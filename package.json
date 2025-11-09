@@ -1,0 +1,65 @@
+{
+  "name": "fa-mcp-server-core",
+  "productName": "FA MCP server core",
+  "version": "0.1.0",
+  "description": "Core MCP server functionality",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "files": [
+    "dist/**/*",
+    "README.md"
+  ],
+  "scripts": {
+    "dev": "tsc --watch",
+    "build": "tsc",
+    "clean": "rimraf dist",
+    "cb": "npm run clean && npm run build",
+    "ci": "node --no-deprecation ./scripts/npm/run.js",
+    "token-gen": "node ../fa-mcp-server-core/src/token/gen-token-server.js",
+    "lint": "eslint .",
+    "lint:fix": "eslint --fix .",
+    "reinstall": "node --no-deprecation ./scripts/npm/run.js reinstall",
+    "typecheck": "tsc --noEmit",
+    "dead:exports": "ts-prune",
+    "dead:files": "knip"
+  },
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "atlassian",
+    "automation"
+  ],
+  "author": {
+    "name": "Viacheslav Makarov",
+    "email": "npmjs@bazilio.ru"
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Bazilio-san/fa-mcp-server-core.git"
+  },
+  "homepage": "https://github.com/Bazilio-san/fa-mcp-server-core#readme",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.13.3",
+    "af-logger-ts": "^0.0.24",
+    "af-db-ts": "^3.0.23",
+    "af-consul-ts": "^4.0.9",
+    "express": "^4.18.3",
+    "helmet": "^7.1.0",
+    "cors": "^2.8.5",
+    "rate-limiter-flexible": "^8.1.0",
+    "config": "^4.1.1",
+    "dotenv": "^16.6.1",
+    "chalk": "^4.1.2"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "@types/express": "^4.17.21",
+    "@types/cors": "^2.8.17",
+    "typescript": "^5.0.0"
+  }
+}

@@ -1,0 +1,5 @@
+<component name="ProjectRunConfigurationManager">
+  <configuration default="false" name="REMOTE PROD-1" type="NodeJSConfigurationType" folderName="REMOTE" path-to-node="sshConfig://AT :: PROD-1 :: MSK-AITR01-AP01 @ root/root/.nvm/versions/node/v22.17.1/bin/node" path-to-js-file="dist/src/_core/index.js" working-dir="$PROJECT_DIR$">
+    <method v="2" />
+  </configuration>
+</component>
