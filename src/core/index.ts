@@ -39,6 +39,7 @@ export { initMcpServer, gracefulShutdown } from './init-mcp-server.js';
 
 export { formatToolResult, getJsonFromResult } from './utils/formatToolResult.js';
 export { trim, isMainModule, isNonEmptyObject, isObject, ppj } from './utils/utils.js';
+export { isPortAvailable, checkPortAvailability } from './utils/port-checker.js';
 
 export { eventEmitter } from './ee.js';
 export { logger, fileLogger } from './logger.js';

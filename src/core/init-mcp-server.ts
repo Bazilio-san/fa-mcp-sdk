@@ -14,6 +14,7 @@ import { AccessPoints, IAccessPoints, IRegisterCyclic } from 'af-consul-ts';
 import { isNonEmptyObject } from './utils/utils.js';
 import { IAccessPoint } from 'af-consul-ts/src/interfaces.js';
 import { accessPointUpdater } from './consul/access-points-updater.js';
+import { checkPortAvailability } from './utils/port-checker.js';
 import chalk from 'chalk';
 
 let cyclicRegisterServiceInConsul: IRegisterCyclic;
@@ -98,6 +99,10 @@ export async function initMcpServer (data: McpServerData): Promise<void> {
 
     case 'http': {
       await startupInfo({ dotEnvResult, cfg: appConfig });
+
+      // Check if port is available before proceeding
+      await checkPortAvailability(appConfig.webServer.port, appConfig.webServer.host, true);
+
       if (needCheckDb) {
         await checkMainDB();
       }
