@@ -26,7 +26,7 @@ async function runTestGroup (title, tests, client) {
         }
       }
     } catch (e) {
-      console.log(`  ❌  ${(await test).name || 'test'}:`, e.message);
+      console.log(`  ❌  ${test.name || 'test'}:`, e.message);
     }
   }
   console.log(`  Result: ${passed}/${tests.length} passed`);

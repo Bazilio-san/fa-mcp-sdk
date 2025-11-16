@@ -61,7 +61,7 @@ export const TEMPLATE_TESTS = {
     async (client) => {
       const name = 'Get custom_prompt returns dynamic text';
       try {
-        const resp = await client.getPrompt('custom_prompt', { sample: 1 });
+        const resp = await client.getPrompt('custom_prompt', { sample: '1' });
         const text = extractPromptText(resp);
         const hasWord = typeof text === 'string' && text.includes('Custom prompt content');
         return hasWord ? ok(name, { text }) : fail(name, { text });
