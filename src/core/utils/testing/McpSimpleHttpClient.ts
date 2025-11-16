@@ -133,8 +133,8 @@ export class McpSimpleHttpClient {
     return res?.tools ?? res;
   }
 
-  async callTool (toolName: string, parameters: Record<string, any> = {}) {
-    return this.sendRpc('tools/call', { name: toolName, arguments: parameters });
+  async callTool (toolName: string, args: Record<string, any> = {}) {
+    return this.sendRpc('tools/call', { name: toolName, arguments: args });
   }
 
   async listResources () {
@@ -149,8 +149,8 @@ export class McpSimpleHttpClient {
     return this.sendRpc('prompts/list');
   }
 
-  async getPrompt (name: string, arguments_: Record<string, any> = {}) {
-    return this.sendRpc('prompts/get', { name, arguments: arguments_ });
+  async getPrompt (name: string, args: Record<string, any> = {}) {
+    return this.sendRpc('prompts/get', { name, arguments: args });
   }
 
   async ping () {

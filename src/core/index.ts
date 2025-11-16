@@ -50,3 +50,4 @@ export { logger, fileLogger } from './logger.js';
 export { McpSimpleHttpClient } from './utils/testing/McpSimpleHttpClient.js';
 export { McpStreamableHttpClient } from './utils/testing/McpStreamableHttpClient.js';
 export { McpSseClient } from './utils/testing/McpSseClient.js';
+export { McpStdioClient } from './utils/testing/McpStdioClient.js';

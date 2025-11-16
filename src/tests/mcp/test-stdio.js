@@ -8,86 +8,14 @@
 import { spawn } from 'child_process';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
-import chalk from 'chalk';
 import TEMPLATE_TESTS from './test-cases.js';
+import { McpStdioClient } from '../../../dist/core/index.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 const projectRoot = join(__dirname, '../../../');
 
 const serverPath = join(projectRoot, 'dist/template/start.js');
-
-const SHOW_IN = process.env.TEST_SHOW_IN === 'true';
-const SHOW_OUT = process.env.TEST_SHOW_OUT === 'true';
-const SHOW_ERR = process.env.TEST_SHOW_ERR === 'true';
-
-class StdioMcpClient {
-  constructor (proc) {
-    this.proc = proc;
-    this.nextId = 1;
-    this.pending = new Map();
-    this.buffer = '';
-
-    this.proc.stdout.on('data', (chunk) => {
-      this.buffer += chunk.toString();
-      this.processLines();
-    });
-    this.proc.stderr.on('data', (data) => {
-      if (SHOW_ERR) {
-        console.error(chalk.gray(String(data)));
-      }
-    });
-  }
-
-  processLines () {
-    const lines = this.buffer.split('\n');
-    this.buffer = lines.pop() || '';
-    for (const line of lines) {
-      const s = line.trim();
-      if (!s) {continue;}
-      try {
-        const msg = JSON.parse(s);
-        if (SHOW_IN) {
-          console.log(chalk.bgYellow('IN ') + s);
-        }
-        if (typeof msg.id === 'number' && (msg.result !== undefined || msg.error)) {
-          const p = this.pending.get(msg.id);
-          if (p) {
-            clearTimeout(p.t);
-            this.pending.delete(msg.id);
-            if (msg.error) { p.reject(new Error(msg.error?.message || 'MCP Error')); } else { p.resolve(msg.result); }
-          }
-        }
-      } catch {
-        // ignore parse errors
-      }
-    }
-  }
-
-  send (method, params = {}, timeoutMs = 15000) {
-    const id = this.nextId++;
-    const req = { jsonrpc: '2.0', id, method, params };
-    const text = JSON.stringify(req) + '\n';
-    if (SHOW_OUT) {
-      console.log(chalk.bgBlue('OUT') + ' ' + text.trim());
-    }
-    this.proc.stdin.write(text);
-    return new Promise((resolve, reject) => {
-      const t = setTimeout(() => {
-        this.pending.delete(id);
-        reject(new Error(`Timeout for ${method}`));
-      }, timeoutMs);
-      this.pending.set(id, { resolve, reject, t });
-    });
-  }
-
-  listPrompts () { return this.send('prompts/list'); }
-  getPrompt (name, args = {}) { return this.send('prompts/get', { name, arguments: args }); }
-  listResources () { return this.send('resources/list'); }
-  readResource (uri) { return this.send('resources/read', { uri }); }
-  listTools () { return this.send('tools/list'); }
-  callTool (name, args = {}) { return this.send('tools/call', { name, arguments: args }); }
-}
 
 async function runTestGroup (title, tests, client) {
   console.log(`\n${title}:`);
@@ -122,7 +50,7 @@ async function main () {
     env: { ...process.env, NODE_ENV: 'test' },
   });
 
-  const client = new StdioMcpClient(proc);
+  const client = new McpStdioClient(proc);
 
   try {
     // Initialize handshake (optional for stdio server; safe to send)
