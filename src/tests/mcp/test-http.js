@@ -5,7 +5,7 @@
  * Uses McpSimpleHttpClient (simple POST requests)
  */
 
-import { appConfig, McpSimpleHttpClient } from '../../../dist/core/index.js';
+import { appConfig, McpHttpClient } from '../../../dist/core/index.js';
 import TEMPLATE_TESTS from './test-cases.js';
 
 const baseUrl = (process.env.TEST_MCP_SERVER_URL || `http://localhost:${appConfig.webServer.port}`).replace(/\/+$/,'');

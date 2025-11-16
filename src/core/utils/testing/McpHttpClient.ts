@@ -35,7 +35,7 @@ type JsonRpcMessage = JsonRpcSuccess | JsonRpcErrorRes | JsonRpcRequest;
  * Uses simple POST requests instead of streaming HTTP for compatibility
  * with the current server implementation
  */
-export class McpSimpleHttpClient {
+export class McpHttpClient {
   private readonly baseUrl: string;
   private readonly endpointPath: string;
   private readonly customHeaders: Record<string, string>;
