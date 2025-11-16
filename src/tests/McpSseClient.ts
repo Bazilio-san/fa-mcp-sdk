@@ -215,12 +215,12 @@ export class McpSseClient {
       this.pending.set(id, { resolve, reject, timeout: timeoutRef, method });
     });
 
-    // Fire-and-wait: POST to /rpc
+    // Fire-and-wait: POST to /sse
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
       ...this.customHeaders,
     };
-    const res = await fetch(`${this.baseUrl}/rpc`, {
+    const res = await fetch(`${this.baseUrl}/sse`, {
       method: 'POST',
       headers,
       body: JSON.stringify(request),

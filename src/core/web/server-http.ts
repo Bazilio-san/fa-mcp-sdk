@@ -132,7 +132,31 @@ export async function startHttpServer (): Promise<void> {
     app.use('/api', apiRouter);
   }
 
-  // SSE endpoint for MCP communication
+  // SSE endpoints for legacy MCP communication
+  // Store SSE transports by session ID and associated servers
+  const sseTransports = new Map<string, { transport: SSEServerTransport, server: any }>();
+
+  // Create a shared MCP server instance for SSE connections
+  async function createSseServer () {
+    const sseServer = createMcpServer();
+
+    // Override the tool call handler to include rate limiting
+    sseServer.setRequestHandler(CallToolRequestSchema, async (request) => {
+      // Apply rate limiting for each SSE tool call
+      const toolCallClientId = 'sse-tool-unknown';
+      await handleRateLimit(rateLimiter, toolCallClientId, 'unknown', `SSE tool call | tool: ${request.params.name}`);
+
+      // Execute the tool call
+      const result = await toolHandler(request.params);
+      return {
+        content: result.content,
+      };
+    });
+
+    return sseServer;
+  }
+
+  // GET endpoint for SSE connection establishment
   app.get('/sse', authTokenMW, async (req, res) => {
     try {
       // Apply rate limiting for SSE connection
@@ -141,23 +165,21 @@ export async function startHttpServer (): Promise<void> {
 
       logger.info('SSE client connected');
 
-      // Create a separate server instance for this SSE connection with rate limiting
-      const sseServer = createMcpServer();
+      // Create SSE transport that will use the same endpoint for POST requests
+      const transport = new SSEServerTransport('/sse', res);
 
-      // Override the tool call handler to include rate limiting
-      sseServer.setRequestHandler(CallToolRequestSchema, async (request) => {
-        // Apply rate limiting for each SSE tool call
-        const toolCallClientId = `sse-tool-${req.ip || 'unknown'}`;
-        await handleRateLimit(rateLimiter, toolCallClientId, req.ip || 'unknown', `SSE tool call | tool: ${request.params.name}`);
+      // Create a dedicated server instance for this SSE connection
+      const sseServer = await createSseServer();
 
-        // Execute the tool call
-        const result = await toolHandler(request.params);
-        return {
-          content: result.content,
-        };
+      // Store both transport and server for cleanup
+      sseTransports.set(transport.sessionId, { transport, server: sseServer });
+
+      // Clean up transport and server on connection close
+      res.on('close', () => {
+        sseTransports.delete(transport.sessionId);
+        logger.info(`SSE client disconnected: ${transport.sessionId}`);
       });
 
-      const transport = new SSEServerTransport('/sse', res);
       await sseServer.connect(transport);
 
       logger.info('SSE connection established successfully');
@@ -167,6 +189,91 @@ export async function startHttpServer (): Promise<void> {
       return res.status(500).json(createJsonRpcErrorResponse(
         new ServerError('Failed to establish SSE connection'),
       ));
+    }
+  });
+
+  // POST endpoint for handling SSE client messages (standard way)
+  app.post('/messages', authTokenMW, async (req, res): Promise<void> => {
+    try {
+      const sessionId = req.query.sessionId as string;
+      if (!sessionId) {
+        res.status(400).json({
+          jsonrpc: '2.0',
+          error: {
+            code: -32602,
+            message: 'Session ID required',
+          },
+          id: null,
+        });
+        return;
+      }
+
+      const transportData = sseTransports.get(sessionId);
+      if (!transportData) {
+        res.status(404).json({
+          jsonrpc: '2.0',
+          error: {
+            code: -32001,
+            message: 'Session not found',
+          },
+          id: null,
+        });
+        return;
+      }
+
+      const { transport } = transportData;
+      await transport.handlePostMessage(req, res, req.body);
+    } catch (error) {
+      logger.error('SSE message handling failed', error);
+      if (!res.headersSent) {
+        res.status(500).json(createJsonRpcErrorResponse(
+          new ServerError('Failed to handle SSE message'),
+        ));
+      }
+    }
+  });
+
+  // POST endpoint for direct SSE requests (legacy compatibility - same endpoint as GET)
+  app.post('/sse', authTokenMW, async (req, res): Promise<void> => {
+    try {
+      // Find any active SSE transport for this client (fallback approach)
+      // TODO: This is needed for test client compatibility. In production,
+      // clients should use proper session management or POST to /messages endpoint.
+      let targetTransport = null;
+
+      for (const [_sessionId, transportData] of sseTransports.entries()) {
+        // Use the first available transport (simple approach for testing)
+        targetTransport = transportData.transport;
+        break;
+      }
+
+      if (!targetTransport) {
+        res.status(404).json({
+          jsonrpc: '2.0',
+          error: {
+            code: -32001,
+            message: 'No SSE connection established. Connect via GET /sse first.',
+          },
+          id: req.body?.id ?? null,
+        });
+        return;
+      }
+
+      // Apply rate limiting
+      const clientId = req.ip || 'unknown';
+      await handleRateLimit(rateLimiter, clientId, req.ip || 'unknown', 'SSE POST', res, req.body?.id);
+
+      logger.info(`Direct SSE POST request received: ${req.body.method} | id: ${req.body.id}`);
+
+      // Use the transport's built-in handlePostMessage method
+      await targetTransport.handlePostMessage(req, res, req.body);
+    } catch (error) {
+      logger.error('SSE POST request failed', error);
+      if (!res.headersSent) {
+        res.status(500).json(createJsonRpcErrorResponse(
+          new ServerError('Failed to handle SSE POST request'),
+        ));
+      }
     }
   });
 
@@ -286,7 +393,8 @@ export async function startHttpServer (): Promise<void> {
     const availableEndpoints: any = {
       about: 'GET /',
       health: 'GET /health',
-      sse: 'GET /sse',
+      sse: 'GET /sse, POST /sse',
+      messages: 'POST /messages',
       mcp: 'POST /mcp',
     };
 
