@@ -13,7 +13,7 @@ import TEMPLATE_TESTS from './test-cases.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
-const projectRoot = join(__dirname, '../../');
+const projectRoot = join(__dirname, '../../../');
 
 const serverPath = join(projectRoot, 'dist/template/start.js');
 

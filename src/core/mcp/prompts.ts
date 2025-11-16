@@ -6,7 +6,20 @@ import { IGetPromptRequest, IPromptContent } from '../_types_/types.js';
 import { getProjectData } from '../bootstrap/init-config.js';
 
 function createPrompts () {
-  const { agentBrief, agentPrompt, customPrompts = [] } = getProjectData();
+  const projectData = getProjectData();
+  if (!projectData) {
+    console.error('Error: Project data not initialized. Make sure initMcpServer() has been called.');
+    return [];
+  }
+
+  const { agentBrief, agentPrompt, customPrompts = [] } = projectData;
+
+  // Validate that required prompts are available
+  if (!agentBrief || !agentPrompt) {
+    console.error('Error: Required prompts (agentBrief, agentPrompt) are missing from project data');
+    return [];
+  }
+
   return [
     {
       name: 'agent_brief',
@@ -45,6 +58,12 @@ export function getPromptsList () {
 export const getPrompt = async (request: IGetPromptRequest): Promise<any> => {
   const { name } = request.params;
   const prompts = getPrompts();
+
+  // Check if prompts are available
+  if (!prompts || prompts.length === 0) {
+    throw new Error('No prompts available. Project data may not be properly initialized.');
+  }
+
   let content: IPromptContent = prompts.filter((p) => p.name === name).map((p) => p.content)[0] || null;
   if (typeof content === 'function') {
     content = await content(request);
