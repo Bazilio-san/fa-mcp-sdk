@@ -261,6 +261,28 @@ npm run lint:fix  # Fix automatically
 npm run typecheck
 ```
 
+### Testing
+
+The framework includes built-in testing utilities for MCP servers:
+
+```javascript
+import { McpSseClient } from 'fa-mcp-sdk';
+
+// For npm package usage - prevents unhandledRejection
+const client = McpSseClient.createWithErrorHandler('http://localhost:3000');
+
+try {
+  const response = await client.callTool('tool_name', { param: 'value' });
+  console.log('Success:', response);
+} catch (error) {
+  console.log('Error:', error.message); // Properly caught
+} finally {
+  await client.close();
+}
+```
+
+**Note**: When using `fa-mcp-sdk` as an npm package, use `McpSseClient.createWithErrorHandler()` to prevent `unhandledRejection` errors that can occur with SSE-based error handling.
+
 ## API Reference
 
 ### McpServerData Interface

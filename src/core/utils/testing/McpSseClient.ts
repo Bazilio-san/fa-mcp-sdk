@@ -40,6 +40,27 @@ export class McpSseClient extends BaseMcpClient {
     this.requestId = 1;
   }
 
+  /**
+   * Create client with automatic unhandledRejection handling for npm package usage
+   */
+  static createWithErrorHandler (baseUrl: string, customHeaders: Record<string, string> = {}): McpSseClient {
+    const client = new McpSseClient(baseUrl, customHeaders);
+
+    // Set up global unhandled rejection handler if not already present
+    if (!(global as any)._faMcpSdkRejectionHandler) {
+      (global as any)._faMcpSdkRejectionHandler = (reason: any) => {
+        // Check if this is an MCP-related error
+        if (typeof reason === 'object' && reason?.message?.includes('MCP Error:')) {
+          // Silently handle MCP errors to prevent unhandledRejection
+          return;
+        }
+      };
+      process.on('unhandledRejection', (global as any)._faMcpSdkRejectionHandler);
+    }
+
+    return client;
+  }
+
   /** Public API: close SSE and reject all pending */
   override async close () {
     this.connected = false;
@@ -192,13 +213,18 @@ export class McpSseClient extends BaseMcpClient {
         const err = new Error(`MCP Error: ${errorMessage}`);
         (err as any).data = payload.error?.data;
         (err as any).fullMcpResponse = payload;
+        (err as any).method = pending.method; // Attach method for error handling
         pending.reject(err);
         return;
       }
       const err = new Error(`MCP Error: ${errorMessage}`);
       (err as any).data = payload.error?.data;
       (err as any).fullMcpResponse = payload;
-      pending.reject(err);
+      (err as any).method = pending.method; // Attach method for error handling
+      // Use setImmediate to avoid synchronous rejection that can cause unhandledRejection
+      setImmediate(() => {
+        pending.reject(err);
+      });
     } else {
       const res = getJsonFromResult(payload.result);
       if (res?.message) {
@@ -233,20 +259,39 @@ export class McpSseClient extends BaseMcpClient {
       'Content-Type': 'application/json',
       ...this.customHeaders,
     };
-    const res = await fetch(`${this.baseUrl}/sse`, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify(request),
-    } as any);
+    try {
+      const res = await fetch(`${this.baseUrl}/sse`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(request),
+      } as any);
 
-    if (!res.ok) {
+      if (!res.ok) {
+        clearTimeout(timeoutRef);
+        this.pending.delete(id);
+        const text = await safeReadText(res);
+        const error = new Error(`RPC send failed: ${res.status} ${res.statusText}${text ? ' - ' + text : ''}`);
+        // Attach method info for better error handling
+        (error as any).method = method;
+        throw error;
+      }
+    } catch (fetchError: any) {
+      // Handle fetch errors and clean up pending request
       clearTimeout(timeoutRef);
       this.pending.delete(id);
-      const text = await safeReadText(res);
-      throw new Error(`RPC send failed: ${res.status} ${res.statusText}${text ? ' - ' + text : ''}`);
+      // Preserve method information for error handling
+      fetchError.method = method;
+      throw fetchError;
     }
 
-    return promise;
+    // Add catch block to handle promise rejection gracefully
+    return promise.catch((error: any) => {
+      // Ensure method info is available
+      if (!error.method) {
+        error.method = method;
+      }
+      throw error;
+    });
   }
 
   async health () {
