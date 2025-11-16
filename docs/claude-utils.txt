@@ -1,0 +1,1 @@
+npx claude-code-templates@latest --analytics
