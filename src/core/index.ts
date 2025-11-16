@@ -43,3 +43,6 @@ export { isPortAvailable, checkPortAvailability } from './utils/port-checker.js'
 
 export { eventEmitter } from './ee.js';
 export { logger, fileLogger } from './logger.js';
+export { McpSimpleHttpClient } from './utils/testing/McpSimpleHttpClient.js';
+export { McpStreamableHttpClient } from './utils/testing/McpStreamableHttpClient.js';
+export { McpSseClient } from './utils/testing/McpSseClient.js';

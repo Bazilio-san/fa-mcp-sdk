@@ -1,4 +1,4 @@
-import { getJsonFromResult } from '../core/index.js';
+import { getJsonFromResult } from '../../index.js';
 
 async function safeReadText (res: Response): Promise<string | undefined> {
   try {

@@ -38,8 +38,6 @@ export const renderAboutPage = async (): Promise<string> => {
   const { resources } = getResourcesList();
   const { prompts } = getPromptsList();
   const { tools, httpComponents } = (global as any).__MCP_PROJECT_DATA__;
-  const statusText = 'online';
-  const statusClass = 'online';
 
   let swaggerInfo = '';
   if (httpComponents?.swagger) {

@@ -1,5 +1,3 @@
-import { appConfig } from '../core/index.js';
-
 type Json = any;
 
 interface JsonRpcRequest {
@@ -28,20 +26,6 @@ interface JsonRpcErrorRes {
 }
 
 type JsonRpcMessage = JsonRpcSuccess | JsonRpcErrorRes | JsonRpcRequest; // allow incoming notifications
-
-export const getJsonFromStreamResult = (result: any) => {
-  if (appConfig.toolAnswerAs === 'structuredContent') {
-    return result?.result?.structuredContent || result?.structuredContent;
-  } else {
-    const text = result?.result?.content?.[0]?.text || result?.content?.[0]?.text || '';
-    try {
-      return JSON.parse(text);
-    } catch {
-      // ignore
-    }
-  }
-  return undefined;
-};
 
 /**
  * MCP Streamable HTTP Client

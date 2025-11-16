@@ -5,8 +5,7 @@
  * Uses McpSseClient to send requests via HTTP and receive responses via SSE
  */
 
-import { appConfig } from '../../../dist/core/index.js';
-import { McpSseClient } from '../../../dist/tests/McpSseClient.js';
+import { appConfig, McpSseClient } from '../../../dist/core/index.js';
 import TEMPLATE_TESTS from './test-cases.js';
 
 const baseUrl = (process.env.TEST_MCP_SERVER_URL || `http://localhost:${appConfig.webServer.port}`).replace(/\/+$/,'');

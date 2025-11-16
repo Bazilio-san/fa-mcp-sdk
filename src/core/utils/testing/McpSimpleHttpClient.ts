@@ -1,4 +1,4 @@
-import { appConfig } from '../core/index.js';
+// noinspection UnnecessaryLocalVariableJS
 
 type Json = any;
 
@@ -29,20 +29,6 @@ interface JsonRpcErrorRes {
 
 type JsonRpcMessage = JsonRpcSuccess | JsonRpcErrorRes | JsonRpcRequest;
 
-export const getJsonFromStreamResult = (result: any) => {
-  if (appConfig.toolAnswerAs === 'structuredContent') {
-    return result?.result?.structuredContent || result?.structuredContent;
-  } else {
-    const text = result?.result?.content?.[0]?.text || result?.content?.[0]?.text || '';
-    try {
-      return JSON.parse(text);
-    } catch {
-      // ignore
-    }
-  }
-  return undefined;
-};
-
 /**
  * MCP Simple HTTP Client
  *
@@ -53,7 +39,6 @@ export class McpSimpleHttpClient {
   private readonly baseUrl: string;
   private readonly endpointPath: string;
   private readonly customHeaders: Record<string, string>;
-  private readonly requestTimeoutMs: number;
 
   private nextId = 1;
 
@@ -69,7 +54,6 @@ export class McpSimpleHttpClient {
     this.baseUrl = baseUrl.replace(/\/$/, '');
     this.endpointPath = options?.endpointPath ?? '/mcp';
     this.customHeaders = options?.headers ?? {};
-    this.requestTimeoutMs = options?.requestTimeoutMs ?? 120_000;
   }
 
   async initialize (params: {
@@ -120,7 +104,7 @@ export class McpSimpleHttpClient {
     });
   }
 
-  async sendRpc<T = any> (method: string, params?: Json, timeoutMs = this.requestTimeoutMs): Promise<T> {
+  async sendRpc<T = any> (method: string, params?: Json): Promise<T> {
     const id = this.nextId++;
     const req: JsonRpcRequest = { jsonrpc: '2.0', id, method, params };
 
