@@ -1,5 +1,9 @@
 // noinspection UnnecessaryLocalVariableJS
 
+import { BaseMcpClient } from './BaseMcpClient.js';
+
+// noinspection UnnecessaryLocalVariableJS
+
 type Json = any;
 
 interface JsonRpcRequest {
@@ -35,12 +39,9 @@ type JsonRpcMessage = JsonRpcSuccess | JsonRpcErrorRes | JsonRpcRequest;
  * Uses simple POST requests instead of streaming HTTP for compatibility
  * with the current server implementation
  */
-export class McpHttpClient {
+export class McpHttpClient extends BaseMcpClient {
   private readonly baseUrl: string;
   private readonly endpointPath: string;
-  private readonly customHeaders: Record<string, string>;
-
-  private nextId = 1;
 
   public serverInfo?: { name: string; version: string };
   public capabilities?: any;
@@ -51,12 +52,12 @@ export class McpHttpClient {
     headers?: Record<string, string>;
     requestTimeoutMs?: number;
   }) {
+    super(options?.headers ?? {});
     this.baseUrl = baseUrl.replace(/\/$/, '');
     this.endpointPath = options?.endpointPath ?? '/mcp';
-    this.customHeaders = options?.headers ?? {};
   }
 
-  async initialize (params: {
+  override async initialize (params: {
     protocolVersion?: string;
     capabilities?: any;
     clientInfo?: { name: string; version: string };
@@ -71,11 +72,11 @@ export class McpHttpClient {
     return res;
   }
 
-  async close () {
+  override async close () {
     // No persistent connection to close for simple HTTP client
   }
 
-  private async sendRequest (request: JsonRpcRequest): Promise<JsonRpcMessage> {
+  private async sendHttpRequest (request: JsonRpcRequest): Promise<JsonRpcMessage> {
     const headers = {
       'Content-Type': 'application/json',
       'Accept': 'application/json',
@@ -99,7 +100,7 @@ export class McpHttpClient {
   notify (method: string, params?: Json) {
     const req: JsonRpcRequest = { jsonrpc: '2.0', method, params };
     // Fire and forget for notifications
-    this.sendRequest(req).catch(() => {
+    this.sendHttpRequest(req).catch(() => {
       // Ignore errors for notifications
     });
   }
@@ -108,7 +109,7 @@ export class McpHttpClient {
     const id = this.nextId++;
     const req: JsonRpcRequest = { jsonrpc: '2.0', id, method, params };
 
-    const response = await this.sendRequest(req);
+    const response = await this.sendHttpRequest(req);
 
     // Handle response
     if ((response as any).result !== undefined && typeof (response as any).id === 'number') {
@@ -127,33 +128,8 @@ export class McpHttpClient {
     throw new Error(`Invalid MCP response: ${JSON.stringify(response)}`);
   }
 
-  // High-level MCP methods
-  async listTools () {
-    const res = await this.sendRpc('tools/list');
-    return res?.tools ?? res;
-  }
-
-  async callTool (toolName: string, args: Record<string, any> = {}) {
-    return this.sendRpc('tools/call', { name: toolName, arguments: args });
-  }
-
-  async listResources () {
-    return this.sendRpc('resources/list');
-  }
-
-  async readResource (uri: string) {
-    return this.sendRpc('resources/read', { uri });
-  }
-
-  async listPrompts () {
-    return this.sendRpc('prompts/list');
-  }
-
-  async getPrompt (name: string, args: Record<string, any> = {}) {
-    return this.sendRpc('prompts/get', { name, arguments: args });
-  }
-
-  async ping () {
-    return this.sendRpc('ping');
+  // Override sendRequest to handle JSON-RPC requests
+  protected override async sendRequest (method: string, params: any): Promise<any> {
+    return this.sendRpc(method, params);
   }
 }

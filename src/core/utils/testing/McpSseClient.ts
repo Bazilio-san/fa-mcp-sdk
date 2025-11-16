@@ -1,4 +1,5 @@
 import { getJsonFromResult } from '../../index.js';
+import { BaseMcpClient } from './BaseMcpClient.js';
 
 async function safeReadText (res: Response): Promise<string | undefined> {
   try {
@@ -16,9 +17,8 @@ async function safeReadText (res: Response): Promise<string | undefined> {
  * and sends JSON-RPC requests as separate HTTP POSTs to /rpc.
  * Supports routing by id and per-operation timeouts.
  */
-export class McpSseClient {
+export class McpSseClient extends BaseMcpClient {
   private readonly baseUrl: string;
-  private readonly customHeaders: Record<string, string>;
   private requestId: number;
 
   // SSE connection state
@@ -35,13 +35,13 @@ export class McpSseClient {
   }>();
 
   constructor (baseUrl: string, customHeaders: Record<string, string> = {}) {
+    super(customHeaders);
     this.baseUrl = baseUrl.replace(/\/$/, '');
-    this.customHeaders = customHeaders;
     this.requestId = 1;
   }
 
   /** Public API: close SSE and reject all pending */
-  async close () {
+  override async close () {
     this.connected = false;
     if (this.sseAbort) {
       this.sseAbort.abort();
@@ -183,10 +183,16 @@ export class McpSseClient {
       // In test environment, log validation errors but don't crash
       if (errorMessage.includes('invalid_type')) {
         console.log(`  ⚠️  Parameter validation error: ${errorMessage}`);
-        pending.resolve({
-          result: null,
-          requestHeaders: this.customHeaders,
-        });
+        pending.resolve(null);
+        return;
+      }
+      // For tool execution errors, we want to throw them so tests can verify expected failures
+      if (errorMessage.includes('Failed to execute tool')) {
+        console.log(`  ⚠️  Error: ${errorMessage}`);
+        const err = new Error(`MCP Error: ${errorMessage}`);
+        (err as any).data = payload.error?.data;
+        (err as any).fullMcpResponse = payload;
+        pending.reject(err);
         return;
       }
       const err = new Error(`MCP Error: ${errorMessage}`);
@@ -198,17 +204,14 @@ export class McpSseClient {
       if (res?.message) {
         console.log('  message:', res.message);
       }
-      pending.resolve({
-        result: payload.result,
-        requestHeaders: this.customHeaders,
-      });
+      pending.resolve(payload.result);
     }
   }
 
   /**
    * Send JSON-RPC request over HTTP; await response via SSE stream
    */
-  async sendRequest (method: string, params: Record<string, any> = {}): Promise<any> {
+  protected override async sendRequest (method: string, params: Record<string, any> = {}): Promise<any> {
     await this.ensureConnected();
 
     const id = this.requestId++;
@@ -244,40 +247,6 @@ export class McpSseClient {
     }
 
     return promise;
-  }
-
-  async listTools () {
-    const { result } = await this.sendRequest('tools/list');
-    return result;
-  }
-
-  async callTool (toolName: string, parameters = {}) {
-    return this.sendRequest('tools/call', {
-      name: toolName,
-      arguments: parameters,
-    });
-  }
-
-  async listResources () {
-    const { result } = await this.sendRequest('resources/list');
-    return result;
-  }
-
-  async readResource (uri: string) {
-    return this.sendRequest('resources/read', { uri });
-  }
-
-  async listPrompts () {
-    const { result } = await this.sendRequest('prompts/list');
-    return result;
-  }
-
-  async getPrompt (name: string, args: Record<string, any> = {}) {
-    return this.sendRequest('prompts/get', { name, arguments: args });
-  }
-
-  async ping () {
-    return this.sendRequest('ping');
   }
 
   async health () {

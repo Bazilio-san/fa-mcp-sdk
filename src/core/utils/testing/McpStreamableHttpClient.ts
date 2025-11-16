@@ -1,3 +1,5 @@
+import { BaseMcpClient } from './BaseMcpClient.js';
+
 type Json = any;
 
 interface JsonRpcRequest {
@@ -25,7 +27,7 @@ interface JsonRpcErrorRes {
   error: JsonRpcErrorObj;
 }
 
-type JsonRpcMessage = JsonRpcSuccess | JsonRpcErrorRes | JsonRpcRequest; // allow incoming notifications
+type JsonRpcMessage = JsonRpcSuccess | JsonRpcErrorRes | JsonRpcRequest;
 
 /**
  * MCP Streamable HTTP Client
@@ -33,10 +35,9 @@ type JsonRpcMessage = JsonRpcSuccess | JsonRpcErrorRes | JsonRpcRequest; // allo
  * Supports a long-lived connection over HTTP (NDJSON),
  * multiple requests/responses and incoming notifications.
  */
-export class McpStreamableHttpClient {
+export class McpStreamableHttpClient extends BaseMcpClient {
   private readonly baseUrl: string;
   private readonly endpointPath: string;
-  private readonly customHeaders: Record<string, string>;
   private readonly requestTimeoutMs: number;
 
   private encoder = new TextEncoder();
@@ -48,8 +49,7 @@ export class McpStreamableHttpClient {
   private abort: AbortController | undefined;
   private readLoopPromise: Promise<void> | undefined;
 
-  private nextId = 1;
-  private pending = new Map<number, { resolve: (v: any) => void; reject: (e: any) => void; timer?: any }>();
+    private pending = new Map<number, { resolve: (v: any) => void; reject: (e: any) => void; timer?: any }>();
   private notifications = new Map<string, Set<(params: any) => void>>();
 
   public serverInfo?: { name: string; version: string };
@@ -61,9 +61,9 @@ export class McpStreamableHttpClient {
     headers?: Record<string, string>;
     requestTimeoutMs?: number;
   }) {
+    super(options?.headers ?? {});
     this.baseUrl = baseUrl.replace(/\/$/, '');
     this.endpointPath = options?.endpointPath ?? '/mcp';
-    this.customHeaders = options?.headers ?? {};
     this.requestTimeoutMs = options?.requestTimeoutMs ?? 120_000;
   }
 
@@ -122,7 +122,7 @@ export class McpStreamableHttpClient {
     this.readLoopPromise = this.readLoop();
   }
 
-  async initialize (params: {
+  override async initialize (params: {
     protocolVersion?: string;
     capabilities?: any;
     clientInfo?: { name: string; version: string };
@@ -138,7 +138,7 @@ export class McpStreamableHttpClient {
     return res;
   }
 
-  async close () {
+  override async close () {
     try {
       // attempt to gracefully finish writing
       try {
@@ -256,33 +256,8 @@ export class McpStreamableHttpClient {
     return p;
   }
 
-  // High-level MCP methods
-  async listTools () {
-    const res = await this.sendRpc('tools/list');
-    return res?.tools ?? res;
-  }
-
-  async callTool (toolName: string, parameters: Record<string, any> = {}) {
-    return this.sendRpc('tools/call', { name: toolName, arguments: parameters });
-  }
-
-  async listResources () {
-    return this.sendRpc('resources/list');
-  }
-
-  async readResource (uri: string) {
-    return this.sendRpc('resources/read', { uri });
-  }
-
-  async listPrompts () {
-    return this.sendRpc('prompts/list');
-  }
-
-  async getPrompt (name: string, arguments_: Record<string, any> = {}) {
-    return this.sendRpc('prompts/get', { name, arguments: arguments_ });
-  }
-
-  async ping () {
-    return this.sendRpc('ping');
+  // Override sendRequest to use sendRpc for consistency
+  protected override async sendRequest (method: string, params: any): Promise<any> {
+    return this.sendRpc(method, params);
   }
 }

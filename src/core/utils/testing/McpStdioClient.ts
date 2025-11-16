@@ -1,6 +1,7 @@
 import '../../bootstrap/dotenv.js';
 import chalk from 'chalk';
 import { ChildProcess } from 'child_process';
+import { BaseMcpClient } from './BaseMcpClient.js';
 
 const SHOW_IN = process.env.TEST_SHOW_IN === 'true';
 const SHOW_OUT = process.env.TEST_SHOW_OUT === 'true';
@@ -12,15 +13,14 @@ interface PendingRequest {
   t: NodeJS.Timeout;
 }
 
-export class McpStdioClient {
+export class McpStdioClient extends BaseMcpClient {
   private proc: ChildProcess;
-  private nextId: number;
   private pending: Map<number, PendingRequest>;
   private buffer: string;
 
   constructor (proc: ChildProcess) {
+    super({});
     this.proc = proc;
-    this.nextId = 1;
     this.pending = new Map();
     this.buffer = '';
 
@@ -91,27 +91,8 @@ export class McpStdioClient {
     });
   }
 
-  listTools () {
-    return this.send('tools/list');
-  }
-
-  callTool (name: string, args: Record<string, any> = {}) {
-    return this.send('tools/call', { name, arguments: args });
-  }
-
-  listResources () {
-    return this.send('resources/list');
-  }
-
-  readResource (uri: string) {
-    return this.send('resources/read', { uri });
-  }
-
-  listPrompts () {
-    return this.send('prompts/list');
-  }
-
-  getPrompt (name: string, args: Record<string, any> = {}) {
-    return this.send('prompts/get', { name, arguments: args });
+  // Override sendRequest to use the existing send method
+  protected override async sendRequest (method: string, params: any): Promise<any> {
+    return this.send(method, params);
   }
 }

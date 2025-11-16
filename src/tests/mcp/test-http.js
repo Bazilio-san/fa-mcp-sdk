@@ -2,7 +2,7 @@
 
 /**
  * HTTP transport tests for the template MCP server (src/template)
- * Uses McpSimpleHttpClient (simple POST requests)
+ * Uses McpHttpClient (simple POST requests)
  */
 
 import { appConfig, McpHttpClient } from '../../../dist/core/index.js';
@@ -37,7 +37,7 @@ async function main () {
   console.log('🧪 HTTP tests for template MCP server');
   console.log('='.repeat(60));
 
-  const client = new McpSimpleHttpClient(baseUrl);
+  const client = new McpHttpClient(baseUrl);
   try {
     await client.initialize({
       protocolVersion: '2024-11-05',
