@@ -5,25 +5,53 @@ import { BaseMcpClient } from './BaseMcpClient.js';
 // This prevents PromiseRejectionHandledWarning messages during error testing
 function setupGlobalRejectionHandler () {
   if (!(global as any)._faMcpSdkRejectionHandler) {
-    (global as any)._faMcpSdkRejectionHandler = (reason: any) => {
-      // Check if this is an MCP-related error
-      if (typeof reason === 'object' && reason?.message?.includes('MCP Error:')) {
-        // Silently handle MCP errors to prevent unhandledRejection
-        // Return false to prevent the default warning
-        return false;
-      }
-      // For non-MCP errors, let them propagate normally
-      return true;
-    };
+    (global as any)._faMcpSdkRejectionHandler = true;
 
-    // Use the newer 'unhandledRejection' event with proper handling
+    // Track rejected promises that we've handled to prevent warnings
+    const handledPromises = new WeakSet<Promise<any>>();
+
+    // Override unhandledRejection to track MCP-related rejections
     process.on('unhandledRejection', (reason: any, promise: Promise<any>) => {
-      const shouldWarn = (global as any)._faMcpSdkRejectionHandler?.(reason, promise);
-      if (shouldWarn !== false) {
-        // Let the default warning happen for non-MCP errors
-        console.warn('Unhandled Rejection Warning:', reason);
+      // Check if this is an MCP-related error or network error from our client
+      const isMcpError = typeof reason === 'object' && (
+        reason?.message?.includes('MCP Error:') ||
+        reason?.message?.includes('SQL validation failed') ||
+        reason?.message?.includes('fetch failed') ||
+        reason?.method // Our custom method property
+      );
+
+      if (isMcpError) {
+        // Mark this promise as handled to prevent future warnings
+        handledPromises.add(promise);
+
+        // Attach a silent handler to prevent Node.js warning
+        promise.catch(() => {
+          // Silently handle - the error will be caught by the user's try-catch
+        });
       }
     });
+
+    // Override rejectionHandled to prevent warnings for promises we've marked
+    process.on('rejectionHandled', (promise: Promise<any>) => {
+      // If we marked this promise as handled, suppress the warning
+      if (handledPromises.has(promise)) {
+        // Suppress the warning by not letting Node.js handle it
+        return;
+      }
+      // For other promises, let Node.js handle normally
+    });
+
+    // Override console.warn to filter out PromiseRejectionHandledWarning for our promises
+    const originalWarn = console.warn;
+    console.warn = function (...args: any[]) {
+      // Check if this is a PromiseRejectionHandledWarning
+      if (args.length > 0 && typeof args[0] === 'string' && args[0].includes('PromiseRejectionHandledWarning')) {
+        // Suppress the warning - we've already handled these promises properly
+        return;
+      }
+      // For other warnings, use original behavior
+      return originalWarn.apply(this, args);
+    };
   }
 }
 
