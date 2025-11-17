@@ -23,11 +23,30 @@ const createResources = (): IResourceData[] => {
   customResources = (customResources || []) as IResourceData[];
   const resources: IResourceData[] = [
     {
-      uri: 'doc://readme',
-      name: `README - ${appConfig.productName}`,
-      description: `${appConfig.productName} project documentation:
-installation, launch (STDIO/HTTP), MCP API, configuration, testing and deployment.`,
+      uri: 'project://id',
+      name: 'project-id',
+      description: `Stable identifier of the project.
+Used:
+- to identify the MCP server in the "MCP registry" 
+- when authorizing with a JWT token`,
       mimeType: 'text/plain',
+      content: appConfig.name,
+    },
+    {
+      uri: 'project://name',
+      name: 'product-name',
+      description: 'Human-readable product name for use in the UI',
+      mimeType: 'text/plain',
+      content: appConfig.productName,
+    },
+    {
+      uri: 'doc://readme',
+      name: 'README.md',
+      description: `Documentation of project '${appConfig.productName}':
+Project description, purpose, features, data sources, installation, launch (STDIO/HTTP), MCP API, configuration, testing, deployment.
+This information is used by searching for this MCP server and its information in the RAG system of the "MCP registry"
+`,
+      mimeType: 'text/markdown',
       content: readme,
     },
   ];
@@ -38,8 +57,8 @@ installation, launch (STDIO/HTTP), MCP API, configuration, testing and deploymen
         uri: 'required://http-headers',
         name: 'Required http headers',
         description: 'Required http headers',
-        mimeType: 'text/plain',
-        content: JSON.stringify(requiredHttpHeaders),
+        mimeType: 'application/json',
+        content: requiredHttpHeaders,
       },
     );
   }

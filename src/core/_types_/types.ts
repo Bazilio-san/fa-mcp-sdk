@@ -21,11 +21,12 @@ export interface IResourceInfo {
 }
 
 export type TResourceContentFunction = (uri: string) => string | Promise<string>;
-export type IResourceContent = string | TResourceContentFunction;
+export type IResourceContent = string | object | TResourceContentFunction;
 
 export interface IResourceData {
   uri: string;
   name: string;
+  title?: string;
   description: string;
   mimeType: string;
   content: IResourceContent;
@@ -36,7 +37,7 @@ export interface IResource {
     {
       uri: string,
       mimeType: string,
-      text: string,
+      text: string | object,
     },
   ],
 }
