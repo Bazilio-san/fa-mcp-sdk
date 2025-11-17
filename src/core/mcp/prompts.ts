@@ -75,7 +75,7 @@ export const getPrompt = async (request: IGetPromptRequest): Promise<any> => {
   return {
     messages: [
       {
-        role: 'system',
+        role: 'assistant',
         content: {
           type: 'text',
           text: content,
