@@ -457,6 +457,7 @@ export const renderAboutPage = async (): Promise<string> => {
           loadingSpinner.style.display = 'none';
           jsonContent.style.display = 'block';
           jsonContent.textContent = textContent;
+          addCopyButton(jsonContent);
         }, 500);
       } else {
         // Hide the detail row
@@ -495,6 +496,7 @@ export const renderAboutPage = async (): Promise<string> => {
             loadingSpinner.style.display = 'none';
             jsonContent.style.display = 'block';
             jsonContent.textContent = textContent;
+            addCopyButton(jsonContent);
           }, 300);
         } else {
           // Fetch and show prompt content
@@ -534,6 +536,7 @@ export const renderAboutPage = async (): Promise<string> => {
             loadingSpinner.style.display = 'none';
             promptContent.style.display = 'block';
             promptContent.innerHTML = '<pre class="json-content">' + promptText + '</pre>';
+            addCopyButton(promptContent.querySelector('.json-content'));
           } catch (error) {
             loadingSpinner.style.display = 'none';
             promptContent.style.display = 'block';
@@ -578,6 +581,7 @@ export const renderAboutPage = async (): Promise<string> => {
             loadingSpinner.style.display = 'none';
             jsonContent.style.display = 'block';
             jsonContent.textContent = textContent;
+            addCopyButton(jsonContent);
           }, 300);
         } else {
           // Fetch and show resource content
@@ -618,6 +622,7 @@ export const renderAboutPage = async (): Promise<string> => {
             loadingSpinner.style.display = 'none';
             resourceContent.style.display = 'block';
             resourceContent.innerHTML = '<pre class="json-content">' + resourceText + '</pre>';
+            addCopyButton(resourceContent.querySelector('.json-content'));
           } catch (error) {
             loadingSpinner.style.display = 'none';
             resourceContent.style.display = 'block';
@@ -658,12 +663,77 @@ export const renderAboutPage = async (): Promise<string> => {
         loading.style.display = 'none';
         result.style.display = 'block';
         result.textContent = JSON.stringify(data, null, 2);
+        addCopyButton(result);
       } catch (err) {
         // Hide loading and show error
         loading.style.display = 'none';
         error.style.display = 'block';
         error.textContent = 'Error: ' + (err.message || 'Failed to fetch health check data');
       }
+    }
+
+    // Copy to clipboard functionality
+    function addCopyButton(contentElement) {
+      if (!contentElement || contentElement.hasAttribute('data-copy-added')) {
+        return;
+      }
+
+      contentElement.setAttribute('data-copy-added', 'true');
+
+      const copyButton = document.createElement('button');
+      copyButton.className = 'copy-button';
+      copyButton.innerHTML = '📋';
+      copyButton.title = 'Copy to clipboard';
+      copyButton.setAttribute('aria-label', 'Copy to clipboard');
+
+      const notification = document.createElement('div');
+      notification.className = 'copy-notification';
+      notification.textContent = 'Copied';
+
+      contentElement.appendChild(copyButton);
+      contentElement.appendChild(notification);
+
+      copyButton.addEventListener('click', async function() {
+        let textToCopy = contentElement.textContent || contentElement.innerText;
+        textToCopy = textToCopy.replace(/📋Copied/, '')
+        try {
+          await navigator.clipboard.writeText(textToCopy);
+
+          // Show notification
+          notification.classList.add('show');
+
+          // Hide notification after 1 second
+          setTimeout(() => {
+            notification.classList.remove('show');
+          }, 1000);
+
+        } catch (err) {
+          // Fallback for browsers that don't support clipboard API
+          const textArea = document.createElement('textarea');
+          textArea.value = textToCopy;
+          textArea.style.position = 'fixed';
+          textArea.style.opacity = '0';
+          document.body.appendChild(textArea);
+          textArea.focus();
+          textArea.select();
+
+          try {
+            document.execCommand('copy');
+
+            // Show notification
+            notification.classList.add('show');
+
+            // Hide notification after 1 second
+            setTimeout(() => {
+              notification.classList.remove('show');
+            }, 1000);
+          } catch (fallbackErr) {
+            console.error('Failed to copy text:', fallbackErr);
+          }
+
+          document.body.removeChild(textArea);
+        }
+      });
     }
 
     // Close modal when clicking outside

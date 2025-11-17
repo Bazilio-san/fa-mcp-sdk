@@ -316,54 +316,7 @@ body {
   100% { transform: rotate(360deg); }
 }
 
-/* JSON content styles */
-.json-content {
-  font-family: var(--font-family-mono);
-  font-size: var(--font-size-050);
-  line-height: 1.4;
-  color: var(--color-neutral-1000);
-  white-space: pre-wrap;
-  overflow-x: auto;
-  max-height: 300px;
-  overflow-y: auto;
-  margin: 0;
-  background: var(--color-neutral-90);
-  padding: 16px;
-  border-radius: var(--border-radius-100);
-  border: 1px solid var(--color-neutral-200);
-}
 
-/* Prompt content styles */
-.prompt-content {
-  font-family: var(--font-family-mono);
-  font-size: var(--font-size-075);
-  line-height: 1.5;
-  color: var(--color-neutral-1000);
-  max-height: 400px;
-  overflow-y: auto;
-}
-
-.prompt-content pre {
-  margin: 0;
-  white-space: pre-wrap;
-  word-wrap: break-word;
-}
-
-/* Resource content styles */
-.resource-content {
-  font-family: var(--font-family-mono);
-  font-size: var(--font-size-075);
-  line-height: 1.5;
-  color: var(--color-neutral-1000);
-  max-height: 400px;
-  overflow-y: auto;
-}
-
-.resource-content pre {
-  margin: 0;
-  white-space: pre-wrap;
-  word-wrap: break-word;
-}
 
 /* Error message styles */
 .error-message {
@@ -481,6 +434,128 @@ body {
   color: #dddddd;
 }
 
+/* Copy Button Styles */
+.copy-button {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  background: var(--color-neutral-90);
+  border: 1px solid var(--color-neutral-200);
+  border-radius: var(--border-radius-100);
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  color: var(--color-neutral-600);
+  font-size: 14px;
+  padding: 0;
+  z-index: 10;
+}
+
+.copy-button:hover {
+  background: var(--color-neutral-100);
+  border-color: var(--color-primary-300);
+  color: var(--color-primary-600);
+}
+
+.copy-button:active {
+  transform: scale(0.95);
+}
+
+/* Copy Notification */
+.copy-notification {
+  position: absolute;
+  top: 8px;
+  right: 40px;
+  background: var(--color-neutral-200);
+  color: white;
+  padding: 4px 8px;
+  border-radius: var(--border-radius-100);
+  font-size: 12px;
+  font-weight: 500;
+  white-space: nowrap;
+  opacity: 0;
+  transform: translateY(-4px);
+  transition: all 0.3s ease;
+  z-index: 11;
+  pointer-events: none;
+}
+
+.copy-notification.show {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* Content containers with relative positioning for copy button */
+.detail-content {
+  position: relative;
+}
+
+.json-content {
+  font-family: var(--font-family-mono);
+  font-size: var(--font-size-050);
+  line-height: 1.4;
+  color: var(--color-neutral-1000);
+  white-space: pre-wrap;
+  overflow-x: auto;
+  max-height: 300px;
+  overflow-y: auto;
+  margin: 0;
+  background: var(--color-neutral-90);
+  padding: 16px;
+  padding-right: 48px; /* Extra space for copy button */
+  border-radius: var(--border-radius-100);
+  border: 1px solid var(--color-neutral-200);
+  position: relative;
+}
+
+.prompt-content {
+  font-family: var(--font-family-mono);
+  font-size: var(--font-size-075);
+  line-height: 1.5;
+  color: var(--color-neutral-1000);
+  max-height: 400px;
+  overflow-y: auto;
+  position: relative;
+}
+
+.prompt-content pre {
+  margin: 0;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  padding: 16px;
+  padding-right: 48px; /* Extra space for copy button */
+  background: var(--color-neutral-90);
+  border-radius: var(--border-radius-100);
+  border: 1px solid var(--color-neutral-200);
+  position: relative;
+}
+
+.resource-content {
+  font-family: var(--font-family-mono);
+  font-size: var(--font-size-075);
+  line-height: 1.5;
+  color: var(--color-neutral-1000);
+  max-height: 400px;
+  overflow-y: auto;
+  position: relative;
+}
+
+.resource-content pre {
+  margin: 0;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  padding: 16px;
+  padding-right: 48px; /* Extra space for copy button */
+  background: var(--color-neutral-90);
+  border-radius: var(--border-radius-100);
+  border: 1px solid var(--color-neutral-200);
+  position: relative;
+}
+
 /* Responsive Design */
 @media (max-width: 640px) {
   body {
@@ -532,6 +607,23 @@ body {
 
   .value {
     text-align: left;
+  }
+
+  .copy-button {
+    width: 24px;
+    height: 24px;
+    font-size: 12px;
+  }
+
+  .copy-notification {
+    font-size: 11px;
+    right: 32px;
+  }
+
+  .json-content,
+  .prompt-content pre,
+  .resource-content pre {
+    padding-right: 40px;
   }
 }`;
 };
