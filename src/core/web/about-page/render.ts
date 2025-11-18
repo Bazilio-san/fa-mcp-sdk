@@ -4,6 +4,7 @@ import { getMainDBConnectionStatus } from '../../db/pg-db.js';
 import { getFaviconSvg } from '../favicon-svg.js';
 import { appConfig, getProjectData } from '../../bootstrap/init-config.js';
 import { getCss } from './css.js';
+import { encodeSvgForDataUri } from '../../utils/utils.js';
 
 const startTime = new Date();
 
@@ -23,12 +24,6 @@ const getUptime = (): string => {
   }
 };
 
-const encodeSvgForDataUri = (svg: string): string => {
-  // Encode SVG for use in data URI
-  return encodeURIComponent(svg)
-    .replace(/'/g, '%27')
-    .replace(/"/g, '%22');
-};
 
 export const renderAboutPage = async (): Promise<string> => {
   const { version, repo } = appConfig;

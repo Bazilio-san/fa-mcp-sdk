@@ -13,3 +13,10 @@ export const isMainModule = (url: string) => {
   url = url.replace(/file:\/+/, '');
   return modulePath && (url === modulePath);
 };
+
+export const encodeSvgForDataUri = (svg: string): string => {
+  // Encode SVG for use in data URI
+  return encodeURIComponent(svg)
+    .replace(/'/g, '%27')
+    .replace(/"/g, '%22');
+};

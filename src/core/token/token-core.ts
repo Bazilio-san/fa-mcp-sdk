@@ -62,11 +62,11 @@ export const generateToken = (user: string, liveTimeSec: number, payload?: any):
     throw new Error('generateToken: Username is empty');
   }
   const expire = Date.now() + (liveTimeSec * 1000);
+  const issuedAt = new Date().toISOString();
   payload = isObject(payload) ? payload : {};
   payload.user = user;
   payload.expire = expire;
-  // Add the required serviceName parameter from appConfig
-  payload.serviceName = appConfig.name;
+  payload.iat = issuedAt;
   return `${expire}.${encrypt(JSON.stringify(payload))}`;
 };
 

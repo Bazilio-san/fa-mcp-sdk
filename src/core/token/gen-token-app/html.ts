@@ -1,9 +1,15 @@
+import { encodeSvgForDataUri } from '../../utils/utils.js';
+const jwtSvg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path fill="#0052cc" d="M10.2 0v6.5L12 8.9l1.8-2.4V0Zm3.6 6.5v3l3-1 3.7-5.1-2.9-2.2zm3 2-1.9 2.6 3 1 6.1-2-1.1-3.5Zm1 3.5L15 13l1.8 2.5 6.2 2 1-3.5Zm-1 3.5-3-1v3l3.8 5.3 3-2.1zm-3 2L12 15.2l-1.8 2.5V24h3.6zm-3.6 0v-3l-3 1-3.7 5.2 2.9 2.1zm-3-2 2-2.5-3-1L0 14l1.1 3.5Zm-1-3.5L9 11 7.3 8.7 1 6.6 0 10Zm1-3.4 3 1V6.4L6.4 1.2l-3 2.2Z"/></svg>';
+const iconEncoded = encodeSvgForDataUri(jwtSvg);
+
 export const getHTMLPage = (): string => `<!DOCTYPE html>
 <html lang='ru'>
 <head>
   <meta charset='UTF-8'>
   <meta name='viewport' content='width=device-width, initial-scale=1.0'>
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,${iconEncoded}">
   <title>Token Generator & Validator</title>
+  
   <style>
 * {
   box-sizing: border-box;
@@ -48,6 +54,9 @@ body {
   border-bottom: 1px solid #c1c7d0;
   background: #fafbfc;
   border-radius: 6px 6px 0 0;
+  display: flex;
+  align-items: center;
+  gap: 16px;
 }
 
 .simple-header h1 {
@@ -103,7 +112,7 @@ body {
 }
 
 .form-group {
-  margin-bottom: 24px;
+  margin-bottom: 12px;
 }
 
 .form-row {
@@ -194,24 +203,21 @@ input::placeholder, textarea::placeholder {
 }
 
 .add-btn {
-  background: #006644;
-  color: white;
+  background: #d7ffd4;
+  color: #089300;
   border: none;
-  border-radius: 3px;
-  width: 36px;
-  height: 36px;
+  border-radius: 14px;
+  width: 28px;
+  height: 28px;
   cursor: pointer;
-  font-size: 18px;
+  font-size: 24px;
   font-weight: 500;
-  display: flex;
   align-items: center;
-  justify-content: center;
-  margin: 12px auto 0;
   transition: background 0.2s ease;
 }
 
 .add-btn:hover {
-  background: #005236;
+  background: #c9ffc4;
 }
 
 .btn {
@@ -238,18 +244,6 @@ input::placeholder, textarea::placeholder {
   box-shadow: none;
 }
 
-.copy-btn {
-  background: #0052cc;
-  padding: 8px 16px;
-  font-size: 14px;
-  width: auto;
-  margin: 12px 0 0 0;
-  border-radius: 3px;
-}
-
-.copy-btn:hover {
-  background: #0065ff;
-}
 
 .result {
   margin-top: 24px;
@@ -285,6 +279,55 @@ input::placeholder, textarea::placeholder {
   position: relative;
 }
 
+.copy-button, .validate-token-button {
+  position: absolute;
+  bottom: 5px;
+  right: 35px;
+  background: #ffffff73;
+  border-radius: 4px;
+  width: 28px;
+  height: 28px;
+  cursor: pointer;
+  font-size: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  transition: all 0.2s ease;
+  z-index: 10;
+}
+
+.validate-token-button {
+  right: 5px;
+}
+
+.copy-button:hover, .validate-token-button:hover {
+  background: #ffffff;
+  transform: scale(1.05);
+}
+
+.copy-notification {
+  position: absolute;
+  top: 8px;
+  right: 42px;
+  background: #006644;
+  color: white;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 500;
+  opacity: 0;
+  transform: translateY(-10px);
+  transition: all 0.3s ease;
+  z-index: 11;
+  white-space: nowrap;
+}
+
+.copy-notification.show {
+  opacity: 1;
+  transform: translateY(0);
+}
+
 .token-info {
   background: rgba(0, 102, 68, 0.05);
   border: 1px solid rgba(0, 102, 68, 0.1);
@@ -306,7 +349,17 @@ input::placeholder, textarea::placeholder {
   font-size: 14px;
   color: #172b4d;
 }
-
+.service-icon {
+  width: 26px;
+  height: 26px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.service-icon svg {
+  width: 100%;
+  height: 100%;
+}
 /* Responsive Design */
 @media (max-width: 640px) {
   body {
@@ -356,6 +409,7 @@ input::placeholder, textarea::placeholder {
 <div class="simple-container">
   <!-- Header -->
   <header class="simple-header">
+    <div class="service-icon">${jwtSvg}</div>
     <h1>Token Generator & Validator</h1>
   </header>
 
@@ -427,7 +481,15 @@ function switchTab (tabName) {
     tab.classList.remove('active');
   });
   document.getElementById(tabName).classList.add('active');
-  event.target.classList.add('active');
+
+  // Activate the corresponding tab button
+  const tabs = document.querySelectorAll('.tab');
+  tabs.forEach(tab => {
+    const onclick = tab.getAttribute('onclick');
+    if (onclick && onclick.includes("switchTab('" + tabName + "')")) {
+      tab.classList.add('active');
+    }
+  });
 }
 
 function addKeyValuePair (key = '', value = '', readonly = false, placeholder = 'Value') {
@@ -456,9 +518,88 @@ function removeKeyValuePair (button) {
   keyValuePairCount--;
 }
 
-function copyToClipboard (text) {
-  navigator.clipboard.writeText(text).then(() => {
-    alert('Token copied to clipboard!');
+function addCopyButtonToTokenOutput(tokenOutput, token) {
+  if (!tokenOutput || tokenOutput.hasAttribute('data-copy-added')) {
+    return;
+  }
+
+  tokenOutput.setAttribute('data-copy-added', 'true');
+
+  const copyButton = document.createElement('button');
+  copyButton.className = 'copy-button';
+  copyButton.innerHTML = '📋';
+  copyButton.title = 'Copy to clipboard';
+  copyButton.setAttribute('aria-label', 'Copy to clipboard');
+
+  const validateButton = document.createElement('button');
+  validateButton.className = 'validate-token-button';
+  validateButton.innerHTML = '✓';
+  validateButton.title = 'Validate token';
+  validateButton.setAttribute('aria-label', 'Validate token');
+
+  const notification = document.createElement('div');
+  notification.className = 'copy-notification';
+  notification.textContent = 'Copied';
+
+  tokenOutput.appendChild(copyButton);
+  tokenOutput.appendChild(validateButton);
+  tokenOutput.appendChild(notification);
+
+  copyButton.addEventListener('click', async function() {
+    try {
+      await navigator.clipboard.writeText(token);
+
+      // Show notification
+      notification.classList.add('show');
+
+      // Hide notification after 1 second
+      setTimeout(() => {
+        notification.classList.remove('show');
+      }, 1000);
+
+    } catch (err) {
+      // Fallback for browsers that don't support clipboard API
+      const textArea = document.createElement('textarea');
+      textArea.value = token;
+      textArea.style.position = 'fixed';
+      textArea.style.opacity = '0';
+      document.body.appendChild(textArea);
+      textArea.focus();
+      textArea.select();
+
+      try {
+        document.execCommand('copy');
+
+        // Show notification
+        notification.classList.add('show');
+
+        // Hide notification after 1 second
+        setTimeout(() => {
+          notification.classList.remove('show');
+        }, 1000);
+      } catch (fallbackErr) {
+        console.error('Failed to copy text:', fallbackErr);
+      }
+
+      document.body.removeChild(textArea);
+    }
+  });
+
+  validateButton.addEventListener('click', function() {
+    // Switch to validation tab
+    switchTab('validate');
+
+    // Set the token in the validation textarea
+    const tokenTextarea = document.getElementById('tokenInput');
+    if (tokenTextarea) {
+      tokenTextarea.value = token;
+
+      // Trigger validation form submit
+      const validateForm = document.getElementById('validateForm');
+      if (validateForm) {
+        validateForm.dispatchEvent(new Event('submit'));
+      }
+    }
   });
 }
 
@@ -511,8 +652,19 @@ document.getElementById('generateForm').addEventListener('submit', async (e) => 
         '<div class="result success">' +
         '<strong>The token has been successfully created!</strong><br>' +
         '<div class="token-output">' + result.token + '</div>' +
-        '<button class="copy-btn" onclick="copyToClipboard(\\'' + result.token + '\\')">Copy Token</button>' +
         '</div>';
+
+      // Add floating copy button to the token output
+      const tokenOutput = resultDiv.querySelector('.token-output');
+      if (tokenOutput) {
+        addCopyButtonToTokenOutput(tokenOutput, result.token);
+      }
+
+      // Automatically populate the validation field with the generated token
+      const tokenTextarea = document.getElementById('tokenInput');
+      if (tokenTextarea) {
+        tokenTextarea.value = result.token;
+      }
     } else {
       resultDiv.innerHTML =
         '<div class="result error">' +
@@ -546,7 +698,7 @@ document.getElementById('validateForm').addEventListener('submit', async (e) => 
 
     if (result.success) {
       const remainingTime = result.payload.expire - Date.now();
-      const payloadKeys = Object.keys(result.payload).filter(k => k !== 'user' && k !== 'expire');
+      const payloadKeys = Object.keys(result.payload).filter((k) => !/^(user|expire|iat|service)$/.test(k));
 
       let payloadHtml = '';
       if (payloadKeys.length > 0) {
@@ -556,12 +708,17 @@ document.getElementById('validateForm').addEventListener('submit', async (e) => 
         });
       }
 
+      // Format issued at time
+      const issuedAtTime = result.payload.iat ? new Date(result.payload.iat).toLocaleString('ru-RU') : 'N/A';
+
       resultDiv.innerHTML =
         '<div class="result success">' +
         '<strong>The token is valid!</strong>' +
         '<div class="token-info">' +
         '<h4>Token Information:</h4>' +
         '<p><strong>User:</strong> ' + result.payload.user + '</p>' +
+        ( result.payload.service ? '<p><strong>Service:</strong> ' + result.payload.service + '</p>' : '') +
+        '<p><strong>Issued at:</strong> ' + issuedAtTime + '</p>' +
         '<p><strong>Time remaining:</strong> ' + formatTime(remainingTime) + '</p>' +
         '<p><strong>Expires:</strong> ' + new Date(result.payload.expire).toLocaleString('ru-RU') + '</p>' +
         payloadHtml +
