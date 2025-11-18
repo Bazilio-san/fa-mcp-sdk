@@ -1,69 +1,6 @@
 export const getCss = (primaryColor: string) => {
+  const primary600 = primaryColor || '#0052cc';
   return `
-:root {
-  /* Primary Colors */
-  --color-primary-600: ${primaryColor || '#0052cc'};
-  --color-primary-500: #0065ff;
-
-  /* Secondary Colors */
-  --color-success-600: #006644;
-
-  /* Danger Colors */
-  --color-danger-600: #bf2600;
-  --color-danger-400: #ff5630;
-
-  /* Neutral Colors */
-  --color-neutral-1000: #172b4d;
-  --color-neutral-900: #253858;
-  --color-neutral-700: #42526e;
-  --color-neutral-600: #505f79;
-  --color-neutral-200: #c1c7d0;
-  --color-neutral-100: #dfe1e6;
-  --color-neutral-90: #ebecf0;
-  --color-neutral-20: #fafbfc;
-  --color-neutral-10: #ffffff;
-
-  /* Spacing - 8px grid */
-  --space-025: 2px;
-  --space-050: 4px;
-  --space-075: 6px;
-  --space-100: 8px;
-  --space-150: 12px;
-  --space-200: 16px;
-  --space-250: 20px;
-  --space-300: 24px;
-  --space-400: 32px;
-  --space-500: 40px;
-  --space-600: 48px;
-  --space-800: 64px;
-  --space-1000: 80px;
-
-  /* Typography */
-  --font-family-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif;
-  --font-family-mono: ui-monospace, 'SF Mono', 'Consolas', 'Roboto Mono', 'Ubuntu Mono', monospace;
-
-  /* Font sizes */
-  --font-size-050: 11px;
-  --font-size-075: 12px;
-  --font-size-100: 14px;
-  --font-size-200: 16px;
-  --font-size-300: 20px;
-  --font-size-400: 24px;
-  --font-size-500: 29px;
-  --font-size-600: 35px;
-
-  /* Border radius */
-  --border-radius-050: 2px;
-  --border-radius-100: 3px;
-  --border-radius-200: 6px;
-  --border-radius-300: 8px;
-  --border-radius-400: 12px;
-
-  /* Shadows */
-  --shadow-raised: 0 1px 1px rgba(9, 30, 66, 0.25), 0 0 1px rgba(9, 30, 66, 0.31);
-  --shadow-overlay: 0 4px 8px -2px rgba(9, 30, 66, 0.25), 0 0 1px rgba(9, 30, 66, 0.31);
-  --shadow-card: 0 1px 3px rgba(9, 30, 66, 0.25), 0 0 1px rgba(9, 30, 66, 0.31);
-}
 
 /* Reset and base styles */
 * {
@@ -77,10 +14,10 @@ html, body {
 }
 
 body {
-  font-family: var(--font-family-sans);
-  font-size: var(--font-size-100);
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif;
+  font-size: 14px;
   line-height: 1.5;
-  color: var(--color-neutral-900);
+  color: #253858;
   background: white;
   margin: 0;
   padding: 20px;
@@ -97,8 +34,8 @@ body {
   width: 100%;
   max-width: 670px;
   background: white;
-  border: 1px solid var(--color-neutral-200);
-  border-radius: var(--border-radius-200);
+  border: 1px solid #c1c7d0;
+  border-radius: 6px;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
   margin-top: 40px;
 }
@@ -106,9 +43,9 @@ body {
 /* Simple Header */
 .simple-header {
   padding: 24px 32px 20px;
-  border-bottom: 1px solid var(--color-neutral-200);
-  background: var(--color-neutral-20);
-  border-radius: var(--border-radius-200) var(--border-radius-200) 0 0;
+  border-bottom: 1px solid #c1c7d0;
+  background: #fafbfc;
+  border-radius: 6px 6px 0 0;
 }
 
 .header-row {
@@ -141,7 +78,7 @@ body {
   font-size: 30px;
   font-weight: 700;
   margin: 0;
-  color: var(--color-primary-600);
+  color: ${primary600};
 }
 
 .status {
@@ -154,13 +91,13 @@ body {
 }
 
 .status.online {
-  background: var(--color-success-100);
-  color: var(--color-success-600);
+  background: rgba(0, 102, 68, 0.1);
+  color: #006644;
 }
 
 .status.offline {
-  background: var(--color-danger-100);
-  color: var(--color-danger-600);
+  background: rgba(191, 38, 0, 0.1);
+  color: #bf2600;
 }
 
 /* Simple Main Content */
@@ -185,8 +122,8 @@ body {
 
 .modal-content {
   background: white;
-  border-radius: var(--border-radius-300);
-  box-shadow: var(--shadow-overlay);
+  border-radius: 8px;
+  box-shadow: 0 4px 8px -2px rgba(9, 30, 66, 0.25), 0 0 1px rgba(9, 30, 66, 0.31);
   max-width: 90vw;
   max-height: 90vh;
   width: 900px;
@@ -200,15 +137,15 @@ body {
   justify-content: space-between;
   align-items: center;
   padding: 20px 24px;
-  background: var(--color-neutral-20);
-  border-bottom: 1px solid var(--color-neutral-200);
+  background: #fafbfc;
+  border-bottom: 1px solid #c1c7d0;
 }
 
 .modal-header h3 {
   margin: 0;
-  font-size: var(--font-size-300);
+  font-size: 20px;
   font-weight: 600;
-  color: var(--color-primary-600);
+  color: ${primary600};
 }
 
 .modal-close {
@@ -216,7 +153,7 @@ body {
   border: none;
   font-size: 24px;
   font-weight: 300;
-  color: var(--color-neutral-600);
+  color: #505f79;
   cursor: pointer;
   padding: 0;
   width: 32px;
@@ -224,13 +161,13 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  border-radius: var(--border-radius-100);
+  border-radius: 3px;
   transition: all 0.2s ease;
 }
 
 .modal-close:hover {
-  background: var(--color-neutral-100);
-  color: var(--color-neutral-900);
+  background: #dfe1e6;
+  color: #253858;
 }
 
 .modal-body {
@@ -241,35 +178,35 @@ body {
 
 .table-container {
   overflow-x: auto;
-  border-radius: var(--border-radius-100);
-  border: 1px solid var(--color-neutral-200);
+  border-radius: 3px;
+  border: 1px solid #c1c7d0;
 }
 
 .details-table {
   width: 100%;
   border-collapse: collapse;
   background: white;
-  font-size: var(--font-size-075);
+  font-size: 12px;
 }
 
 .details-table th {
-  background: var(--color-neutral-100);
+  background: #dfe1e6;
   padding: 12px 16px;
   text-align: left;
   font-weight: 600;
-  color: var(--color-neutral-900);
-  border-bottom: 2px solid var(--color-neutral-200);
+  color: #253858;
+  border-bottom: 2px solid #c1c7d0;
   white-space: nowrap;
 }
 
 .details-table td {
   padding: 12px 16px;
-  border-bottom: 1px solid var(--color-neutral-100);
+  border-bottom: 1px solid #dfe1e6;
   vertical-align: top;
 }
 
 .details-table tr:hover {
-  background: var(--color-neutral-20);
+  background: #fafbfc;
 }
 
 .details-table tr:last-child td {
@@ -278,7 +215,7 @@ body {
 
 /* Detail row styles */
 .detail-row {
-  background: var(--color-neutral-20);
+  background: #fafbfc;
 }
 
 .detail-row td {
@@ -293,8 +230,8 @@ body {
 .loading-spinner {
   width: 20px;
   height: 20px;
-  border: 2px solid var(--color-neutral-200);
-  border-top: 2px solid var(--color-primary-500);
+  border: 2px solid #c1c7d0;
+  border-top: 2px solid #0065ff;
   border-radius: 50%;
   animation: spin 1s linear infinite;
   margin: 0 auto 12px auto;
@@ -303,8 +240,8 @@ body {
 .loading-cell {
   text-align: center;
   padding: 40px 20px;
-  color: var(--color-neutral-600);
-  font-size: var(--font-size-100);
+  color: #505f79;
+  font-size: 14px;
 }
 
 .loading-cell .loading-spinner {
@@ -322,36 +259,36 @@ body {
 .error-message {
   padding: 16px;
   background: #ffebe9;
-  color: var(--color-danger-600);
-  border: 1px solid var(--color-danger-400);
-  border-radius: var(--border-radius-100);
-  font-family: var(--font-family-mono);
-  font-size: var(--font-size-075);
+  color: #bf2600;
+  border: 1px solid #ff5630;
+  border-radius: 3px;
+  font-family: ui-monospace, 'SF Mono', 'Consolas', 'Roboto Mono', 'Ubuntu Mono', monospace;
+  font-size: 12px;
   text-align: center;
 }
 
 .clickable {
-  color: var(--color-primary-500) !important;
+  color: #0065ff !important;
   text-decoration: none;
   cursor: pointer;
   transition: color 0.2s ease;
 }
 
 .clickable:hover {
-  color: var(--color-primary-600);
+  color: ${primary600};
   text-decoration: underline;
 }
 
 .detail-link {
-  color: var(--color-primary-500);
+  color: #0065ff;
   text-decoration: none;
-  font-size: var(--font-size-075);
+  font-size: 12px;
   font-weight: 500;
   cursor: pointer;
 }
 
 .detail-link:hover {
-  color: var(--color-primary-600);
+  color: ${primary600};
   text-decoration: underline;
 }
 
@@ -366,7 +303,7 @@ body {
   justify-content: space-between;
   align-items: center;
   padding: 8px 0;
-  border-bottom: 1px solid var(--color-neutral-100);
+  border-bottom: 1px solid #dfe1e6;
 }
 
 .info-row:last-child {
@@ -375,58 +312,58 @@ body {
 
 .label {
   font-weight: 500;
-  color: var(--color-neutral-700);
+  color: #42526e;
   min-width: 100px;
 }
 
 .value {
   text-align: right;
-  color: var(--color-neutral-1000);
-  font-family: var(--font-family-mono);
+  color: #172b4d;
+  font-family: ui-monospace, 'SF Mono', 'Consolas', 'Roboto Mono', 'Ubuntu Mono', monospace;
   font-size: 14px;
 }
 
 .value.link {
-  color: var(--color-primary-500);
+  color: #0065ff;
   text-decoration: none;
 }
 
 .value.link:hover {
-  color: var(--color-primary-600);
+  color: ${primary600};
   text-decoration: underline;
 }
 
 .value.connected {
-  color: var(--color-success-600);
+  color: #006644;
 }
 
 .value.disconnected, .value.error {
-  color: var(--color-danger-600);
+  color: #bf2600;
 }
 
 
 /* Simple Footer */
 .simple-footer {
   padding: 16px 32px;
-  background: var(--color-neutral-20);
-  border-top: 1px solid var(--color-neutral-200);
-  border-radius: 0 0 var(--border-radius-200) var(--border-radius-200);
+  background: #fafbfc;
+  border-top: 1px solid #c1c7d0;
+  border-radius: 0 0 6px 6px;
 }
 
 .simple-footer p {
   margin: 0;
   font-size: 12px;
-  color: var(--color-neutral-600);
+  color: #505f79;
   text-align: center;
 }
 
 .simple-footer a {
-  color: var(--color-primary-500);
+  color: #0065ff;
   text-decoration: none;
 }
 
 .simple-footer a:hover {
-  color: var(--color-primary-600);
+  color: ${primary600};
   text-decoration: underline;
 }
 
@@ -439,9 +376,9 @@ body {
   position: absolute;
   top: 8px;
   right: 8px;
-  background: var(--color-neutral-90);
-  border: 1px solid var(--color-neutral-200);
-  border-radius: var(--border-radius-100);
+  background: #ebecf0;
+  border: 1px solid #c1c7d0;
+  border-radius: 3px;
   width: 28px;
   height: 28px;
   display: flex;
@@ -449,16 +386,16 @@ body {
   justify-content: center;
   cursor: pointer;
   transition: all 0.2s ease;
-  color: var(--color-neutral-600);
+  color: #505f79;
   font-size: 14px;
   padding: 0;
   z-index: 10;
 }
 
 .copy-button:hover {
-  background: var(--color-neutral-100);
-  border-color: var(--color-primary-300);
-  color: var(--color-primary-600);
+  background: #dfe1e6;
+  border-color: #0052cc;
+  color: ${primary600};
 }
 
 .copy-button:active {
@@ -470,10 +407,10 @@ body {
   position: absolute;
   top: 8px;
   right: 40px;
-  background: var(--color-neutral-200);
+  background: #c1c7d0;
   color: white;
   padding: 4px 8px;
-  border-radius: var(--border-radius-100);
+  border-radius: 3px;
   font-size: 12px;
   font-weight: 500;
   white-space: nowrap;
@@ -495,28 +432,28 @@ body {
 }
 
 .json-content {
-  font-family: var(--font-family-mono);
-  font-size: var(--font-size-050);
+  font-family: ui-monospace, 'SF Mono', 'Consolas', 'Roboto Mono', 'Ubuntu Mono', monospace;
+  font-size: 11px;
   line-height: 1.4;
-  color: var(--color-neutral-1000);
+  color: #172b4d;
   white-space: pre-wrap;
   overflow-x: auto;
   max-height: 300px;
   overflow-y: auto;
   margin: 0;
-  background: var(--color-neutral-90);
+  background: #ebecf0;
   padding: 16px;
   padding-right: 48px; /* Extra space for copy button */
-  border-radius: var(--border-radius-100);
-  border: 1px solid var(--color-neutral-200);
+  border-radius: 3px;
+  border: 1px solid #c1c7d0;
   position: relative;
 }
 
 .prompt-content {
-  font-family: var(--font-family-mono);
-  font-size: var(--font-size-075);
+  font-family: ui-monospace, 'SF Mono', 'Consolas', 'Roboto Mono', 'Ubuntu Mono', monospace;
+  font-size: 12px;
   line-height: 1.5;
-  color: var(--color-neutral-1000);
+  color: #172b4d;
   max-height: 400px;
   overflow-y: auto;
   position: relative;
@@ -528,17 +465,17 @@ body {
   word-wrap: break-word;
   padding: 16px;
   padding-right: 48px; /* Extra space for copy button */
-  background: var(--color-neutral-90);
-  border-radius: var(--border-radius-100);
-  border: 1px solid var(--color-neutral-200);
+  background: #ebecf0;
+  border-radius: 3px;
+  border: 1px solid #c1c7d0;
   position: relative;
 }
 
 .resource-content {
-  font-family: var(--font-family-mono);
-  font-size: var(--font-size-075);
+  font-family: ui-monospace, 'SF Mono', 'Consolas', 'Roboto Mono', 'Ubuntu Mono', monospace;
+  font-size: 12px;
   line-height: 1.5;
-  color: var(--color-neutral-1000);
+  color: #172b4d;
   max-height: 400px;
   overflow-y: auto;
   position: relative;
@@ -550,9 +487,9 @@ body {
   word-wrap: break-word;
   padding: 16px;
   padding-right: 48px; /* Extra space for copy button */
-  background: var(--color-neutral-90);
-  border-radius: var(--border-radius-100);
-  border: 1px solid var(--color-neutral-200);
+  background: #ebecf0;
+  border-radius: 3px;
+  border: 1px solid #c1c7d0;
   position: relative;
 }
 

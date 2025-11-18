@@ -610,8 +610,17 @@ export const renderAboutPage = async (): Promise<string> => {
               if (i > 0) resourceText += '\\n\\n---\\n\\n';
               resourceText += 'URI: ' + content.uri + '\\n';
               resourceText += 'MIME Type: ' + content.mimeType + '\\n\\n';
+
               if (content.text) {
-                resourceText += content.text;
+                let processedText = content.text;
+
+                // Handle JSON content more intelligently
+                if (content.mimeType === 'application/json') {
+                  if (typeof processedText !== 'string') {
+                    processedText = JSON.stringify(processedText, null, 2);
+                  }
+                }
+                resourceText += processedText;
               } else if (content.blob) {
                 resourceText += '[Binary content: ' + content.blob.length + ' bytes]';
               } else {

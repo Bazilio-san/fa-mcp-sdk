@@ -11,54 +11,87 @@ export const getHTMLPage = (): string => `<!DOCTYPE html>
   padding: 0;
 }
 
-body {
-  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  min-height: 100vh;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 20px;
+html, body {
+  height: 100%;
 }
 
-.container {
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif;
+  font-size: 14px;
+  line-height: 1.5;
+  color: #253858;
   background: white;
-  border-radius: 20px;
-  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
-  padding: 30px;
+  margin: 0;
+  padding: 24px;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  min-height: 100vh;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+}
+
+/* Simple Layout */
+.simple-container {
   width: 100%;
-  max-width: 800px;
+  max-width: 670px;
+  background: white;
+  border: 1px solid #c1c7d0;
+  border-radius: 6px;
+  box-shadow: 0 1px 3px rgba(9, 30, 66, 0.25), 0 0 1px rgba(9, 30, 66, 0.31);
+  margin-top: 40px;
+}
+
+/* Simple Header */
+.simple-header {
+  padding: 16px 24px 12px;
+  border-bottom: 1px solid #c1c7d0;
+  background: #fafbfc;
+  border-radius: 6px 6px 0 0;
+}
+
+.simple-header h1 {
+  font-size: 24px;
+  font-weight: 600;
+  margin: 0;
+  color: #0052cc;
+}
+
+/* Simple Main Content */
+.simple-main {
+  padding: 24px 24px;
 }
 
 .tab-container {
-  margin-bottom: 30px;
+  margin-bottom: 0;
 }
 
 .tabs {
   display: flex;
-  border-bottom: 2px solid #f0f0f0;
-  margin-bottom: 20px;
+  border-bottom: 1px solid #c1c7d0;
+  margin-bottom: 24px;
 }
 
 .tab {
   background: none;
   border: none;
-  padding: 15px 25px;
+  padding: 12px 16px;
   cursor: pointer;
-  font-size: 16px;
+  font-size: 14px;
   font-weight: 500;
-  color: #666;
+  color: #505f79;
   border-bottom: 2px solid transparent;
-  transition: all 0.3s ease;
+  transition: all 0.2s ease;
 }
 
 .tab.active {
-  color: #667eea;
-  border-bottom-color: #667eea;
+  color: #0052cc;
+  border-bottom-color: #0052cc;
 }
 
 .tab:hover {
-  background: #f9f9f9;
+  color: #253858;
+  background: #fafbfc;
 }
 
 .tab-content {
@@ -70,34 +103,46 @@ body {
 }
 
 .form-group {
-  margin-bottom: 20px;
+  margin-bottom: 24px;
 }
 
 .form-row {
   display: flex;
-  gap: 10px;
+  gap: 12px;
   align-items: center;
 }
 
 label {
   display: block;
-  margin-bottom: 5px;
+  margin-bottom: 4px;
   font-weight: 500;
-  color: #333;
+  color: #42526e;
+  font-size: 14px;
 }
 
 input, select, textarea {
   width: 100%;
-  padding: 12px;
-  border: 2px solid #e0e0e0;
-  border-radius: 8px;
+  padding: 4px 6px;
+  border: 1px solid #c1c7d0;
+  border-radius: 3px;
   font-size: 14px;
-  transition: border-color 0.3s ease;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+  background: white;
+}
+
+select {
+  padding: 3px 6px;
 }
 
 input:focus, select:focus, textarea:focus {
   outline: none;
-  border-color: #667eea;
+  border-color: #0065ff;
+  box-shadow: 0 0 0 2px rgba(0, 101, 255, 0.1);
+}
+
+input::placeholder, textarea::placeholder {
+  color: #505f79;
 }
 
 .time-input {
@@ -110,8 +155,8 @@ input:focus, select:focus, textarea:focus {
 
 .key-value-pair {
   display: flex;
-  gap: 10px;
-  margin-bottom: 10px;
+  gap: 8px;
+  margin-bottom: 12px;
   align-items: center;
 }
 
@@ -129,134 +174,198 @@ input:focus, select:focus, textarea:focus {
 }
 
 .remove-btn {
-  background: #ffffff;
-  color: #ff0000;
-  border: 1px solid #ffb7b7;
-  border-radius: 50%;
-  width: 36px;
-  height: 36px;
+  background: white;
+  color: #bf2600;
+  border: 0px;
+  width: 28px;
+  height: 28px;
   cursor: pointer;
-  font-size: 24px;
+  font-size: 22px;
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: background 0.3s ease;
+  flex-shrink: 0;
 }
 
 .remove-btn:hover {
-  background: #ff3838;
+  background: #bf2600;
+  color: white;
+  border-color: #bf2600;
 }
 
 .add-btn {
-  background: #2ed573;
+  background: #006644;
   color: white;
   border: none;
-  border-radius: 50%;
-  width: 40px;
-  height: 40px;
+  border-radius: 3px;
+  width: 36px;
+  height: 36px;
   cursor: pointer;
-  font-size: 20px;
+  font-size: 18px;
+  font-weight: 500;
   display: flex;
   align-items: center;
   justify-content: center;
-  margin: 10px auto;
-  transition: background 0.3s ease;
+  margin: 12px auto 0;
+  transition: background 0.2s ease;
 }
 
 .add-btn:hover {
-  background: #26d068;
+  background: #005236;
 }
 
 .btn {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: #0052cc;
   color: white;
   border: none;
-  padding: 15px 30px;
-  border-radius: 10px;
-  font-size: 16px;
+  padding: 12px 24px;
+  border-radius: 3px;
+  font-size: 14px;
   font-weight: 500;
   cursor: pointer;
-  transition: transform 0.3s ease, box-shadow 0.3s ease;
+  transition: all 0.2s ease;
   width: 100%;
-  margin-bottom: 20px;
+  margin-bottom: 16px;
 }
 
 .btn:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 10px 20px rgba(0, 0, 0, 0.2);
+  background: #0065ff;
+  box-shadow: 0 1px 1px rgba(9, 30, 66, 0.25), 0 0 1px rgba(9, 30, 66, 0.31);
 }
 
 .btn:active {
-  transform: translateY(0);
+  transform: translateY(1px);
+  box-shadow: none;
 }
 
 .copy-btn {
-  background: #5352ed;
-  padding: 10px 20px;
+  background: #0052cc;
+  padding: 8px 16px;
   font-size: 14px;
   width: auto;
-  margin: 10px 0 0 0;
+  margin: 12px 0 0 0;
+  border-radius: 3px;
+}
+
+.copy-btn:hover {
+  background: #0065ff;
 }
 
 .result {
-  margin-top: 20px;
-  padding: 20px;
-  border-radius: 10px;
-  font-family: 'Courier New', monospace;
+  margin-top: 24px;
+  padding: 24px;
+  border-radius: 3px;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif;
 }
 
 .result.success {
-  background: #d4edda;
-  color: #155724;
-  border: 1px solid #c3e6cb;
+  background: rgba(0, 102, 68, 0.1);
+  color: #006644;
+  border: 1px solid rgba(0, 102, 68, 0.2);
 }
 
 .result.error {
-  background: #f8d7da;
-  color: #721c24;
-  border: 1px solid #f5c6cb;
+  background: rgba(191, 38, 0, 0.1);
+  color: #bf2600;
+  border: 1px solid rgba(255, 86, 48, 0.2);
 }
 
 .token-output {
-  background: #f8f9fa;
-  border: 2px solid #e9ecef;
-  border-radius: 8px;
-  padding: 15px;
-  font-family: 'Courier New', monospace;
+  background: #ebecf0;
+  border: 1px solid #c1c7d0;
+  border-radius: 3px;
+  padding: 16px;
+  font-family: ui-monospace, 'SF Mono', 'Consolas', 'Roboto Mono', 'Ubuntu Mono', monospace;
   font-size: 12px;
   line-height: 1.4;
   word-break: break-all;
   min-height: 100px;
   resize: vertical;
+  color: #172b4d;
+  position: relative;
 }
 
 .token-info {
-  background: #e8f5e8;
-  border: 1px solid #d4edda;
-  border-radius: 8px;
-  padding: 15px;
-  margin-top: 15px;
+  background: rgba(0, 102, 68, 0.05);
+  border: 1px solid rgba(0, 102, 68, 0.1);
+  border-radius: 3px;
+  padding: 16px;
+  margin-top: 12px;
 }
 
 .token-info h4 {
-  margin-bottom: 10px;
-  color: #155724;
+  margin-bottom: 8px;
+  color: #006644;
+  font-weight: 600;
+  font-size: 14px;
 }
 
 .token-info p {
-  margin: 5px 0;
-  font-family: 'Courier New', monospace;
+  margin: 4px 0;
+  font-family: ui-monospace, 'SF Mono', 'Consolas', 'Roboto Mono', 'Ubuntu Mono', monospace;
   font-size: 14px;
+  color: #172b4d;
+}
+
+/* Responsive Design */
+@media (max-width: 640px) {
+  body {
+    padding: 16px;
+  }
+
+  .simple-container {
+    margin-top: 24px;
+    max-width: 100%;
+  }
+
+  .simple-header {
+    padding: 16px 20px 12px;
+  }
+
+  .simple-header h1 {
+    font-size: 20px;
+  }
+
+  .simple-main {
+    padding: 20px 20px;
+  }
+
+  .form-row {
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .key-value-pair {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+  }
+
+  .key-value-pair input[name="keys"] {
+    width: 100%;
+  }
+
+  .remove-btn {
+    width: 100%;
+    margin-top: 8px;
+  }
 }
   </style>
 </head>
 <body>
-<div class="container">
-  <div class="tab-container">
-    <div class="tabs">
-      <button class="tab active" onclick="switchTab('generate')">Token generation</button>
-      <button class="tab" onclick="switchTab('validate')">Token validation</button>
-    </div>
+<div class="simple-container">
+  <!-- Header -->
+  <header class="simple-header">
+    <h1>Token Generator & Validator</h1>
+  </header>
+
+  <!-- Main Content -->
+  <main class="simple-main">
+    <div class="tab-container">
+      <div class="tabs">
+        <button class="tab active" onclick="switchTab('generate')">Token generation</button>
+        <button class="tab" onclick="switchTab('validate')">Token validation</button>
+      </div>
 
     <!-- Token generation -->
     <div id="generate" class="tab-content active">
@@ -303,7 +412,8 @@ input:focus, select:focus, textarea:focus {
       </form>
       <div id="validateResult"></div>
     </div>
-  </div>
+    </div>
+  </main>
 </div>
 
 <script>
@@ -482,7 +592,7 @@ async function initializeForm () {
 
     // Adding a pre-filled pair serviceName
     addKeyValuePair('service', serviceName, true);
-    addKeyValuePair('issue', '', true, 'Reqoest for the issuance of a token');
+    addKeyValuePair('issue', '', true, 'URL of request for the issuance of a token in JIRA');
 
   } catch (error) {
     console.error('Error loading service info:', error);
