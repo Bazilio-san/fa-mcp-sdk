@@ -6,6 +6,7 @@
 #    host: <host>
 #    port: 9999
 #    token: '***'
+#    noConsul: true # Use if the service developers do not provide registration in consul
 #    consulServiceName: <consulServiceName>
 
 consul:
@@ -19,31 +20,34 @@ consul:
       host: 'consul.entapp.work'
       port: 443
       secure: true
+      # Token for getting information about DEV services
       token: '***'
     prd:
       dc: 'dc-prd'
       host: 'consul.entapp.work'
       port: 443
       secure: true
+      # Token for obtaining information about PROD services
       token: '***'
     reg:
-      host: null
+      host: null # The host of the consul agent where the service will be registered. If not specified, the server on which the service is running is used
       port: 8500
       secure: false
+      # Token for registering the service in the consul agent
       token: '***'
   service:
-    name: <name> # Will be pulled up from package.json
-    instance: '???'
-    version: <version> # Will be pulled up from package.json
-    description: <description> # Will be pulled up from package.json
-    tags: [] # Will be pulled up from package.json
+    enable: true # true - Allows registration of the service with the consul
+    name: <name> # <name> will be replaced by <package.json>.name at initialization
+    instance: 'instance-0' # This value will be specified as a suffix in the id of the service
+    version: <version> # <version> will be replaced by <package.json>.version at initialization
+    description: <description> # <description> will be replaced by <package.json>.description at initialization
+    tags: [] # If null or empty array - Will be pulled up from package.keywords at initialization
     meta:
       # "About" page link template
       who: 'http://{address}:{port}/'
-    noRegOnStart: true # If true - disable the registration of the service with the consul
-  envCode:
-      prod: <env_prefix>r01 # Required - product contour code
-      dev: <env_prefix>e01 # Required - code of the development circuit
+  envCode: # Used to generate the service ID
+    prod: <envCode.prod> # Production environment code
+    dev: <envCode.dev> # Development environment code
 
 db:
   postgres:
@@ -59,10 +63,14 @@ db:
 
 logger:
   level: info
-  useFileLogger: true
+  useFileLogger: true # To use or not to use logging to a file
+  # VVA --------------------------- Добавить папку логирования
 
 mcp:
   transportType: http # stdio | http
+  # Response format configuration.
+  # - structuredContent - default - the response in result.structuredContent returns JSON
+  # - text - in the response, serialized JSON is returned in result.content[0].text
   toolAnswerAs: text # text | structuredContent
   rateLimit:
     maxRequests: 100
@@ -75,19 +83,20 @@ swagger:
     - url: http://0.0.0.0:9876
       description: "Development server (all interfaces)"
 
-# Response format configuration.
-# - structuredContent - default - the response in result.structuredContent returns JSON
-# - text - in the response, serialized JSON is returned in result.content[0].text
-toolAnswerAs: text
-
-uiColor:
+uiColor: # Font color of the header and a number of interface elements on the ABOUT page
   primary: '#0f65dc'
 
 webServer:
   host: '0.0.0.0'
   port: 9876
+  # array of hosts that CORS skips
   originHosts: ['localhost', '0.0.0.0']
   auth:
-    enabled: false
+    enabled: false # Enables/disables token authorization
+    # An array of fixed tokens that pass to the MCP (use only for MCPs with green data or for development)
     permanentServerTokens: []
-    tokenEncryptKey: '***'
+    token:
+      # Symmetric encryption key to generate a token for this MCP
+      encryptKey: '***'
+      # If webServer.auth.enabled and the parameter true, the service name and the service specified in the token will be checked
+      checkMCPName: true

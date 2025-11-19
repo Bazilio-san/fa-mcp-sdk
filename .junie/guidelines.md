@@ -113,10 +113,10 @@ Ports and transport
 Configuration
 - Main file: `config\default.yaml`. Override by environment (node-config rules), env vars, or additional config files.
 - Key toggles:
-  - `webServer.auth.enabled` – turn on token auth if needed (with `permanentServerTokens`, `tokenEncryptKey`).
+  - `webServer.auth.enabled` – turn on token auth if needed (with `permanentServerTokens`, `token.encryptKey`).
   - `mcp.rateLimit` – guard MCP methods (`tools/call` has per-IP limiter in `server-http.ts`).
   - `db.postgres.dbs.main.host` – if empty string, DB usage is disabled. If provided, DB checked on startup.
-  - `consul.service.noRegOnStart` – set to `false` to register in Consul automatically (requires consul agent config).
+  - `consul.service.enable` – set to `true` to register in Consul automatically (requires consul agent config).
   - `swagger.servers` – list of servers shown in Swagger.
 
 Swagger UI
@@ -174,7 +174,7 @@ DB & pgvector
 - If `db.postgres.dbs.main.host` is configured, the server will attempt a connection on startup. `usedExtensions` supports `pgvector` enabling vector features (see `src\core\db\pg-db.ts`).
 
 Consul integration
-- Disabled by default (`noRegOnStart: true`). To enable, configure `consul.agent` and set `noRegOnStart: false`. UI link is derived via `getConsulUIAddress` in `src\template\start.ts`.
+- Enabled by default (`enable: true`). To disable, configure `consul.agent` and set `enable: false`.
 
 Stdio transport
 - See `docs\CHECK_STDIO.md` for stdio usage details. You can run via `npm run template:stdio` after building.

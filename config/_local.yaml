@@ -1,21 +1,34 @@
 # Copy this file to local.yaml and update with your database credentials
 # local.yaml is gitignored and won't be committed
 ---
+ad:
+  domains:
+    MYDOMAIN:
+      default: true
+      controllers:
+        - 'ldap://c1.corp.com'
+        - 'ldap://c2.corp.com'
+      username: '***'
+      password: '***'
+
 consul:
   agent:
     dev:
+      # Token for getting information about DEV services
       token: '***'
     prd:
+      # Token for obtaining information about PROD services
       token: '***'
     reg:
-      host: '***'
+      # host: '***' # The host of the consul agent where the service will be registered. If not specified, the server on which the service is running is used
+      # Token for registering the service in the consul agent
       token: '***'
   service:
-    instance: "??"
-    noRegOnStart: true # If true - Allows you to disable the registration of the service with the consul
-  envCode:
-    prod: <env_prefix>r01 # Required - product contour code
-    dev: <env_prefix>e01 # Required - code of the development circuit
+    enable: true # true - Allows registration of the service with the consul
+    instance: 'instance-0' # This value will be specified as a suffix in the id of the service
+  envCode: # Used to generate the service ID
+    prod: <envCode.prod> # Production environment code
+    dev: <envCode.dev> # Development environment code
 
 db:
   postgres:
@@ -32,7 +45,7 @@ db:
 
 logger:
   level: info
-  useFileLogger: true
+  useFileLogger: true # To use or not to use logging to a file
 
 mcp:
   transportType: http # 'stdio' or 'http'
@@ -46,12 +59,16 @@ swagger:
     - url: http://localhost:9876
       description: "Local server"
 
-toolAnswerAs: text
-
 webServer:
   port: 9876
+  # array of hosts that CORS skips
   originHosts: ['localhost', '0.0.0.0']
   auth:
-    enabled: false
+    enabled: false # Enables/disables token authorization
+    # An array of fixed tokens that pass to the MCP (use only for MCPs with green data or for development)
     permanentServerTokens: []
-    tokenEncryptKey: '***'
+    token:
+      # Symmetric encryption key to generate a token for this MCP
+      encryptKey: '***'
+      # If webServer.auth.enabled and the parameter true, the service name and the service specified in the token will be checked
+      checkMCPName: true

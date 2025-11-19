@@ -59,6 +59,7 @@ export default [
       }],
       'object-curly-spacing': ['error', 'always'],
       'curly': ['error', 'all'],
+      'eol-last': ['error', 'always'],
     },
   },
   {
@@ -89,6 +90,7 @@ export default [
       }],
       'object-curly-spacing': ['error', 'always'],
       'curly': ['error', 'all'],
+      'eol-last': ['error', 'always'],
     },
   },
   {
@@ -131,6 +133,7 @@ export default [
       'doc/',
       'node_modules/',
       'coverage/',
+      'cli-template/',
       '**/*.d.ts',
     ],
   },

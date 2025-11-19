@@ -29,10 +29,21 @@ function buildConfig (): AppConfig {
     description,
   };
 
-  cfg.consul.service = { ...cfg.consul.service, name, version, description };
-  cfg.consul.service.tags = keywords;
+  const s = cfg.consul.service;
+  if (s.name === '<name>') {
+    s.name = name;
+  }
+  if (s.version === '<version>') {
+    s.version = version;
+  }
+  if (s.description === '<description>') {
+    s.description = description;
+  }
+  if (!s.tags?.length) {
+    s.tags = keywords;
+  }
   cfg.mcp.transportType = process.argv[2] === 'stdio' ? 'stdio' : config.mcp.transportType;
-  cfg.isMainDBUsed = !!config.db.postgres?.dbs.main?.host;
+  cfg.isMainDBUsed = !!config.db?.postgres?.dbs?.main?.host;
   const urlRe = /\b(https?|ftp|file):\/\/[-A-Z0-9+&@#\/%?=~_|$!:,.;]*[A-Z0-9+&@#\/%=~_|$]/i;
   if (urlRe.test(trim(repository?.url))) {
     cfg.repo = urlRe.exec(repository.url)?.[0] || '';

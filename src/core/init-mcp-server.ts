@@ -19,7 +19,7 @@ import chalk from 'chalk';
 
 let cyclicRegisterServiceInConsul: IRegisterCyclic;
 const initCyclicRegisterServiceInConsul = async () => {
-  if (!appConfig.consul.service.noRegOnStart) {
+  if (appConfig.consul.service.enable) {
     // Starting a cyclic service registration in consul
     cyclicRegisterServiceInConsul = await registerCyclic();
     await cyclicRegisterServiceInConsul.start();

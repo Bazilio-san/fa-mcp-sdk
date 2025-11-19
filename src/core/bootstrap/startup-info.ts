@@ -20,7 +20,7 @@ export const startupInfo = async (args: { dotEnvResult: any, cfg: AppConfig }) =
   let consulInfoItem: string | [string, string] = '';
   const s = cfg.consul.service;
   let consulUI: string | undefined;
-  if (!s.noRegOnStart) {
+  if (s.enable) {
     const consulApi: IAFConsulAPI = await getConsulAPI();
     const r = consulApi.registerConfig;
 

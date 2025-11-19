@@ -1,0 +1,73 @@
+{
+  "name": "{{project.name}}",
+  "productName": "{{project.productName}}",
+  "version": "0.0.1",
+  "description": "{{project.description}}",
+  "type": "module",
+  "main": "dist/core/index.js",
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "scripts": {
+    "start": "node dist/src/start.js",
+    "build": "tsc",
+    "clean": "rimraf dist",
+    "cb": "npm run clean && npm run build",
+    "ci": "node --no-deprecation ./scripts/npm/run.js",
+    "reinstall": "node --no-deprecation ./scripts/npm/run.js reinstall",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint .",
+    "lint:fix": "eslint --fix .",
+    "generate-token": "node node_modules/fa-mcp-sdk/dist/core/token/gen-token-app/gen-token-server.js",
+    "dead:exports": "ts-prune",
+    "dead:files": "knip",
+    "postinstall": "node scripts/npm/patch_node_modules.js",
+    "consul:unreg": "node node_modules/fa-mcp-sdk/dist/core/consul/deregister.js",
+    "test": "jest",
+    "test:mcp": "node scripts/test-mcp-tools.js",
+    "test:mcp-http": "node tests/mcp/test-http.js",
+    "test:mcp-sse": "node tests/mcp/test-sse.js",
+    "test:mcp-stdio": "node tests/mcp/test-stdio.js"
+  },
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "typescript",
+    "template",
+    "ai",
+    "prompts",
+    "tools",
+    "resources"
+  ],
+  "author": {
+    "name": "{{author.name}}",
+    "email": "{{author.email}}"
+  },
+  "license": "MIT",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.22.0",
+    "dotenv": "^17.2.3",
+    "fa-mcp-sdk": "^0.2.38",
+    "swagger-jsdoc": "^6.2.8",
+    "swagger-ui-express": "^5.0.1"
+  },
+  "devDependencies": {
+    "@types/express": "^5.0.5",
+    "@types/jest": "^30.0.0",
+    "@types/node": "^24.10.1",
+    "@types/swagger-jsdoc": "^6.0.4",
+    "@types/swagger-ui-express": "^4.1.8",
+    "cross-env": "^10.1.0",
+    "eslint-config-at-25": "^25.9.6",
+    "jest": "^30.2.0",
+    "rimraf": "^6.1.0",
+    "ts-jest": "^29.4.5",
+    "tsx": "^4.20.6",
+    "typescript": "^5.9.3"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://{{git-base-url}}/{{project.name}}.git"
+  },
+  "private": true
+}

@@ -71,7 +71,7 @@ export const renderAboutPage = async (): Promise<string> => {
     footerData.push(assets?.maintainerHtml);
   }
   let consulInfo = '';
-  if (!appConfig.consul.service.noRegOnStart) {
+  if (appConfig.consul.service.enable) {
     const { id } = appConfig.consul.service;
     if (id) {
       consulInfo = `<!-- Consul Info -->

@@ -85,3 +85,4 @@ _logs/
 /config/__server__/
 glm.ps1
 glm.sh
+/~last-cli-config.json

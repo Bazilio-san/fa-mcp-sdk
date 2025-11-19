@@ -19,7 +19,10 @@ interface IWebServerConfig {
     auth: {
       enabled: boolean,
       permanentServerTokens: string[],
-      tokenEncryptKey: string,
+      token: {
+        encryptKey: string,
+        checkMCPName: boolean,
+      }
     },
   }
 }
@@ -63,13 +66,12 @@ export interface AppConfig extends ILoggerConfig,
   accessPoints: IAccessPoints,
   consul: IAFConsulConfig & {
     envCode: {
-      prod: string; // Required - product contour code
-      dev: string; // Required - code of the development circuit
+      prod: string; // Production environment code
+      dev: string; // Development environment code
     };
   },
-  toolAnswerAs: 'text' | 'structuredContent',
   uiColor: {
-    primary: string; // Interface color
+    primary: string; // Font color of the header and a number of interface elements on the ABOUT page
   }
 }
 

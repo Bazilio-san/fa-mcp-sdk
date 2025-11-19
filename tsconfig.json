@@ -39,6 +39,7 @@
     "dist",
     "doc",
     "node_modules",
+    "cli-template",
     "coverage"
   ],
   "ts-node": {

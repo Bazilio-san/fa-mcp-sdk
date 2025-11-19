@@ -8,14 +8,14 @@ import chalk from 'chalk';
 
 const logger = lgr.getSubLogger({ name: chalk.cyan('token-auth') });
 
-const { permanentServerTokens: pt, tokenEncryptKey } = appConfig.webServer.auth;
+const { permanentServerTokens: pt, token: tokenCfg } = appConfig.webServer.auth;
 
 const permanentServerTokensSet: Set<string> = new Set(Array.isArray(pt) ? pt : [pt]);
 
 const ALGORITHM = 'aes-256-ctr';
 const KEY = crypto
   .createHash('sha256')
-  .update(String(tokenEncryptKey))
+  .update(String(tokenCfg.encryptKey))
   .digest('base64')
   .substring(0, 32);
 
@@ -77,7 +77,12 @@ export const generateToken = (user: string, liveTimeSec: number, payload?: any):
  * - the obsolescence time must not be expired
  * - If a user is transferred, it must match
  */
-export const checkToken = (token: string, expectedUser?: string): ICheckTokenResult => {
+export const checkToken = (arg: {
+  token: string,
+  expectedUser?: string,
+  expectedService?: string,
+}): ICheckTokenResult => {
+  let { token, expectedUser, expectedService = appConfig.name } = arg;
   token = (token || '').trim();
   if (!token) {
     return {
@@ -121,7 +126,7 @@ export const checkToken = (token: string, expectedUser?: string): ICheckTokenRes
   }
 
   expectedUser = trim(expectedUser).toLowerCase();
-  if (expectedUser && payload.user !== expectedUser ) {
+  if (expectedUser && payload.user !== expectedUser) {
     return {
       isTokenDecrypted: true,
       inTokenType: 'JWT',
@@ -129,6 +134,15 @@ export const checkToken = (token: string, expectedUser?: string): ICheckTokenRes
     };
   }
 
+  if (tokenCfg.checkMCPName) {
+    if (expectedService && payload.service !== expectedService) {
+      return {
+        isTokenDecrypted: true,
+        inTokenType: 'JWT',
+        errorReason: `JWT Token: service not match :: Expected  '${expectedService}' / obtained from the token: '${payload.service}'`,
+      };
+    }
+  }
   let expire = Number(expirePartStr) || 0;
 
   const expiredOn = Date.now() - expire;

@@ -85,7 +85,7 @@ export const generateTokenApp = (port?: number) => {
         });
       }
 
-      const result = checkToken(token);
+      const result = checkToken({ token });
 
       if ('errorReason' in result) {
         return res.json({

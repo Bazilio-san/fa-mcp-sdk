@@ -62,7 +62,7 @@ const startProject = async (): Promise<void> => {
       favicon,
       maintainerHtml: '<a href="https://support.com/page/2805" target="_blank" rel="noopener" class="clickable">Support</a>',
     },
-    // Function to get Consul UI address (if consul enabled: consul.service.noRegOnStart = false)
+    // Function to get Consul UI address (if consul enabled: consul.service.enable = true)
     getConsulUIAddress: (serviceId: string) => `https://consul.my.ui/ui/dc-${isConsulProd ? 'prod' : 'dev'}/services/${serviceId}/instances`,
   };
 

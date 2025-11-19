@@ -7,10 +7,8 @@ import { appConfig } from '../bootstrap/init-config.js';
 
 const { enabled } = appConfig.webServer.auth;
 
-const getTokenFromHttpHeader = (req: Request): { user: string, token: string } => {
-  const { authorization = '', user = '' } = req.headers;
-  const token = authorization.replace(/^Bearer */, '');
-  return { user: String(user).toLowerCase(), token };
+const getTokenFromHttpHeader = (req: Request): string => {
+  return (req.headers.authorization || '').replace(/^Bearer */, '');
 };
 
 const SHOW_HEADERS_SET = new Set(['user', 'authorization', 'x-real-ip', 'x-mode', 'host']);
@@ -41,11 +39,11 @@ export const getAuthByTokenError = (req: Request): { code: number, message: stri
   if (!enabled) {
     return undefined;
   }
-  const { token, user } = getTokenFromHttpHeader(req);
+  const token = getTokenFromHttpHeader(req);
   if (!token) {
     return debugAuth(req, 400, 'Missing authorization header');
   }
-  const checkResult = checkToken(token, user);
+  const checkResult = checkToken({ token });
   if (checkResult.errorReason) {
     return debugAuth(req, 401, checkResult.errorReason);
   }
