@@ -1,6 +1,6 @@
-import { initMcpServer, McpServerData } from 'fa-mcp-sdk';
-
 // Import all project data from existing files
+// @ts-ignore
+import { appConfig, initMcpServer, McpServerData } from 'fa-mcp-sdk';
 import { readFileSync } from 'fs';
 import { join } from 'path';
 import { tools } from './tools/tools.js';
@@ -11,7 +11,6 @@ import { customPrompts } from './prompts/custom-prompts.js';
 import { customResources } from './custom-resources.js';
 import { apiRouter, endpointsOn404 } from './api/router.js';
 import { swagger } from './api/swagger.js';
-import { appConfig } from 'fa-mcp-sdk';
 
 const isConsulProd = (process.env.NODE_CONSUL_ENV || process.env.NODE_ENV) === 'production';
 
@@ -63,7 +62,16 @@ const startProject = async (): Promise<void> => {
       maintainerHtml: '<a href="https://support.com/page/2805" target="_blank" rel="noopener" class="clickable">Support</a>',
     },
     // Function to get Consul UI address (if consul enabled: consul.service.enable = true)
-    getConsulUIAddress: (serviceId: string) => `https://consul.my.ui/ui/dc-${isConsulProd ? 'prod' : 'dev'}/services/${serviceId}/instances`,
+    getConsulUIAddress: (serviceId: string) => {
+      const { agent } = appConfig.consul || {};
+      if (!agent?.dev?.host || !agent?.prd?.host) {
+        return '--consul-ui-not-configured--';
+      }
+      return `${isConsulProd
+        ? `https://${agent.prd.host}/ui/dc-msk-infra`
+        : `https://${agent.dev.host}/ui/dc-dev`
+      }/services/${serviceId}/instances`;
+    },
   };
 
   // Start MCP server with assembled data

@@ -17,14 +17,14 @@ consul:
   agent:
     dev:
       dc: '{{consul.agent.dev.dc}}'
-      host: 'consul.entapp.work'
+      host: '{{consul.agent.dev.host}}'
       port: 443
       secure: true
       # Token for getting information about DEV services
       token: '***'
     prd:
       dc: '{{consul.agent.prd.dc}}'
-      host: 'consul.entapp.work'
+      host: '{{consul.agent.prd.host}}'
       port: 443
       secure: true
       # Token for obtaining information about PROD services

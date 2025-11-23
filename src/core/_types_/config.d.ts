@@ -1,6 +1,7 @@
 import { TFileLogLevel } from 'af-logger-ts';
 import { IAFDatabasesConfig } from 'af-db-ts';
 import { IAFConsulConfig, IAccessPoints } from 'af-consul-ts';
+import { IADConfig } from './active-directory-config.js';
 
 
 // Logging configuration
@@ -47,7 +48,8 @@ interface ISwaggerConfig {
   }
 }
 
-export interface AppConfig extends ILoggerConfig,
+export interface AppConfig extends IADConfig,
+  ILoggerConfig,
   IAFDatabasesConfig,
   IWebServerConfig,
   IMCPConfig,

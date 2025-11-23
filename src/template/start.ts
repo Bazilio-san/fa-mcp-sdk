@@ -63,7 +63,16 @@ const startProject = async (): Promise<void> => {
       maintainerHtml: '<a href="https://support.com/page/2805" target="_blank" rel="noopener" class="clickable">Support</a>',
     },
     // Function to get Consul UI address (if consul enabled: consul.service.enable = true)
-    getConsulUIAddress: (serviceId: string) => `https://consul.my.ui/ui/dc-${isConsulProd ? 'prod' : 'dev'}/services/${serviceId}/instances`,
+    getConsulUIAddress: (serviceId: string) => {
+      const { agent } = appConfig.consul || {};
+      if (!agent?.dev?.host || !agent?.prd?.host) {
+        return '--consul-ui-not-configured--';
+      }
+      return `${isConsulProd
+        ? `https://${agent.prd.host}/ui/dc-msk-infra`
+        : `https://${agent.dev.host}/ui/dc-dev`
+      }/services/${serviceId}/instances`;
+    },
   };
 
   // Start MCP server with assembled data

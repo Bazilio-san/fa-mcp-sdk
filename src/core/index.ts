@@ -1,4 +1,5 @@
 export type { AppConfig } from './_types_/config.js';
+export type { IADConfig, IDcConfig } from './_types_/active-directory-config.js';
 export type {
   McpServerData,
   IGetPromptParams,
@@ -36,7 +37,11 @@ export { ValidationError } from './errors/ValidationError.js';
 
 export type { ICheckTokenResult } from './token/i-token.js';
 export * from './token/token-auth.js';
-export { generateTokenApp } from './token/gen-token-app/gen-token-server.js';
+
+export async function generateTokenApp (...args: any[]) {
+  const { generateTokenApp: tokenGen } = await import('./token/gen-token-app/gen-token-server.js');
+  return tokenGen(...args);
+}
 
 export { initMcpServer, gracefulShutdown } from './init-mcp-server.js';
 

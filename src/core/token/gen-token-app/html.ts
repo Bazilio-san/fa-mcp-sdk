@@ -2,7 +2,14 @@ import { encodeSvgForDataUri } from '../../utils/utils.js';
 const jwtSvg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path fill="#0052cc" d="M10.2 0v6.5L12 8.9l1.8-2.4V0Zm3.6 6.5v3l3-1 3.7-5.1-2.9-2.2zm3 2-1.9 2.6 3 1 6.1-2-1.1-3.5Zm1 3.5L15 13l1.8 2.5 6.2 2 1-3.5Zm-1 3.5-3-1v3l3.8 5.3 3-2.1zm-3 2L12 15.2l-1.8 2.5V24h3.6zm-3.6 0v-3l-3 1-3.7 5.2 2.9 2.1zm-3-2 2-2.5-3-1L0 14l1.1 3.5Zm-1-3.5L9 11 7.3 8.7 1 6.6 0 10Zm1-3.4 3 1V6.4L6.4 1.2l-3 2.2Z"/></svg>';
 const iconEncoded = encodeSvgForDataUri(jwtSvg);
 
-export const getHTMLPage = (): string => `<!DOCTYPE html>
+interface AuthStatus {
+  isAuthenticated: boolean;
+  username: string;
+  domain: string;
+  ntlmEnabled: boolean;
+}
+
+export const getHTMLPage = (authStatus?: AuthStatus): string => `<!DOCTYPE html>
 <html lang='ru'>
 <head>
   <meta charset='UTF-8'>
@@ -360,6 +367,66 @@ input::placeholder, textarea::placeholder {
   width: 100%;
   height: 100%;
 }
+
+/* Authentication status */
+.auth-status {
+  padding: 12px 16px;
+  margin-bottom: 16px;
+  border-radius: 4px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 14px;
+}
+
+.auth-status.auth-enabled {
+  background: rgba(0, 102, 68, 0.1);
+  border: 1px solid rgba(0, 102, 68, 0.2);
+  color: #006644;
+}
+
+.auth-status.auth-disabled {
+  background: rgba(245, 158, 11, 0.1);
+  border: 1px solid rgba(245, 158, 11, 0.2);
+  color: #d97706;
+}
+
+.auth-info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.auth-indicator {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  margin-right: 4px;
+}
+
+.auth-indicator.enabled {
+  background: #006644;
+}
+
+.auth-indicator.disabled {
+  background: #d97706;
+}
+
+.logout-btn {
+  background: #dc2626;
+  color: white;
+  border: none;
+  padding: 6px 12px;
+  border-radius: 3px;
+  font-size: 12px;
+  cursor: pointer;
+  transition: background 0.2s ease;
+}
+
+.logout-btn:hover {
+  background: #b91c1c;
+}
 /* Responsive Design */
 @media (max-width: 640px) {
   body {
@@ -413,8 +480,23 @@ input::placeholder, textarea::placeholder {
     <h1>Token Generator & Validator</h1>
   </header>
 
-  <!-- Main Content -->
+  <!-- Authentication Status -->
   <main class="simple-main">
+    ${authStatus ? `
+    <div class="auth-status ${authStatus.ntlmEnabled ? 'auth-enabled' : 'auth-disabled'}">
+      <div class="auth-info">
+        <span>
+          <span class="auth-indicator ${authStatus.ntlmEnabled ? 'enabled' : 'disabled'}"></span>
+          NTLM Authentication: ${authStatus.ntlmEnabled ? 'Enabled' : 'Disabled'}
+          ${authStatus.ntlmEnabled && authStatus.isAuthenticated ? `- Logged in as ${authStatus.domain}\\\\${authStatus.username}` : ''}
+        </span>
+      </div>
+      ${authStatus.ntlmEnabled && authStatus.isAuthenticated ? `
+        <button class="logout-btn" onclick="logout()">Log out</button>
+      ` : ''}
+    </div>
+    ` : ''}
+
     <div class="tab-container">
       <div class="tabs">
         <button class="tab active" onclick="switchTab('generate')">Token generation</button>
@@ -756,6 +838,27 @@ async function initializeForm () {
   }
   // Add one empty pair for the user
   addKeyValuePair();
+}
+
+// Logout function
+async function logout() {
+  try {
+    const response = await fetch('/logout', {
+      method: 'GET',
+      credentials: 'include'
+    });
+
+    if (response.status === 401) {
+      // Authentication cleared, reload page to trigger browser auth prompt
+      window.location.reload();
+    } else {
+      console.error('Logout failed');
+      alert('Logout failed. Please clear your browser cache and reload the page.');
+    }
+  } catch (error) {
+    console.error('Error during logout:', error);
+    alert('Error during logout. Please clear your browser cache and reload the page.');
+  }
 }
 
 // Initialization on page load

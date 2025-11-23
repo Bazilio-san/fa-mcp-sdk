@@ -120,6 +120,11 @@ class MCPGenerator {
         title: 'Development Consul Datacenter to search for services',
       },
       {
+        name: 'consul.agent.dev.host',
+        defaultValue: 'consul.my.ui',
+        title: 'Development Consul UI host',
+      },
+      {
         name: 'consul.agent.dev.token',
         defaultValue: '***',
         title: 'Token for accessing Development Consul Datacenter',
@@ -128,6 +133,11 @@ class MCPGenerator {
         name: 'consul.agent.prd.dc',
         defaultValue: '',
         title: 'Production Consul Datacenter to search for services',
+      },
+      {
+        name: 'consul.agent.prd.host',
+        defaultValue: 'consul.my.ui',
+        title: 'Production Consul UI host',
       },
       {
         name: 'consul.agent.prd.token',
