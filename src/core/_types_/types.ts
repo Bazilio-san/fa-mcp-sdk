@@ -6,6 +6,7 @@ export interface IPromptData {
   description: string,
   arguments: [],
   content: IPromptContent,
+  requireAuth?: boolean,
 }
 
 export interface IRequiredHttpHeader {
@@ -30,6 +31,7 @@ export interface IResourceData {
   description: string;
   mimeType: string;
   content: IResourceContent;
+  requireAuth?: boolean;
 }
 
 export interface IResource {

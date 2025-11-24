@@ -26,12 +26,14 @@ function createPrompts () {
       description: 'Brief description of the agent to be selected in the agent system',
       arguments: [],
       content: agentBrief,
+      requireAuth: false,
     },
     {
       name: 'agent_prompt',
       description: 'Detailed prompt of the agent',
       arguments: [],
       content: agentPrompt,
+      requireAuth: false,
     },
     ...customPrompts,
   ];

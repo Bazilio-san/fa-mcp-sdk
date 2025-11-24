@@ -27,10 +27,11 @@ const createResources = (): IResourceData[] => {
       name: 'project-id',
       description: `Stable identifier of the project.
 Used:
-- to identify the MCP server in the "MCP registry" 
+- to identify the MCP server in the "MCP registry"
 - when authorizing with a JWT token`,
       mimeType: 'text/plain',
       content: appConfig.name,
+      requireAuth: false,
     },
     {
       uri: 'project://name',
@@ -38,6 +39,7 @@ Used:
       description: 'Human-readable product name for use in the UI',
       mimeType: 'text/plain',
       content: appConfig.productName,
+      requireAuth: false,
     },
     {
       uri: 'doc://readme',
@@ -48,6 +50,7 @@ This information is used by searching for this MCP server and its information in
 `,
       mimeType: 'text/markdown',
       content: readme,
+      requireAuth: false,
     },
   ];
   requiredHttpHeaders = (requiredHttpHeaders || []) as IRequiredHttpHeader[];

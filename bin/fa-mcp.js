@@ -208,6 +208,11 @@ class MCPGenerator {
         skip: true,
         name: 'PM2_NAMESPACE',
       },
+      {
+        name: 'maintainerUrl',
+        defaultValue: '',
+        title: 'Maintainer url',
+      },
     ];
   }
 
@@ -427,7 +432,14 @@ class MCPGenerator {
             // Auto-generate upstream from mcp.domain by replacing dots with dashes
             config['upstream'] = value.replace(/\./g, '-');
           }
-          continue; // Skip the generic assignment at the end
+          continue;
+
+        case 'maintainerUrl':
+          value = await ask.optional(title, name, defaultValue);
+          if (value) {
+            config['maintainerHtml'] = `<a href="${value}" target="_blank" rel="noopener" class="clickable">Support</a>`;
+          }
+          continue;
         default:
           value = await ask.optional(title, name, defaultValue);
       }
