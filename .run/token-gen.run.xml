@@ -6,7 +6,9 @@
       <script value="token-gen" />
     </scripts>
     <node-interpreter value="project" />
-    <envs />
+    <envs>
+      <env name="DEBUG" value="ntlm:auth-flow,ntlm:ldap-proxy,ntlm:ldap-proxy-id" />
+    </envs>
     <method v="2" />
   </configuration>
 </component>

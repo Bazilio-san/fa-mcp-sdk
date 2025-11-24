@@ -76,9 +76,3 @@ export const setupNTLMAuthentication = () => {
     }
   ];
 };
-
-// Export for type safety and additional utilities
-export { tokenGenNtlmOptions };
-
-// Export session management utilities for testing
-export { getSessionStats } from './ntlm-session-storage.js';
