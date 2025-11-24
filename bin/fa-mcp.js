@@ -13,6 +13,7 @@ const PRINT_FILLED = true;
 
 const hl = (v) => chalk.bgGreen.black(v);
 const hly = (v) => chalk.bgYellow.black(v);
+const hp = (paramName) => ` [${chalk.magenta(paramName)}]`;
 const formatDefaultValue = (v) => (v ? ` (default: ${hl(v)})` : '');
 const OPTIONAL = chalk.gray(' (optional)');
 const FROM_CONFIG = chalk.gray(' (from config)');
@@ -20,7 +21,7 @@ const trim = (s) => String(s || '').trim();
 
 const printFilled = (paramName, paramValue) => {
   if (PRINT_FILLED) {
-    console.log(`   ${paramName}: ${hl(paramValue)}`);
+    console.log(`  ${hp(paramName)}: ${hl(paramValue)}`);
   }
 };
 
@@ -46,7 +47,7 @@ const getAsk = () => {
     optional: (title, paramName, defaultValue, example = undefined) => new Promise(resolve => {
       const defaultText = formatDefaultValue(defaultValue);
       example = example ? ` (example: ${example})` : '';
-      const prompt = `${title} [${paramName}]${defaultText}${example}${OPTIONAL}: `;
+      const prompt = `${title}${hp(paramName)}${defaultText}${example}${OPTIONAL}: `;
       rl.question(prompt, (v) => {
         resolve(trim(v) || trim(defaultValue));
       });
@@ -57,8 +58,8 @@ const getAsk = () => {
       const y = isTrue ? `${hl('y')}` : 'y';
       const n = isTrue ? 'n' : `${hl('n')}`;
 
-      paramName = paramName ? ` [${paramName}]` : '';
-      const prompt = `${title}${paramName} (${y}/${n}): `;
+      const hpn = paramName ? hp(paramName) : '';
+      const prompt = `${title}${hpn} (${y}/${n}): `;
       while (true) {
         const answer = await yn_(prompt, defaultValue === 'true' ? 'y' : 'n');
         if (answer === 'y' || answer === 'n') {
@@ -170,6 +171,13 @@ class MCPGenerator {
         name: 'mcp.domain',
         defaultValue: '',
         title: 'Domain name for nginx configuration',
+      },
+      {
+        name: 'ssl-wildcard.conf.rel.path',
+        defaultValue: 'snippets/ssl-wildcard.conf',
+        title: `The relative path to the nginx configuration file 
+in the /etc/nginx folder that specifies the SSL 
+certificate's public and private keys`,
       },
 
       {

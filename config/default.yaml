@@ -15,6 +15,7 @@ consul:
     timeout: '5s'
     deregistercriticalserviceafter: '3m'
   agent:
+    # Credentials for getting information about services in the DEV DC
     dev:
       dc: 'dc-dev'
       host: 'consul.entapp.work'
@@ -22,6 +23,7 @@ consul:
       secure: true
       # Token for getting information about DEV services
       token: '***'
+    # Credentials for getting information about services in the PROD DC
     prd:
       dc: 'dc-prd'
       host: 'consul.entapp.work'
@@ -29,8 +31,10 @@ consul:
       secure: true
       # Token for obtaining information about PROD services
       token: '***'
+    # Credentials for registering the service with Consul
     reg:
-      host: null # The host of the consul agent where the service will be registered. If not specified, the server on which the service is running is used
+      # The host of the consul agent where the service will be registered. If not specified, the server on which the service is running is used
+      host: null
       port: 8500
       secure: false
       # Token for registering the service in the consul agent
@@ -83,7 +87,8 @@ swagger:
     - url: http://0.0.0.0:9876
       description: "Development server (all interfaces)"
 
-uiColor: # Font color of the header and a number of interface elements on the ABOUT page
+uiColor:
+  # Font color of the header and a number of interface elements on the ABOUT page
   primary: '#0f65dc'
 
 webServer:
