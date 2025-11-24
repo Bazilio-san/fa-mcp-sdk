@@ -4,7 +4,7 @@
   "version": "0.0.1",
   "description": "{{project.description}}",
   "type": "module",
-  "main": "dist/core/index.js",
+  "main": "dist/src/start.js",
   "engines": {
     "node": ">=20.0.0"
   },
