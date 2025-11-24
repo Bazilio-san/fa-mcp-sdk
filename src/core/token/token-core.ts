@@ -8,14 +8,14 @@ import chalk from 'chalk';
 
 const logger = lgr.getSubLogger({ name: chalk.cyan('token-auth') });
 
-const { permanentServerTokens: pt, token: tokenCfg } = appConfig.webServer.auth;
-
+const pt = appConfig.webServer?.auth?.permanentServerTokens || [];
 const permanentServerTokensSet: Set<string> = new Set(Array.isArray(pt) ? pt : [pt]);
+const checkMCPName =  appConfig.webServer?.auth?.token?.checkMCPName || false;
 
 const ALGORITHM = 'aes-256-ctr';
 const KEY = crypto
   .createHash('sha256')
-  .update(String(tokenCfg.encryptKey))
+  .update(String(appConfig.webServer?.auth?.token?.encryptKey || 'secret'))
   .digest('base64')
   .substring(0, 32);
 
@@ -134,7 +134,7 @@ export const checkToken = (arg: {
     };
   }
 
-  if (tokenCfg.checkMCPName) {
+  if (checkMCPName) {
     if (expectedService && payload.service !== expectedService) {
       return {
         isTokenDecrypted: true,
