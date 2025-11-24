@@ -7,7 +7,7 @@ import { appConfig, getProjectData } from '../bootstrap/init-config.js';
 import { getResource, getResourcesList } from '../mcp/resources.js';
 import { IGetPromptRequest } from '../_types_/types.js';
 
-import { authTokenMW } from '../token/token-auth.js';
+import { authTokenMW, createConditionalAuthMiddleware } from '../token/token-auth.js';
 import { createMcpServer } from '../mcp/create-mcp-server.js';
 import { logger as lgr } from '../logger.js';
 import { createJsonRpcErrorResponse, ServerError, toError, toStr } from '../errors/errors.js';
@@ -72,6 +72,9 @@ export async function startHttpServer (): Promise<void> {
     points: appConfig.mcp.rateLimit.maxRequests,
     duration: appConfig.mcp.rateLimit.windowMs / 1000, // Convert to seconds
   });
+
+  // Create conditional auth middleware for SSE endpoints
+  const conditionalAuthMW = createConditionalAuthMiddleware();
 
   // Security middleware
   app.use(helmet({
@@ -193,7 +196,7 @@ export async function startHttpServer (): Promise<void> {
   });
 
   // POST endpoint for handling SSE client messages (standard way)
-  app.post('/messages', authTokenMW, async (req, res): Promise<void> => {
+  app.post('/messages', conditionalAuthMW, async (req, res): Promise<void> => {
     try {
       const sessionId = req.query.sessionId as string;
       if (!sessionId) {
@@ -234,7 +237,7 @@ export async function startHttpServer (): Promise<void> {
   });
 
   // POST endpoint for direct SSE requests (legacy compatibility - same endpoint as GET)
-  app.post('/sse', authTokenMW, async (req, res): Promise<void> => {
+  app.post('/sse', conditionalAuthMW, async (req, res): Promise<void> => {
     try {
       // Find any active SSE transport for this client (fallback approach)
       // TODO: This is needed for test client compatibility. In production,

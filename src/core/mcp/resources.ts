@@ -62,6 +62,7 @@ This information is used by searching for this MCP server and its information in
         description: 'Required http headers',
         mimeType: 'application/json',
         content: requiredHttpHeaders,
+        requireAuth: false,
       },
     );
   }

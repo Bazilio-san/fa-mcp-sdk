@@ -124,6 +124,27 @@ export const isPublicMcpRequest = (req: Request): boolean => {
   }
 };
 
+/**
+ * Create conditional auth middleware that checks for public MCP requests
+ */
+export const createConditionalAuthMiddleware = () => {
+  return (req: Request, res: Response, next: NextFunction) => {
+    // Check if this is an MCP request (HTTP or SSE) that should be public
+    const isMcpRequest = req.path === '/mcp' || req.path === '/messages' || req.path === '/sse';
+
+    if (isMcpRequest && isPublicMcpRequest(req)) {
+      return next();
+    }
+
+    const authError = getAuthByTokenError(req);
+    if (authError) {
+      res.status(authError.code).send(authError.message);
+      return;
+    }
+    next();
+  };
+};
+
 export const authTokenMW = (req: Request, res: Response, next: NextFunction) => {
   // Check if this is a public MCP request
   if (req.path === '/mcp' && isPublicMcpRequest(req)) {
