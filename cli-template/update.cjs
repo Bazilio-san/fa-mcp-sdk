@@ -5,7 +5,7 @@ const path = require('path');
 const { execSync, spawn } = require('child_process');
 const os = require('os');
 
-const version = '2025.11.22-1800';
+const version = '2025.11.24-0743';
 console.log(`Update script version: ${version}`);
 
 // Имя этой папки
@@ -304,6 +304,7 @@ function loadConfig () {
  */
 function getServiceName () {
   let serviceName = '';
+  let serviceNameAlt = '';
   let serviceInstance = '';
   try {
     if (fs.existsSync('.env')) {
@@ -311,6 +312,10 @@ function getServiceName () {
       let match = envContent.match(/^SERVICE_NAME=([^\r\n]+)/m);
       if (match) {
         serviceName = match[1].trim();
+      }
+      match = envContent.match(/^SERVICE_NAME_ALT=([^\r\n]+)/m);
+      if (match) {
+        serviceNameAlt = match[1].trim();
       }
       match = envContent.match(/^SERVICE_INSTANCE=([^\r\n]+)/m);
       if (match) {
@@ -322,7 +327,11 @@ function getServiceName () {
       serviceName = packageJson.name;
     }
 
-    return `${serviceName}${serviceInstance}`;
+    return {
+      serviceNameForPM2: `${serviceName}${serviceInstance}`,
+      serviceName,
+      serviceNameForSystemd: serviceNameAlt || serviceName,
+    };
   } catch (error) {
     console.error('Error getting service name:', error.message);
     process.exit(1);
@@ -334,7 +343,7 @@ function getServiceName () {
  */
 function systemctlServiceExists (serviceName) {
   try {
-    execCommand(`systemctl list-unit-files "${serviceName}.service"`);
+    const res = execCommand(`systemctl list-unit-files "${serviceName}.service"`);
     return true;
   } catch {
     return false;
@@ -343,8 +352,8 @@ function systemctlServiceExists (serviceName) {
 
 function pm2ServiceExists (serviceName) {
   try {
-    execCommand(`pm2 id "${serviceName}"`);
-    return true;
+    const res = execCommand(`pm2 id "${serviceName}"`);
+    return /\[\s*\d\s*]/.test(res);
   } catch {
     return false;
   }
@@ -482,18 +491,20 @@ const buildQuasar = () => {
   logIt('Quasar build completed');
 };
 
-const restartService = (serviceName, args) => {
+const restartService = ({ serviceName, serviceNameForPM2, serviceNameForSystemd }, args) => {
   let srvc = '';
-  if (systemctlServiceExists(serviceName)) {
+  if (systemctlServiceExists(serviceNameForSystemd)) {
     srvc = 'systemctl';
-  } else if (pm2ServiceExists(serviceName)) {
+    logIt(`Restarting service ${serviceNameForSystemd} via ${srvc}`, true);
+    execCommand(`${srvc} restart "${serviceNameForSystemd}"`);
+  } else if (pm2ServiceExists(serviceNameForPM2)) {
     srvc = 'pm2';
+    logIt(`Restarting service ${serviceNameForPM2} via ${srvc}`, true);
+    execCommand(`${srvc} restart "${serviceNameForPM2}"`);
   } else {
     logIt(`Service ${serviceName} not found in systemctl or PM2`);
     return;
   }
-  logIt(`Restarting service ${serviceName} via ${srvc}`, true);
-  execCommand(`${srvc} restart "${serviceName}"`);
   logIt(`Service restarted`);
 };
 
@@ -511,7 +522,7 @@ async function main () {
   }
 
   // Get service information
-  const serviceName = getServiceName();
+  const { serviceName, serviceNameForPM2, serviceNameForSystemd } = getServiceName();
 
   logIt(`<status>Update <y>${colorG.y(serviceName)}</y> ${nowPretty()}`);
 
@@ -581,10 +592,10 @@ async function main () {
     if (needUpdate || args.force) {
       updateDeployedLogFile = true;
       logTryUpdate(updateReason);
-      reinstallDependencies();
-      compile();
-      buildQuasar();
-      restartService(serviceName, args);
+      //reinstallDependencies();
+      //compile();
+      //buildQuasar();
+      restartService({ serviceName, serviceNameForPM2, serviceNameForSystemd }, args);
 
       // Add completion info to build log
       logIt(`Update completed successfully at ${new Date().toISOString().replace('T', ' ').substring(0, 19)}`);
