@@ -488,7 +488,7 @@ input::placeholder, textarea::placeholder {
         <span>
           <span class="auth-indicator ${authStatus.ntlmEnabled ? 'enabled' : 'disabled'}"></span>
           NTLM Authentication: ${authStatus.ntlmEnabled ? 'Enabled' : 'Disabled'}
-          ${authStatus.ntlmEnabled && authStatus.isAuthenticated ? `- Logged in as ${authStatus.domain}\\\\${authStatus.username}` : ''}
+          ${authStatus.ntlmEnabled && authStatus.isAuthenticated ? `- Logged in as ${authStatus.domain}\\${authStatus.username}` : ''}
         </span>
       </div>
       ${authStatus.ntlmEnabled && authStatus.isAuthenticated ? `

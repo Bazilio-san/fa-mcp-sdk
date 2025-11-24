@@ -54,13 +54,13 @@ app.use((req, res, next) => {
 
     // Имитируем NTLM объект
     req.ntlm = {
-      username: username.includes('\\\\') ? username.split('\\\\')[1] : username,
-      domain: username.includes('\\\\') ? username.split('\\\\')[0] : 'OFFICE',
+      username: username.includes('\\') ? username.split('\\')[1] : username,
+      domain: username.includes('\\') ? username.split('\\')[0] : 'OFFICE',
       workstation: 'TEST-WS',
       isAuthenticated: true
     };
 
-    console.log(`[TEST-SERVER] User authenticated: ${req.ntlm.domain}\\\\${req.ntlm.username}`);
+    console.log(`[TEST-SERVER] User authenticated: ${req.ntlm.domain}\\${req.ntlm.username}`);
   }
 
   next();
@@ -70,7 +70,7 @@ app.use((req, res, next) => {
 app.get('/', (req, res) => {
   const username = req.ntlm?.username || 'Unknown';
   const domain = req.ntlm?.domain || 'Unknown';
-  console.log(`[TEST-SERVER] Main page accessed by: ${domain}\\\\${username}`);
+  console.log(`[TEST-SERVER] Main page accessed by: ${domain}\\${username}`);
 
   res.send(`
 <!DOCTYPE html>
@@ -78,7 +78,7 @@ app.get('/', (req, res) => {
 <head><title>Token Generator Test</title></head>
 <body>
   <h1>Token Generator & Validator (Test Mode)</h1>
-  <p><strong>Authenticated User:</strong> ${domain}\\\\${username}</p>
+  <p><strong>Authenticated User:</strong> ${domain}\\${username}</p>
 
   <h2>Generate Token</h2>
   <form id="generateForm">
@@ -129,7 +129,7 @@ app.get('/', (req, res) => {
 app.post('/api/generate-token', (req, res) => {
   const username = req.ntlm?.username || 'Unknown';
   const domain = req.ntlm?.domain || 'Unknown';
-  console.log(`[TEST-SERVER] Token generation by: ${domain}\\\\${username}`);
+  console.log(`[TEST-SERVER] Token generation by: ${domain}\\${username}`);
 
   const { user, timeValue, timeUnit } = req.body;
 

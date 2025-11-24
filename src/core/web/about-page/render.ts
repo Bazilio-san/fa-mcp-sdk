@@ -509,7 +509,14 @@ export const renderAboutPage = async (): Promise<string> => {
             });
 
             if (!response.ok) {
-              throw new Error('HTTP ' + response.status);
+              let errorData = ''
+              try {
+                 errorData = await response.text();
+              } catch {
+                //
+              }
+              errorData = [response.statusText || '', errorData].join('. ')
+              throw new Error('HTTP ' + response.status + (errorData ? ': ' + errorData : ''));
             }
 
             const result = await response.json();
@@ -594,7 +601,14 @@ export const renderAboutPage = async (): Promise<string> => {
             });
 
             if (!response.ok) {
-              throw new Error('HTTP ' + response.status);
+              let errorData = ''
+              try {
+                 errorData = await response.text();
+              } catch {
+                //
+              }
+              errorData = [response.statusText || '', errorData].join('. ')
+              throw new Error('HTTP ' + response.status + (errorData ? ': ' + errorData : ''));
             }
 
             const result = await response.json();
@@ -658,6 +672,15 @@ export const renderAboutPage = async (): Promise<string> => {
         const response = await fetch('/health');
 
         if (!response.ok) {
+          let errorData = ''
+          try {
+             errorData = await response.text();
+          } catch {
+            //
+          }
+          errorData = [response.statusText || '', errorData].join('. ')
+          throw new Error('HTTP ' + response.status + (errorData ? ': ' + errorData : ''));
+
           throw new Error('HTTP ' + response.status + ': ' + response.statusText);
         }
 

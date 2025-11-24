@@ -106,8 +106,43 @@ export const getLoginPageHTML = (username: string = ''): string => `<!DOCTYPE ht
       const wl = window.location;
       const login = document.getElementById('login').value;
       const password = document.getElementById('password').value;
-      window.location.href = wl.protocol + '//' + login + ':' + password + '@' + wl.hostname + ':' + wl.port;
+
+      // Special handling for NTLM authentication
+      // The @ symbol in passwords breaks URL construction, so we need proper URL encoding
+      try {
+        // Properly encode the credentials for URL
+        const encodedLogin = encodeURIComponent(login);
+        const encodedPassword = encodeURIComponent(password);
+
+        console.log('Attempting authentication with:', { login: encodedLogin, passwordLength: password.length });
+
+        // Navigate with properly encoded credentials
+        window.location.href = wl.protocol + '//' + encodedLogin + ':' + encodedPassword + '@' + wl.hostname + ':' + wl.port;
+      } catch (error) {
+        console.error('Authentication error:', error);
+        alert('Authentication failed: ' + error.message);
+      }
     }
+
+    // For testing: add direct NTLM trigger function
+    function triggerNTLM() {
+      // This will trigger the browser's native NTLM authentication dialog
+      const wl = window.location;
+      window.location.href = wl.origin + '/';
+    }
+
+    // Add additional button for testing
+    document.addEventListener('DOMContentLoaded', function() {
+      const buttonContainer = document.querySelector('.views-button-container');
+      if (buttonContainer) {
+        const ntlmButton = document.createElement('button');
+        ntlmButton.type = 'button';
+        ntlmButton.textContent = 'Trigger NTLM Dialog';
+        ntlmButton.style.marginTop = '10px';
+        ntlmButton.onclick = triggerNTLM;
+        buttonContainer.appendChild(ntlmButton);
+      }
+    });
   </script>
   <div class="views-outer-container">
     <div class="views-auth-container">

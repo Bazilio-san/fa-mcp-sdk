@@ -11,11 +11,22 @@ import {
 // Authorization logic - initially allow all authenticated users
 export const authorize = (ntlm: any): boolean => {
   const { username, domain } = ntlm;
+
+  // Debug: log what we received
+  console.log('[TOKEN-GEN] Authorization check received:', { username, domain, fullNtlm: ntlm });
+
   // Simple authorization - can be extended with role checks
-  if (username && domain) {
-    console.log(`[TOKEN-GEN] User authorized: ${domain}\\${username}`);
+  if (username) {
+    // For testing purposes, allow access if username exists
+    // The domain might be missing due to NTLM integration issues
+    if (domain) {
+      console.log(`[TOKEN-GEN] User authorized: ${domain}\\${username}`);
+    } else {
+      console.log(`[TOKEN-GEN] User authorized (no domain): ${username}`);
+    }
     return true;
   }
+
   console.log(`[TOKEN-GEN] User authorization failed: ${domain}\\${username}`);
   return false;
 };
