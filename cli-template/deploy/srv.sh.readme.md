@@ -1,41 +1,130 @@
-# srv.sh - Unified systemd Service Management Script
-
-Universal script for managing systemd services for Node.js applications. Consolidates functionality from separate `deploy/systemd-service/` scripts into a single solution.
+# srv.cjs
+Universal script for managing systemd services of Node.js applications.
 
 ## Features
 
-- ✅ **Universal execution**: Works the same when launched from project root or from `deploy/` folder
-- ✅ **Auto-detection of Node.js version**: Priority: parameter → .envrc → current version
-- ✅ **Smart Node.js search**: NVM paths → system paths
-- ✅ **Automatic configuration reading**: package.json, config for port
-- ✅ **systemd unit file generation**: Correct paths and settings
-- ✅ **Process management**: Stops processes on ports when removing
+- ✅ **Universal invocation**: Works the same when run from the project root or from the `deploy/` folder
+- ✅ **Automatic Node.js version detection**: Priority is CLI param → .envrc → current version
+- ✅ **Smart Node.js lookup**: NVM paths → system paths
+- ✅ **Automatic config reading**: package.json, config for port
+- ✅ **systemd unit generation**: Correct paths and settings
+- ✅ **Process management**: Stops processes bound to ports on deletion
+- ✅ **Instance support**: Service name can be extended with suffix `--<instance>` from `.env` (variable `SERVICE_INSTANCE`)
 
-## Operation Algorithm
+## Requirements and how to run
 
-### Working Directory Determination
+- The file is executable: `deploy/srv.cjs` has a shebang `#!/usr/bin/env node`. On the server, make sure the file has execute permissions:
 
 ```bash
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"    # Script folder: /path/to/project/deploy/
-PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"                      # Project root: /path/to/project/
+chmod +x deploy/srv.cjs
 ```
 
-**Result**: Regardless of launch location, the script always uses the project root for:
+- You can run it in two equivalent ways:
+
+```bash
+# From the project root or from the deploy/ folder
+./deploy/srv.cjs <command> [options]
+
+# Or via node
+node deploy/srv.cjs <command> [options]
+```
+
+## Commands
+
+### Install service
+
+```bash
+# Basic install (auto-detect everything)
+./deploy/srv.cjs install
+./deploy/srv.cjs i
+
+# With a custom service name
+./deploy/srv.cjs install -n my-custom-service
+
+# With a specific Node.js version
+./deploy/srv.cjs install -v 20.10.0
+
+# Combined params
+./deploy/srv.cjs i -n custom-service -v 22.17.1
+```
+
+**What happens:**
+1. Node.js version and path to the binary are determined
+2. `package.json` is read to get `main` and `name`
+3. A systemd unit file is generated at `/etc/systemd/system/<service_name>.service`
+4. `systemctl daemon-reload` is executed
+5. `systemctl enable --now <service_name>` is executed
+
+### Delete service
+
+```bash
+# Auto-detect port from config
+./deploy/srv.cjs delete
+./deploy/srv.cjs d
+
+# With a custom service name
+./deploy/srv.cjs delete -n custom-service
+
+# With a specific port
+./deploy/srv.cjs delete -p 8080
+
+# Combined params
+./deploy/srv.cjs d -n custom-service -p 8080
+```
+
+**What happens:**
+1. Port is determined from config or CLI param
+2. `systemctl stop <service_name>` is executed
+3. `systemctl disable <service_name>` is executed
+4. Unit file `/etc/systemd/system/<service_name>.service` is removed
+5. Process on the specified port is terminated (if exists)
+6. `systemctl daemon-reload` is executed
+
+### Reinstall service
+
+```bash
+# Full reinstall
+./deploy/srv.cjs reinstall
+./deploy/srv.cjs r
+
+# With params
+./deploy/srv.cjs r -n custom-service -v 22.17.1 -p 8080
+```
+
+**What happens:**
+1. Performs a full deletion (as in `delete`)
+2. Performs a full installation (as in `install`)
+3. Shows status and starts tailing logs
+
+## How it works
+
+### Resolving working directories
+
+The script computes directories by itself (within Node.js runtime):
+
+```javascript
+// deploy/srv.cjs
+const SCRIPT_DIR = __dirname;           // /path/to/project/deploy/
+const PROJECT_ROOT = path.resolve(SCRIPT_DIR, '..'); // /path/to/project/
+process.chdir(PROJECT_ROOT);
+```
+
+**Result**: Regardless of where it's launched, the script always uses the project root for:
 - Reading `package.json`
 - Reading `.envrc`
 - Reading configuration
-- Setting `WorkingDirectory` in systemd unit
+- Setting `WorkingDirectory` in the systemd unit
 
-### Node.js Version Detection Algorithm
+### Node.js version detection algorithm
 
-1. **Parameter `-v <version>`** (highest priority)
+1. **CLI param `-v <version>`** (highest priority)
    ```bash
-   ./deploy/srv.sh install -v 20.10.0
+   ./deploy/srv.cjs install -v 20.10.0
    ```
 
-2. **`.envrc` file in project root**
+2. **`.envrc` file in the project root**
    ```bash
-   # Searches for line like:
+   # Looks for a line like:
    nvm use 22.17.1
    # Extracts: 22.17.1
    ```
@@ -45,7 +134,7 @@ PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"                      # Project root: /pa
    node -v  # For example: v22.17.1 → 22.17.1
    ```
 
-### Node.js Path Search Algorithm
+### Node.js binary path lookup
 
 1. **NVM path** (priority)
    ```bash
@@ -57,131 +146,29 @@ PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"                      # Project root: /pa
    which node  # For example: /usr/bin/node
    ```
 
-### Service Name Detection Algorithm
+### Service name resolution
 
-1. **Parameter `-n <name>`** (priority)
-2. **`name` value from package.json** (default)
+1. **CLI param `-n <name>`** (priority)
+2. **`.env` → `SERVICE_NAME`** (if provided)
+3. **`name` value from package.json** (default)
+4. Additionally: if `SERVICE_INSTANCE` is set in `.env`, the final name becomes `<name>--<instance>`
 
-### Port Detection Algorithm
+### Port resolution
 
-1. **Parameter `-p <port>`** (priority)
+1. **CLI param `-p <port>`** (priority)
 2. **`config.webServer.port` value** (automatic)
    ```javascript
-   // Executed from project root:
+   // Executed from the project root:
    const config = require('config');
    console.log(config.webServer?.port);
    ```
 
-## Commands
 
-### Service Installation
-
-```bash
-# Basic installation (auto-detect all parameters)
-./deploy/srv.sh install
-./deploy/srv.sh i
-
-# With custom service name
-./deploy/srv.sh install -n my-custom-service
-
-# With specific Node.js version
-./deploy/srv.sh install -v 20.10.0
-
-# Combined parameters
-./deploy/srv.sh i -n custom-service -v 22.17.1
-```
-
-**What happens:**
-1. Node.js version and binary path are determined
-2. `package.json` is read to get `main` and `name`
-3. systemd unit file is generated in `/etc/systemd/system/<service_name>.service`
-4. `systemctl daemon-reload` is executed
-5. `systemctl enable --now <service_name>` is executed
-
-### Service Removal
-
-```bash
-# Auto-detect port from config
-./deploy/srv.sh delete
-./deploy/srv.sh d
-
-# With custom service name
-./deploy/srv.sh delete -n custom-service
-
-# With specific port
-./deploy/srv.sh delete -p 8080
-
-# Combined parameters
-./deploy/srv.sh d -n custom-service -p 9021
-```
-
-**What happens:**
-1. Port is determined from configuration or parameter
-2. `systemctl stop <service_name>` is executed
-3. `systemctl disable <service_name>` is executed
-4. Unit file `/etc/systemd/system/<service_name>.service` is removed
-5. Process on specified port is terminated (if exists)
-6. `systemctl daemon-reload` is executed
-
-### Service Reinstallation
-
-```bash
-# Complete reinstallation
-./deploy/srv.sh reinstall
-./deploy/srv.sh r
-
-# With parameters
-./deploy/srv.sh r -n custom-service -v 22.17.1 -p 9021
-```
-
-**What happens:**
-1. Complete service removal is performed (as in `delete`)
-2. Complete service installation is performed (as in `install`)
-3. Status is shown and log viewing is started
-
-## Execution Examples
-
-### From Project Root
-
-```bash
-# All commands work from root
-./deploy/srv.sh install
-./deploy/srv.sh delete -p 9021
-./deploy/srv.sh reinstall -n mcp-fin-office-dev
-```
-
-### From deploy Folder
-
-```bash
-cd deploy/
-
-# All commands work from deploy folder
-./srv.sh install
-./srv.sh delete -p 9021
-./srv.sh reinstall -n mcp-fin-office-dev
-```
-
-### Real-world Project Examples
-
-```bash
-# Development installation
-./deploy/srv.sh install -n mcp-fin-office-dev -v 22.17.1
-
-# Production installation with auto-detection
-./deploy/srv.sh install
-
-# Remove dev version
-./deploy/srv.sh delete -n mcp-fin-office-dev
-
-# Quick reinstall after changes
-./deploy/srv.sh reinstall
-```
-
-## Generated systemd Unit File
+## Generated systemd unit file
 
 ```ini
 [Unit]
-Description=mcp-fin-office
+Description=<serviceName>
 After=network.target
 StartLimitIntervalSec=0
 
@@ -189,159 +176,35 @@ StartLimitIntervalSec=0
 User=root
 WorkingDirectory=/path/to/project/root
 EnvironmentFile=/path/to/project/root/.env
-ExecStart=/root/.nvm/versions/node/v22.17.1/bin/node dist/src/_core/index.js
+ExecStart=/root/.nvm/versions/node/v22.17.1/bin/node <package.json.main>
 Restart=always
 RestartSec=3
-StandardOutput=syslog
-StandardError=syslog
 
 [Install]
 WantedBy=multi-user.target
 ```
 
-## Debugging and Monitoring
+## Debugging and monitoring
 
-### View Status
 
-```bash
-systemctl status mcp-fin-office
-```
-
-### View Logs
+### Viewing logs
 
 ```bash
-# Recent logs
-journalctl -u mcp-fin-office
+# Short status with logs
+systemctl -l status <serviceName>
 
-# Follow logs in real-time
-journalctl -u mcp-fin-office -f
+# Latest logs (compact output)
+journalctl -o cat -u <serviceName>
 
-# Logs from last hour
-journalctl -u mcp-fin-office --since "1 hour ago"
+# Follow logs in real time (equivalent to what `reinstall` starts)
+journalctl -o cat -xefu <serviceName>
+
+# Logs for the last hour
+journalctl -u <serviceName> --since "1 hour ago"
 ```
 
-### Manual Control
+### Manual control
 
 ```bash
-# Stop
-sudo systemctl stop mcp-fin-office
-
-# Start
-sudo systemctl start mcp-fin-office
-
-# Restart
-sudo systemctl restart mcp-fin-office
-
-# Disable autostart
-sudo systemctl disable mcp-fin-office
-```
-
-## Requirements
-
-- **Operating System**: Linux with systemd
-- **Permissions**: `sudo` privileges for managing systemd services
-- **Node.js**: Installed Node.js (NVM or system installation)
-- **Project Files**:
-  - `package.json` in project root
-  - Built application (file specified in `package.json` `main`)
-  - Optional: `.envrc` for Node.js version detection
-  - Optional: `config/` folder for port detection
-
-## File Structure
-
-```
-project-root/
-├── package.json              # Source: name, main
-├── .envrc                    # Optional: Node.js version
-├── config/
-│   └── default.yaml         # Optional: webServer.port
-├── deploy/
-│   ├── srv.sh              # ← This script
-│   └── srv.sh.readme.md    # ← This documentation
-└── dist/
-    └── src/
-        └── _core/
-            └── index.js     # Main application file
-```
-
-## Troubleshooting
-
-### Script Cannot Find Node.js
-
-```bash
-# Check Node.js availability
-node -v
-which node
-
-# Check NVM installation
-ls -la ~/.nvm/versions/node/
-```
-
-### package.json Reading Error
-
-```bash
-# Check JSON syntax
-cat package.json | jq .
-
-# Check for name and main fields
-node -e "const pkg = require('./package.json'); console.log('name:', pkg.name); console.log('main:', pkg.main);"
-```
-
-### Port Detection Error
-
-```bash
-# Check configuration
-node -e "const c = require('config'); console.log('port:', c.webServer?.port);"
-
-# Check configuration files
-ls -la config/
-cat config/default.yaml | grep -A5 webServer
-```
-
-### Access Permissions
-
-```bash
-# Check systemd management permissions
-sudo systemctl --version
-
-# Check write permissions for /etc/systemd/system/
-sudo ls -la /etc/systemd/system/
-```
-
-## CI/CD Integration
-
-### Automated Deployment
-
-```bash
-#!/bin/bash
-# deploy.sh
-
-# Build project
-npm ci
-npm run build
-
-# Install/reinstall service
-./deploy/srv.sh reinstall
-
-# Check successful startup
-sleep 5
-systemctl is-active --quiet mcp-fin-office && echo "Service started successfully"
-```
-
-### Rollback Script
-
-```bash
-#!/bin/bash
-# rollback.sh
-
-# Stop current service
-./deploy/srv.sh delete
-
-# Restore previous version
-git checkout HEAD~1
-npm ci
-npm run build
-
-# Start previous version
-./deploy/srv.sh install
+sudo systemctl start|stop|restart|disable|status <serviceName>
 ```

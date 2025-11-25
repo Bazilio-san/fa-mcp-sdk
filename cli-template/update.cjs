@@ -1,3 +1,5 @@
+#!/usr/bin/env node
+
 // noinspection UnnecessaryLocalVariableJS
 
 const fs = require('fs');
@@ -5,12 +7,12 @@ const path = require('path');
 const { execSync, spawn } = require('child_process');
 const os = require('os');
 
-const version = '2025.11.24-0743';
+const version = '2025.11.25-0506';
 console.log(`Update script version: ${version}`);
 
-// Имя этой папки
+// Name of this folder
 const scriptDirName = require('path').basename(__dirname);
-// Смена рабочей директории на директорию скрипта
+// Changing the working directory to a script directory
 process.chdir(__dirname);
 const CWD = process.cwd();
 const VON = path.resolve(path.join(CWD, '..'));
@@ -122,7 +124,7 @@ const truncateCumulativeLogIfNeeded = () => {
         const tailContent = buffer.toString('utf8').replace(/^[\r\n]*/, ''); // Remove leading newlines
         fs.writeFileSync(logFile, tailContent);
 
-        log(`Cumulative log truncated to ${Math.round(tailContent.length / 1024)}KB`);
+        logIt(`Cumulative log truncated to ${Math.round(tailContent.length / 1024)}KB`);
       }
     }
   } catch (error) {
@@ -152,10 +154,7 @@ function execCommand (command, options = {}, withSetupScript = false) {
     });
     return result;
   } catch (error) {
-    if (options.throwOnError !== false) {
-      throw error;
-    }
-    return error.stdout || '';
+    throw error;
   }
 }
 
@@ -304,7 +303,6 @@ function loadConfig () {
  */
 function getServiceName () {
   let serviceName = '';
-  let serviceNameAlt = '';
   let serviceInstance = '';
   try {
     if (fs.existsSync('.env')) {
@@ -312,10 +310,6 @@ function getServiceName () {
       let match = envContent.match(/^SERVICE_NAME=([^\r\n]+)/m);
       if (match) {
         serviceName = match[1].trim();
-      }
-      match = envContent.match(/^SERVICE_NAME_ALT=([^\r\n]+)/m);
-      if (match) {
-        serviceNameAlt = match[1].trim();
       }
       match = envContent.match(/^SERVICE_INSTANCE=([^\r\n]+)/m);
       if (match) {
@@ -328,9 +322,8 @@ function getServiceName () {
     }
 
     return {
-      serviceNameForPM2: `${serviceName}${serviceInstance}`,
       serviceName,
-      serviceNameForSystemd: serviceNameAlt || serviceName,
+      serviceNamePM: `${serviceName}${serviceInstance}`,
     };
   } catch (error) {
     console.error('Error getting service name:', error.message);
@@ -383,7 +376,11 @@ function getRepoInfo () {
       upstreamHash,
     };
   } catch (error) {
-    console.error('Error getting repo info:', error.message);
+    const message = String(error.message).includes(error.stderr)
+      ? error.message
+      : [error.stderr, error.message].join('\n');
+
+    console.error('Error getting repo info:', message);
     return null;
   }
 }
@@ -432,7 +429,6 @@ ${colorizeHTML(clearColors(body))}
       logIt(`Sending update notification to: ${emailAddress}`);
       const subject = `${status} Update: ${serviceName} (on ${hostname})`;
 
-      // Подаем тело письма через stdin, задаем Content-Type
       const command = `mail -a "Content-Type: text/html; charset=UTF-8" -s "${subject.replace(/"/g, '\\"')}" "${emailAddress}"`;
       const child = spawn('/bin/bash', ['-lc', command], { stdio: ['pipe', 'inherit', 'inherit'] });
       child.stdin.write(htmlContent);
@@ -491,20 +487,18 @@ const buildQuasar = () => {
   logIt('Quasar build completed');
 };
 
-const restartService = ({ serviceName, serviceNameForPM2, serviceNameForSystemd }, args) => {
+const restartService = (serviceNamePM) => {
   let srvc = '';
-  if (systemctlServiceExists(serviceNameForSystemd)) {
+  if (systemctlServiceExists(serviceNamePM)) {
     srvc = 'systemctl';
-    logIt(`Restarting service ${serviceNameForSystemd} via ${srvc}`, true);
-    execCommand(`${srvc} restart "${serviceNameForSystemd}"`);
-  } else if (pm2ServiceExists(serviceNameForPM2)) {
+  } else if (pm2ServiceExists(serviceNamePM)) {
     srvc = 'pm2';
-    logIt(`Restarting service ${serviceNameForPM2} via ${srvc}`, true);
-    execCommand(`${srvc} restart "${serviceNameForPM2}"`);
   } else {
-    logIt(`Service ${serviceName} not found in systemctl or PM2`);
+    logIt(`Service ${serviceNamePM} not found in systemctl or PM2`);
     return;
   }
+  logIt(`Restarting service ${serviceNamePM} via ${srvc}`, true);
+  execCommand(`${srvc} restart "${serviceNamePM}"`);
   logIt(`Service restarted`);
 };
 
@@ -522,7 +516,7 @@ async function main () {
   }
 
   // Get service information
-  const { serviceName, serviceNameForPM2, serviceNameForSystemd } = getServiceName();
+  const { serviceName, serviceNamePM } = getServiceName();
 
   logIt(`<status>Update <y>${colorG.y(serviceName)}</y> ${nowPretty()}`);
 
@@ -544,7 +538,7 @@ async function main () {
   const expectedBranch = args.expectedBranch || config.branch;
   let updateDeployedLogFile = false;
   try {
-    // 1) Если есть локальные изменения — откатить
+    // 1) If there are local changes, roll back
     const hasChanges = execCommand('git status --porcelain').trim().length > 0;
     if (hasChanges) {
       logIt(`Found uncommited changes. Reset to HEAD...`);
@@ -557,7 +551,7 @@ async function main () {
     const repoInfo = getRepoInfo();
     let { branch, headHash, upstreamHash } = repoInfo;
 
-    // 2) Если ветка не та — жестко переключиться на голову удаленной expectedBranch
+    // 2) If the branch is not the same, hard switch to the head of the deleted expectedBranch
     const expectedUpstream = `origin/${expectedBranch}`;
     if (branch !== expectedBranch) {
       needUpdate = true;
@@ -577,7 +571,7 @@ async function main () {
     }
 
     if (headHash !== upstreamHash) {
-      // 3) Ветка та же, но надо подтянуть изменения
+      // 3) The branch is the same, but we need to tighten up the changes
       needUpdate = true;
       updateReason += `${updateReason ? '. ' : ''}headHash !== upstreamHash (${headHash} != ${upstreamHash})`;
       printCurrenBranch();
@@ -592,10 +586,10 @@ async function main () {
     if (needUpdate || args.force) {
       updateDeployedLogFile = true;
       logTryUpdate(updateReason);
-      //reinstallDependencies();
-      //compile();
-      //buildQuasar();
-      restartService({ serviceName, serviceNameForPM2, serviceNameForSystemd }, args);
+      reinstallDependencies();
+      compile();
+      buildQuasar();
+      restartService(serviceNamePM);
 
       // Add completion info to build log
       logIt(`Update completed successfully at ${new Date().toISOString().replace('T', ' ').substring(0, 19)}`);
@@ -605,6 +599,8 @@ async function main () {
       } else {
         logIt('EMAIL not found');
       }
+    } else {
+      logIt('No changes detected. Update skipped.');
     }
   } catch (err) {
     const message = String(err.message).includes(err.stderr)

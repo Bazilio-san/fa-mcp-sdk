@@ -54,7 +54,7 @@ Build outputs:
 - Library runtime: `dist\core\**\*.js`
 - Template runtime: `dist\template\**\*.js`
 
-#### 3) Technology map and where to find things (ключевые элементы и размещение кода)
+#### 3) Technology map and where to find things
 - Transport & server
   - HTTP server: `src\core\web\server-http.ts` (Express, Helmet, CORS, rate limiting, endpoints). Start log printed with product name and port.
   - SSE support: served by HTTP layer and consumed by `McpSseClient` (testing client).

@@ -68,7 +68,7 @@ db:
 logger:
   level: info
   useFileLogger: true # To use or not to use logging to a file
-  # VVA --------------------------- Добавить папку логирования
+  # VVA --------------------------- Add a logging folder
 
 mcp:
   transportType: http # stdio | http

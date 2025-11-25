@@ -1,4 +1,4 @@
-// Простая тестовая версия сервера для проверки NTLM аутентификации
+// A simple test version of the server to verify NTLM authentication
 import express from 'express';
 
 const app = express();
@@ -7,13 +7,12 @@ const port = 3030;
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// Простая имитация NTLM middleware для тестирования
+// Easy NTLM middleware simulation for testing
 app.use((req, res, next) => {
-  // Проверяем заголовок Authorization
   const auth = req.headers.authorization;
 
   if (!auth) {
-    // Отправляем NTLM challenge
+    // Sending NTLM challenge
     console.log('[TEST-SERVER] No auth header, sending NTLM challenge');
     return res
       .setHeader('WWW-Authenticate', 'NTLM')
@@ -47,12 +46,12 @@ app.use((req, res, next) => {
   }
 
   if (auth.startsWith('Basic ')) {
-    // Простая имитация NTLM - декодируем Basic auth
+    // Simple NTLM simulation - decode Basic auth
     const base64Credentials = auth.split(' ')[1];
     const credentials = Buffer.from(base64Credentials, 'base64').toString('ascii');
     const [username, password] = credentials.split(':');
 
-    // Имитируем NTLM объект
+    // ИMitigate the NTLM object
     req.ntlm = {
       username: username.includes('\\') ? username.split('\\')[1] : username,
       domain: username.includes('\\') ? username.split('\\')[0] : 'OFFICE',
@@ -66,7 +65,6 @@ app.use((req, res, next) => {
   next();
 });
 
-// Главная страница
 app.get('/', (req, res) => {
   const username = req.ntlm?.username || 'Unknown';
   const domain = req.ntlm?.domain || 'Unknown';
@@ -140,7 +138,7 @@ app.post('/api/generate-token', (req, res) => {
     });
   }
 
-  // Имитируем генерацию токена
+  // Simulating token generation
   const token = 'test-token-' + Date.now();
 
   res.json({
