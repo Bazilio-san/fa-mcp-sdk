@@ -9,6 +9,7 @@ interface ILoggerConfig {
   logger: {
     level: TFileLogLevel;
     useFileLogger: boolean;
+    dir?: string; // Directory for log files (if useFileLogger is true)
   }
 }
 

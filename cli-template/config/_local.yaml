@@ -15,7 +15,7 @@ consul:
       token: '{{consul.agent.reg.token}}'
   service:
     enable: {{consul.service.enable}} # true - Allows registration of the service with the consul
-    instance: 'instance-0' # This value will be specified as a suffix in the id of the service
+    instance: '{{SERVICE_INSTANCE}}' # This value will be specified as a suffix in the id of the service
   envCode: # Used to generate the service ID
     prod: '{{consul.envCode.prod}}' # Production environment code
     dev: '{{consul.envCode.dev}}' # Development environment code
@@ -35,7 +35,8 @@ db:
 
 logger:
   level: info
-  useFileLogger: true # To use or not to use logging to a file
+  useFileLogger: {{logger.useFileLogger}} # To use or not to use logging to a file
+  dir: '{{logger.dir}}'
 
 mcp:
   transportType: http # 'stdio' or 'http'

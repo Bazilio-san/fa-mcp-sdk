@@ -3,9 +3,9 @@
 
 import { red, reset } from 'af-color';
 import { appConfig } from './bootstrap/init-config.js';
-import { getAFLogger, Logger, FileLogger, ILogObj } from 'af-logger-ts';
+import { getAFLogger, Logger, FileLogger, ILogObj, ILoggerSettings } from 'af-logger-ts';
 
-const { level, useFileLogger } = appConfig.logger;
+const { level, useFileLogger, dir: logDir } = appConfig.logger;
 
 // Check if we're in STDIO mode to disable console logging
 const isStdioMode = appConfig.mcp.transportType === 'stdio';
@@ -27,7 +27,7 @@ if (appConfig.mcp.transportType === 'stdio') {
     return logger!;
   };
 } else {
-  const { logger: l, fileLogger: fl } = getAFLogger({
+  const settings: ILoggerSettings = {
     level: isStdioMode ? 'error' : level, // Suppress most logs in STDIO mode
     maxSize: '500m',
     name: '\x1b[1P',
@@ -50,7 +50,11 @@ if (appConfig.mcp.transportType === 'stdio') {
       /https?:\/\/[^:]+:[^@]+@/gi,
     ],
     noFileLogger: !Boolean(useFileLogger),
-  });
+  };
+  if (useFileLogger && logDir) {
+    settings.logDir = logDir;
+  }
+  const { logger: l, fileLogger: fl } = getAFLogger(settings);
   logger = l;
   fileLogger = fl;
 }

@@ -209,8 +209,9 @@ certificate's public and private keys`,
         name: 'NODE_ENV',
       },
       {
-        skip: true,
         name: 'SERVICE_INSTANCE',
+        defaultValue: '',
+        title: 'Suffix of the service name in Consul and process manager',
       },
       {
         skip: true,
@@ -220,6 +221,17 @@ certificate's public and private keys`,
         name: 'maintainerUrl',
         defaultValue: '',
         title: 'Maintainer url',
+      },
+      {
+        name: 'logger.useFileLogger',
+        defaultValue: '',
+        title: 'Whether to check MCP name in the token',
+      },
+      {
+        skip: true,
+        name: 'logger.dir',
+        defaultValue: '',
+        title: 'Папка, куда будут записываться логи',
       },
     ];
   }
@@ -438,14 +450,28 @@ certificate's public and private keys`,
           value = await ask.optional(title, name, defaultValue);
           if (value) {
             // Auto-generate upstream from mcp.domain by replacing dots with dashes
-            config['upstream'] = value.replace(/\./g, '-');
+            config.upstream = value.replace(/\./g, '-');
           }
           continue;
 
         case 'maintainerUrl':
           value = await ask.optional(title, name, defaultValue);
           if (value) {
-            config['maintainerHtml'] = `<a href="${value}" target="_blank" rel="noopener" class="clickable">Support</a>`;
+            config.maintainerHtml = `<a href="${value}" target="_blank" rel="noopener" class="clickable">Support</a>`;
+          }
+          continue;
+        case 'logger.useFileLogger':
+          const enabled = await ask.yn(title, name, defaultValue);
+          config[name] = String(enabled);
+          if (enabled) {
+            const nm = 'logger.dir';
+            const p = this.optionalParams.find(({ name: n }) => n === nm);
+            value = await ask.optional(p.title, nm, config[nm] || p.defaultValue);
+            if (value) {
+              config[nm] = value;
+            }
+          } else {
+            config[nm] = '';
           }
           continue;
         default:
@@ -526,6 +552,11 @@ certificate's public and private keys`,
     // Loop until configuration is confirmed
     while (!confirmed) {
       await this.collectConfigData(configProxy, isRetry);
+
+      // Set NODE_ENV and PM2_NAMESPACE based on isProduction
+      config.NODE_ENV = config.isProduction === 'true' ? 'production' : 'development';
+      config.PM2_NAMESPACE = config.isProduction === 'true' ? 'prod' : 'dev';
+
       confirmed = await this.confirmConfiguration(config);
 
       if (!confirmed) {

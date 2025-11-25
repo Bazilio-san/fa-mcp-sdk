@@ -42,7 +42,7 @@ consul:
   service:
     enable: {{consul.service.enable}} # true - Allows registration of the service with the consul
     name: <name> # <name> will be replaced by <package.json>.name at initialization
-    instance: 'instance-0' # This value will be specified as a suffix in the id of the service
+    instance: '{{SERVICE_INSTANCE}}' # This value will be specified as a suffix in the id of the service
     version: <version> # <version> will be replaced by <package.json>.version at initialization
     description: <description> # <description> will be replaced by <package.json>.description at initialization
     tags: [] # If null or empty array - Will be pulled up from package.keywords at initialization
@@ -67,7 +67,8 @@ db:
 
 logger:
   level: info
-  useFileLogger: true # To use or not to use logging to a file
+  useFileLogger: {{logger.useFileLogger}} # To use or not to use logging to a file
+  dir: '{{logger.dir}}'
 
 mcp:
   transportType: http # stdio | http
