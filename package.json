@@ -1,7 +1,7 @@
 {
   "name": "fa-mcp-sdk",
   "productName": "FA MCP SDK",
-  "version": "0.2.94",
+  "version": "0.2.95",
   "description": "Core infrastructure and templates for building Model Context Protocol (MCP) servers with TypeScript",
   "type": "module",
   "main": "dist/core/index.js",
@@ -59,7 +59,7 @@
   },
   "homepage": "https://github.com/Bazilio-san/fa-mcp-sdk#readme",
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.22.0",
+    "@modelcontextprotocol/sdk": "^1.23.0",
     "af-consul-ts": "^4.0.14",
     "af-db-ts": "^3.0.23",
     "af-logger-ts": "^0.0.24",
@@ -70,7 +70,7 @@
     "express": "^5.1.0",
     "helmet": "^8.1.0",
     "pgvector": "^0.2.1",
-    "rate-limiter-flexible": "^8.2.1",
+    "rate-limiter-flexible": "^8.3.0",
     "uuid": "^13.0.0",
     "ya-express-ntlm": "^1.0.39"
   },
@@ -86,12 +86,12 @@
     "@types/node": "^24.10.1",
     "@types/swagger-jsdoc": "^6.0.4",
     "@types/swagger-ui-express": "^4.1.8",
-    "@typescript-eslint/eslint-plugin": "^8.46.4",
-    "@typescript-eslint/parser": "^8.46.4",
+    "@typescript-eslint/eslint-plugin": "^8.48.0",
+    "@typescript-eslint/parser": "^8.48.0",
     "eslint": "^9.39.1",
     "eslint-plugin-import": "^2.32.0",
     "eslint-plugin-unused-imports": "^4.3.0",
-    "rimraf": "^6.1.0",
+    "rimraf": "^6.1.2",
     "typescript": "^5.9.3"
   }
 }

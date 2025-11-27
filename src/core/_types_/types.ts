@@ -121,4 +121,5 @@ export interface IToolInputSchema {
   type: 'object';
   properties?: IToolProperties | undefined;
   required?: string[] | undefined;
+  [x: string]: unknown;
 }

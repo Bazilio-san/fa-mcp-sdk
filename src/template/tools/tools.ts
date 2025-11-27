@@ -7,10 +7,7 @@ import { IToolInputSchema, IToolProperties } from '../../core/_types_/types.js';
  */
 
 
-const getGenericInputSchema = (
-  queryDescription?: string,
-  additionalProperties?: IToolProperties,
-): IToolInputSchema => {
+export const getGenericInputSchema = (queryDescription?: string, additionalProperties?: IToolProperties): IToolInputSchema => {
   const properties = {
     query: {
       type: 'string',
