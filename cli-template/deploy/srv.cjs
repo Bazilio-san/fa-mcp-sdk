@@ -5,6 +5,7 @@
  * Analog of deploy/srv.sh
  * Can be run from project root or from deploy/ directory
  */
+const version = '2025-11-26-08:46';
 
 /* Colors for output */
 const c = '\x1b[1;36m', lc = '\x1b[0;36m';
@@ -239,7 +240,7 @@ async function detectPort () {
       cfg = await new Function('p', 'return import(p)')('config');
       cfg = cfg.default || cfg;
     }
-    const port = cfg?.webServer?.port;
+    const port = cfg?.webServer?.port || cfg?.server?.port;
     if (port && String(port).match(/^[0-9]{2,5}$/)) return String(port);
   } catch (e) {
     // ignore, will fail below

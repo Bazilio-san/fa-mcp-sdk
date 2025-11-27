@@ -11,6 +11,7 @@ db:
 logger:
   level: LOGGER_LEVEL
   useFileLogger: LOGGER_USE_FILE_LOGGER
+  dir: LOGGER_DIR
 
 mcp:
   transportType: MCP_TRANSPORT_TYPE

@@ -231,7 +231,7 @@ certificate's public and private keys`,
         skip: true,
         name: 'logger.dir',
         defaultValue: '',
-        title: 'Папка, куда будут записываться логи',
+        title: 'Absolute path to the folder where logs will be written',
       },
     ];
   }

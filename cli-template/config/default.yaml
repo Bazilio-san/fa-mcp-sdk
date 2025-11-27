@@ -68,6 +68,7 @@ db:
 logger:
   level: info
   useFileLogger: {{logger.useFileLogger}} # To use or not to use logging to a file
+  # Absolute path to the folder where logs will be written
   dir: '{{logger.dir}}'
 
 mcp:
