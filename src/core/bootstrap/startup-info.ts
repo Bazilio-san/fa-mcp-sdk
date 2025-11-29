@@ -30,7 +30,7 @@ export const startupInfo = async (args: { dotEnvResult: any, cfg: AppConfig }) =
     s.host = r.address || null;
     s.port = r.port || null;
     consulInfoItem = ['Consul serviceId', consulApi.serviceId];
-    consulUI = '\nConsul UI:' + consulApi.consulUI!;
+    consulUI = '\nConsul UI: ' + consulApi.consulUI!;
   }
 
   configInfo({ dotEnvResult, cfg: JSON.parse(JSON.stringify(cfg)) }); // To display you must set ENV DEBUG=config-info

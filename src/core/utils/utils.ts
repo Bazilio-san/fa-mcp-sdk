@@ -1,3 +1,7 @@
+import fs from 'fs';
+import path from 'path';
+import { ROOT_PROJECT_DIR } from '../constants.js';
+
 export const trim = (s: any): string => String(s || '').trim();
 
 export const ppj = (v: any) => {
@@ -19,4 +23,20 @@ export const encodeSvgForDataUri = (svg: string): string => {
   return encodeURIComponent(svg)
     .replace(/'/g, '%27')
     .replace(/"/g, '%22');
+};
+
+/**
+ * Get asset file content by relative path from the <project root>/src/asset folder
+ */
+export const getAsset = (relPathFromAssetRoot: string): string | undefined => {
+  const assetFilePath = path.join(ROOT_PROJECT_DIR, 'src/asset', relPathFromAssetRoot);
+  if (!fs.existsSync(assetFilePath)) {
+    return;
+  }
+  try {
+    return fs.readFileSync(assetFilePath, 'utf8');
+  } catch (err) {
+    console.error(err);
+  }
+  return;
 };

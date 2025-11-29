@@ -46,9 +46,18 @@ export async function generateTokenApp (...args: any[]) {
 export { initMcpServer, gracefulShutdown } from './init-mcp-server.js';
 
 export { formatToolResult, getJsonFromResult } from './utils/formatToolResult.js';
-export { trim, isMainModule, isNonEmptyObject, isObject, ppj } from './utils/utils.js';
+export {
+  trim,
+  isMainModule,
+  isNonEmptyObject,
+  isObject,
+  ppj,
+  encodeSvgForDataUri,
+  getAsset,
+} from './utils/utils.js';
 export { isPortAvailable, checkPortAvailability } from './utils/port-checker.js';
 
+export { ROOT_PROJECT_DIR } from './constants.js';
 export { eventEmitter } from './ee.js';
 export { logger, fileLogger } from './logger.js';
 
