@@ -202,6 +202,7 @@ certificate's public and private keys`,
       },
       {
         title: 'Is it Production mode',
+        defaultValue: 'false',
         name: 'isProduction',
       },
       {
@@ -258,7 +259,6 @@ certificate's public and private keys`,
 
   async collectConfigData (config, isRetry = false) {
     const ask = getAsk();
-
     // Collect required parameters
     for (const param of this.requiredParams) {
       const { title, name } = param;
@@ -427,6 +427,7 @@ certificate's public and private keys`,
       if (skip) {
         continue;
       }
+
       let value;
       switch (name) {
         case 'git-base-url':
@@ -460,7 +461,7 @@ certificate's public and private keys`,
             config.maintainerHtml = `<a href="${value}" target="_blank" rel="noopener" class="clickable">Support</a>`;
           }
           continue;
-        case 'logger.useFileLogger':
+        case 'logger.useFileLogger': {
           const enabled = await ask.yn(title, name, defaultValue);
           config[name] = String(enabled);
           if (enabled) {
@@ -474,6 +475,12 @@ certificate's public and private keys`,
             config[nm] = '';
           }
           continue;
+        }
+        case 'isProduction': {
+          const enabled = await ask.yn(title, name, defaultValue);
+          config[name] = String(enabled);
+          continue;
+        }
         default:
           value = await ask.optional(title, name, defaultValue);
       }
@@ -546,6 +553,12 @@ certificate's public and private keys`,
       }
     }
 
+    if (configProxy.NODE_ENV === 'development') {
+      configProxy.isProduction = 'false';
+    } else if (configProxy.NODE_ENV === 'production') {
+      configProxy.isProduction = 'true';
+    }
+
     let confirmed = false;
     let isRetry = false;
 
@@ -556,6 +569,7 @@ certificate's public and private keys`,
       // Set NODE_ENV and PM2_NAMESPACE based on isProduction
       config.NODE_ENV = config.isProduction === 'true' ? 'production' : 'development';
       config.PM2_NAMESPACE = config.isProduction === 'true' ? 'prod' : 'dev';
+      config.SERVICE_INSTANCE = config.PM2_NAMESPACE;
 
       confirmed = await this.confirmConfiguration(config);
 
