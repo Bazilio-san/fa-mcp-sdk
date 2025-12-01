@@ -226,7 +226,7 @@ certificate's public and private keys`,
       {
         name: 'logger.useFileLogger',
         defaultValue: '',
-        title: 'Whether to check MCP name in the token',
+        title: 'Whether to use file logger',
       },
       {
         skip: true,
