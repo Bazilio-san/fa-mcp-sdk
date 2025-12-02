@@ -613,7 +613,19 @@ certificate's public and private keys`,
     // Check if directory is empty
     try {
       const files = await fs.readdir(targetPath);
-      const allowedFiles = ['.git', '.idea', '.vscode', '.swp', '.swo', '.DS_Store', '.sublime-project', '.sublime-workspace', 'node_modules', 'dist'];
+      const allowedFiles = [
+        '.git',
+        '.idea',
+        '.vscode',
+        '.swp',
+        '.swo',
+        '.DS_Store',
+        '.sublime-project',
+        '.sublime-workspace',
+        'node_modules',
+        'dist',
+        '~last-cli-config.json'
+      ];
       const hasOtherFiles = files.some(file => !allowedFiles.includes(file));
 
       if (hasOtherFiles) {
