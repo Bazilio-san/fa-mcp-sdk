@@ -464,8 +464,8 @@ certificate's public and private keys`,
         case 'logger.useFileLogger': {
           const enabled = await ask.yn(title, name, defaultValue);
           config[name] = String(enabled);
+          const nm = 'logger.dir';
           if (enabled) {
-            const nm = 'logger.dir';
             const p = this.optionalParams.find(({ name: n }) => n === nm);
             value = await ask.optional(p.title, nm, config[nm] || p.defaultValue);
             if (value) {
