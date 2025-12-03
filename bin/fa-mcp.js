@@ -624,6 +624,8 @@ certificate's public and private keys`,
         '.sublime-workspace',
         'node_modules',
         'dist',
+        '_misc',
+        '_tmp',
         '~last-cli-config.json'
       ];
       const hasOtherFiles = files.some(file => !allowedFiles.includes(file));
