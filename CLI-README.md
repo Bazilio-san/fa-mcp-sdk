@@ -182,7 +182,7 @@ Note: The `dist/` directory (compiled JavaScript) is created after running `npm 
 ## Directory Requirements
 
 - **Empty directories only** - CLI aborts if files exist
-- Allowed files: `.git`, `.idea`, `.vscode`, `.DS_Store`, `node_modules`, `dist`, `_misc`, `_tmp`, `.swp`, `.swo`, `.sublime-project`, `.sublime-workspace`, `~last-cli-config.json`
+- Allowed files: `.git`, `.idea`, `.vscode`, `.DS_Store`, `node_modules`, `dist`, `__misc`, `_tmp`, `.swp`, `.swo`, `.sublime-project`, `.sublime-workspace`, `~last-cli-config.json`
 - Use absolute paths for target directory
 
 ## Deployment
