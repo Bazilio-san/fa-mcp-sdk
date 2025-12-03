@@ -624,7 +624,7 @@ certificate's public and private keys`,
         '.sublime-workspace',
         'node_modules',
         'dist',
-        '_misc',
+        '__misc',
         '_tmp',
         '~last-cli-config.json'
       ];
