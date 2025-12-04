@@ -758,8 +758,8 @@ certificate's public and private keys`,
     const mcpDomain = config['mcp.domain'];
     if (mcpDomain) {
       try {
-        const oldConfigPath = path.join(targetPath, 'deploy', 'mcp-template.com.conf');
-        const newConfigPath = path.join(targetPath, 'deploy', `${mcpDomain}.conf`);
+        const oldConfigPath = path.join(targetPath, 'deploy/NGINX/sites-enabled/mcp-template.com.conf');
+        const newConfigPath = path.join(targetPath, 'deploy/NGINX/sites-enabled', `${mcpDomain}.conf`);
 
         await fs.access(oldConfigPath);
         await fs.rename(oldConfigPath, newConfigPath);
