@@ -26,7 +26,7 @@ db:
       main:
         label: 'Your Database Label'
         database: your_database
-        host: 'your_host' # To exclude the use of the database, you need to set host = ''
+        host: '' # To exclude the use of the database, you need to set host = ''
         port: 5432
         user: your_user
         password: your_password
