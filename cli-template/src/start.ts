@@ -1,8 +1,6 @@
 // Import all project data from existing files
 // @ts-ignore
-import { appConfig, initMcpServer, McpServerData } from 'fa-mcp-sdk';
-import { readFileSync } from 'fs';
-import { join } from 'path';
+import { appConfig, initMcpServer, McpServerData, getAsset } from 'fa-mcp-sdk';
 import { tools } from './tools/tools.js';
 import { handleToolCall } from './tools/handle-tool-call.js';
 import { AGENT_BRIEF } from './prompts/agent-brief.js';
@@ -20,17 +18,7 @@ const isConsulProd = (process.env.NODE_CONSUL_ENV || process.env.NODE_ENV) === '
  */
 const startProject = async (): Promise<void> => {
   // Read favicon from assets
-  const faviconPath = join(process.cwd(), 'src/template/asset/favicon.svg');
-  let favicon: string;
-
-  try {
-    favicon = readFileSync(faviconPath, 'utf-8');
-  } catch (_error) {
-    // Fallback if favicon not found
-    favicon = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16">
-<rect width="16" height="16" fill="${appConfig.uiColor.primary || '#007ACC'}"/>
-</svg>`;
-  }
+  const favicon = getAsset('favicon.svg')!;
 
   // Assemble all data to pass to the core
   const serverData: McpServerData = {
