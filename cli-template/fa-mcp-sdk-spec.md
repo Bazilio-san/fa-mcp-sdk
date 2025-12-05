@@ -2,7 +2,9 @@
 
 ## Overview
 
-The FA-MCP-SDK is a comprehensive TypeScript framework for building Model Context Protocol (MCP) servers. This documentation covers how to use the SDK to create your own MCP server project.
+The FA-MCP-SDK is a comprehensive TypeScript framework for building Model Context 
+Protocol (MCP) servers. This documentation covers how to use the SDK 
+to create your own MCP server project.
 
 ## Getting Started
 
@@ -433,15 +435,110 @@ const users1 = await queryMAIN('SELECT * FROM users WHERE active = $1', [true]);
 const users2 = await queryMAIN({ sqlText: 'SELECT * FROM users WHERE active = $1', sqlValues: [true] });
 
 
-// Execute commands
+// execMAIN - execute SQL commands without returning result set
+// Function Signature:
+const execMAIN = async (
+  arg: string | IQueryPgArgsCOptional,
+): Promise<number | undefined> {...}
+
+// Examples:
 await execMAIN('INSERT INTO logs (message, created_at) VALUES ($1, $2)',
   ['Server started', new Date()]);
+await execMAIN({ sqlText: 'UPDATE users SET active = $1 WHERE id = $2', sqlValues: [false, userId] });
 
-// Get single row
-const user = await oneRowMAIN('SELECT * FROM users WHERE id = $1', [userId]);
+// queryRsMAIN - execute SQL and return rows array directly
+// Function Signature:
+const queryRsMAIN = async <R extends QueryResultRow = any> (
+  arg: string | IQueryPgArgsCOptional,
+  sqlValues?: any[],
+  throwError = false,
+): Promise<R[] | undefined> {...}
 
-// Check connection status
-const status = await getMainDBConnectionStatus(); // 'connected' | 'disconnected' | 'error'
+// Example:
+const users = await queryRsMAIN<User>('SELECT * FROM users WHERE active = $1', [true]);
+
+// oneRowMAIN - execute SQL and return single row
+// Function Signature:
+const oneRowMAIN = async <R extends QueryResultRow = any> (
+  arg: string | IQueryPgArgsCOptional,
+  sqlValues?: any[],
+  throwError = false,
+): Promise<R | undefined> {...}
+
+// Example:
+const user = await oneRowMAIN<User>('SELECT * FROM users WHERE id = $1', [userId]);
+
+// getMainDBConnectionStatus - check database connection status
+// Function Signature:
+const getMainDBConnectionStatus = async (): Promise<string> {...}
+
+// Possible return values: 'connected' | 'disconnected' | 'error' | 'db_not_used'
+const status = await getMainDBConnectionStatus();
+
+// checkMainDB - verify database connectivity (stops application if failed)
+// Function Signature:
+const checkMainDB = async (): Promise<void> {...}
+
+// Example:
+await checkMainDB(); // Throws or exits process if DB connection fails
+
+// getInsertSqlMAIN - generate INSERT SQL statement
+// Function Signature:
+const getInsertSqlMAIN = async <U extends TDBRecord = TDBRecord> (arg: {
+  commonSchemaAndTable: string,
+  recordset: TRecordSet<U>,
+  excludeFromInsert?: string[],
+  addOutputInserted?: boolean,
+  isErrorOnConflict?: boolean,
+  keepSerialFields?: boolean,
+}): Promise<string> {...}
+
+// Example:
+const insertSql = await getInsertSqlMAIN({
+  commonSchemaAndTable: 'public.users',
+  recordset: [{ name: 'John', email: 'john@example.com' }],
+  addOutputInserted: true
+});
+
+// getMergeSqlMAIN - generate UPSERT (INSERT...ON CONFLICT) SQL statement
+// Function Signature:
+const getMergeSqlMAIN = async <U extends TDBRecord = TDBRecord> (arg: {
+  commonSchemaAndTable: string,
+  recordset: TRecordSet<U>,
+  conflictFields?: string[],
+  omitFields?: string[],
+  updateFields?: string[],
+  fieldsExcludedFromUpdatePart?: string[],
+  noUpdateIfNull?: boolean,
+  mergeCorrection?: (_sql: string) => string,
+  returning?: string,
+}): Promise<string> {...}
+
+// Example:
+const mergeSql = await getMergeSqlMAIN({
+  commonSchemaAndTable: 'public.users',
+  recordset: [{ id: 1, name: 'John Updated', email: 'john@example.com' }],
+  conflictFields: ['email'],
+  returning: '*'
+});
+
+// mergeByBatch - execute merge operations in batches
+// Function Signature:
+const mergeByBatch = async <U extends TDBRecord = TDBRecord> (arg: {
+  recordset: TRecordSet<U>,
+  getMergeSqlFn: Function
+  batchSize?: number
+}): Promise<any[]> {...}
+
+// Example:
+const results = await mergeByBatch({
+  recordset: largeDataSet,
+  getMergeSqlFn: (batch) => getMergeSqlMAIN({
+    commonSchemaAndTable: 'public.users',
+    recordset: batch
+  }),
+  batchSize: 500
+});
 ```
 
 ### Error Handling
@@ -478,17 +575,47 @@ import {
   addErrorMessage
 } from 'fa-mcp-sdk';
 
-// Create JSON-RPC error responses
-const errorResponse = createJsonRpcErrorResponse('request-123', error);
+// createJsonRpcErrorResponse - create JSON-RPC 2.0 error response
+// Function Signature:
+function createJsonRpcErrorResponse (
+  error: Error | BaseMcpError,
+  requestId?: string | number | null,
+): any {...}
 
-// Convert values to Error objects
-const err = toError(someValue);
+// Example:
+try {
+  // some operation
+} catch (error) {
+  const jsonRpcError = createJsonRpcErrorResponse(error, 'request-123');
+  res.json(jsonRpcError);
+}
 
-// Safe string conversion
-const message = toStr(errorData);
+// toError - safely convert any value to Error object
+// Function Signature:
+const toError = (err: any): Error {...}
 
-// Add context to errors
-const enhancedError = addErrorMessage(originalError, 'Additional context');
+// Examples:
+const err1 = toError(new Error('Original error'));      // Returns original Error
+const err2 = toError('String error message');           // Returns new Error('String error message')
+const err3 = toError({ message: 'Object error' });      // Returns new Error('[object Object]')
+
+// toStr - safely convert error to string message
+// Function Signature:
+const toStr = (err: any): string {...}
+
+// Examples:
+const msg1 = toStr(new Error('Test error'));           // Returns 'Test error'
+const msg2 = toStr('String message');                  // Returns 'String message'
+const msg3 = toStr(null);                              // Returns 'Unknown error'
+
+// addErrorMessage - add context to existing error message
+// Function Signature:
+const addErrorMessage = (err: any, msg: string): void {...}
+
+// Example:
+const originalError = new Error('Connection failed');
+addErrorMessage(originalError, 'Database operation failed');
+// originalError.message is now: 'Database operation failed. Connection failed'
 ```
 
 ### Authentication and Security
@@ -496,32 +623,110 @@ const enhancedError = addErrorMessage(originalError, 'Additional context');
 #### Token-based Authentication
 
 ```typescript
-import { authByToken, authTokenMW, ICheckTokenResult } from 'fa-mcp-sdk';
+import {
+  authByToken,
+  authTokenMW,
+  ICheckTokenResult,
+  checkToken,
+  generateToken
+} from 'fa-mcp-sdk';
 
-// Validate authentication token
-const tokenResult: ICheckTokenResult = await authByToken(token);
-
-if (tokenResult.valid) {
-  console.log('User:', tokenResult.user);
-} else {
-  console.log('Auth failed:', tokenResult.error);
+// Types used:
+export interface ICheckTokenResult {
+  inTokenType?: TTokenType          // 'permanent' | 'JWT'
+  payload?: ITokenPayload,          // Token payload with user data
+  errorReason?: string,             // Error message if validation failed
+  isTokenDecrypted?: boolean,       // Whether token was successfully decrypted
 }
 
-// Use as Express middleware (for HTTP transport)
+export interface ITokenPayload {
+  user: string,                     // Username
+  expire: number,                   // Expiration timestamp
+  [key: string]: any,               // Additional payload data
+}
+
+// checkToken - validate token and return detailed result
+// Function Signature:
+const checkToken = (arg: {
+  token: string,
+  expectedUser?: string,
+  expectedService?: string,
+}): ICheckTokenResult {...}
+
+// Example:
+const tokenResult = checkToken({
+  token: 'user_provided_token',
+  expectedUser: 'john_doe',
+  expectedService: 'my-mcp-server'
+});
+
+if (!tokenResult.errorReason) {
+  console.log('Valid token for user:', tokenResult.payload?.user);
+} else {
+  console.log('Auth failed:', tokenResult.errorReason);
+}
+
+// generateToken - create JWT token
+// Function Signature:
+const generateToken = (user: string, liveTimeSec: number, payload?: any): string {...}
+
+// Example:
+const token = generateToken('john_doe', 3600, { role: 'admin' }); // 1 hour token
+
+// authByToken - Express route handler for token validation
+// Function Signature:
+const authByToken = (req: Request, res: Response): boolean {...}
+
+// Example:
+app.post('/api/secure', (req, res) => {
+  if (!authByToken(req, res)) {
+    return; // Response already sent with error
+  }
+  // User is authenticated, continue with request
+  res.json({ message: 'Access granted' });
+});
+
+// authTokenMW - Express middleware for token authentication
+// Function Signature:
+const authTokenMW = (req: Request, res: Response, next: NextFunction): void {...}
+
+// Example:
 import express from 'express';
 const app = express();
-app.use('/protected', authTokenMW);
-```
+app.use('/protected', authTokenMW); // Apply to all /protected/* routes
 
 #### Token Generation
-
-Start a token generation web application:
 
 ```typescript
 import { generateTokenApp } from 'fa-mcp-sdk';
 
-// Start token generation service
-await generateTokenApp(/* configuration options */);
+// generateTokenApp - start token generation web application
+// Function Signature:
+async function generateTokenApp (...args: any[]): Promise<void> {...}
+
+// Starts a web server for generating authentication tokens
+// Uses NTLM authentication if configured
+// Web interface available at configured host:port
+
+// Example:
+await generateTokenApp(); // Uses default configuration from appConfig
+
+// Token generation app provides:
+// - Web interface for token creation
+// - NTLM domain authentication support
+// - JWT token generation with configurable expiration
+// - Integration with Active Directory (if configured)
+
+// Configuration in config/default.yaml:
+// webServer:
+//   auth:
+//     token:
+//       encryptKey: '***'           # Symmetric key for token encryption
+//
+// Optional NTLM configuration:
+// ntlm:
+//   domain: 'DOMAIN'
+//   domainController: 'dc.domain.com'
 ```
 
 ### Utility Functions
@@ -539,27 +744,75 @@ import {
   getAsset
 } from 'fa-mcp-sdk';
 
-// Safe string trimming
-const cleanText = trim(userInput);
+// trim - safely trim string with null/undefined handling
+// Function Signature:
+const trim = (s: any): string {...}
 
-// Check if running as main module
+// Examples:
+const cleanText1 = trim('  hello  ');           // Returns 'hello'
+const cleanText2 = trim(null);                  // Returns ''
+const cleanText3 = trim(undefined);             // Returns ''
+const cleanText4 = trim(123);                   // Returns '123'
+
+// isMainModule - check if current module is the main entry point
+// Function Signature:
+const isMainModule = (url: string): boolean {...}
+
+// Example:
 if (isMainModule(import.meta.url)) {
-  console.log('Running as main');
+  console.log('Running as main module');
+  startServer();
 }
 
-// Object validation
-if (isNonEmptyObject(data)) {
-  // Process data
-}
+// isObject - check if value is an object (not null, not array)
+// Function Signature:
+const isObject = (o: any): boolean {...}
 
-// Pretty-print JSON
-console.log(ppj(complexObject));
+// Examples:
+isObject({});                    // Returns true
+isObject({ key: 'value' });      // Returns true
+isObject([]);                    // Returns false
+isObject(null);                  // Returns false
+isObject('string');              // Returns false
 
-// Encode SVG for data URI
-const favicon = encodeSvgForDataUri(svgContent);
+// isNonEmptyObject - check if value is non-empty object with defined values
+// Function Signature:
+const isNonEmptyObject = (o: any): boolean {...}
 
-// Get asset content
-const logoContent = getAsset('path/to/logo.svg');
+// Examples:
+isNonEmptyObject({ key: 'value' });     // Returns true
+isNonEmptyObject({});                   // Returns false
+isNonEmptyObject({ key: undefined });   // Returns false
+isNonEmptyObject([]);                   // Returns false
+
+// ppj - pretty-print JSON with 2-space indentation
+// Function Signature:
+const ppj = (v: any): string {...}
+
+// Example:
+const formatted = ppj({ user: 'john', age: 30 });
+// Returns:
+// {
+//   "user": "john",
+//   "age": 30
+// }
+
+// encodeSvgForDataUri - encode SVG content for use in data URI
+// Function Signature:
+const encodeSvgForDataUri = (svg: string): string {...}
+
+// Example:
+const svgContent = '<svg xmlns="http://www.w3.org/2000/svg"><circle r="10"/></svg>';
+const encoded = encodeSvgForDataUri(svgContent);
+const dataUri = `data:image/svg+xml,${encoded}`;
+
+// getAsset - get asset file content from src/asset folder
+// Function Signature:
+const getAsset = (relPathFromAssetRoot: string): string | undefined {...}
+
+// Example:
+const logoContent = getAsset('logo.svg');         // Reads from src/asset/logo.svg
+const iconContent = getAsset('icons/star.svg');   // Reads from src/asset/icons/star.svg
 ```
 
 #### Network Utilities
@@ -567,15 +820,45 @@ const logoContent = getAsset('path/to/logo.svg');
 ```typescript
 import { isPortAvailable, checkPortAvailability } from 'fa-mcp-sdk';
 
-// Check if port is available
-const available = await isPortAvailable(3000, 'localhost');
+// isPortAvailable - check if port is available for binding
+// Function Signature:
+function isPortAvailable (port: number, host: string = '0.0.0.0'): Promise<boolean> {...}
 
-// Check with error handling
+// Examples:
+const available1 = await isPortAvailable(3000);                    // Check on all interfaces
+const available2 = await isPortAvailable(3000, 'localhost');       // Check on localhost
+const available3 = await isPortAvailable(8080, '192.168.1.10');   // Check on specific IP
+
+if (available1) {
+  console.log('Port 3000 is available');
+} else {
+  console.log('Port 3000 is occupied');
+}
+
+// checkPortAvailability - check port with error handling
+// Function Signature:
+async function checkPortAvailability (
+  port: number,
+  host: string = '0.0.0.0',
+  exitOnError: boolean = true
+): Promise<void> {...}
+
+// Examples:
 try {
-  await checkPortAvailability(3000, 'localhost', true); // throws if busy
+  // Throws error if port is busy
+  await checkPortAvailability(3000, 'localhost', true);
+  console.log('Port is available, can start server');
+} catch (error) {
+  console.log('Port is busy:', error.message);
+}
+
+// Don't exit process on busy port
+try {
+  await checkPortAvailability(3000, 'localhost', false);
   console.log('Port is available');
 } catch (error) {
-  console.log('Port is busy');
+  console.log('Port is occupied, will use different port');
+  // Continue execution instead of exiting
 }
 ```
 
@@ -584,16 +867,55 @@ try {
 ```typescript
 import { formatToolResult, getJsonFromResult } from 'fa-mcp-sdk';
 
-// Format tool results consistently
+// formatToolResult - format tool execution results based on configuration
+// Function Signature:
+function formatToolResult (json: any): any {...}
+
+// Behavior depends on appConfig.mcp.toolAnswerAs setting:
+// - 'structuredContent': Returns { structuredContent: json }
+// - 'text': Returns { content: [{ type: 'text', text: JSON.stringify(json, null, 2) }] }
+
+// Examples:
 const result = {
-  data: processedData,
+  message: 'Operation completed',
+  data: { count: 42, items: ['a', 'b'] },
   timestamp: new Date().toISOString(),
 };
 
 const formattedResult = formatToolResult(result);
 
-// Extract JSON from formatted result
-const originalData = getJsonFromResult(formattedResult);
+// If toolAnswerAs = 'structuredContent':
+// {
+//   structuredContent: {
+//     message: 'Operation completed',
+//     data: { count: 42, items: ['a', 'b'] },
+//     timestamp: '2025-01-01T12:00:00.000Z'
+//   }
+// }
+
+// If toolAnswerAs = 'text':
+// {
+//   content: [{
+//     type: 'text',
+//     text: '{\n  "message": "Operation completed",\n  "data": {\n    "count": 42,\n    "items": ["a", "b"]\n  },\n  "timestamp": "2025-01-01T12:00:00.000Z"\n}'
+//   }]
+// }
+
+// getJsonFromResult - extract original JSON from formatted result
+// Function Signature:
+const getJsonFromResult = <T = any> (result: any): T {...}
+
+// Examples:
+const originalData1 = getJsonFromResult<MyDataType>(formattedResult);
+
+// Works with both response formats:
+const structuredResponse = { structuredContent: { user: 'john', age: 30 } };
+const textResponse = {
+  content: [{ type: 'text', text: '{"user":"john","age":30}' }]
+};
+
+const data1 = getJsonFromResult(structuredResponse);  // { user: 'john', age: 30 }
+const data2 = getJsonFromResult(textResponse);        // { user: 'john', age: 30 }
 ```
 
 ### Logging
@@ -752,30 +1074,79 @@ import {
   deregisterServiceFromConsul
 } from 'fa-mcp-sdk';
 
-// Get Consul client
-const consul = await getConsulAPI();
+// getConsulAPI - get configured Consul client instance
+// Function Signature:
+const getConsulAPI = async (): Promise<any> {...}
 
-// Access point management starts automatically if configured
+// Returns Consul API client configured from appConfig.consul settings
+// Example:
+const consulApi = await getConsulAPI();
+const services = await consulApi.catalog.service.list();
+console.log('Available services:', services);
 
-// Manual service deregistration
-await deregisterServiceFromConsul('my-service-id');
+// deregisterServiceFromConsul - remove service registration from Consul
+// Function Signature:
+const deregisterServiceFromConsul = async (): Promise<void> {...}
 
-// Access point updater control (usually automatic)
-accessPointUpdater.start();
-accessPointUpdater.stop();
+// Note: This function reads serviceId from command line arguments (process.argv)
+// Usage in command line context:
+// node script.js <serviceId> [agentHost] [agentPort]
+
+// Example programmatic usage:
+await deregisterServiceFromConsul();
+
+// accessPointUpdater - manage access point lifecycle
+// Object with start/stop methods:
+const accessPointUpdater = {
+  start(): void;    // Start automatic access point updates
+  stop(): void;     // Stop automatic access point updates
+}
+
+// Examples:
+accessPointUpdater.start();  // Automatically starts if appConfig.accessPoints configured
+accessPointUpdater.stop();   // Stop updates (called automatically on shutdown)
+
+// Access point configuration in config/default.yaml:
+// accessPoints:
+//   myService:
+//     title: 'My remote service'
+//     host: <host>
+//     port: 9999
+//     token: '***'
+//     noConsul: true
+//     consulServiceName: <consulServiceName>
 ```
 
 ### Graceful Shutdown
 
-The SDK handles graceful shutdown automatically, but you can also use it manually:
-
 ```typescript
 import { gracefulShutdown } from 'fa-mcp-sdk';
 
+// gracefulShutdown - perform graceful application shutdown
+// Function Signature:
+async function gracefulShutdown (signal: string, exitCode: number = 0): Promise<void> {...}
+
+// Automatically handles:
+// - Stopping Consul service registration
+// - Closing database connections
+// - Flushing file logs
+// - Stopping access point updater
+// - Process exit with specified code
+
+// Examples:
 // Manual shutdown
 process.on('SIGUSR2', () => {
   gracefulShutdown('SIGUSR2', 0);
 });
+
+// Emergency shutdown
+process.on('uncaughtException', (error) => {
+  console.error('Uncaught exception:', error);
+  gracefulShutdown('UNCAUGHT_EXCEPTION', 1);
+});
+
+// Note: SDK automatically registers SIGINT and SIGTERM handlers
+// in initMcpServer(), so manual registration is only needed for custom signals
 ```
 
 ### Transport Types
@@ -822,4 +1193,5 @@ process.on('SIGUSR2', () => {
 3. **Input validation** - Validate all user inputs
 4. **Error messages** - Don't leak sensitive information
 
-This documentation provides everything needed to build, test, and deploy your own MCP server using the FA-MCP-SDK framework.
+This documentation provides everything needed to build, test, and deploy your own 
+MCP server using the FA-MCP-SDK framework.
