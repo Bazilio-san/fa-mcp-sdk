@@ -97,16 +97,13 @@ The CLI collects required and optional parameters through interactive prompts or
 
 ```
 my-mcp-server/
-├── .editorconfig                # Editor configuration
-├── .env.example                 # Environment variables template
-├── .envrc                       # direnv configuration
-├── .gitignore                   # Git ignore rules
-├── .run/                        # IDE run configurations
+├── .run/                        # JetBrains IDE run configurations
 ├── config/                      # Environment configurations
 │   ├── _local.yaml              # Local configuration template
 │   ├── custom-environment-variables.yaml # Environment mapping
 │   ├── default.yaml             # Base configuration
 │   ├── development.yaml         # Development settings
+│   ├── local.yaml               # Local configuration
 │   ├── production.yaml          # Production settings
 │   └── test.yaml                # Test environment
 ├── deploy/                      # Deployment configurations
@@ -144,6 +141,11 @@ my-mcp-server/
 │   ├── mcp/                     # MCP protocol tests
 │   ├── jest-simple-reporter.js  # Custom Jest reporter
 │   └── utils.ts                 # Test utilities
+├── .editorconfig                # Editor configuration
+├── .env                         # Environment variables
+├── .env.example                 # Environment variables template
+├── .envrc                       # direnv configuration
+├── .gitignore                   # Git ignore rules
 ├── eslint.config.js             # ESLint configuration
 ├── jest.config.js               # Jest test configuration
 ├── LICENSE                      # MIT license file

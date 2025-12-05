@@ -51,7 +51,7 @@ app.use((req, res, next) => {
     const credentials = Buffer.from(base64Credentials, 'base64').toString('ascii');
     const [username, password] = credentials.split(':');
 
-    // ИMitigate the NTLM object
+    // Mitigate the NTLM object
     req.ntlm = {
       username: username.includes('\\') ? username.split('\\')[1] : username,
       domain: username.includes('\\') ? username.split('\\')[0] : 'OFFICE',

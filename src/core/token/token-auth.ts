@@ -15,7 +15,7 @@ const getTokenFromHttpHeader = (req: Request): string => {
 
 const SHOW_HEADERS_SET = new Set(['user', 'authorization', 'x-real-ip', 'x-mode', 'host']);
 
-export const debugAuth = (req: Request, code: number, message: string): { code: number, message: string } => {
+const debugAuth = (req: Request, code: number, message: string): { code: number, message: string } => {
   if (debugTokenAuth.enabled) {
     let headersStr: string = '';
     if (req.headers) {
@@ -64,7 +64,7 @@ export const authByToken = (req: Request, res: Response) => {
 /**
  * Check if a resource URI is public (doesn't require authentication)
  */
-export const isPublicResource = (uri: string): boolean => {
+const isPublicResource = (uri: string): boolean => {
   // Get all resources including built-in and custom
   const allResources = getResourcesList().resources;
   const resource = allResources.find(r => r.uri === uri);
@@ -80,7 +80,7 @@ export const isPublicResource = (uri: string): boolean => {
 /**
  * Check if a prompt name is public (doesn't require authentication)
  */
-export const isPublicPrompt = (name: string): boolean => {
+const isPublicPrompt = (name: string): boolean => {
   // Get all prompts including built-in and custom
   const allPrompts = getPromptsList().prompts;
   const prompt = allPrompts.find(p => p.name === name);
@@ -96,7 +96,7 @@ export const isPublicPrompt = (name: string): boolean => {
 /**
  * Check if the current MCP request is for a public resource or prompt
  */
-export const isPublicMcpRequest = (req: Request): boolean => {
+const isPublicMcpRequest = (req: Request): boolean => {
   const { method } = req.body || {};
 
   switch (method) {

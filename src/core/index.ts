@@ -29,18 +29,42 @@ export { accessPointUpdater } from './consul/access-points-updater.js';
 export { deregisterServiceFromConsul } from './consul/deregister.js';
 export { getConsulAPI } from './consul/get-consul-api.js';
 
-export * from './db/pg-db.js';
+export {
+  execMAIN,
+  queryRsMAIN,
+  queryMAIN,
+  checkMainDB,
+  getInsertSqlMAIN,
+  getMainDBConnectionStatus,
+  getMergeSqlMAIN,
+  mergeByBatch,
+  oneRowMAIN,
+} from './db/pg-db.js';
+
+export type { IQueryPgArgsCOptional } from './db/pg-db.js';
 
 export { BaseMcpError } from './errors/BaseMcpError.js';
-export * from './errors/errors.js';
+
+export {
+  addErrorMessage,
+  createJsonRpcErrorResponse,
+  toError,
+  toStr,
+  ToolExecutionError,
+  ServerError,
+} from './errors/errors.js';
+
 export { ValidationError } from './errors/ValidationError.js';
 
 export type { ICheckTokenResult } from './token/i-token.js';
-export * from './token/token-auth.js';
+export {
+  authByToken,
+  authTokenMW,
+} from './token/token-auth.js';
 
 export async function generateTokenApp (...args: any[]) {
-  const { generateTokenApp: tokenGen } = await import('./token/gen-token-app/gen-token-server.js');
-  return tokenGen(...args);
+  const { generateTokenApp: generateTokenApp_ } = await import('./token/gen-token-app/gen-token-server.js');
+  return generateTokenApp_(...args);
 }
 
 export { initMcpServer, gracefulShutdown } from './init-mcp-server.js';

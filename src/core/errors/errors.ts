@@ -16,18 +16,6 @@ export class ToolExecutionError extends BaseMcpError {
   }
 }
 
-export class SearchError extends BaseMcpError {
-  constructor (entityType: string, message: string) {
-    super(
-      'SEARCH_ERROR',
-      `Failed to search '${entityType}': ${message}`,
-      undefined,
-      400,
-      true,
-    );
-  }
-}
-
 /**
  * Server-related errors
  */
