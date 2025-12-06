@@ -6,6 +6,7 @@ import { fileURLToPath } from 'url';
 import readline from 'readline';
 import { v4 as uuidv4 } from 'uuid';
 import chalk from 'chalk';
+import yaml from 'js-yaml';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -69,6 +70,34 @@ const getAsk = () => {
       }
     },
   };
+};
+
+/**
+ * Parse configuration file (JSON or YAML)
+ * @param {string} filePath - Path to the configuration file
+ * @param {string} content - Content of the file
+ * @returns {object} Parsed configuration object
+ */
+const parseConfigFile = (filePath, content) => {
+  const ext = path.extname(filePath).toLowerCase();
+
+  try {
+    if (ext === '.json') {
+      return JSON.parse(content);
+    } else if (ext === '.yaml' || ext === '.yml') {
+      return yaml.load(content, { schema: yaml.DEFAULT_SCHEMA });
+    } else {
+      // Try to detect format by content
+      const trimmed = content.trim();
+      if (trimmed.startsWith('{') || trimmed.startsWith('[')) {
+        return JSON.parse(content);
+      } else {
+        return yaml.load(content, { schema: yaml.DEFAULT_SCHEMA });
+      }
+    }
+  } catch (error) {
+    throw new Error(`Failed to parse configuration file ${filePath}: ${error.message}`);
+  }
 };
 
 class MCPGenerator {
@@ -165,6 +194,11 @@ class MCPGenerator {
         name: 'consul.envCode.prod',
         defaultValue: '<envCode.prod>',
         title: 'Production environment code for Consul service ID generation',
+      },
+      {
+        name: 'NODE_CONSUL_ENV',
+        defaultValue: '',
+        title: 'Affects how the Consul service ID is formed - as a product or development ID. Valid values: "" | "development" | "production"',
       },
 
       {
@@ -487,6 +521,18 @@ certificate's public and private keys`,
           config[name] = String(enabled);
           continue;
         }
+        case 'NODE_CONSUL_ENV': {
+          if (currentValue === '') {
+            continue;
+          }
+          value = await ask.optional(title, name, defaultValue);
+          if (value === '' || value === 'development' || value === 'production') {
+            config[name] = value;
+          } else {
+            config[name] = '';
+          }
+          continue;
+        }
 
         default:
           value = await ask.optional(title, name, defaultValue);
@@ -534,17 +580,17 @@ certificate's public and private keys`,
 
   async collectConfiguration () {
     const config = {};
-    const configFile = process.argv.find((arg) => arg.endsWith('.json')) ||
+    const configFile = process.argv.find((arg) => arg.endsWith('.json') || arg.endsWith('.yaml') || arg.endsWith('.yml')) ||
       process.argv.find((arg) => arg.startsWith('--config='))?.split('=')[1];
 
     if (configFile) {
       try {
         const configData = await fs.readFile(configFile, 'utf8');
-        const parsedConfig = JSON.parse(configData);
+        const parsedConfig = parseConfigFile(configFile, configData);
         Object.assign(config, parsedConfig);
         console.log(`📋 Loaded configuration from: ${hly(configFile)}`);
       } catch (error) {
-        console.warn(`⚠️  Warning: Could not load config file ${configFile}`);
+        console.warn(`⚠️  Warning: Could not load config file ${configFile}: ${error.message}`);
       }
     }
 
@@ -565,7 +611,9 @@ certificate's public and private keys`,
     } else if (configProxy.NODE_ENV === 'production') {
       configProxy.isProduction = 'true';
     }
-
+    if (config['logger.useFileLogger'] !== 'true') {
+      config['logger.dir'] = '';
+    }
     let confirmed = false;
     let isRetry = false;
 
@@ -592,34 +640,34 @@ certificate's public and private keys`,
   async getTargetPath (config = {}) {
     const ask = getAsk();
 
-    let targetPath = process.cwd();
+    let tp = process.cwd();
     let createInCurrent;
     let pPath = trim(config.projectAbsPath);
     if (pPath) {
-      targetPath = path.resolve(pPath);
-      console.log(`Create project in: ${hl(targetPath)}${FROM_CONFIG}`);
+      tp = path.resolve(pPath);
+      console.log(`Create project in: ${hl(tp)}${FROM_CONFIG}`);
     } else {
-      createInCurrent = await ask.yn(`Create project in current directory? (${hl(targetPath)})`, '', 'n');
+      createInCurrent = await ask.yn(`Create project in current directory? (${hl(tp)})`, '', 'n');
       if (!createInCurrent) {
-        targetPath = await ask.question('Enter absolute path for project: ');
-        targetPath = path.resolve(targetPath);
+        tp = await ask.question('Enter absolute path for project: ');
+        tp = path.resolve(tp);
       }
     }
 
-    config.projectAbsPath = targetPath;
+    config.projectAbsPath = tp;
     // Create directory if it doesn't exist
     try {
-      await fs.access(targetPath);
+      await fs.access(tp);
     } catch {
       console.log('Creating directory recursively...');
-      await fs.mkdir(targetPath, { recursive: true });
+      await fs.mkdir(tp, { recursive: true });
     }
 
-    const errMsg = `❌  Directory ${hl(targetPath)} not empty - cannot create project here. Use an empty directory or specify a different path.`;
+    const errMsg = `❌  Directory ${hl(tp)} not empty - cannot create project here. Use an empty directory or specify a different path.`;
 
     // Check if directory is empty
     try {
-      const files = await fs.readdir(targetPath);
+      const files = await fs.readdir(tp);
       const allowedFiles = [
         '.git',
         '.idea',
@@ -650,7 +698,7 @@ certificate's public and private keys`,
     }
 
     ask.close();
-    return targetPath;
+    return tp;
   }
 
   async copyDirectory (source, target) {
@@ -728,7 +776,16 @@ certificate's public and private keys`,
     return files;
   }
 
-  async replaceTemplateParameters (targetPath, config) {
+  async transformTargetFile (config, targetRelPath, transformFn) {
+    const targetPath = config.projectAbsPath;
+    const targetFullPath = path.join(targetPath, targetRelPath);
+    const content = await fs.readFile(targetFullPath, 'utf8');
+    const transformedContent = transformFn(content, config);
+    await fs.writeFile(targetFullPath, transformedContent, 'utf8');
+  }
+
+  async replaceTemplateParameters (config) {
+    const targetPath = config.projectAbsPath;
     const files = await this.getAllFiles(targetPath);
 
     for (const filePath of files) {
@@ -754,10 +811,11 @@ certificate's public and private keys`,
         await fs.writeFile(filePath, content, 'utf8');
       }
     }
+    if (config['NODE_CONSUL_ENV'] === '') {
+      await this.transformTargetFile(config, '.env', (c) => c.replace(/^(NODE_CONSUL_ENV)=([^\r\n]*)/m, '#$1=$2'));
+    }
     if (config['claude.isBypassPermissions'] === 'true') {
-      const settingsPath = path.join(targetPath, '.claude', 'settings.json');
-      const content = await fs.readFile(settingsPath, 'utf8')
-        .replace('"acceptEdits"', '"bypassPermissions"')
+      const transformFn = (c) => c.replace('"acceptEdits"', '"bypassPermissions"')
         .replace(/"allow": \[\s+"Edit",/, `"allow": [
       "Bash(sudo cp:*)",
       "Bash(sudo:*)",
@@ -791,11 +849,12 @@ certificate's public and private keys`,
       "Bash(unset http_proxy)",
       "Bash(wc:*)",
       "Edit",`);
-      await fs.writeFile(settingsPath, content, 'utf8');
+      await this.transformTargetFile(config, '.claude/settings.json', transformFn);
     }
   }
 
-  async createProject (targetPath, config) {
+  async createProject (config) {
+    const targetPath = config.projectAbsPath;
     // Copy template files
     await this.copyDirectory(this.templateDir, targetPath);
     await fs.copyFile(path.join(targetPath, '.env.example'), path.join(targetPath, '.env')); // VVT
@@ -829,7 +888,7 @@ certificate's public and private keys`,
     }
 
     // Replace template parameters
-    await this.replaceTemplateParameters(targetPath, config);
+    await this.replaceTemplateParameters(config);
 
     // Replace template placeholders with defaultValue from optionalParams and save as _local.yaml
     if (localYamlContent) {
@@ -878,7 +937,7 @@ certificate's public and private keys`,
       const targetPath = await this.getTargetPath(config);
 
       console.log(`\n📁 Creating project in: ${targetPath}`);
-      await this.createProject(targetPath, config);
+      await this.createProject(config);
 
       console.log('\n✅  MCP Server template created successfully!');
       console.log('\n📋 Next steps:');

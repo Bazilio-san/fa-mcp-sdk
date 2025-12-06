@@ -1,0 +1,185 @@
+# =============================================================================
+# FA-MCP-SDK Configuration Example (YAML)
+# =============================================================================
+# This file provides an example configuration for the FA-MCP-SDK with detailed
+# comments explaining each parameter and its purpose.
+# Usage: fa-mcp cli-config.example.yaml
+
+# =============================================================================
+# REQUIRED PARAMETERS
+# =============================================================================
+
+# Project name used in package.json and for MCP server identification
+# This becomes the package name and is used throughout the generated project
+project.name: "mcp-example"
+
+# Project description displayed in package.json
+# Used to describe what your MCP server does
+project.description: "MCP Server example description"
+
+# Product name displayed in UI and documentation
+# Human-readable name shown to users
+project.productName: "MCP Example"
+
+# Web server port for HTTP endpoints and MCP protocol
+# The port where your MCP server will listen for connections
+port: "8888"
+
+# =============================================================================
+# PROJECT SETUP
+# =============================================================================
+
+# Absolute path where the project will be created
+# If not specified, you'll be prompted during setup
+projectAbsPath: "/opt/node/mcp-example"
+
+# Auto-accept configuration without confirmation prompts
+# Set to "y" to skip confirmation dialog, "n" to always ask
+forceAcceptConfig: "y"
+
+# =============================================================================
+# AUTHOR INFORMATION
+# =============================================================================
+
+# Author email for package.json
+# Used in package.json metadata and npm publishing
+author.email: "author@company.com"
+
+# Author name for package.json
+# Your name as it appears in package.json
+author.name: "Author Name"
+
+# =============================================================================
+# GIT REPOSITORY
+# =============================================================================
+
+# Git repository base URL for links and documentation
+# Examples: "github.com/username", "gitlab.company.com/PROJECT"
+git-base-url: "gitlab.company.com/PROJ_NAME"
+
+# =============================================================================
+# CONSUL SERVICE DISCOVERY
+# =============================================================================
+
+# Enable service registration with Consul
+# Set to "true" to register this MCP server with Consul service discovery
+consul.service.enable: "true"
+
+# Development environment Consul settings
+consul.agent.dev.dc: "dc-dev"                    # Development datacenter name
+consul.agent.dev.host: "consul.my.ui"            # Development Consul UI hostname
+consul.agent.dev.token: "12345678-90ab-cdef-cdef-90ab12345678"  # Dev access token
+
+# Production environment Consul settings
+consul.agent.prd.dc: "dc-prod"                   # Production datacenter name
+consul.agent.prd.host: "consul.my.ui"            # Production Consul UI hostname
+consul.agent.prd.token: "21345678-90ab-cdef-cdef-90ab12345678"  # Prod access token
+
+# Consul service registration token
+# Token used to register this service with Consul agent
+consul.agent.reg.token: "12345678-90ab-cdef-cdef-90ab12345678"
+
+# Environment codes for service ID generation
+consul.envCode.dev: "envCode-dev"                # Development environment identifier
+consul.envCode.prod: "envCode-prod"              # Production environment identifier
+# Affects how the Consul service ID is formed - as a product or development ID. Valid values: "" | "development" | "production"
+NODE_CONSUL_ENV: ""
+
+# =============================================================================
+# WEB SERVER & DOMAIN CONFIGURATION
+# =============================================================================
+
+# Domain name for nginx configuration and SSL certificates
+# Used to generate nginx virtual host configuration
+mcp.domain: "mcp-example.company.com"
+
+# Relative path to SSL certificate configuration in /etc/nginx
+# Path to nginx SSL snippet with certificate paths
+ssl-wildcard.conf.rel.path: "snippets/ssl-wildcard-company-com.conf"
+
+# Upstream name generated from domain (auto-generated from mcp.domain)
+# Nginx upstream block name (dots replaced with dashes)
+upstream: "mcp-example-company-com"
+
+# =============================================================================
+# AUTHENTICATION & SECURITY
+# =============================================================================
+
+# Enable token-based authorization for MCP server endpoints
+# Set to "true" to require authentication tokens for API access
+webServer.auth.enabled: "true"
+
+# Check MCP server name in authentication tokens
+# Validates that tokens are issued for this specific MCP server
+webServer.auth.token.checkMCPName: "true"
+
+# Encryption key for MCP authentication tokens
+# Auto-generated UUID for token encryption/decryption
+webServer.auth.token.encryptKey: "b7cdde45-3896-46a3-868a-ff4fe4******"
+
+# Enable "GOD Mode" for Claude Code - bypasses permission checks
+# WARNING: Only enable for development environments with trusted users
+claude.isBypassPermissions: "false"
+
+# =============================================================================
+# ENVIRONMENT & DEPLOYMENT
+# =============================================================================
+
+# Production mode flag - affects logging, error handling, performance optimizations
+# Set to "true" for production deployment, "false" for development
+isProduction: "false"
+
+# Node.js environment variable (auto-set based on isProduction)
+# Either "development" or "production"
+NODE_ENV: "development"
+
+# Service instance identifier suffix
+# Used in Consul service names and process manager
+SERVICE_INSTANCE: "dev"
+
+# PM2 namespace for process management
+# Groups related processes in PM2 ecosystem
+PM2_NAMESPACE: "dev"
+
+# =============================================================================
+# LOGGING CONFIGURATION
+# =============================================================================
+
+# Enable file-based logging (in addition to console logging)
+# Set to "true" to write logs to files, "false" for console only
+logger.useFileLogger: "false"
+
+# Absolute path to log files directory
+# Only used when logger.useFileLogger is "true"
+# logger.dir: "/var/log/mcp-example"
+
+# =============================================================================
+# SUPPORT & MAINTENANCE
+# =============================================================================
+
+# Maintainer/support URL for help and issue reporting
+# Displayed in UI and documentation as clickable support link
+maintainerUrl: "https://support.company.com/dept/1234"
+
+# HTML link generated from maintainerUrl (auto-generated)
+# maintainerHtml: '<a href="https://support.company.com/dept/1234" target="_blank" rel="noopener" class="clickable">Support</a>'
+
+# =============================================================================
+# ADDITIONAL NOTES
+# =============================================================================
+
+# File Usage Examples:
+# 1. Interactive setup: fa-mcp
+# 2. With JSON config: fa-mcp config.json
+# 3. With YAML config: fa-mcp config.yaml
+# 4. With config flag: fa-mcp --config=my-config.yaml
+
+# Generated Project Structure:
+# - TypeScript MCP server with HTTP/STDIO transport
+# - Express.js web server with Swagger documentation
+# - Consul service discovery integration
+# - PM2 process management configuration
+# - Nginx reverse proxy setup
+# - SSL/TLS certificate handling
+# - Token-based authentication system
+# - Comprehensive logging infrastructure
