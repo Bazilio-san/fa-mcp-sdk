@@ -109,13 +109,21 @@ interface ISwaggerConfig {
   }
 }
 
+interface ICacheConfig {
+  cache: {
+    ttlSeconds: 300, // Cache TTL in seconds
+    maxItems: 1000, // Maximum number of cached items
+  }
+}
+
 export interface AppConfig extends IADConfig,
+  ICacheConfig,
+  IConsulConfig,
   ILoggerConfig,
   IAFDatabasesConfig,
   IWebServerConfig,
   IMCPConfig,
-  ISwaggerConfig,
-  IConsulConfig {
+  ISwaggerConfig {
 
   isMainDBUsed: boolean, // = !!appConfig.db.postgres?.dbs.main?.host
   // Package metadata (enriched from package.json)

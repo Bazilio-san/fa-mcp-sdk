@@ -12,6 +12,10 @@ import { addErrorMessage, toError } from '../errors/errors.js';
 
 const logger = lgr.getSubLogger({ name: chalk.green('cache') });
 
+const DEFAULT_TTL_SECONDS = 300;
+const DEFAULT_MAX_ITEMS = 1000;
+const DEFAULT_CHECK_PERIOD = 120;
+
 /**
  * Enhanced cache manager with TTL support and statistics
  */
@@ -34,7 +38,12 @@ export class CacheManager {
       verbose?: boolean;
     } = {},
   ) {
-    const { ttlSeconds = 300, maxItems = 1000, checkPeriod = 120, verbose = false } = options;
+    const {
+      ttlSeconds = DEFAULT_TTL_SECONDS,
+      maxItems = DEFAULT_MAX_ITEMS,
+      checkPeriod = DEFAULT_CHECK_PERIOD,
+      verbose = false,
+    } = options;
 
     this.defaultTtl = ttlSeconds;
     this.verbose = verbose;
@@ -112,7 +121,9 @@ export class CacheManager {
 
     if (success) {
       this.stats.sets++;
-      if (this.verbose) {logger.debug(`Cache set successful: key: ${key} | ttl: ${ttl}`);}
+      if (this.verbose) {
+        logger.debug(`Cache set successful: key: ${key} | ttl: ${ttl}`);
+      }
     } else {
       logger.warn(`Cache set failed: key: ${key} | ttl: ${ttl}`);
     }
@@ -126,7 +137,9 @@ export class CacheManager {
   del (key: string): number {
     const deleted = this.cache.del(key);
     this.stats.deletes += deleted;
-    if (this.verbose) {logger.debug(`Cache delete: key: ${key} | deleted: ${deleted}`);}
+    if (this.verbose) {
+      logger.debug(`Cache delete: key: ${key} | deleted: ${deleted}`);
+    }
     return deleted;
   }
 
@@ -145,7 +158,9 @@ export class CacheManager {
     if (value !== undefined) {
       this.stats.hits++;
       this.stats.deletes++;
-      if (this.verbose) {logger.debug(`Cache take: key: ${key}`);}
+      if (this.verbose) {
+        logger.debug(`Cache take: key: ${key}`);
+      }
     } else {
       this.stats.misses++;
     }

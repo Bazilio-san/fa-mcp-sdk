@@ -281,6 +281,15 @@ accessPoints:
     noConsul: true # Use if the service developers do not provide registration in consul
     consulServiceName: <consulServiceName>
 
+# --------------------------------------------------
+# CACHING Reduces API calls by caching responses
+# --------------------------------------------------
+cache:
+   # Default Cache TTL in seconds
+   ttlSeconds: 300
+   # Default maximum number of cached items
+   maxItems: 1000
+
 consul:
    check:
       interval: '10s'
@@ -777,6 +786,7 @@ const authTokenMW = (req: Request, res: Response, next: NextFunction): void {...
 import express from 'express';
 const app = express();
 app.use('/protected', authTokenMW); // Apply to all /protected/* routes
+```
 
 #### Token Generation
 
@@ -1066,13 +1076,16 @@ const markdown = formatResultAsMarkdown(testResult);
 Use the provided test clients to test your MCP server:
 
 **STDIO Transport Testing:**
+
 ```typescript
+// noinspection JSAnnotator
+
 import { McpStdioClient } from 'fa-mcp-sdk';
 import { spawn } from 'child_process';
 
 const proc = spawn('node', ['dist/start.js', 'stdio'], {
-  stdio: ['pipe', 'pipe', 'pipe'],
-  env: { ...process.env, NODE_ENV: 'test' },
+   stdio: ['pipe', 'pipe', 'pipe'],
+   env: { ...process.env, NODE_ENV: 'test' },
 });
 
 const client = new McpStdioClient(proc);

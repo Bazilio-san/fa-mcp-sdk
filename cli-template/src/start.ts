@@ -13,8 +13,7 @@ import { swagger } from './api/swagger.js';
 const isConsulProd = (process.env.NODE_CONSUL_ENV || process.env.NODE_ENV) === 'production';
 
 /**
- * Template main function that assembles all project data and starts the MCP server
- * This serves as an example of how to use the fa-mcp-sdk library
+ * Main function that assembles all project data and starts the MCP server
  */
 const startProject = async (): Promise<void> => {
   // Read favicon from assets

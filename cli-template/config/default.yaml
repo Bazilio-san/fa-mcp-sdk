@@ -9,6 +9,15 @@
 #    noConsul: true # Use if the service developers do not provide registration in consul
 #    consulServiceName: <consulServiceName>
 
+# --------------------------------------------------
+# CACHING Reduces API calls by caching responses
+# --------------------------------------------------
+cache:
+  # Default Cache TTL in seconds
+  ttlSeconds: 300
+  # Default maximum number of cached items
+  maxItems: 1000
+
 consul:
   check:
     interval: '10s'
