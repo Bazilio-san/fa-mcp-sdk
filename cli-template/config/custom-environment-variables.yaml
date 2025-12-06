@@ -1,3 +1,7 @@
+cache:
+  ttlSeconds: CACHE_TTL_SECONDS
+  maxItems: CACHE_MAX_ITEMS
+
 db:
   postgres:
     dbs:

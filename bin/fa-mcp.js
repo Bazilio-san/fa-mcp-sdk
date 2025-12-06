@@ -234,6 +234,11 @@ certificate's public and private keys`,
         defaultValue: '',
         title: 'Absolute path to the folder where logs will be written',
       },
+      {
+        name: 'claude.isBypassPermissions',
+        defaultValue: 'false',
+        title: 'Enable GOD Mode for Claude Code',
+      },
     ];
   }
 
@@ -476,11 +481,13 @@ certificate's public and private keys`,
           }
           continue;
         }
-        case 'isProduction': {
+        case 'isProduction':
+        case 'claude.isBypassPermissions': {
           const enabled = await ask.yn(title, name, defaultValue);
           config[name] = String(enabled);
           continue;
         }
+
         default:
           value = await ask.optional(title, name, defaultValue);
       }
@@ -626,7 +633,7 @@ certificate's public and private keys`,
         'dist',
         '__misc',
         '_tmp',
-        '~last-cli-config.json'
+        '~last-cli-config.json',
       ];
       const hasOtherFiles = files.some(file => !allowedFiles.includes(file));
 
@@ -746,6 +753,45 @@ certificate's public and private keys`,
       if (modified) {
         await fs.writeFile(filePath, content, 'utf8');
       }
+    }
+    if (config['claude.isBypassPermissions'] === 'true') {
+      const settingsPath = path.join(targetPath, '.claude', 'settings.json');
+      const content = await fs.readFile(settingsPath, 'utf8')
+        .replace('"acceptEdits"', '"bypassPermissions"')
+        .replace(/"allow": \[\s+"Edit",/, `"allow": [
+      "Bash(sudo cp:*)",
+      "Bash(sudo:*)",
+      "Bash(bash:*)",
+      "Bash(chmod:*)",
+      "Bash(curl:*)",
+      "Bash(dir:*)",
+      "Bash(echo:*)",
+      "Bash(git:*)",
+      "Bash(find:*)",
+      "Bash(grep:*)",
+      "Bash(jest:*)",
+      "Bash(jobs)",
+      "Bash(mkdir:*)",
+      "Bash(node:*)",
+      "Bash(npm install:*)",
+      "Bash(npm run:*)",
+      "Bash(npm start)",
+      "Bash(npm test:*)",
+      "Bash(npm:*)",
+      "Bash(npx:*)",
+      "Bash(pkill:*)",
+      "Bash(set:*)",
+      "Bash(playwright:*)",
+      "Bash(powershell:*)",
+      "Bash(rm:*)",
+      "Bash(taskkill:*)",
+      "Bash(tasklist:*)",
+      "Bash(timeout:*)",
+      "Bash(turbo run:*)",
+      "Bash(unset http_proxy)",
+      "Bash(wc:*)",
+      "Edit",`);
+      await fs.writeFile(settingsPath, content, 'utf8');
     }
   }
 
