@@ -12,6 +12,7 @@ export interface IPromptData {
 export interface IRequiredHttpHeader {
   name: string, // E.g. "Authorization",
   description: string, // E.g. "JWT Token issued on request"
+  isOptional?: boolean,
 }
 
 export interface IResourceInfo {
