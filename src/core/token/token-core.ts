@@ -8,14 +8,15 @@ import chalk from 'chalk';
 
 const logger = lgr.getSubLogger({ name: chalk.cyan('token-auth') });
 
-const pt = appConfig.webServer?.auth?.permanentServerTokens || [];
+const { jwtToken, permanentServerTokens: pt = [] } = appConfig.webServer?.auth || {};
+const checkMCPName = jwtToken?.checkMCPName || false;
 const permanentServerTokensSet: Set<string> = new Set(Array.isArray(pt) ? pt : [pt]);
-const checkMCPName =  appConfig.webServer?.auth?.token?.checkMCPName || false;
+
 
 const ALGORITHM = 'aes-256-ctr';
 const KEY = crypto
   .createHash('sha256')
-  .update(String(appConfig.webServer?.auth?.token?.encryptKey || 'secret'))
+  .update(String(jwtToken?.encryptKey || 'secret'))
   .digest('base64')
   .substring(0, 32);
 

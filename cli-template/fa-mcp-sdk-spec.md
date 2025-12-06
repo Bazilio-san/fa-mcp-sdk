@@ -386,11 +386,21 @@ webServer:
       enabled: false # Enables/disables token authorization
       # An array of fixed tokens that pass to the MCP (use only for MCPs with green data or for development)
       permanentServerTokens: []
-      token:
+      jwtToken:
          # Symmetric encryption key to generate a token for this MCP
          encryptKey: '***'
          # If webServer.auth.enabled and the parameter true, the service name and the service specified in the token will be checked
          checkMCPName: true
+      #basic:
+      #  username: '***'
+      #  password: '***'
+      #oauth2:
+      #  type: 'oauth2';
+      #  clientId: '***'
+      #  clientSecret: '***'
+      #  redirectUri?: 'string'
+      #  tokenEndpoint?: string # For custom OAuth providers // VVR
+      #pat: string;
 ```
 
 **`config/local.yaml`** - local overrides. Usually contains secrets.

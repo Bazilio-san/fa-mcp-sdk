@@ -9,11 +9,12 @@ import { logger as lgr } from '../logger.js';
 
 import chalk from 'chalk';
 import { addErrorMessage, toError } from '../errors/errors.js';
+import { appConfig } from '../bootstrap/init-config.js';
 
 const logger = lgr.getSubLogger({ name: chalk.green('cache') });
 
-const DEFAULT_TTL_SECONDS = 300;
-const DEFAULT_MAX_ITEMS = 1000;
+const DEFAULT_TTL_SECONDS = appConfig.cache.ttlSeconds || 300;
+const DEFAULT_MAX_ITEMS = appConfig.cache.maxItems || 1000;
 const DEFAULT_CHECK_PERIOD = 120;
 
 /**

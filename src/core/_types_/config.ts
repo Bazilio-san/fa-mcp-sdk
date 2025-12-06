@@ -3,74 +3,21 @@ import { IAFDatabasesConfig } from 'af-db-ts';
 import { IAFConsulConfig, IAccessPoints } from 'af-consul-ts';
 import { IADConfig } from './active-directory-config.js';
 
-// JIRA Authentication types
-interface IBasicAuth {
-  username?: string;
-  password?: string;
+
+export interface IBasicAuth {
+  type: 'basic';
+  username: string;
+  password: string;
 }
 
-interface IOAuth2Auth {
+export interface IOAuth2Auth {
   type: 'oauth2';
   clientId: string;
   clientSecret: string;
   accessToken: string;
   refreshToken?: string;
   redirectUri?: string;
-}
-
-// Tool configuration
-interface IToolsConfig {
-  include: 'ALL' | string[];
-  exclude: string[];
-}
-
-// User resolution configuration
-interface IUserLookupConfig {
-  enabled: boolean;
-  serviceUrl: string;
-  timeoutMs?: number;
-}
-
-// JIRA configuration
-interface IJiraConfig {
-  url: string;
-  apiVersion: 2 | 3;
-  restPath: string; // /rest/api/<2|3>
-  origin: string;
-  auth?: {
-    basic?: IBasicAuth;
-    pat?: string;
-    oauth2?: IOAuth2Auth;
-  };
-  fieldId: {
-    epicLink: string;
-    epicName: string;
-    storyPoints: string;
-  };
-  usedInstruments?: IToolsConfig;
-  userLookup?: IUserLookupConfig;
-}
-
-// SSL/TLS configuration
-interface ISslConfig {
-  rejectUnauthorized: boolean;
-}
-
-// User substitution configuration
-interface ISubstitutionConfig {
-  httpHeader?: string; // HTTP header name to use with impersonate plugin
-  loginIfNoHeader?: string; // Optional login as this user if no header is provided. Used for caching priorities
-  jira?: Record<string, string>; // Mapping from original user to substitute user
-}
-
-
-// Logging configuration
-interface ILoggerConfig {
-  logger: {
-    level: TFileLogLevel;
-    useFileLogger: boolean;
-    dir?: string; // Directory for log files (if useFileLogger is true)
-  }
+  tokenEndpoint?: string; // For custom OAuth providers // VVR
 }
 
 interface IWebServerConfig {
@@ -80,12 +27,24 @@ interface IWebServerConfig {
     originHosts: string[],
     auth: {
       enabled: boolean,
-      permanentServerTokens: string[],
-      token: {
+      basic?: IBasicAuth;
+      pat?: string;
+      oauth2?: IOAuth2Auth;
+      jwtToken: {
         encryptKey: string,
         checkMCPName: boolean,
       }
+      permanentServerTokens: string[],
     },
+  }
+}
+
+// Logging configuration
+interface ILoggerConfig {
+  logger: {
+    level: TFileLogLevel;
+    useFileLogger: boolean;
+    dir?: string; // Directory for log files (if useFileLogger is true)
   }
 }
 
@@ -118,7 +77,6 @@ interface ICacheConfig {
 
 export interface AppConfig extends IADConfig,
   ICacheConfig,
-  IConsulConfig,
   ILoggerConfig,
   IAFDatabasesConfig,
   IWebServerConfig,
@@ -144,14 +102,4 @@ export interface AppConfig extends IADConfig,
   uiColor: {
     primary: string; // Font color of the header and a number of interface elements on the ABOUT page
   }
-
-  // JIRA-specific configuration
-  jira?: IJiraConfig;
-  ssl?: ISslConfig;
-  subst?: ISubstitutionConfig;
-}
-
-declare module 'config' {
-  const config: Partial<AppConfig>;
-  export = config;
 }

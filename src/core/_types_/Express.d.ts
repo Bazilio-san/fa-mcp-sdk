@@ -1,8 +1,4 @@
-import { IUserData } from 'ya-express-ntlm';
-
-export type TNtlm = Partial<IUserData> & {
-  uri?: string, // For debug
-}
+import { TNtlm } from './TNtlm.js';
 
 declare global {
   namespace Express {

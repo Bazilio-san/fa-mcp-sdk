@@ -1,6 +1,7 @@
 cache:
   ttlSeconds: CACHE_TTL_SECONDS
   maxItems: CACHE_MAX_ITEMS
+  checkPeriod: CACHE_CHECK_PERIOD
 
 db:
   postgres:
@@ -15,6 +16,7 @@ db:
 logger:
   level: LOGGER_LEVEL
   useFileLogger: LOGGER_USE_FILE_LOGGER
+  dir: LOGGER_DIR
 
 mcp:
   transportType: MCP_TRANSPORT_TYPE
@@ -32,6 +34,15 @@ webServer:
   auth:
     enabled: WS_AUTH_ENABLED
     permanentServerTokens: WS_SERVER_TOKENS # comma separated list
-    token:
+    jwtToken:
       encryptKey: WS_TOKEN_ENCRYPT_KEY
       checkMCPName: WS_CHECK_MC_NAME
+    basic:
+      username: WS_AUTH_BASIC_USERNAME
+      password: WS_AUTH_BASIC_PASSWORD
+    oauth2:
+      clientId: WS_AUTH_OAUTH2_CLIENT_ID
+      clientSecret: WS_AUTH_OAUTH2_CLIENT_SECRET
+      redirectUri: WS_AUTH_OAUTH2_REDIRECT_URI
+      tokenEndpoint: WS_AUTH_OAUTH2_TOKEN_ENDPOINT # For custom OAuth providers // VVR
+    pat: WS_AUTH_PAT
