@@ -1,7 +1,7 @@
 {
   "name": "fa-mcp-sdk",
   "productName": "FA MCP SDK",
-  "version": "0.2.122",
+  "version": "0.2.124",
   "description": "Core infrastructure and templates for building Model Context Protocol (MCP) servers with TypeScript",
   "type": "module",
   "main": "dist/core/index.js",
@@ -32,7 +32,7 @@
     "prepublishOnly": "npm run cb",
     "template:start": "node dist/template/start.js",
     "template:stdio": "node dist/template/start.js stdio",
-    "token-gen": "node dist/core/token/gen-token-app/gen-token-server.js"
+    "token-gen": "node dist/core/auth/token-generator/server.js"
   },
   "keywords": [
     "mcp",

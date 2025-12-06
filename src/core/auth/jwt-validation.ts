@@ -1,7 +1,7 @@
 // noinspection UnnecessaryLocalVariableJS
 import crypto from 'crypto';
 import { appConfig } from '../bootstrap/init-config.js';
-import { ICheckTokenResult, ITokenPayload } from './i-token.js';
+import { ICheckTokenResult, ITokenPayload } from './types.js';
 import { logger as lgr } from '../logger.js';
 import { isObject, trim } from '../utils/utils.js';
 import chalk from 'chalk';

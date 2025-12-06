@@ -2,7 +2,7 @@ import { appConfig } from '../../bootstrap/init-config.js';
 import express, { Request, Response } from 'express';
 import chalk from 'chalk';
 import { getHTMLPage } from './html.js';
-import { checkToken, generateToken } from '../token-core.js';
+import { checkToken, generateToken } from '../jwt-validation.js';
 import { isMainModule } from '../../utils/utils.js';
 import { setupNTLMAuthentication } from './ntlm-integration.js';
 import { isNTLMEnabled } from './ntlm-domain-config.js';

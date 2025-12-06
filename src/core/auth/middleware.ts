@@ -1,7 +1,7 @@
 // noinspection UnnecessaryLocalVariableJS
 import { NextFunction, Request, Response } from 'express';
 import { cyan, lBlue, magenta, red, reset } from 'af-color';
-import { checkToken } from './token-core.js';
+import { checkToken } from './jwt-validation.js';
 import { debugTokenAuth } from '../debug.js';
 import { appConfig } from '../bootstrap/init-config.js';
 import { getResourcesList } from '../mcp/resources.js';
@@ -158,3 +158,126 @@ export const authTokenMW = (req: Request, res: Response, next: NextFunction) => 
   }
   next();
 };
+
+// ========================================================================
+// MULTI-AUTHENTICATION - NEW FUNCTIONALITY
+// ========================================================================
+
+import { checkMultiAuth, detectAuthConfiguration, logAuthConfiguration } from './multi-auth.js';
+
+/**
+ * Checks token authorization using all configured methods
+ * in ascending CPU load order
+ */
+export const getMultiAuthError = (req: Request): { code: number, message: string } | undefined => {
+  const { auth } = appConfig.webServer;
+  if (!auth.enabled) {
+    return undefined;
+  }
+
+  const token = getTokenFromHttpHeader(req);
+  if (!token) {
+    return debugAuth(req, 400, 'Missing authorization header');
+  }
+
+  const authResult = checkMultiAuth(token, auth);
+  if (!authResult.success) {
+    return debugAuth(req, 401, authResult.error || 'Authentication failed');
+  }
+
+  // Add authentication information to request for use in application
+  (req as any).authInfo = {
+    authType: authResult.authType,
+    tokenType: authResult.tokenType,
+    username: authResult.username,
+    accessToken: authResult.accessToken,
+    payload: authResult.payload
+  };
+
+  return undefined;
+};
+
+/**
+ * Determines whether to use multi-authentication or basic JWT is sufficient
+ */
+function shouldUseMultiAuth (auth: typeof appConfig.webServer.auth): boolean {
+  return !!(auth.pat || auth.basic || auth.oauth2);
+}
+
+/**
+ * Enhanced middleware with multi-authentication support
+ * Automatically determines which system to use
+ */
+export const enhancedAuthTokenMW = (req: Request, res: Response, next: NextFunction) => {
+  // Check if this is a public MCP request
+  if (req.path === '/mcp' && isPublicMcpRequest(req)) {
+    return next();
+  }
+
+  const auth = appConfig.webServer.auth;
+
+  // If additional authentication types are configured - use multi-auth
+  const authError = shouldUseMultiAuth(auth)
+    ? getMultiAuthError(req)      // 🆕 New system
+    : getAuthByTokenError(req);   // ✅ Existing system
+
+  if (authError) {
+    res.status(authError.code).send(authError.message);
+    return;
+  }
+  next();
+};
+
+/**
+ * Middleware configurator - creates middleware with specified options
+ */
+export function createConfigurableAuthMiddleware (options: {
+  forceMultiAuth?: boolean;
+  logConfiguration?: boolean;
+} = {}) {
+  return (req: Request, res: Response, next: NextFunction) => {
+    const auth = appConfig.webServer.auth;
+
+    // Log configuration on first request
+    if (options.logConfiguration && !(createConfigurableAuthMiddleware as any)._logged) {
+      logAuthConfiguration(auth);
+      (createConfigurableAuthMiddleware as any)._logged = true;
+    }
+
+    // Check if this is a public MCP request
+    if (req.path === '/mcp' && isPublicMcpRequest(req)) {
+      return next();
+    }
+
+    // Choose authentication system
+    const useMultiAuth = options.forceMultiAuth || shouldUseMultiAuth(auth);
+    const authError = useMultiAuth
+      ? getMultiAuthError(req)
+      : getAuthByTokenError(req);
+
+    if (authError) {
+      res.status(authError.code).send(authError.message);
+      return;
+    }
+    next();
+  };
+}
+
+// Static property for logging tracking
+(createConfigurableAuthMiddleware as any)._logged = false;
+
+/**
+ * Utility to get current authentication configuration information
+ */
+export function getAuthInfo () {
+  const auth = appConfig.webServer.auth;
+  const detection = detectAuthConfiguration(auth);
+
+  return {
+    enabled: auth.enabled,
+    configured: detection.configured,
+    valid: detection.valid,
+    errors: detection.errors,
+    usingMultiAuth: shouldUseMultiAuth(auth)
+  };
+}

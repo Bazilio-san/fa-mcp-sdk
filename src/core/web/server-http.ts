@@ -7,7 +7,7 @@ import { appConfig, getProjectData } from '../bootstrap/init-config.js';
 import { getResource, getResourcesList } from '../mcp/resources.js';
 import { IGetPromptRequest } from '../_types_/types.js';
 
-import { authTokenMW, createConditionalAuthMiddleware } from '../token/token-auth.js';
+import { authTokenMW, createConditionalAuthMiddleware } from '../auth/middleware.js';
 import { createMcpServer } from '../mcp/create-mcp-server.js';
 import { logger as lgr } from '../logger.js';
 import { createJsonRpcErrorResponse, ServerError, toError, toStr } from '../errors/errors.js';

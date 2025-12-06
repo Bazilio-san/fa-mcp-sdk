@@ -229,7 +229,7 @@ curl -X POST http://localhost:3000/mcp \
 
 ## Implementation Details
 
-The authentication check happens in the `authTokenMW` and `createConditionalAuthMiddleware` middleware in `src/core/token/token-auth.ts`. The middleware:
+The authentication check happens in the `authTokenMW` and `createConditionalAuthMiddleware` middleware in `src/core/auth/middleware.ts`. The middleware:
 
 ### HTTP MCP Endpoint (`/mcp`)
 1. Checks if the request is for the `/mcp` endpoint

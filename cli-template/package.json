@@ -18,7 +18,7 @@
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
     "lint:fix": "eslint --fix .",
-    "generate-token": "node node_modules/fa-mcp-sdk/dist/core/token/gen-token-app/gen-token-server.js",
+    "generate-token": "node node_modules/fa-mcp-sdk/dist/core/auth/token-generator/server.js",
     "dead:exports": "ts-prune",
     "dead:files": "knip",
     "postinstall": "node scripts/npm/patch_node_modules.js",

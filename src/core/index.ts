@@ -56,14 +56,14 @@ export {
 
 export { ValidationError } from './errors/ValidationError.js';
 
-export type { ICheckTokenResult } from './token/i-token.js';
+export type { ICheckTokenResult } from './auth/types.js';
 export {
   authByToken,
   authTokenMW,
-} from './token/token-auth.js';
+} from './auth/middleware.js';
 
 export async function generateTokenApp (...args: any[]) {
-  const { generateTokenApp: generateTokenApp_ } = await import('./token/gen-token-app/gen-token-server.js');
+  const { generateTokenApp: generateTokenApp_ } = await import('./auth/token-generator/server.js');
   return generateTokenApp_(...args);
 }
 
