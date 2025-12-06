@@ -85,6 +85,8 @@ export { ROOT_PROJECT_DIR } from './constants.js';
 export { eventEmitter } from './ee.js';
 export { logger, fileLogger } from './logger.js';
 
+export { getCache, CacheManager } from './cache/cache.js';
+
 export { McpHttpClient } from './utils/testing/McpHttpClient.js';
 export { McpSseClient } from './utils/testing/McpSseClient.js';
 export { McpStdioClient } from './utils/testing/McpStdioClient.js';

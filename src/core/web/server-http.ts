@@ -240,8 +240,7 @@ export async function startHttpServer (): Promise<void> {
   app.post('/sse', conditionalAuthMW, async (req, res): Promise<void> => {
     try {
       // Find any active SSE transport for this client (fallback approach)
-      // TODO: This is needed for test client compatibility. In production,
-      // clients should use proper session management or POST to /messages endpoint.
+      // TODO: This is needed for test client compatibility. In production, clients should use proper session management or POST to /messages endpoint.
       let targetTransport = null;
 
       for (const [_sessionId, transportData] of sseTransports.entries()) {

@@ -27,6 +27,7 @@ fa-mcp-sdk/
 │   ├── mcp/            # MCP protocol implementation
 │   ├── web/            # HTTP server and endpoints
 │   ├── db/             # PostgreSQL integration
+│   ├── cache/          # Caching system with node-cache wrapper
 │   ├── consul/         # Service discovery
 │   ├── token/          # Authentication
 │   ├── errors/         # Error handling

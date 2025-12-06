@@ -386,6 +386,89 @@ webServer:
 
 **`config/local.yaml`** - local overrides. Usually contains secrets.
 
+### Cache Management
+
+#### `getCache(options?): CacheManager`
+
+Get or create a global cache instance for your MCP server.
+
+```typescript
+import { getCache, CacheManager } from 'fa-mcp-sdk';
+
+// Create default cache instance
+const cache = getCache();
+
+// Create cache with custom options
+const customCache = getCache({
+  ttlSeconds: 600,    // Default TTL: 10 minutes
+  maxItems: 5000,     // Max cached items
+  checkPeriod: 300,   // Cleanup interval in seconds
+  verbose: true       // Enable debug logging
+});
+```
+
+#### Cache Methods
+
+The `CacheManager` provides the following methods:
+
+| Method | Description | Example |
+|--------|-------------|---------|
+| `get<T>(key)` | Get value from cache | `const user = cache.get<User>('user:123');` |
+| `set<T>(key, value, ttl?)` | Set value in cache | `cache.set('user:123', userData, 300);` |
+| `has(key)` | Check if key exists | `if (cache.has('user:123')) { ... }` |
+| `del(key)` | Delete key from cache | `cache.del('user:123');` |
+| `take<T>(key)` | Get and delete (single use) | `const otp = cache.take<string>('otp:123');` |
+| `mget<T>(keys[])` | Get multiple values | `const users = cache.mget(['user:1', 'user:2']);` |
+| `mset(items[])` | Set multiple values | `cache.mset([{key: 'a', val: 1}, {key: 'b', val: 2}]);` |
+| `getOrSet<T>(key, factory, ttl?)` | Get or compute value | `const data = await cache.getOrSet('key', () => fetchData());` |
+| `keys()` | List all keys | `const allKeys = cache.keys();` |
+| `flush()` | Clear all entries | `cache.flush();` |
+| `ttl(key, seconds)` | Update key TTL | `cache.ttl('user:123', 600);` |
+| `getTtl(key)` | Get remaining TTL | `const remaining = cache.getTtl('user:123');` |
+| `getStats()` | Get cache statistics | `const stats = cache.getStats();` |
+| `close()` | Close cache resources | `cache.close();` |
+
+#### Usage Examples
+
+```typescript
+import { getCache } from 'fa-mcp-sdk';
+
+const cache = getCache();
+
+// Basic caching
+cache.set('user:123', { name: 'John', email: 'john@example.com' });
+const user = cache.get<User>('user:123');
+
+// Cache with TTL (time to live)
+cache.set('session:abc', sessionData, 1800); // 30 minutes
+
+// Single-use values (OTP, tokens)
+cache.set('otp:user123', '123456', 300);
+const otp = cache.take('otp:user123'); // Gets and deletes
+
+// Get-or-set pattern
+const expensiveData = await cache.getOrSet(
+  'computation:key',
+  async () => {
+    // This function runs only on cache miss
+    return await performExpensiveOperation();
+  },
+  3600 // Cache for 1 hour
+);
+
+// Batch operations
+const userData = cache.mget(['user:1', 'user:2', 'user:3']);
+cache.mset([
+  { key: 'user:1', val: user1Data },
+  { key: 'user:2', val: user2Data, ttl: 600 }
+]);
+
+// Cache monitoring
+const stats = cache.getStats();
+console.log(`Hit rate: ${(stats.hitRate * 100).toFixed(1)}%`);
+console.log(`Keys: ${stats.keys}, Memory: ${stats.vsize} bytes`);
+```
+
 ### Database Integration
 
 To disable the use of the database, you need to set appConfig.db.postgres.dbs.main.host to an empty value.
