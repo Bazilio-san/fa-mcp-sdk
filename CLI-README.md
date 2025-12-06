@@ -69,16 +69,37 @@ The CLI collects required and optional parameters through interactive prompts or
 
 ```json
 {
-  "project.name": "my-mcp-server",
-  "project.description": "A custom MCP server",
-  "project.productName": "My MCP Server",
-  "author.name": "John Doe",
-  "author.email": "john@example.com",
-  "port": "3000",
-  "git-base-url": "github.com/username",
+  "project.name": "mcp-example",
+  "project.description": "MCP Server example decription",
+  "project.productName": "MCP Example",
+  "projectAbsPath": "/opt/node/mcp-example",
+  "forceAcceptConfig": "y",
+  "author.email": "author@company.com",
+  "author.name": "Author Name",
+  "consul.agent.dev.dc": "dc-dev",
+  "consul.agent.dev.host": "consul.my.ui",
+  "consul.agent.dev.token": "12345678-90ab-cdef-cdef-90ab12345678",
+  "consul.agent.prd.dc": "dc-prod",
+  "consul.agent.prd.host": "consul.my.ui",
+  "consul.agent.prd.token": "21345678-90ab-cdef-cdef-90ab12345678",
+  "consul.agent.reg.token": "12345678-90ab-cdef-cdef-90ab12345678",
+  "consul.envCode.dev": "envCode-dev",
+  "consul.envCode.prod": "envCode-prod",
   "consul.service.enable": "true",
-  "webServer.auth.enabled": "false",
-  "isProduction": "false"
+  "git-base-url": "gitlab.company.com/PROJ_NAME",
+  "logger.useFileLogger": "false",
+  "maintainerUrl": "https://support.company.com/dept/1234",
+  "mcp.domain": "mcp-example.company.com",
+  "ssl-wildcard.conf.rel.path": "snippets/ssl-wildcard-company-com.conf",
+  "port": "8888",
+  "webServer.auth.enabled": "true",
+  "webServer.auth.token.checkMCPName": "true",
+  "webServer.auth.token.encryptKey": "b7cdde45-3896-46a3-868a-ff4fe4******",
+  "upstream": "mcp-example-company-com",
+  "NODE_ENV": "development",
+  "SERVICE_INSTANCE": "dev",
+  "PM2_NAMESPACE": "dev",
+  "claude.isBypassPermissions": "false"
 }
 ```
 
