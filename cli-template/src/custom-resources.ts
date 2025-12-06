@@ -1,3 +1,4 @@
+// @ts-ignore
 import { IResourceData } from 'fa-mcp-sdk';
 
 export const customResources: IResourceData[] = [

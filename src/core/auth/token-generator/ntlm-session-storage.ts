@@ -86,6 +86,6 @@ export const getSessionStats = () => {
       username: (data as SessionData).username,
       domain: (data as SessionData).domain,
       lastAccess: new Date((data as SessionData).lastAccess).toISOString(),
-    }))
+    })),
   };
 };

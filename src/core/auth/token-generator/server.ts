@@ -49,7 +49,7 @@ export const generateTokenApp = (port?: number) => {
       isAuthenticated,
       username,
       domain,
-      ntlmEnabled: isNTLMEnabled()
+      ntlmEnabled: isNTLMEnabled(),
     }));
   });
 

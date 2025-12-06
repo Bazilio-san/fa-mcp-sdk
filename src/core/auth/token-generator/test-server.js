@@ -56,7 +56,7 @@ app.use((req, res, next) => {
       username: username.includes('\\') ? username.split('\\')[1] : username,
       domain: username.includes('\\') ? username.split('\\')[0] : 'OFFICE',
       workstation: 'TEST-WS',
-      isAuthenticated: true
+      isAuthenticated: true,
     };
 
     console.log(`[TEST-SERVER] User authenticated: ${req.ntlm.domain}\\${req.ntlm.username}`);
@@ -134,7 +134,7 @@ app.post('/api/generate-token', (req, res) => {
   if (!user || !timeValue || !timeUnit) {
     return res.json({
       success: false,
-      error: 'Missing required fields'
+      error: 'Missing required fields',
     });
   }
 
@@ -144,7 +144,7 @@ app.post('/api/generate-token', (req, res) => {
   res.json({
     success: true,
     token: token,
-    message: `Token generated for ${user} by ${domain}\\${username}`
+    message: `Token generated for ${user} by ${domain}\\${username}`,
   });
 });
 
@@ -157,7 +157,7 @@ app.get('/api/service-info', (req, res) => {
     success: true,
     serviceName: 'test-token-server',
     authenticatedUser: `${domain}\\${username}`,
-    timestamp: new Date().toISOString()
+    timestamp: new Date().toISOString(),
   });
 });
 

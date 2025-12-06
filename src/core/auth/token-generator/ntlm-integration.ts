@@ -18,7 +18,7 @@ export const setupNTLMAuthentication = () => {
       req.ntlm = {
         isAuthenticated: false,
         username: 'Anonymous',
-        domain: 'NoAuth'
+        domain: 'NoAuth',
       };
       next();
     }];
@@ -51,7 +51,7 @@ export const setupNTLMAuthentication = () => {
         return res.json({
           message: 'Token Generation Server Session Statistics',
           timestamp: new Date().toISOString(),
-          ...stats
+          ...stats,
         });
       }
 
@@ -60,7 +60,7 @@ export const setupNTLMAuthentication = () => {
         return res.json({
           status: 'ok',
           service: 'token-generation-server',
-          timestamp: new Date().toISOString()
+          timestamp: new Date().toISOString(),
         });
       }
 
@@ -73,6 +73,6 @@ export const setupNTLMAuthentication = () => {
       // Run NTLM authentication
       console.log(`[TOKEN-GEN] Starting NTLM authentication for: ${req.method} ${req.path}`);
       ntlmMiddleware!(req, res, next);
-    }
+    },
   ];
 };

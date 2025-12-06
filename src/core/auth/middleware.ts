@@ -169,7 +169,7 @@ import { checkMultiAuth, detectAuthConfiguration, logAuthConfiguration } from '.
  * Checks token authorization using all configured methods
  * in ascending CPU load order
  */
-export const getMultiAuthError = (req: Request): { code: number, message: string } | undefined => {
+export const getMultiAuthError = async (req: Request): Promise<{ code: number, message: string } | undefined> => {
   const { auth } = appConfig.webServer;
   if (!auth.enabled) {
     return undefined;
@@ -180,7 +180,7 @@ export const getMultiAuthError = (req: Request): { code: number, message: string
     return debugAuth(req, 400, 'Missing authorization header');
   }
 
-  const authResult = checkMultiAuth(token, auth);
+  const authResult = await checkMultiAuth(token, auth);
   if (!authResult.success) {
     return debugAuth(req, 401, authResult.error || 'Authentication failed');
   }
@@ -191,7 +191,7 @@ export const getMultiAuthError = (req: Request): { code: number, message: string
     tokenType: authResult.tokenType,
     username: authResult.username,
     accessToken: authResult.accessToken,
-    payload: authResult.payload
+    payload: authResult.payload,
   };
 
   return undefined;
@@ -208,7 +208,7 @@ function shouldUseMultiAuth (auth: typeof appConfig.webServer.auth): boolean {
  * Enhanced middleware with multi-authentication support
  * Automatically determines which system to use
  */
-export const enhancedAuthTokenMW = (req: Request, res: Response, next: NextFunction) => {
+export const enhancedAuthTokenMW = async (req: Request, res: Response, next: NextFunction) => {
   // Check if this is a public MCP request
   if (req.path === '/mcp' && isPublicMcpRequest(req)) {
     return next();
@@ -216,16 +216,21 @@ export const enhancedAuthTokenMW = (req: Request, res: Response, next: NextFunct
 
   const auth = appConfig.webServer.auth;
 
-  // If additional authentication types are configured - use multi-auth
-  const authError = shouldUseMultiAuth(auth)
-    ? getMultiAuthError(req)      // 🆕 New system
-    : getAuthByTokenError(req);   // ✅ Existing system
+  try {
+    // If additional authentication types are configured - use multi-auth
+    const authError = shouldUseMultiAuth(auth)
+      ? await getMultiAuthError(req)      // 🆕 New system
+      : getAuthByTokenError(req);         // ✅ Existing system
 
-  if (authError) {
-    res.status(authError.code).send(authError.message);
+    if (authError) {
+      res.status(authError.code).send(authError.message);
+      return;
+    }
+    next();
+  } catch {
+    res.status(500).send('Authentication error');
     return;
   }
-  next();
 };
 
 /**
@@ -235,7 +240,7 @@ export function createConfigurableAuthMiddleware (options: {
   forceMultiAuth?: boolean;
   logConfiguration?: boolean;
 } = {}) {
-  return (req: Request, res: Response, next: NextFunction) => {
+  return async (req: Request, res: Response, next: NextFunction) => {
     const auth = appConfig.webServer.auth;
 
     // Log configuration on first request
@@ -249,17 +254,22 @@ export function createConfigurableAuthMiddleware (options: {
       return next();
     }
 
-    // Choose authentication system
-    const useMultiAuth = options.forceMultiAuth || shouldUseMultiAuth(auth);
-    const authError = useMultiAuth
-      ? getMultiAuthError(req)
-      : getAuthByTokenError(req);
+    try {
+      // Choose authentication system
+      const useMultiAuth = options.forceMultiAuth || shouldUseMultiAuth(auth);
+      const authError = useMultiAuth
+        ? await getMultiAuthError(req)
+        : getAuthByTokenError(req);
 
-    if (authError) {
-      res.status(authError.code).send(authError.message);
+      if (authError) {
+        res.status(authError.code).send(authError.message);
+        return;
+      }
+      next();
+    } catch {
+      res.status(500).send('Authentication error');
       return;
     }
-    next();
   };
 }
 
@@ -278,6 +288,6 @@ export function getAuthInfo () {
     configured: detection.configured,
     valid: detection.valid,
     errors: detection.errors,
-    usingMultiAuth: shouldUseMultiAuth(auth)
+    usingMultiAuth: shouldUseMultiAuth(auth),
   };
 }

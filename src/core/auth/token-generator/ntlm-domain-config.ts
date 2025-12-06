@@ -20,7 +20,7 @@ if (!isNTLMEnabled()) {
 }
 
 export const defaultTokenGenDomainConfig: IDcConfig = { controllers: [], username: '', password: '' };
-export const tokenGenDomains: {[domainName: string]: IDcConfig} = {};
+export const tokenGenDomains: { [domainName: string]: IDcConfig } = {};
 
 // Process and validate all domains (same logic as main NTLM example)
 if (isNTLMEnabled()) {

@@ -11,6 +11,7 @@ export type TTokenType = 'permanent' | 'JWT';
 export interface ITokenPayload {
   user: string,
   expire: number,
+
   [key: string]: any,
 }
 
@@ -44,30 +45,6 @@ export interface AuthResult {
   payload?: any;
 }
 
-export interface MultiAuthConfig {
-  enabled: boolean;
-  permanentServerTokens: string[];
-  jwtToken: {
-    encryptKey: string;
-    checkMCPName: boolean;
-  };
-  pat?: string;
-  basic?: {
-    type: 'basic';
-    username: string;
-    password: string;
-  };
-  oauth2?: {
-    type: 'oauth2';
-    clientId: string;
-    clientSecret: string;
-    accessToken: string;
-    refreshToken?: string;
-    redirectUri?: string;
-    tokenEndpoint?: string;
-  };
-}
-
 /**
  * Authentication check order in ascending CPU load
  */
@@ -76,5 +53,5 @@ export const AUTH_PRIORITY_ORDER: Record<AuthType, number> = {
   'pat': 2,                    // String and length validation
   'basic': 3,                  // Base64 decoding
   'jwtToken': 4,               // Symmetric decryption + JSON.parse
-  'oauth2': 5                  // Potentially HTTP requests
+  'oauth2': 5,                  // Potentially HTTP requests
 };

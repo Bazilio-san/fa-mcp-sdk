@@ -58,17 +58,27 @@ The primary function for starting your MCP server.
 **Example Usage in `src/start.ts`:**
 
 ```typescript
-import { initMcpServer, McpServerData } from 'fa-mcp-sdk';
+import { initMcpServer, McpServerData, CustomBasicAuthValidator } from 'fa-mcp-sdk';
 import { tools } from './tools/tools.js';
 import { handleToolCall } from './tools/handle-tool-call.js';
 import { AGENT_BRIEF } from './prompts/agent-brief.js';
 import { AGENT_PROMPT } from './prompts/agent-prompt.js';
+
+// Optional: Custom Basic Authentication validator
+const customAuthValidator: CustomBasicAuthValidator = async (username: string, password: string): Promise<boolean> => {
+  // Your custom authentication logic here (database, LDAP, API, etc.)
+  return await authenticateUser(username, password);
+};
 
 const serverData: McpServerData = {
   tools,
   toolHandler: handleToolCall,
   agentBrief: AGENT_BRIEF,
   agentPrompt: AGENT_PROMPT,
+
+  // Optional: Provide custom Basic Authentication
+  customBasicAuthValidator: customAuthValidator,
+
   // ... other configuration
 };
 
@@ -95,6 +105,9 @@ interface McpServerData {
   // Resources
   requiredHttpHeaders?: IRequiredHttpHeader[] | null; // HTTP headers for authentication
   customResources?: IResourceData[] | null;        // Custom resource definitions
+
+  // Authentication
+  customBasicAuthValidator?: CustomBasicAuthValidator; // Custom Basic Authentication validator function
 
   // HTTP Server Components (for HTTP transport)
   httpComponents?: {
@@ -831,6 +844,366 @@ await generateTokenApp(); // Uses default configuration from appConfig
 //   domain: 'DOMAIN'
 //   domainController: 'dc.domain.com'
 ```
+
+#### Multi-Authentication System
+
+The FA-MCP-SDK supports a comprehensive multi-authentication system that allows multiple authentication methods to work together with CPU-optimized performance ordering.
+
+##### Types and Interfaces
+
+```typescript
+import {
+  AuthType,
+  AuthResult,
+  AuthDetectionResult,
+  CustomBasicAuthValidator,
+  checkMultiAuth,
+  detectAuthConfiguration,
+  logAuthConfiguration,
+  enhancedAuthTokenMW,
+  createConfigurableAuthMiddleware,
+  getAuthInfo,
+  getMultiAuthError
+} from 'fa-mcp-sdk';
+
+// Authentication types in CPU priority order (low to high cost)
+export type AuthType = 'permanentServerTokens' | 'pat' | 'basic' | 'jwtToken' | 'oauth2';
+
+// Custom Basic Authentication validator function
+export type CustomBasicAuthValidator = (username: string, password: string) => Promise<boolean> | boolean;
+
+// Authentication result interface
+export interface AuthResult {
+  success: boolean;
+  error?: string;
+  authType?: AuthType;
+  tokenType?: string;
+  username?: string;
+  accessToken?: string;
+  payload?: any;
+}
+
+// Authentication detection result
+export interface AuthDetectionResult {
+  configured: AuthType[];    // Authentication types found in configuration
+  valid: AuthType[];        // Authentication types properly configured and ready
+  errors: Record<string, string[]>;  // Configuration errors by auth type
+}
+```
+
+##### Core Multi-Authentication Functions
+
+```typescript
+// checkMultiAuth - validate token using all configured authentication methods
+// Function Signature:
+async function checkMultiAuth(
+  token: string,
+  authConfig: AppConfig['webServer']['auth']
+): Promise<AuthResult> {...}
+
+// Example:
+const authConfig = appConfig.webServer.auth;
+const result = await checkMultiAuth('user_token', authConfig);
+
+if (result.success) {
+  console.log(`Authenticated via ${result.authType} as ${result.username}`);
+} else {
+  console.log('Authentication failed:', result.error);
+}
+
+// detectAuthConfiguration - analyze auth configuration
+// Function Signature:
+function detectAuthConfiguration(authConfig: AppConfig['webServer']['auth']): AuthDetectionResult {...}
+
+// Example:
+const detection = detectAuthConfiguration(appConfig.webServer.auth);
+console.log('Configured auth types:', detection.configured);
+console.log('Valid auth types:', detection.valid);
+console.log('Configuration errors:', detection.errors);
+
+// logAuthConfiguration - log auth system status (debugging)
+// Function Signature:
+function logAuthConfiguration(authConfig: AppConfig['webServer']['auth']): void {...}
+
+// Example:
+logAuthConfiguration(appConfig.webServer.auth);
+// Output:
+// Auth system configuration:
+// - enabled: true
+// - configured types: permanentServerTokens, basic, pat
+// - valid types: permanentServerTokens, pat
+```
+
+##### Multi-Authentication Middleware
+
+```typescript
+import express from 'express';
+import {
+  enhancedAuthTokenMW,
+  createConfigurableAuthMiddleware,
+  getMultiAuthError,
+  getAuthInfo
+} from 'fa-mcp-sdk';
+
+// enhancedAuthTokenMW - automatic multi-auth middleware
+// Automatically detects if multi-auth is needed based on configuration
+const app = express();
+app.use('/api', enhancedAuthTokenMW);
+
+app.get('/api/protected', (req, res) => {
+  const authInfo = (req as any).authInfo;
+  res.json({
+    message: 'Access granted',
+    authType: authInfo?.authType,
+    username: authInfo?.username,
+    tokenType: authInfo?.tokenType
+  });
+});
+
+// createConfigurableAuthMiddleware - configurable middleware
+// Function Signature:
+function createConfigurableAuthMiddleware(options: {
+  forceMultiAuth?: boolean;
+  logConfiguration?: boolean;
+} = {}): (req: Request, res: Response, next: NextFunction) => void {...}
+
+// Example:
+const authMW = createConfigurableAuthMiddleware({
+  logConfiguration: true,    // Log auth config on first request
+  forceMultiAuth: false      // Auto-detect multi-auth need
+});
+
+app.use('/api/v2', authMW);
+
+// getMultiAuthError - programmatic auth checking
+// Function Signature:
+async function getMultiAuthError(req: Request): Promise<{ code: number, message: string } | undefined> {...}
+
+// Example - Custom middleware with different auth levels
+app.use('/api/custom', async (req, res, next) => {
+  if (req.path.startsWith('/api/custom/public')) {
+    return next(); // Public endpoints
+  }
+
+  if (req.path.startsWith('/api/custom/admin')) {
+    // Admin endpoints - require server tokens only
+    const token = (req.headers.authorization || '').replace(/^Bearer */, '');
+    if (appConfig.webServer.auth.permanentServerTokens.includes(token)) {
+      return next();
+    }
+    return res.status(403).json({ error: 'Admin access required' });
+  }
+
+  // Regular endpoints - use full multi-auth
+  try {
+    const authError = await getMultiAuthError(req);
+    if (authError) {
+      res.status(authError.code).send(authError.message);
+      return;
+    }
+    next();
+  } catch (error) {
+    res.status(500).send('Authentication error');
+  }
+});
+
+// getAuthInfo - get current authentication configuration info
+// Function Signature:
+function getAuthInfo(): {
+  enabled: boolean;
+  configured: AuthType[];
+  valid: AuthType[];
+  errors: Record<string, string[]>;
+  usingMultiAuth: boolean;
+} {...}
+
+// Example:
+app.get('/auth/info', (req, res) => {
+  const authInfo = getAuthInfo();
+  res.json(authInfo);
+});
+```
+
+##### Custom Basic Authentication
+
+You can provide custom Basic Authentication validation functions through the `McpServerData` interface:
+
+```typescript
+import { McpServerData, CustomBasicAuthValidator } from 'fa-mcp-sdk';
+
+// Database-backed authentication
+const databaseAuthValidator: CustomBasicAuthValidator = async (username: string, password: string): Promise<boolean> => {
+  try {
+    const user = await getUserFromDatabase(username);
+    if (!user) return false;
+
+    return await comparePassword(password, user.hashedPassword);
+  } catch (error) {
+    console.error('Database authentication error:', error);
+    return false;
+  }
+};
+
+// LDAP/Active Directory authentication
+const ldapAuthValidator: CustomBasicAuthValidator = async (username: string, password: string): Promise<boolean> => {
+  try {
+    const result = await authenticateWithLDAP(username, password);
+    return result.success;
+  } catch (error) {
+    console.error('LDAP authentication error:', error);
+    return false;
+  }
+};
+
+// External API authentication
+const apiAuthValidator: CustomBasicAuthValidator = async (username: string, password: string): Promise<boolean> => {
+  try {
+    const response = await fetch('https://auth.example.com/validate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username, password })
+    });
+
+    if (!response.ok) return false;
+    const result = await response.json();
+    return result.valid === true;
+  } catch (error) {
+    console.error('API authentication error:', error);
+    return false;
+  }
+};
+
+// Multi-factor authentication
+const mfaAuthValidator: CustomBasicAuthValidator = async (username: string, password: string): Promise<boolean> => {
+  try {
+    // Password format: "actualPassword:mfaToken"
+    const [actualPassword, mfaToken] = password.split(':');
+    if (!actualPassword || !mfaToken) return false;
+
+    // Validate base credentials
+    const user = await getUserFromDatabase(username);
+    if (!user || !(await comparePassword(actualPassword, user.hashedPassword))) {
+      return false;
+    }
+
+    // Validate MFA token
+    return await validateMFAToken(username, mfaToken);
+  } catch (error) {
+    console.error('MFA authentication error:', error);
+    return false;
+  }
+};
+
+// Use custom validator in MCP server
+const serverData: McpServerData = {
+  tools,
+  toolHandler,
+  agentBrief: 'My MCP Server',
+  agentPrompt: 'Server with custom authentication',
+
+  // Provide custom basic auth validator
+  customBasicAuthValidator: databaseAuthValidator, // or ldapAuthValidator, apiAuthValidator, mfaAuthValidator
+
+  // ... other configuration
+};
+
+await initMcpServer(serverData);
+```
+
+##### Authentication Configuration
+
+Multi-authentication is configured in `config/default.yaml`:
+
+```yaml
+webServer:
+  auth:
+    enabled: true
+
+    # Permanent server tokens (CPU priority: 1 - fastest)
+    permanentServerTokens:
+      - 'server-token-1'
+      - 'server-token-2'
+
+    # Personal Access Tokens (CPU priority: 2)
+    pat: 'ATATT3xFfGF0...'
+
+    # Basic Authentication (CPU priority: 3)
+    basic:
+      type: 'basic'
+      username: 'admin'
+      password: 'password'
+      # Note: When using customBasicAuthValidator, username/password can be omitted
+
+    # JWT Tokens (CPU priority: 4)
+    jwtToken:
+      encryptKey: 'your-secret-key'
+      checkMCPName: true
+
+    # OAuth2 (CPU priority: 5 - most expensive)
+    oauth2:
+      type: 'oauth2'
+      clientId: 'your-client-id'
+      clientSecret: 'your-client-secret'
+      accessToken: 'your-access-token'
+      refreshToken: 'your-refresh-token'
+      redirectUri: 'https://example.com/callback'
+      tokenEndpoint: 'https://auth.provider.com/token'
+```
+
+##### Usage Examples
+
+```typescript
+// Test authentication programmatically
+app.post('/test-token', async (req, res) => {
+  const { token } = req.body;
+  if (!token) {
+    return res.status(400).json({ error: 'Token required' });
+  }
+
+  try {
+    const result = await checkMultiAuth(token, appConfig.webServer.auth);
+    res.json({
+      valid: result.success,
+      authType: result.authType,
+      tokenType: result.tokenType,
+      error: result.error,
+      username: result.username,
+      hasPayload: !!result.payload
+    });
+  } catch (error) {
+    res.status(500).json({ error: 'Authentication test failed' });
+  }
+});
+
+// Different authentication requirements for different endpoints
+app.use('/rest', enhancedAuthTokenMW);           // Any valid auth
+app.use('/graphql', userLevelAuthOnly);          // No server tokens
+app.use('/websocket', sessionTokensOnly);       // JWT/OAuth2 only
+```
+
+**Client Usage Examples:**
+
+```bash
+# Using permanent server token
+curl -H "Authorization: Bearer server-token-1" http://localhost:3000/mcp
+
+# Using JWT token
+curl -H "Authorization: Bearer eyJ0eXAiOiJKV1QiLCJhb..." http://localhost:3000/mcp
+
+# Using Basic Authentication
+curl -H "Authorization: Basic $(echo -n 'admin:password' | base64)" http://localhost:3000/mcp
+
+# Using PAT
+curl -H "Authorization: Bearer ATATT3xFfGF0..." http://localhost:3000/mcp
+
+# Using OAuth2
+curl -H "Authorization: Bearer ya29.A0AfH6..." http://localhost:3000/mcp
+
+# Using MFA Basic Auth (if custom validator supports it)
+curl -H "Authorization: Basic $(echo -n 'admin:password:123456' | base64)" http://localhost:3000/mcp
+```
+
+The multi-authentication system automatically tries authentication methods in CPU-optimized order (fastest first) and returns on the first successful match, providing both performance and flexibility.
 
 ### Utility Functions
 

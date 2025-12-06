@@ -5,7 +5,7 @@ import { tokenGenDomainConfig, getDomainConfig } from './ntlm-domain-config.js';
 import { getNotAuthenticatedPageHTML, getNotAuthorizedPageHTML } from './ntlm-templates.js';
 import {
   getTokenGenSessionData,
-  setTokenGenSessionData
+  setTokenGenSessionData,
 } from './ntlm-session-storage.js';
 
 // Authorization logic - initially allow all authenticated users

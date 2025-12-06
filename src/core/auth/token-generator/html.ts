@@ -568,7 +568,7 @@ function switchTab (tabName) {
   const tabs = document.querySelectorAll('.tab');
   tabs.forEach(tab => {
     const onclick = tab.getAttribute('onclick');
-    if (onclick && onclick.includes("switchTab('" + tabName + "')")) {
+    if (onclick && onclick.includes('switchTab(\'' + tabName + '\')')) {
       tab.classList.add('active');
     }
   });
@@ -845,7 +845,7 @@ async function logout() {
   try {
     const response = await fetch('/logout', {
       method: 'GET',
-      credentials: 'include'
+      credentials: 'include',
     });
 
     if (response.status === 401) {

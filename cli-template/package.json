@@ -1,7 +1,7 @@
 {
-  "name": "{{project.name}}",
+  "name": "project.name",
   "productName": "{{project.productName}}",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "description": "{{project.description}}",
   "type": "module",
   "main": "dist/src/start.js",
@@ -45,14 +45,14 @@
   },
   "license": "MIT",
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.22.0",
+    "@modelcontextprotocol/sdk": "^1.24.3",
     "dotenv": "^17.2.3",
-    "fa-mcp-sdk": "^0.2.108",
+    "fa-mcp-sdk": "^0.2.125",
     "swagger-jsdoc": "^6.2.8",
     "swagger-ui-express": "^5.0.1"
   },
   "devDependencies": {
-    "@types/express": "^5.0.5",
+    "@types/express": "^5.0.6",
     "@types/jest": "^30.0.0",
     "@types/node": "^24.10.1",
     "@types/swagger-jsdoc": "^6.0.4",
