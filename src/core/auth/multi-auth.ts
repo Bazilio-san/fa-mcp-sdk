@@ -2,196 +2,93 @@
  * Multi-authentication system core
  */
 
+import { Request } from 'express';
 import { checkToken } from './jwt-validation.js';
-import { AppConfig } from '../_types_/config.js';
 import { logger as lgr } from '../logger.js';
 import { AuthDetectionResult, AuthResult, AuthType } from './types.js';
-import { CustomBasicAuthValidator } from '../_types_/types.js';
+import { CustomAuthValidator } from '../_types_/types.js';
+import { normalizeHeaders } from '../utils/utils.js';
 import chalk from 'chalk';
+import { appConfig } from '../bootstrap/init-config.js';
 
 const logger = lgr.getSubLogger({ name: chalk.magenta('multi-auth') });
+
+const {
+  enabled: authEnabled,
+  permanentServerTokens: pt,
+  basic: { username: bUsername, password: bPassword } = {},
+  jwtToken: { encryptKey } = {},
+} = appConfig.webServer?.auth || {};
 
 /**
  * Authentication check order in ascending CPU load
  */
-const AUTH_PRIORITY_ORDER: Record<AuthType, number> = {
+const authOrder = {
   'permanentServerTokens': 1,  // O(1) Set.has()
-  'pat': 2,                    // String and length validation
-  'basic': 3,                  // Base64 decoding
-  'jwtToken': 4,               // Symmetric decryption + JSON.parse
-  'oauth2': 5,                 // Potentially HTTP requests
+  'basic': 2,                  // Base64 decoding
+  'jwtToken': 3,               // Symmetric decryption + JSON.parse
+};
+
+export const getTokenFromHttpHeader = (req: Request): string => {
+  return (req.headers.authorization || '').replace(/^Bearer */, '');
 };
 
 /**
- * Gets custom basic auth validator from global context
+ * Gets custom auth validator from global context
  */
-function getCustomBasicAuthValidator (): CustomBasicAuthValidator | undefined {
+function getCustomAuthValidator (): CustomAuthValidator | undefined {
   const projectData = (global as any).__MCP_PROJECT_DATA__;
-  const fn = projectData?.customBasicAuthValidator;
+  const fn = projectData?.customAuthValidator;
   return typeof fn === 'function' ? fn : undefined;
 }
 
 /**
- * Detects configured authentication types
+ * Detects configured authentication types in priority order (ascending CPU load)
  */
-export function detectAuthConfiguration (authConfig: AppConfig['webServer']['auth']): AuthDetectionResult {
+export function detectAuthConfiguration (): AuthDetectionResult {
   const configured: AuthType[] = [];
-  const valid: AuthType[] = [];
   const errors: Record<string, string[]> = {};
-  const result: AuthDetectionResult = {
-    configured,
-    valid,
-    errors,
-  };
+  const result: AuthDetectionResult = { configured, errors };
 
-  const { enabled, basic, jwtToken: { encryptKey } = {}, oauth2, pat, permanentServerTokens: pt } = authConfig;
-
-  if (!enabled) {
+  if (!authEnabled) {
     return result;
   }
   // Check permanentServerTokens
   if (Array.isArray(pt) && pt.filter(Boolean)) {
     configured.push('permanentServerTokens');
-    valid.push('permanentServerTokens');
   }
 
   // Check JWT Token
   if (encryptKey?.length) {
     configured.push('jwtToken');
-    valid.push('jwtToken');
-  }
-
-  // Check PAT
-  if (pat?.length) {
-    if (pat.length > 10) {
-      configured.push('pat');
-      valid.push('pat');
-    } else {
-      errors.pat = ['Token too short or invalid'];
-    }
   }
 
   // Check Basic Auth
-  if (basic && (basic.username || basic.password)) {
-    configured.push('basic');
+  if (bUsername || bPassword) {
     const errs = [];
-    const customValidator = getCustomBasicAuthValidator();
-
-    // If custom validator exists, we only need it to be configured (no username/password check)
-    if (customValidator) {
-      valid.push('basic');
+    // Default validation - require both username and password
+    if (!bUsername) {
+      errs.push('Username missing');
+    }
+    if (!bPassword) {
+      errs.push('Password missing');
+    }
+    if (!errs.length) {
+      configured.push('basic');
     } else {
-      // Default validation - require both username and password
-      if (!basic.username) {
-        errs.push('Username missing');
-      }
-      if (!basic.password) {
-        errs.push('Password missing');
-      }
-
-      if (!errs.length) {
-        valid.push('basic');
-      } else {
-        errors.basic = errs;
-      }
+      errors.basic = errs;
     }
   }
 
-  // Check OAuth2
-  const { clientId, clientSecret, accessToken } = oauth2 || {};
-  if (clientId || clientSecret || accessToken) {
-    configured.push('oauth2');
-    const required = ['clientId', 'clientSecret', 'accessToken'];
-    const missing = required.filter((field) => !oauth2![field as keyof typeof oauth2]);
-
-    if (missing.length) {
-      errors.oauth2 = [`Missing fields: ${missing.join(', ')}`];
-    } else {
-      valid.push('oauth2');
-    }
-  }
-
+  result.configured = configured.sort((a, b) => authOrder[a] - authOrder[b]);
   return result;
-}
-
-/**
- * Gets list of valid authorization types in priority order (ascending CPU load)
- */
-export function getValidAuthTypes (authConfig: AppConfig['webServer']['auth']): AuthType[] {
-  const detection = detectAuthConfiguration(authConfig);
-
-  return detection.valid.sort((a, b) => {
-    return AUTH_PRIORITY_ORDER[a] - AUTH_PRIORITY_ORDER[b];
-  });
-}
-
-/**
- * Checks token for specific authentication type
- */
-export async function checkAuthType (
-  authType: AuthType,
-  token: string,
-  authConfig: AppConfig['webServer']['auth'],
-): Promise<AuthResult> {
-  try {
-    switch (authType) {
-      case 'permanentServerTokens':
-      case 'jwtToken':
-        const result = checkToken({ token });
-        if (result.errorReason) {
-          return { success: false, error: result.errorReason };
-        }
-        return {
-          success: true,
-          authType,
-          tokenType: result.inTokenType || 'unknown',
-          payload: result.payload,
-        };
-
-      case 'pat':
-        return checkPATToken(token);
-
-      case 'basic':
-        return await checkBasicAuth(token, authConfig);
-
-      case 'oauth2':
-        return checkOAuth2Token(token, authConfig);
-
-      default:
-        return { success: false, error: `Unknown auth type: ${authType}` };
-    }
-  } catch (error) {
-    logger.error(`Auth type ${authType} check failed:`, error);
-    return { success: false, error: `${authType} validation failed: ${error instanceof Error ? error.message : 'Unknown error'}` };
-  }
-}
-
-/**
- * PAT (Personal Access Token) validation
- */
-function checkPATToken (token: any): AuthResult {
-  // Simple Atlassian PAT token format validation
-  if (!token || typeof token !== 'string') {
-    return { success: false, error: 'PAT token must be a string' };
-  }
-
-  // Also support other PAT token formats
-  if (token.length >= 20 && /^[A-Za-z0-9+/=_-]+$/.test(token)) {
-    return {
-      success: true,
-      authType: 'pat',
-      tokenType: 'pat',
-      accessToken: token,
-    };
-  }
-
-  return { success: false, error: 'Invalid PAT token format' };
 }
 
 /**
  * Basic Authentication validation
  */
-async function checkBasicAuth (token: string, authConfig: AppConfig['webServer']['auth']): Promise<AuthResult> {
+async function checkBasicAuth (token: string): Promise<AuthResult> {
+  const authConfig = appConfig.webServer.auth;
   if (!authConfig.basic) {
     return { success: false, error: 'Basic auth not configured' };
   }
@@ -205,111 +102,60 @@ async function checkBasicAuth (token: string, authConfig: AppConfig['webServer']
       return { success: false, error: 'Invalid basic auth format - missing username or password' };
     }
 
-    const customValidator = getCustomBasicAuthValidator();
-
-    if (customValidator) {
-      // Use custom validation function
-      try {
-        const isValid = await customValidator(username, password);
-        if (isValid) {
-          return {
-            success: true,
-            authType: 'basic',
-            tokenType: 'basic',
-            username,
-          };
-        } else {
-          return { success: false, error: 'Invalid credentials' };
-        }
-      } catch (error) {
-        logger.error('Custom basic auth validator failed:', error);
-        return { success: false, error: 'Authentication validation failed' };
-      }
-    } else {
-      // Default validation using configured username/password
-      if (username === authConfig.basic.username && password === authConfig.basic.password) {
-        return {
-          success: true,
-          authType: 'basic',
-          tokenType: 'basic',
-          username,
-        };
-      }
-      return { success: false, error: 'Invalid credentials' };
+    if (username === bUsername && password === bPassword) {
+      return {
+        success: true,
+        authType: 'basic',
+        tokenType: 'basic',
+        username,
+      };
     }
+    return { success: false, error: 'Invalid credentials' };
   } catch {
     return { success: false, error: 'Invalid basic auth format - not valid base64' };
   }
 }
 
-/**
- * OAuth2 token validation
- */
-function checkOAuth2Token (token: string, authConfig: AppConfig['webServer']['auth']): AuthResult {
-  if (!authConfig.oauth2) {
-    return { success: false, error: 'OAuth2 not configured' };
-  }
-
-  try {
-    // Check Bearer token format
-    if (!token.startsWith('Bearer ')) {
-      return { success: false, error: 'OAuth2 token must start with Bearer' };
-    }
-
-    const accessToken = token.replace('Bearer ', '');
-
-    // Simple check that token is not empty and has reasonable length
-    if (accessToken.length < 10) {
-      return { success: false, error: 'OAuth2 token too short' };
-    }
-
-    // Simple token format validation
-    if (!/^[A-Za-z0-9+/=_.-]+$/.test(accessToken)) {
-      return { success: false, error: 'Invalid OAuth2 token format' };
-    }
-
-    // In real implementation there would be token validation through API
-    // or validation through introspection endpoint
-
-    return {
-      success: true,
-      authType: 'oauth2',
-      tokenType: 'oauth2',
-      accessToken,
-    };
-  } catch (error) {
-    return { success: false, error: `OAuth2 validation failed: ${error instanceof Error ? error.message : 'Unknown error'}` };
-  }
-}
 
 /**
- * Checks token using all configured authentication methods
- * in ascending CPU load order
+ * Checks auth using all configured authentication methods in ascending CPU load order
  */
-export async function checkMultiAuth (
-  token: string,
-  authConfig: AppConfig['webServer']['auth'],
-): Promise<AuthResult> {
+export async function checkMultiAuth (req: Request): Promise<AuthResult> {
+  const token = getTokenFromHttpHeader(req);
   if (!token) {
     return { success: false, error: 'Token not provided' };
   }
+  const validAuthTypes = detectAuthConfiguration();
+  const { configured } = validAuthTypes;
 
-  const validAuthTypes = getValidAuthTypes(authConfig);
-
-  if (validAuthTypes.length === 0) {
+  if (configured.length) {
     return { success: false, error: 'No authentication methods configured' };
   }
+  const configuredTypes = configured.join(', ');
+  logger.debug(`Checking auth types: ${configuredTypes}`);
 
-  logger.debug(`Checking token with auth types: ${validAuthTypes.join(', ')}`);
-
-  for (const authType of validAuthTypes) {
+  for (const authType of configured) {
     try {
-      const result = await checkAuthType(authType, token, authConfig);
-      if (result.success) {
-        logger.debug(`Authentication successful using: ${authType}`);
-        return result;
+      switch (authType) {
+        case 'permanentServerTokens':
+        case 'jwtToken':
+          const result = checkToken({ token });
+          if (result.errorReason) {
+            return { success: false, error: result.errorReason };
+          }
+          return {
+            success: true,
+            authType,
+            tokenType: result.inTokenType || 'unknown',
+            payload: result.payload,
+          };
+
+        case 'basic':
+          return await checkBasicAuth(token);
+
+        default:
+          return { success: false, error: `Unknown auth type: ${authType}` };
       }
-      logger.debug(`Authentication failed for ${authType}: ${result.error}`);
     } catch (error) {
       logger.warn(`Auth type ${authType} failed with exception:`, error instanceof Error ? error.message : 'Unknown error');
     }
@@ -317,24 +163,84 @@ export async function checkMultiAuth (
 
   return {
     success: false,
-    error: `Authentication failed for all configured methods: ${validAuthTypes.join(', ')}`,
+    error: `Authentication failed for all configured methods: ${configuredTypes}`,
   };
+}
+
+/**
+ * Enhanced authentication check that combines configured auth methods with custom validator
+ */
+export async function checkCombinedAuth (req: Request): Promise<AuthResult> {
+  const { configured } = detectAuthConfiguration();
+  const customValidator = getCustomAuthValidator();
+
+  // Create request object with normalized headers for custom validator
+  const requestWithNormalizedHeaders = customValidator ? {
+    ...req,
+    headers: normalizeHeaders(req.headers || {}),
+  } : req;
+
+  // If configured auth methods exist, check them first
+  if (configured.length) {
+    const multiAuthResult = await checkMultiAuth(req);
+    if (multiAuthResult.success) {
+      // If custom validator also exists, run it additionally
+      if (customValidator) {
+        try {
+          const customResult = await customValidator(requestWithNormalizedHeaders);
+          if (!customResult.success) {
+            logger.debug(`Standard auth passed but custom validator rejected: ${customResult.error}`);
+            return { success: false, error: customResult.error || 'Custom authentication failed' };
+          }
+          logger.debug('Both standard auth and custom validator passed');
+
+          // Merge authentication results (prefer custom validator details if present)
+          return { ...multiAuthResult, ...customResult };
+        } catch (error) {
+          logger.error('Custom auth validator failed:', error);
+          return { success: false, error: 'Custom authentication validation failed' };
+        }
+      }
+      return multiAuthResult;
+    }
+  }
+
+  // If standard auth failed or no standard auth configured, try custom validator alone
+  if (customValidator) {
+    try {
+      const customResult = await customValidator(requestWithNormalizedHeaders);
+      if (customResult.success) {
+        logger.debug('Authentication successful using custom validator only');
+        return customResult;
+      }
+      logger.debug(`Custom validator rejected authentication: ${customResult.error}`);
+    } catch (error) {
+      logger.error('Custom auth validator failed:', error);
+      return { success: false, error: 'Custom authentication validation failed' };
+    }
+  }
+
+  // Both standard and custom auth failed
+  const errorMsg = configured.length
+    ? `Authentication failed for all methods: ${configured.join(', ')}${customValidator ? ' and custom validator' : ''}`
+    : 'No authentication methods configured';
+
+  return { success: false, error: errorMsg };
 }
 
 /**
  * Logs authentication configuration (for debugging)
  */
-export function logAuthConfiguration (authConfig: AppConfig['webServer']['auth']): void {
-  const detection = detectAuthConfiguration(authConfig);
+export function logAuthConfiguration (): void {
+  const { configured, errors } = detectAuthConfiguration();
 
   logger.info('Auth system configuration:');
-  logger.info(`- enabled: ${authConfig.enabled}`);
-  logger.info(`- configured types: ${detection.configured.join(', ')}`);
-  logger.info(`- valid types: ${detection.valid.join(', ')}`);
+  logger.info(`- enabled: ${!!appConfig.webServer?.auth?.enabled}`);
+  logger.info(`- configured types: ${configured.join(', ')}`);
 
-  if (Object.keys(detection.errors).length > 0) {
+  if (Object.keys(errors).length) {
     logger.warn('Auth configuration errors:');
-    Object.entries(detection.errors).forEach(([type, errors]) => {
+    Object.entries(errors).forEach(([type, errors]) => {
       logger.warn(`- ${type}: ${errors.join(', ')}`);
     });
   }

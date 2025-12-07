@@ -1,4 +1,4 @@
-import { IGetPromptRequest, IPromptData } from '../../core/index.js';
+import { IPromptData, IGetPromptRequest } from '../../core/index.js';
 
 export const customPrompts: IPromptData[] = [
   {

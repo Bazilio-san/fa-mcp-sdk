@@ -1,5 +1,5 @@
 import { Router, Request, Response } from 'express';
-import { logger, authTokenMW, IEndpointsOn404 } from '../../core/index.js';
+import { logger, createAuthMW, IEndpointsOn404 } from '../../core/index.js';
 
 export const apiRouter: Router | null = Router();
 
@@ -8,8 +8,11 @@ export const apiRouter: Router | null = Router();
  * Modify this file to implement your specific API endpoints
  */
 
+// Create universal auth middleware
+const authMW = createAuthMW();
+
 // Example protected endpoint using auth middleware
-apiRouter.get('/example', authTokenMW, async (req: Request, res: Response) => {
+apiRouter.get('/example', authMW, async (req: Request, res: Response) => {
   try {
     logger.info('Example endpoint called');
 

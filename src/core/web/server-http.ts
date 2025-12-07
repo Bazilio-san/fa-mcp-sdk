@@ -7,7 +7,7 @@ import { appConfig, getProjectData } from '../bootstrap/init-config.js';
 import { getResource, getResourcesList } from '../mcp/resources.js';
 import { IGetPromptRequest } from '../_types_/types.js';
 
-import { authTokenMW, createConditionalAuthMiddleware } from '../auth/middleware.js';
+import { createAuthMW } from '../auth/middleware.js';
 import { createMcpServer } from '../mcp/create-mcp-server.js';
 import { logger as lgr } from '../logger.js';
 import { createJsonRpcErrorResponse, ServerError, toError, toStr } from '../errors/errors.js';
@@ -19,6 +19,7 @@ import chalk from 'chalk';
 import { getPrompt, getPromptsList } from '../mcp/prompts.js';
 import { renderAboutPage } from './about-page/render.js';
 import { getMainDBConnectionStatus } from '../db/pg-db.js';
+import { normalizeHeaders } from '../utils/utils.js';
 
 const logger = lgr.getSubLogger({ name: chalk.bgYellow('server-http') });
 
@@ -73,8 +74,8 @@ export async function startHttpServer (): Promise<void> {
     duration: appConfig.mcp.rateLimit.windowMs / 1000, // Convert to seconds
   });
 
-  // Create conditional auth middleware for SSE endpoints
-  const conditionalAuthMW = createConditionalAuthMiddleware();
+  // Create universal auth middleware for all endpoints
+  const authMW = createAuthMW();
 
   // Security middleware
   app.use(helmet({
@@ -136,21 +137,28 @@ export async function startHttpServer (): Promise<void> {
   }
 
   // SSE endpoints for legacy MCP communication
-  // Store SSE transports by session ID and associated servers
-  const sseTransports = new Map<string, { transport: SSEServerTransport, server: any }>();
+  // Store SSE transports by session ID with transport, server, and preserved headers
+  const sseTransports = new Map<string, {
+    transport: SSEServerTransport,
+    server: any,
+    headers: Record<string, string>
+  }>();
 
-  // Create a shared MCP server instance for SSE connections
-  async function createSseServer () {
+  // Create SSE server instance with preserved headers from connection establishment
+  async function createSseServer (preservedHeaders: Record<string, string>) {
     const sseServer = createMcpServer();
 
-    // Override the tool call handler to include rate limiting
+    // Override the tool call handler to include rate limiting and preserved headers
     sseServer.setRequestHandler(CallToolRequestSchema, async (request) => {
       // Apply rate limiting for each SSE tool call
       const toolCallClientId = 'sse-tool-unknown';
       await handleRateLimit(rateLimiter, toolCallClientId, 'unknown', `SSE tool call | tool: ${request.params.name}`);
 
-      // Execute the tool call
-      const result = await toolHandler(request.params);
+      // Execute the tool call with preserved headers from SSE connection establishment
+      const result = await toolHandler({
+        ...request.params,
+        headers: preservedHeaders // Use headers from when SSE connection was established
+      });
       return {
         content: result.content,
       };
@@ -160,7 +168,7 @@ export async function startHttpServer (): Promise<void> {
   }
 
   // GET endpoint for SSE connection establishment
-  app.get('/sse', authTokenMW, async (req, res) => {
+  app.get('/sse', authMW, async (req, res) => {
     try {
       // Apply rate limiting for SSE connection
       const clientId = `sse-${req.ip || 'unknown'}`;
@@ -168,14 +176,22 @@ export async function startHttpServer (): Promise<void> {
 
       logger.info('SSE client connected');
 
+      // Preserve normalized headers from SSE connection establishment
+      const preservedHeaders = normalizeHeaders(req.headers);
+      logger.debug('SSE connection headers preserved:', Object.keys(preservedHeaders));
+
       // Create SSE transport that will use the same endpoint for POST requests
       const transport = new SSEServerTransport('/sse', res);
 
-      // Create a dedicated server instance for this SSE connection
-      const sseServer = await createSseServer();
+      // Create a dedicated server instance with preserved headers for this SSE connection
+      const sseServer = await createSseServer(preservedHeaders);
 
-      // Store both transport and server for cleanup
-      sseTransports.set(transport.sessionId, { transport, server: sseServer });
+      // Store transport, server, and headers for cleanup and reference
+      sseTransports.set(transport.sessionId, {
+        transport,
+        server: sseServer,
+        headers: preservedHeaders
+      });
 
       // Clean up transport and server on connection close
       res.on('close', () => {
@@ -196,7 +212,7 @@ export async function startHttpServer (): Promise<void> {
   });
 
   // POST endpoint for handling SSE client messages (standard way)
-  app.post('/messages', conditionalAuthMW, async (req, res): Promise<void> => {
+  app.post('/messages', authMW, async (req, res): Promise<void> => {
     try {
       const sessionId = req.query.sessionId as string;
       if (!sessionId) {
@@ -237,7 +253,7 @@ export async function startHttpServer (): Promise<void> {
   });
 
   // POST endpoint for direct SSE requests (legacy compatibility - same endpoint as GET)
-  app.post('/sse', conditionalAuthMW, async (req, res): Promise<void> => {
+  app.post('/sse', authMW, async (req, res): Promise<void> => {
     try {
       // Find any active SSE transport for this client (fallback approach)
       // TODO: This is needed for test client compatibility. In production, clients should use proper session management or POST to /messages endpoint.
@@ -280,7 +296,7 @@ export async function startHttpServer (): Promise<void> {
   });
 
   // POST endpoint for MCP requests
-  app.post('/mcp', authTokenMW, async (req, res) => {
+  app.post('/mcp', authMW, async (req, res) => {
     try {
       // Apply rate limiting
       const clientId = req.ip || 'unknown';
@@ -319,7 +335,10 @@ export async function startHttpServer (): Promise<void> {
           // Apply rate limiting for tool calls
           const toolCallClientId = `tool-${req.ip || 'unknown'}`;
           await handleRateLimit(rateLimiter, toolCallClientId, req.ip || 'unknown', `tool call | tool: ${params?.name || 'unknown'}`, res, id);
-          result = await toolHandler(params);
+          result = await toolHandler({
+            ...params,
+            headers: normalizeHeaders(req.headers)
+          });
           break;
 
         case 'prompts/list':

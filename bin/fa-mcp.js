@@ -11,6 +11,7 @@ import yaml from 'js-yaml';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const PRINT_FILLED = true;
+const PROJ_ROOT = path.join(__dirname, '..');
 
 const hl = (v) => chalk.bgGreen.black(v);
 const hly = (v) => chalk.bgYellow.black(v);
@@ -25,6 +26,8 @@ const printFilled = (paramName, paramValue) => {
     console.log(`  ${hp(paramName)}: ${hl(paramValue)}`);
   }
 };
+
+const faMcpSdkVersion = require(path.join(PROJ_ROOT, 'package.json')).version;
 
 const getAsk = () => {
   const rl = readline.createInterface({
@@ -123,7 +126,6 @@ const removeIfExists = async (targetPath, relPath, options = {}) => {
 
 class MCPGenerator {
   constructor () {
-    this.templateDir = path.join(__dirname, '..', 'cli-template');
     this.lastConfigPath = path.join(process.cwd(), '~last-cli-config.json');
     this.requiredParams = [
       {
@@ -774,7 +776,7 @@ certificate's public and private keys`,
           delete packageJson.author;
         }
       }
-
+      packageJson.dependencies['fa-mcp-sdk'] = `^${faMcpSdkVersion}`;
       return JSON.stringify(packageJson, null, 2);
     } catch (error) {
       throw new Error(`Error processing package.json: ${error.message}`);
@@ -827,7 +829,11 @@ certificate's public and private keys`,
             modified = true;
           }
         }
-        content = content.replace(/'[^']+index-to-remove.js'/g, 'fa-mcp-sdk');
+        content = content.replace(/'[^']+\/core\/index.js'/g, 'fa-mcp-sdk');
+      }
+      if (filePath.endsWith('test-sse-npm-package.js')) {
+        content = content.replace(/http:\/\/localhost:9876/g, `http://localhost:${config.port}`);
+        modified = true;
       }
 
       if (modified) {
@@ -879,8 +885,10 @@ certificate's public and private keys`,
   async createProject (config) {
     const targetPath = config.projectAbsPath;
     // Copy template files
-    await this.copyDirectory(this.templateDir, targetPath);
-    await fs.copyFile(path.join(targetPath, '.env.example'), path.join(targetPath, '.env')); // VVT
+    await this.copyDirectory(path.join(PROJ_ROOT, 'cli-template'), targetPath);
+    await this.copyDirectory(path.join(PROJ_ROOT, 'src/template'), path.join(targetPath, 'src'));
+    await this.copyDirectory(path.join(PROJ_ROOT, 'src/tests'), path.join(targetPath, 'tests'));
+    await fs.copyFile(path.join(targetPath, '.env.example'), path.join(targetPath, '.env'));
 
     // Rename mcp-template.com.conf if mcp.domain is provided
     const mcpDomain = config['mcp.domain'];

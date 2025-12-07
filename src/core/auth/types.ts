@@ -29,6 +29,7 @@ export interface AuthDetectionResult {
 export interface AuthResult {
   success: boolean;
   error?: string;
+
   authType?: AuthType;
   tokenType?: string;
   username?: string;

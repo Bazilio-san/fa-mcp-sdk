@@ -21,7 +21,7 @@ export type {
 
   IToolProperties,
   IToolInputSchema,
-  CustomBasicAuthValidator,
+  CustomAuthValidator,
 } from './_types_/types.js';
 
 export { appConfig } from './bootstrap/init-config.js';
@@ -63,22 +63,15 @@ export async function generateTokenApp (...args: any[]) {
 }
 
 export {
-  authByToken,
-  authTokenMW,
-  createConfigurableAuthMiddleware,
-  enhancedAuthTokenMW,
-  getAuthInfo,
-  getMultiAuthError,
-  createConditionalAuthMiddleware,
-  getAuthByTokenError,
+  createAuthMW,          // Universal authentication middleware
+  getMultiAuthError,     // Programmatic authentication checking
 } from './auth/middleware.js';
 
 export {
   checkMultiAuth,
+  checkCombinedAuth,
   detectAuthConfiguration,
   logAuthConfiguration,
-  checkAuthType,
-  getValidAuthTypes,
 } from './auth/multi-auth.js';
 
 export type {
@@ -101,6 +94,7 @@ export {
   ppj,
   encodeSvgForDataUri,
   getAsset,
+  normalizeHeaders,
 } from './utils/utils.js';
 export { isPortAvailable, checkPortAvailability } from './utils/port-checker.js';
 

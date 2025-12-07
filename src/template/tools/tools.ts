@@ -1,5 +1,5 @@
 import { Tool } from '@modelcontextprotocol/sdk/types.js';
-import { IToolInputSchema, IToolProperties } from '../../core/_types_/types.js';
+import { IToolInputSchema, IToolProperties } from '../../core/index.js';
 
 /**
  * Template tools configuration for MCP Server
@@ -7,7 +7,10 @@ import { IToolInputSchema, IToolProperties } from '../../core/_types_/types.js';
  */
 
 
-export const getGenericInputSchema = (queryDescription?: string, additionalProperties?: IToolProperties): IToolInputSchema => {
+const getGenericInputSchema = (
+  queryDescription?: string,
+  additionalProperties?: IToolProperties,
+): IToolInputSchema => {
   const properties = {
     query: {
       type: 'string',

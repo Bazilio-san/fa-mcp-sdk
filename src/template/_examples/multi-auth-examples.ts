@@ -13,7 +13,8 @@ import {
   logAuthConfiguration,
   McpServerData,
   CustomAuthValidator,
-} from '../index-to-remove.js';
+  AuthResult,
+} from '../../core/index.js';
 
 // ========================================================================
 // ПРИМЕР:
@@ -196,39 +197,73 @@ app.use('/ws', async (req, res, next) => {
 // ========================================================================
 
 // Пример кастомной функции аутентификации
-const customAuthValidator: CustomAuthValidator = async (req) => {
+const customAuthValidator: CustomAuthValidator = async (req): Promise<AuthResult> => {
   // Черный ящик для кастомной логики аутентификации
   const userHeader = req.headers['x-user-id'];
   const apiKey = req.headers['x-api-key'];
   const clientIP = req.headers['x-real-ip'] || req.connection?.remoteAddress;
 
-  // Пример: проверка IP-адреса из whitelist
-  const allowedIPs = ['127.0.0.1', '192.168.1.0/24'];
-  if (!isIPAllowed(clientIP, allowedIPs)) {
-    return false;
+  try {
+    // Пример: проверка IP-адреса из whitelist
+    const allowedIPs = ['127.0.0.1', '192.168.1.0/24'];
+    if (!(await isIPAllowed(clientIP, allowedIPs))) {
+      return { success: false, error: `IP address ${clientIP} not in whitelist` };
+    }
+
+    // Пример: проверка специального API ключа
+    if (apiKey && userHeader) {
+      const isValidKey = await validateApiKeyForUser(apiKey, userHeader);
+      if (!isValidKey) {
+        return { success: false, error: 'Invalid API key for user' };
+      }
+
+      return {
+        success: true,
+        authType: 'basic',
+        tokenType: 'apiKey',
+        username: userHeader,
+        payload: {
+          clientIP,
+          apiKeyPrefix: apiKey.substring(0, 8) + '...',
+          validatedAt: new Date().toISOString()
+        }
+      };
+    }
+
+    // Пример: проверка времени работы (только рабочие часы)
+    const now = new Date();
+    const hour = now.getHours();
+    const isWorkingHours = hour >= 9 && hour <= 17;
+
+    if (!isWorkingHours) {
+      return { success: false, error: 'Access only allowed during business hours (9-17)' };
+    }
+
+    // Пример: проверка заголовка User-Agent
+    const userAgent = req.headers['user-agent'];
+    if (userAgent?.includes('bot') || userAgent?.includes('crawler')) {
+      return { success: false, error: 'Bots and crawlers are not allowed' };
+    }
+
+    // Разрешаем доступ с базовой информацией
+    return {
+      success: true,
+      authType: 'basic',
+      tokenType: 'custom',
+      username: `guest-${clientIP}`,
+      payload: {
+        clientIP,
+        userAgent,
+        accessTime: new Date().toISOString(),
+        businessHoursAccess: isWorkingHours
+      }
+    };
+  } catch (error) {
+    return {
+      success: false,
+      error: `Custom authentication error: ${error instanceof Error ? error.message : 'Unknown error'}`
+    };
   }
-
-  // Пример: проверка специального API ключа
-  if (apiKey && userHeader) {
-    return await validateApiKeyForUser(apiKey, userHeader);
-  }
-
-  // Пример: проверка времени работы (только рабочие часы)
-  const now = new Date();
-  const hour = now.getHours();
-  const isWorkingHours = hour >= 9 && hour <= 17;
-
-  if (!isWorkingHours) {
-    return false;
-  }
-
-  // Пример: проверка заголовка User-Agent
-  const userAgent = req.headers['user-agent'];
-  if (userAgent?.includes('bot') || userAgent?.includes('crawler')) {
-    return false;
-  }
-
-  return true; // Разрешаем доступ
 };
 
 // Демонстрация использования checkCombinedAuth напрямую
@@ -301,38 +336,76 @@ const mcpServerDataExample: McpServerData = {
   agentPrompt: 'An example server demonstrating custom authentication',
 
   // Кастомный валидатор аутентификации
-  customAuthValidator: async (req) => {
+  customAuthValidator: async (req): Promise<AuthResult> => {
     console.log('🔐 Custom auth validator called');
 
-    // Логика валидации может быть любой:
-    const authHeader = req.headers.authorization;
-    const specialToken = req.headers['x-special-token'];
-    const clientCert = req.headers['x-client-cert'];
+    try {
+      // Логика валидации может быть любой:
+      const authHeader = req.headers.authorization;
+      const specialToken = req.headers['x-special-token'];
+      const clientCert = req.headers['x-client-cert'];
 
-    // Пример 1: Проверка специального токена
-    if (specialToken === 'secret-company-token-2024') {
-      console.log('✅ Authentication via special token');
-      return true;
-    }
-
-    // Пример 2: Проверка клиентского сертификата
-    if (clientCert && await validateClientCertificate(clientCert)) {
-      console.log('✅ Authentication via client certificate');
-      return true;
-    }
-
-    // Пример 3: Интеграция с внешней системой аутентификации
-    if (authHeader?.startsWith('Bearer ')) {
-      const token = authHeader.slice(7);
-      const isValid = await validateExternalToken(token);
-      if (isValid) {
-        console.log('✅ Authentication via external system');
-        return true;
+      // Пример 1: Проверка специального токена
+      if (specialToken === 'secret-company-token-2024') {
+        console.log('✅ Authentication via special token');
+        return {
+          success: true,
+          authType: 'basic',
+          tokenType: 'specialToken',
+          username: 'company-user',
+          payload: {
+            tokenType: 'company',
+            issuedAt: new Date().toISOString(),
+            level: 'company-wide'
+          }
+        };
       }
-    }
 
-    console.log('❌ Custom authentication failed');
-    return false;
+      // Пример 2: Проверка клиентского сертификата
+      if (clientCert && (await validateClientCertificate(clientCert))) {
+        console.log('✅ Authentication via client certificate');
+        return {
+          success: true,
+          authType: 'basic',
+          tokenType: 'clientCert',
+          username: 'cert-user',
+          payload: {
+            certificateFingerprint: clientCert.substring(0, 32) + '...',
+            validatedAt: new Date().toISOString(),
+            level: 'certificate-based'
+          }
+        };
+      }
+
+      // Пример 3: Интеграция с внешней системой аутентификации
+      if (authHeader?.startsWith('Bearer ')) {
+        const token = authHeader.slice(7);
+        const isValid = await validateExternalToken(token);
+        if (isValid) {
+          console.log('✅ Authentication via external system');
+          return {
+            success: true,
+            authType: 'basic',
+            tokenType: 'externalToken',
+            username: 'external-user',
+            payload: {
+              tokenPrefix: token.substring(0, 8) + '...',
+              validatedAt: new Date().toISOString(),
+              level: 'external-system'
+            }
+          };
+        }
+      }
+
+      console.log('❌ Custom authentication failed');
+      return { success: false, error: 'No valid authentication method found' };
+    } catch (error) {
+      console.log('❌ Custom authentication error:', error);
+      return {
+        success: false,
+        error: `Custom authentication error: ${error instanceof Error ? error.message : 'Unknown error'}`
+      };
+    }
   },
 };
 

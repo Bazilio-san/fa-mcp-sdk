@@ -1,17 +1,18 @@
 // noinspection UnnecessaryLocalVariableJS
 import { NextFunction, Request, Response } from 'express';
 import { cyan, lBlue, magenta, red, reset } from 'af-color';
-import { checkToken } from './jwt-validation.js';
 import { debugTokenAuth } from '../debug.js';
 import { appConfig } from '../bootstrap/init-config.js';
 import { getResourcesList } from '../mcp/resources.js';
 import { getPromptsList } from '../mcp/prompts.js';
+import {
+  checkCombinedAuth,
+  logAuthConfiguration,
+} from './multi-auth.js';
+import { AuthResult } from './types.js';
 
-const { enabled } = appConfig.webServer.auth;
 
-const getTokenFromHttpHeader = (req: Request): string => {
-  return (req.headers.authorization || '').replace(/^Bearer */, '');
-};
+const { enabled: authEnabled } = appConfig.webServer.auth;
 
 const SHOW_HEADERS_SET = new Set(['user', 'authorization', 'x-real-ip', 'x-mode', 'host']);
 
@@ -32,34 +33,7 @@ const debugAuth = (req: Request, code: number, message: string): { code: number,
 };
 
 
-/**
- * Checks token authorization.
- * If everything is OK, it will return undefined.
- * Otherwise, it will return the object with an error
- */
-export const getAuthByTokenError = (req: Request): { code: number, message: string } | undefined => {
-  if (!enabled) {
-    return undefined;
-  }
-  const token = getTokenFromHttpHeader(req);
-  if (!token) {
-    return debugAuth(req, 400, 'Missing authorization header');
-  }
-  const checkResult = checkToken({ token });
-  if (checkResult.errorReason) {
-    return debugAuth(req, 401, checkResult.errorReason);
-  }
-  return undefined;
-};
-
-export const authByToken = (req: Request, res: Response) => {
-  const authError = getAuthByTokenError(req);
-  if (authError) {
-    res.status(authError.code).send(authError.message);
-    return false;
-  }
-  return true;
-};
+// Legacy functions removed - use createAuthMW() instead
 
 /**
  * Check if a resource URI is public (doesn't require authentication)
@@ -74,7 +48,7 @@ const isPublicResource = (uri: string): boolean => {
   }
 
   // Check if resource explicitly sets requireAuth to false (undefined means true for custom resources)
-  return (resource as any).requireAuth === false;
+  return resource.requireAuth === false;
 };
 
 /**
@@ -124,148 +98,75 @@ const isPublicMcpRequest = (req: Request): boolean => {
   }
 };
 
-/**
- * Create conditional auth middleware that checks for public MCP requests
- */
-export const createConditionalAuthMiddleware = () => {
-  return (req: Request, res: Response, next: NextFunction) => {
-    // Check if this is an MCP request (HTTP or SSE) that should be public
-    const isMcpRequest = req.path === '/mcp' || req.path === '/messages' || req.path === '/sse';
-
-    if (isMcpRequest && isPublicMcpRequest(req)) {
-      return next();
-    }
-
-    const authError = getAuthByTokenError(req);
-    if (authError) {
-      res.status(authError.code).send(authError.message);
-      return;
-    }
-    next();
-  };
-};
-
-export const authTokenMW = (req: Request, res: Response, next: NextFunction) => {
-  // Check if this is a public MCP request
-  if (req.path === '/mcp' && isPublicMcpRequest(req)) {
-    return next();
-  }
-
-  const authError = getAuthByTokenError(req);
-  if (authError) {
-    res.status(authError.code).send(authError.message);
-    return;
-  }
-  next();
-};
-
-// ========================================================================
-// MULTI-AUTHENTICATION - NEW FUNCTIONALITY
-// ========================================================================
-
-import { checkMultiAuth, detectAuthConfiguration, logAuthConfiguration } from './multi-auth.js';
+// Legacy middleware functions removed - use createAuthMW() instead
 
 /**
- * Checks token authorization using all configured methods
- * in ascending CPU load order
+ * Programmatic authentication checking - for manual auth validation in code
+ * Returns error object if authentication failed, undefined if successful
  */
 export const getMultiAuthError = async (req: Request): Promise<{ code: number, message: string } | undefined> => {
-  const { auth } = appConfig.webServer;
-  if (!auth.enabled) {
+  if (!authEnabled) {
     return undefined;
   }
 
-  const token = getTokenFromHttpHeader(req);
-  if (!token) {
-    return debugAuth(req, 400, 'Missing authorization header');
-  }
-
-  const authResult = await checkMultiAuth(token, auth);
+  const authResult = await checkCombinedAuth(req);
   if (!authResult.success) {
     return debugAuth(req, 401, authResult.error || 'Authentication failed');
   }
 
   // Add authentication information to request for use in application
-  (req as any).authInfo = {
-    authType: authResult.authType,
-    tokenType: authResult.tokenType,
-    username: authResult.username,
-    accessToken: authResult.accessToken,
-    payload: authResult.payload,
-  };
+  (req as any).authInfo = { ...authResult };
 
   return undefined;
 };
 
-/**
- * Determines whether to use multi-authentication or basic JWT is sufficient
- */
-function shouldUseMultiAuth (auth: typeof appConfig.webServer.auth): boolean {
-  return !!(auth.pat || auth.basic || auth.oauth2);
+// ========================================================================
+// UNIVERSAL AUTHENTICATION MIDDLEWARE
+// ========================================================================
+
+interface AuthMiddlewareOptions {
+  mcpPaths?: string[];        // Paths to check for public MCP requests (default: ['/mcp', '/messages', '/sse'])
+  logConfig?: boolean;        // Log auth configuration on first request (default: from LOG_AUTH_CONFIG env)
 }
 
 /**
- * Enhanced middleware with multi-authentication support
- * Automatically determines which system to use
+ * Universal authentication middleware - handles all authentication scenarios
  */
-export const enhancedAuthTokenMW = async (req: Request, res: Response, next: NextFunction) => {
-  // Check if this is a public MCP request
-  if (req.path === '/mcp' && isPublicMcpRequest(req)) {
-    return next();
-  }
+export function createAuthMW (options: AuthMiddlewareOptions = {}) {
+  const {
+    mcpPaths = ['/mcp', '/messages', '/sse'],
+    logConfig = process.env.LOG_AUTH_CONFIG === 'true',
+  } = options;
 
-  const auth = appConfig.webServer.auth;
-
-  try {
-    // If additional authentication types are configured - use multi-auth
-    const authError = shouldUseMultiAuth(auth)
-      ? await getMultiAuthError(req)      // 🆕 New system
-      : getAuthByTokenError(req);         // ✅ Existing system
-
-    if (authError) {
-      res.status(authError.code).send(authError.message);
-      return;
-    }
-    next();
-  } catch {
-    res.status(500).send('Authentication error');
-    return;
-  }
-};
-
-/**
- * Middleware configurator - creates middleware with specified options
- */
-export function createConfigurableAuthMiddleware (options: {
-  forceMultiAuth?: boolean;
-  logConfiguration?: boolean;
-} = {}) {
   return async (req: Request, res: Response, next: NextFunction) => {
-    const auth = appConfig.webServer.auth;
-
     // Log configuration on first request
-    if (options.logConfiguration && !(createConfigurableAuthMiddleware as any)._logged) {
-      logAuthConfiguration(auth);
-      (createConfigurableAuthMiddleware as any)._logged = true;
+    if (logConfig && !(createAuthMW as any)._logged) {
+      logAuthConfiguration();
+      (createAuthMW as any)._logged = true;
     }
 
-    // Check if this is a public MCP request
-    if (req.path === '/mcp' && isPublicMcpRequest(req)) {
+    // Check if this is a public MCP request on any of the configured paths
+    const isMcpRequest = mcpPaths.includes(req.path);
+    if (isMcpRequest && isPublicMcpRequest(req)) {
+      return next();
+    }
+
+    // Skip authentication if disabled
+    if (!authEnabled) {
       return next();
     }
 
     try {
-      // Choose authentication system
-      const useMultiAuth = options.forceMultiAuth || shouldUseMultiAuth(auth);
-      const authError = useMultiAuth
-        ? await getMultiAuthError(req)
-        : getAuthByTokenError(req);
-
-      if (authError) {
-        res.status(authError.code).send(authError.message);
-        return;
+      // Use enhanced combined authentication (standard + custom validator)
+      const authResult: AuthResult = await checkCombinedAuth(req);
+      if (!authResult.success) {
+        const errorDetails = debugAuth(req, 401, authResult.error || 'Authentication failed');
+        return res.status(errorDetails.code).send(errorDetails.message);
       }
-      next();
+
+      // Add authentication information to request for use in application
+      (req as any).authInfo = authResult;
+      return next();
     } catch {
       res.status(500).send('Authentication error');
       return;
@@ -274,20 +175,5 @@ export function createConfigurableAuthMiddleware (options: {
 }
 
 // Static property for logging tracking
-(createConfigurableAuthMiddleware as any)._logged = false;
+(createAuthMW as any)._logged = false;
 
-/**
- * Utility to get current authentication configuration information
- */
-export function getAuthInfo () {
-  const auth = appConfig.webServer.auth;
-  const detection = detectAuthConfiguration(auth);
-
-  return {
-    enabled: auth.enabled,
-    configured: detection.configured,
-    valid: detection.valid,
-    errors: detection.errors,
-    usingMultiAuth: shouldUseMultiAuth(auth),
-  };
-}

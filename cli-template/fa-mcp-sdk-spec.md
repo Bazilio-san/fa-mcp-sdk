@@ -65,7 +65,7 @@ import { AGENT_BRIEF } from './prompts/agent-brief.js';
 import { AGENT_PROMPT } from './prompts/agent-prompt.js';
 
 // Optional: Custom Authentication validator (black box function)
-const customAuthValidator: CustomAuthValidator = async (req): Promise<boolean> => {
+const customAuthValidator: CustomAuthValidator = async (req): Promise<AuthResult> => {
   // Your custom authentication logic here - full request object available
   // Can access headers, IP, user-agent, etc.
   const authHeader = req.headers.authorization;
@@ -73,7 +73,21 @@ const customAuthValidator: CustomAuthValidator = async (req): Promise<boolean> =
   const clientIP = req.headers['x-real-ip'] || req.connection?.remoteAddress;
 
   // Implement any authentication logic (database, LDAP, API, custom rules, etc.)
-  return await authenticateRequest(req);
+  const isAuthenticated = await authenticateRequest(req);
+
+  if (isAuthenticated) {
+    return {
+      success: true,
+      authType: 'basic',
+      tokenType: 'custom',
+      username: userID || 'unknown',
+    };
+  } else {
+    return {
+      success: false,
+      error: 'Custom authentication failed',
+    };
+  }
 };
 
 const serverData: McpServerData = {
@@ -855,7 +869,6 @@ addErrorMessage(originalError, 'Database operation failed');
 
 ```typescript
 import {
-  authByToken,
   ICheckTokenResult,
   checkToken,
   generateToken
@@ -903,27 +916,20 @@ const generateToken = (user: string, liveTimeSec: number, payload?: any): string
 // Example:
 const token = generateToken('john_doe', 3600, { role: 'admin' }); // 1 hour token
 
-// authByToken - Express route handler for token validation
-// Function Signature:
-const authByToken = (req: Request, res: Response): boolean {...}
+// Deprecated: authByToken was replaced by createAuthMW universal middleware
+// Use createAuthMW instead for all authentication scenarios:
 
-// Example:
-app.post('/api/secure', (req, res) => {
-  if (!authByToken(req, res)) {
-    return; // Response already sent with error
-  }
-  // User is authenticated, continue with request
-  res.json({ message: 'Access granted' });
+// Example - Modern approach:
+app.post('/api/secure', createAuthMW(), (req, res) => {
+  // User is authenticated, authInfo available on req
+  const authInfo = (req as any).authInfo;
+  res.json({
+    message: 'Access granted',
+    authType: authInfo?.authType,
+    username: authInfo?.username
+  });
 });
 
-// authTokenMW - Express middleware for token authentication
-// Function Signature:
-const authTokenMW = (req: Request, res: Response, next: NextFunction): void {...}
-
-// Example:
-import express from 'express';
-const app = express();
-app.use('/protected', authTokenMW); // Apply to all /protected/* routes
 ```
 
 #### Token Generation
@@ -984,7 +990,7 @@ import {
 export type AuthType = 'permanentServerTokens' | 'basic' | 'jwtToken';
 
 // Custom Authentication validator function (black box - receives full request)
-export type CustomAuthValidator = (req: any) => Promise<boolean> | boolean;
+export type CustomAuthValidator = (req: any) => Promise<AuthResult> | AuthResult;
 
 // Authentication result interface
 export interface AuthResult {
@@ -1153,7 +1159,7 @@ You can provide custom authentication validation functions through the `McpServe
 import { McpServerData, CustomAuthValidator } from 'fa-mcp-sdk';
 
 // Database-backed authentication with request context
-const databaseAuthValidator: CustomAuthValidator = async (req): Promise<boolean> => {
+const databaseAuthValidator: CustomAuthValidator = async (req): Promise<AuthResult> => {
   try {
     // Extract authentication data from various sources
     const authHeader = req.headers.authorization;
@@ -1163,50 +1169,82 @@ const databaseAuthValidator: CustomAuthValidator = async (req): Promise<boolean>
     if (authHeader?.startsWith('Basic ')) {
       const [user, pass] = Buffer.from(authHeader.slice(6), 'base64').toString().split(':');
       const dbUser = await getUserFromDatabase(user);
-      return dbUser && await comparePassword(pass, dbUser.hashedPassword);
+
+      if (dbUser && await comparePassword(pass, dbUser.hashedPassword)) {
+        return {
+          success: true,
+          authType: 'basic',
+          tokenType: 'basic',
+          username: dbUser.username,
+          payload: { userId: dbUser.id, roles: dbUser.roles }
+        };
+      }
     }
 
     if (apiKey && username) {
-      return await validateUserApiKey(username, apiKey);
+      const isValid = await validateUserApiKey(username, apiKey);
+      if (isValid) {
+        return {
+          success: true,
+          authType: 'basic',
+          tokenType: 'apiKey',
+          username: username,
+          payload: { apiKey: apiKey.substring(0, 8) + '...' }
+        };
+      }
     }
 
-    return false;
+    return { success: false, error: 'Invalid credentials' };
   } catch (error) {
     console.error('Database authentication error:', error);
-    return false;
+    return { success: false, error: 'Database authentication error' };
   }
 };
 
 // IP-based authentication with time restrictions
-const ipBasedAuthValidator: CustomAuthValidator = async (req): Promise<boolean> => {
+const ipBasedAuthValidator: CustomAuthValidator = async (req): Promise<AuthResult> => {
   try {
     const clientIP = req.headers['x-real-ip'] || req.connection?.remoteAddress;
     const userAgent = req.headers['user-agent'];
 
     // Check IP whitelist
-    if (!isIPAllowed(clientIP)) return false;
+    if (!isIPAllowed(clientIP)) {
+      return { success: false, error: `IP address ${clientIP} not allowed` };
+    }
 
     // Block bots and crawlers
-    if (userAgent?.includes('bot') || userAgent?.includes('crawler')) return false;
+    if (userAgent?.includes('bot') || userAgent?.includes('crawler')) {
+      return { success: false, error: 'Bots and crawlers are not allowed' };
+    }
 
     // Time-based restrictions (business hours only)
     const hour = new Date().getHours();
-    if (hour < 9 || hour > 17) return false;
+    if (hour < 9 || hour > 17) {
+      return { success: false, error: 'Access only allowed during business hours (9-17)' };
+    }
 
-    return true;
+    return {
+      success: true,
+      authType: 'basic',
+      tokenType: 'ipBased',
+      username: `ip-${clientIP}`,
+      payload: { clientIP, userAgent, accessTime: new Date().toISOString() }
+    };
   } catch (error) {
     console.error('IP authentication error:', error);
-    return false;
+    return { success: false, error: 'IP authentication error' };
   }
 };
 
 // External service authentication
-const externalServiceAuthValidator: CustomAuthValidator = async (req): Promise<boolean> => {
+const externalServiceAuthValidator: CustomAuthValidator = async (req): Promise<AuthResult> => {
   try {
     const token = req.headers.authorization?.replace('Bearer ', '');
     const clientId = req.headers['x-client-id'];
 
-    if (!token || !clientId) return false;
+    if (!token || !clientId) {
+      return { success: false, error: 'Missing token or client ID' };
+    }
 
     const response = await fetch('https://auth.example.com/validate', {
       method: 'POST',
@@ -1214,37 +1252,71 @@ const externalServiceAuthValidator: CustomAuthValidator = async (req): Promise<b
       body: JSON.stringify({ token, clientId, ip: req.ip })
     });
 
-    if (!response.ok) return false;
+    if (!response.ok) {
+      return { success: false, error: 'External service validation failed' };
+    }
+
     const result = await response.json();
-    return result.valid === true;
+    if (result.valid === true) {
+      return {
+        success: true,
+        authType: 'basic',
+        tokenType: 'external',
+        username: result.username || clientId,
+        payload: {
+          clientId,
+          externalUserId: result.userId,
+          scopes: result.scopes
+        }
+      };
+    } else {
+      return { success: false, error: result.error || 'Invalid token' };
+    }
   } catch (error) {
     console.error('External service authentication error:', error);
-    return false;
+    return { success: false, error: 'External service authentication error' };
   }
 };
 
 // Multi-factor authentication with context
-const mfaAuthValidator: CustomAuthValidator = async (req): Promise<boolean> => {
+const mfaAuthValidator: CustomAuthValidator = async (req): Promise<AuthResult> => {
   try {
     const authHeader = req.headers.authorization;
     const mfaToken = req.headers['x-mfa-token'];
     const userSession = req.headers['x-session-id'];
 
-    if (!authHeader?.startsWith('Basic ') || !mfaToken) return false;
+    if (!authHeader?.startsWith('Basic ') || !mfaToken) {
+      return { success: false, error: 'Missing basic auth or MFA token' };
+    }
 
     const [username, password] = Buffer.from(authHeader.slice(6), 'base64').toString().split(':');
 
     // Validate base credentials
     const user = await getUserFromDatabase(username);
     if (!user || !(await comparePassword(password, user.hashedPassword))) {
-      return false;
+      return { success: false, error: 'Invalid username or password' };
     }
 
     // Validate MFA token and session
-    return await validateMFAToken(username, mfaToken, userSession);
+    const mfaValid = await validateMFAToken(username, mfaToken, userSession);
+    if (mfaValid) {
+      return {
+        success: true,
+        authType: 'basic',
+        tokenType: 'mfa',
+        username: username,
+        payload: {
+          userId: user.id,
+          sessionId: userSession,
+          mfaMethod: 'totp' // or whatever MFA method was used
+        }
+      };
+    } else {
+      return { success: false, error: 'Invalid MFA token or session' };
+    }
   } catch (error) {
     console.error('MFA authentication error:', error);
-    return false;
+    return { success: false, error: 'MFA authentication error' };
   }
 };
 

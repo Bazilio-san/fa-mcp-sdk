@@ -1,8 +1,10 @@
-import '../core/bootstrap/dotenv.js';
 import fsp from 'fs/promises';
 import fss from 'fs';
 import path from 'path';
 import chalk from 'chalk';
+import * as dotenv from 'dotenv';
+
+dotenv.config({ quiet: true, path: path.join(process.cwd(), '.env') });
 
 const testResultLogsDir = process.env.TEST_RESULT_LOGS_DIR || '_logs/mcp';
 

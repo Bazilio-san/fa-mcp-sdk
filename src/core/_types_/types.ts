@@ -1,5 +1,6 @@
 import { Tool } from '@modelcontextprotocol/sdk/types.js';
 import { Router } from 'express';
+import { AuthResult } from '../auth/types.js';
 
 export interface IPromptData {
   name: string,
@@ -18,22 +19,18 @@ export interface IRequiredHttpHeader {
 export interface IResourceInfo {
   uri: string;
   name: string;
+  title?: string;
   description: string;
   mimeType: string;
+  requireAuth?: boolean;
+}
+
+export interface IResourceData extends IResourceInfo {
+  content: IResourceContent;
 }
 
 export type TResourceContentFunction = (uri: string) => string | Promise<string>;
 export type IResourceContent = string | object | TResourceContentFunction;
-
-export interface IResourceData {
-  uri: string;
-  name: string;
-  title?: string;
-  description: string;
-  mimeType: string;
-  content: IResourceContent;
-  requireAuth?: boolean;
-}
 
 export interface IResource {
   contents: [
@@ -55,9 +52,9 @@ export interface ISwaggerData {
 /**
  * Custom Authentication validation function
  * @param req - Express request object containing all authentication information
- * @returns Promise<boolean> or boolean indicating if authentication is valid
+ * @returns Promise<AuthResult> or AuthResult with detailed authentication result
  */
-export type CustomAuthValidator = (req: any) => Promise<boolean> | boolean;
+export type CustomAuthValidator = (req: any) => Promise<AuthResult> | AuthResult;
 
 /**
  * All data that needs to be passed to initialize the MCP server
@@ -132,5 +129,6 @@ export interface IToolInputSchema {
   type: 'object';
   properties?: IToolProperties | undefined;
   required?: string[] | undefined;
+
   [x: string]: unknown;
 }
