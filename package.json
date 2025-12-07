@@ -1,7 +1,7 @@
 {
   "name": "fa-mcp-sdk",
   "productName": "FA MCP SDK",
-  "version": "0.2.137",
+  "version": "0.2.138",
   "description": "Core infrastructure and templates for building Model Context Protocol (MCP) servers with TypeScript",
   "type": "module",
   "main": "dist/core/index.js",
@@ -12,6 +12,7 @@
   "files": [
     "dist/core/**/*",
     "cli-template/**/*",
+    "cli-template/.gitignore",
     "bin/**/*",
     "src/template/**/*",
     "src/tests/**/*",

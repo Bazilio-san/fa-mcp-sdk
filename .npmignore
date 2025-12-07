@@ -8,6 +8,10 @@
 .env
 .env.*
 
+# Exclude specific gitignore files except the one we need
+.gitignore
+!cli-template/.gitignore
+
 # Source and development files
 src/
 test/
@@ -20,7 +24,6 @@ __tests__/
 
 # Configuration files
 .editorconfig
-.gitignore
 eslint.config.js
 tsconfig.json
 tsconfig.*.json
