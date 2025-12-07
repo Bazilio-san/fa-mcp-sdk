@@ -5,11 +5,22 @@
 import { checkToken } from './jwt-validation.js';
 import { AppConfig } from '../_types_/config.js';
 import { logger as lgr } from '../logger.js';
-import { AuthDetectionResult, AuthResult, AuthType, AUTH_PRIORITY_ORDER } from './types.js';
+import { AuthDetectionResult, AuthResult, AuthType } from './types.js';
 import { CustomBasicAuthValidator } from '../_types_/types.js';
 import chalk from 'chalk';
 
 const logger = lgr.getSubLogger({ name: chalk.magenta('multi-auth') });
+
+/**
+ * Authentication check order in ascending CPU load
+ */
+const AUTH_PRIORITY_ORDER: Record<AuthType, number> = {
+  'permanentServerTokens': 1,  // O(1) Set.has()
+  'pat': 2,                    // String and length validation
+  'basic': 3,                  // Base64 decoding
+  'jwtToken': 4,               // Symmetric decryption + JSON.parse
+  'oauth2': 5,                 // Potentially HTTP requests
+};
 
 /**
  * Gets custom basic auth validator from global context
@@ -33,37 +44,27 @@ export function detectAuthConfiguration (authConfig: AppConfig['webServer']['aut
     errors,
   };
 
-  const { enabled, basic, jwtToken, oauth2, pat, permanentServerTokens: pt } = authConfig;
+  const { enabled, basic, jwtToken: { encryptKey } = {}, oauth2, pat, permanentServerTokens: pt } = authConfig;
 
   if (!enabled) {
     return result;
   }
   // Check permanentServerTokens
-  if (Array.isArray(pt) && pt?.length) {
+  if (Array.isArray(pt) && pt.filter(Boolean)) {
     configured.push('permanentServerTokens');
-    const validTokens = pt.filter(Boolean);
-    if (validTokens.length) {
-      valid.push('permanentServerTokens');
-    } else {
-      errors.permanentServerTokens = ['No valid tokens in array'];
-    }
+    valid.push('permanentServerTokens');
   }
 
-  // Check jwtToken
-  if (jwtToken?.encryptKey) {
-    const { encryptKey } = jwtToken;
+  // Check JWT Token
+  if (encryptKey?.length) {
     configured.push('jwtToken');
-    if (encryptKey?.length) {
-      valid.push('jwtToken');
-    } else {
-      errors.jwtToken = ['Encryption key missing or too short'];
-    }
+    valid.push('jwtToken');
   }
 
   // Check PAT
   if (pat?.length) {
-    configured.push('pat');
     if (pat.length > 10) {
+      configured.push('pat');
       valid.push('pat');
     } else {
       errors.pat = ['Token too short or invalid'];

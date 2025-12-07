@@ -50,6 +50,11 @@ function buildConfig (): AppConfig {
   } else if (urlRe.test(trim(homepage))) {
     cfg.repo = urlRe.exec(homepage)?.[0] || '';
   }
+  const pst = cfg.webServer?.auth?.permanentServerTokens as (string | string[] | undefined);
+  if (typeof pst === 'string' && pst.includes(',')) {
+    cfg.webServer.auth.permanentServerTokens = pst.split(',').map(trim);
+  }
+
   return cfg;
 }
 

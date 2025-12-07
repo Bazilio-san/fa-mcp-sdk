@@ -3,8 +3,16 @@
  */
 
 import express from 'express';
-// @ts-ignore
-import { appConfig, enhancedAuthTokenMW, createConfigurableAuthMiddleware, getMultiAuthError, getAuthInfo, checkMultiAuth, detectAuthConfiguration, logAuthConfiguration } from 'fa-mcp-sdk';
+import {
+  appConfig,
+  enhancedAuthTokenMW,
+  createConfigurableAuthMiddleware,
+  getMultiAuthError,
+  getAuthInfo,
+  checkMultiAuth,
+  detectAuthConfiguration,
+  logAuthConfiguration
+} from 'fa-mcp-sdk';
 
 // ========================================================================
 // ПРИМЕР 1: ПРОСТАЯ ЗАМЕНА MIDDLEWARE
@@ -67,7 +75,7 @@ app.use('/api/custom', async (req, res, next) => {
       return;
     }
     next();
-  } catch (error) {
+  } catch {
     res.status(500).send('Authentication error');
     return;
   }
@@ -161,7 +169,7 @@ app.post('/api/test-token', async (req, res) => {
       username: result.username,
       hasPayload: !!result.payload,
     });
-  } catch (error) {
+  } catch {
     return res.status(500).json({ error: 'Authentication test failed' });
   }
 });
@@ -189,7 +197,7 @@ app.use('/graphql', async (req, res, next) => {
     }
 
     return next();
-  } catch (error) {
+  } catch {
     return res.status(500).send('Authentication error');
   }
 });

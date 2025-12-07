@@ -3062,10 +3062,10 @@ ext@^1.7.0:
   dependencies:
     type "^2.7.2"
 
-fa-mcp-sdk@^0.2.108:
-  version "0.2.121"
-  resolved "https://registry.yarnpkg.com/fa-mcp-sdk/-/fa-mcp-sdk-0.2.121.tgz#1ec44af0cc120a223deb06c87c10c4057168b658"
-  integrity sha512-q+g5LnzizXIK+DFhlphs/iWVV3oIQbqHqcx9ihkSU5E3XLBjAtBHtvREZrxQK0MkoJt/7aIvuE5rwnZSQZ11Vg==
+fa-mcp-sdk@^0.2.125:
+  version "0.2.125"
+  resolved "https://registry.yarnpkg.com/fa-mcp-sdk/-/fa-mcp-sdk-0.2.125.tgz#9bc2ebba9398fe4e36cc38af849a69096b043101"
+  integrity sha512-fetrLXGSeYgiaMUQzxW7F48YSvCBeTwJSvArZ7938+C7EUzv9WA3/QGdWuORBadD2XK5z4PUiMj2Bnjvk/snMA==
   dependencies:
     "@modelcontextprotocol/sdk" "^1.24.3"
     af-consul-ts "^4.0.14"

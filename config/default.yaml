@@ -108,20 +108,29 @@ webServer:
   port: 9876
   # array of hosts that CORS skips
   originHosts: [ 'localhost', '0.0.0.0' ]
+  # Authentication is configured here only when accessing the MCP server
+  # Authentication in services that enable tools, resources, and prompts
+  # is implemented more deeply. To do this, you need to use the information passed in HTTP headers
+  # You can also use a custom authorization function
   auth:
-    enabled: false # Enables/disables token authorization
-
+    enabled: false # Enables/disables authorization
     # ========================================================================
-    # PERMANENT SERVER TOKENS (✅ Already implemented)
+    # PERMANENT SERVER TOKENS
     # Static tokens for server-to-server communication
     # CPU cost: O(1) - fastest authentication method
+    #
+    # To enable this authentication, you need to set auth.enabled = true
+    # and set one token of at least 20 characters in length
     # ========================================================================
     permanentServerTokens: [ ] # Add your server tokens here: ['token1', 'token2']
 
     # ========================================================================
-    # JWT TOKEN WITH SYMMETRIC ENCRYPTION (✅ Already implemented)
+    # JWT TOKEN WITH SYMMETRIC ENCRYPTION
     # Custom JWT tokens with AES-256 encryption
     # CPU cost: Medium - decryption + JSON parsing
+    #
+    # To enable this authentication, you need to set auth.enabled = true and set
+    # encryptKey to at least 20 characters
     # ========================================================================
     jwtToken:
       # Symmetric encryption key to generate a token for this MCP (minimum 8 chars)
@@ -130,30 +139,11 @@ webServer:
       checkMCPName: true
 
     # ========================================================================
-    # MULTI-AUTHENTICATION SUPPORT (🆕 New implementation)
-    # Multiple auth types can be configured simultaneously
-    # They will be checked in order of increasing CPU cost
-    # ========================================================================
-
-    # Personal Access Token (PAT) - Fast string validation
-    # Example formats: ATATT3xFfGF0... (Atlassian) or any long alphanumeric token
-    # CPU cost: Low - string format validation
-    #pat: 'ATATT3xFfGF0aBcDeFgHiJkLmNoPqRsTuVwXyZ123456789'
-
     # Basic Authentication - Base64 encoded username:password
     # CPU cost: Medium - Base64 decoding + string comparison
-    #basic:
-    #  type: 'basic'
-    #  username: 'admin'
-    #  password: 'your-secure-password'
-
-    # OAuth2 Token Authentication - Bearer tokens
-    # CPU cost: High - potential HTTP validation calls
-    #oauth2:
-    #  type: 'oauth2'
-    #  clientId: 'your-oauth2-client-id'
-    #  clientSecret: 'your-oauth2-client-secret'
-    #  accessToken: 'your-current-access-token'  # Can be updated dynamically
-    #  refreshToken: 'your-refresh-token'        # Optional - for token refresh
-    #  redirectUri: 'https://yourapp.com/oauth/callback'  # Optional
-    #  tokenEndpoint: 'https://provider.com/oauth/token'  # Optional - for custom providers
+    # To enable this authentication, you need to set auth.enabled = true
+    # and set username and password to valid values
+    # ========================================================================
+    basic:
+      username: ''
+      password: '***'

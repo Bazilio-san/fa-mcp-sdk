@@ -1,5 +1,4 @@
 // Import all project data from existing files
-// @ts-ignore
 import { appConfig, initMcpServer, McpServerData, getAsset } from 'fa-mcp-sdk';
 import { tools } from './tools/tools.js';
 import { handleToolCall } from './tools/handle-tool-call.js';

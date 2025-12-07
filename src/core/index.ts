@@ -1,4 +1,3 @@
-
 export type { AppConfig } from './_types_/config.js';
 export type { IADConfig, IDcConfig } from './_types_/active-directory-config.js';
 export type {
@@ -58,19 +57,38 @@ export {
 
 export { ValidationError } from './errors/ValidationError.js';
 
-export {
-  authByToken,
-  authTokenMW,
-} from './auth/middleware.js';
-
 export async function generateTokenApp (...args: any[]) {
   const { generateTokenApp: generateTokenApp_ } = await import('./auth/token-generator/server.js');
   return generateTokenApp_(...args);
 }
 
-export { createConfigurableAuthMiddleware, enhancedAuthTokenMW, getAuthInfo, getMultiAuthError } from './auth/middleware.js';
-export { checkMultiAuth, detectAuthConfiguration, logAuthConfiguration } from './auth/multi-auth.js';
-export type { AuthDetectionResult, AuthResult, AuthType, ICheckTokenResult, ITokenPayload, TTokenType } from './auth/types.js';
+export {
+  authByToken,
+  authTokenMW,
+  createConfigurableAuthMiddleware,
+  enhancedAuthTokenMW,
+  getAuthInfo,
+  getMultiAuthError,
+  createConditionalAuthMiddleware,
+  getAuthByTokenError,
+} from './auth/middleware.js';
+
+export {
+  checkMultiAuth,
+  detectAuthConfiguration,
+  logAuthConfiguration,
+  checkAuthType,
+  getValidAuthTypes,
+} from './auth/multi-auth.js';
+
+export type {
+  AuthDetectionResult,
+  AuthResult,
+  AuthType,
+  ICheckTokenResult,
+  ITokenPayload,
+  TTokenType,
+} from './auth/types.js';
 
 export { initMcpServer, gracefulShutdown } from './init-mcp-server.js';
 

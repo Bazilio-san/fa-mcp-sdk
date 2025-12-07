@@ -44,14 +44,3 @@ export interface AuthResult {
   accessToken?: string;
   payload?: any;
 }
-
-/**
- * Authentication check order in ascending CPU load
- */
-export const AUTH_PRIORITY_ORDER: Record<AuthType, number> = {
-  'permanentServerTokens': 1,  // O(1) Set.has()
-  'pat': 2,                    // String and length validation
-  'basic': 3,                  // Base64 decoding
-  'jwtToken': 4,               // Symmetric decryption + JSON.parse
-  'oauth2': 5,                  // Potentially HTTP requests
-};

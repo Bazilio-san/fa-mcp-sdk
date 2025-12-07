@@ -7,7 +7,6 @@
  * validation with fa-mcp-sdk multi-authentication system.
  */
 
-// @ts-ignore
 import { McpServerData, CustomBasicAuthValidator, initMcpServer } from 'fa-mcp-sdk';
 import { Tool } from '@modelcontextprotocol/sdk/types.js';
 

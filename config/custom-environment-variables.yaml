@@ -40,9 +40,3 @@ webServer:
     basic:
       username: WS_AUTH_BASIC_USERNAME
       password: WS_AUTH_BASIC_PASSWORD
-    oauth2:
-      clientId: WS_AUTH_OAUTH2_CLIENT_ID
-      clientSecret: WS_AUTH_OAUTH2_CLIENT_SECRET
-      redirectUri: WS_AUTH_OAUTH2_REDIRECT_URI
-      tokenEndpoint: WS_AUTH_OAUTH2_TOKEN_ENDPOINT # For custom OAuth providers // VVR
-    pat: WS_AUTH_PAT

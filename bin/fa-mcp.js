@@ -924,6 +924,12 @@ certificate's public and private keys`,
       const nodeModulesPath = path.join(targetPath, 'node_modules');
       await fs.access(nodeModulesPath);
       await fs.rm(nodeModulesPath, { recursive: true, force: true });
+      const yarnLock = path.join(targetPath, 'yarn.lock');
+      await fs.access(yarnLock);
+      await fs.rm(yarnLock, { force: true });
+      const packageLock = path.join(targetPath, 'package-lock.json');
+      await fs.access(packageLock);
+      await fs.rm(packageLock, { force: true });
     } catch {
       // node_modules doesn't exist, which is fine
     }
