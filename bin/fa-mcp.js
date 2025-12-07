@@ -890,7 +890,9 @@ certificate's public and private keys`,
     // Copy template files
     await this.copyDirectory(path.join(PROJ_ROOT, 'cli-template'), targetPath);
     await this.copyDirectory(path.join(PROJ_ROOT, 'src/template'), path.join(targetPath, 'src'));
-    await this.copyDirectory(path.join(PROJ_ROOT, 'src/tests'), path.join(targetPath, 'tests'));
+    let testsTargetPath = path.join(targetPath, 'tests');
+    await fs.mkdir(testsTargetPath, { recursive: true });
+    await this.copyDirectory(path.join(PROJ_ROOT, 'src/tests'), testsTargetPath);
     await fs.copyFile(path.join(targetPath, '.env.example'), path.join(targetPath, '.env'));
 
     // Rename mcp-template.com.conf if mcp.domain is provided
