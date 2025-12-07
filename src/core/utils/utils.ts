@@ -40,3 +40,32 @@ export const getAsset = (relPathFromAssetRoot: string): string | undefined => {
   }
   return;
 };
+
+/**
+ * Normalize HTTP headers by converting all header names to lowercase
+ * @param headers - Original headers object (from Express req.headers)
+ * @returns Normalized headers object with lowercase keys
+ */
+export const normalizeHeaders = (headers: Record<string, any>): Record<string, string> => {
+  const normalized: Record<string, string> = {};
+
+  if (!headers || typeof headers !== 'object') {
+    return normalized;
+  }
+
+  Object.entries(headers).forEach(([key, value]) => {
+    if (value !== undefined && value !== null) {
+      // Convert header name to lowercase
+      const normalizedKey = key.toLowerCase();
+
+      // Convert value to string, handle arrays
+      if (Array.isArray(value)) {
+        normalized[normalizedKey] = value.join(', ');
+      } else {
+        normalized[normalizedKey] = String(value);
+      }
+    }
+  });
+
+  return normalized;
+};

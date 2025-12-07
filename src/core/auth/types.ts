@@ -2,10 +2,6 @@
  * Types and interfaces for fa-mcp-sdk authentication system
  */
 
-// ========================================================================
-// JWT TOKENS AND LEGACY TYPES
-// ========================================================================
-
 export type TTokenType = 'permanent' | 'JWT';
 
 export interface ITokenPayload {
@@ -23,15 +19,10 @@ export interface ICheckTokenResult {
   isTokenDecrypted?: boolean,
 }
 
-// ========================================================================
-// MULTI-AUTHENTICATION - NEW TYPES
-// ========================================================================
-
-export type AuthType = 'permanentServerTokens' | 'jwtToken' | 'pat' | 'basic' | 'oauth2';
+export type AuthType = 'permanentServerTokens' | 'jwtToken' | 'basic';
 
 export interface AuthDetectionResult {
   configured: AuthType[];
-  valid: AuthType[];
   errors: Record<string, string[]>;
 }
 
@@ -41,6 +32,5 @@ export interface AuthResult {
   authType?: AuthType;
   tokenType?: string;
   username?: string;
-  accessToken?: string;
   payload?: any;
 }

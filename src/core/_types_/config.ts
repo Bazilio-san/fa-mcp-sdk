@@ -4,22 +4,6 @@ import { IAFConsulConfig, IAccessPoints } from 'af-consul-ts';
 import { IADConfig } from './active-directory-config.js';
 
 
-export interface IBasicAuth {
-  type: 'basic';
-  username: string;
-  password: string;
-}
-
-export interface IOAuth2Auth {
-  type: 'oauth2';
-  clientId: string;
-  clientSecret: string;
-  accessToken: string;
-  refreshToken?: string;
-  redirectUri?: string;
-  tokenEndpoint?: string; // For custom OAuth providers // VVR
-}
-
 interface IWebServerConfig {
   webServer: {
     host: string,
@@ -27,9 +11,10 @@ interface IWebServerConfig {
     originHosts: string[],
     auth: {
       enabled: boolean,
-      basic?: IBasicAuth;
-      pat?: string;
-      oauth2?: IOAuth2Auth;
+      basic?: {
+        username: string;
+        password: string;
+      };
       jwtToken: {
         encryptKey: string,
         checkMCPName: boolean,

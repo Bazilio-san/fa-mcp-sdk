@@ -53,12 +53,11 @@ export interface ISwaggerData {
 }
 
 /**
- * Custom Basic Authentication validation function
- * @param username - The username to validate
- * @param password - The password to validate
- * @returns Promise<boolean> or boolean indicating if credentials are valid
+ * Custom Authentication validation function
+ * @param req - Express request object containing all authentication information
+ * @returns Promise<boolean> or boolean indicating if authentication is valid
  */
-export type CustomBasicAuthValidator = (username: string, password: string) => Promise<boolean> | boolean;
+export type CustomAuthValidator = (req: any) => Promise<boolean> | boolean;
 
 /**
  * All data that needs to be passed to initialize the MCP server
@@ -66,7 +65,7 @@ export type CustomBasicAuthValidator = (username: string, password: string) => P
 export interface McpServerData {
   // MCP components
   tools: Tool[];
-  toolHandler: (params: { name: string; arguments?: any }) => Promise<any>;
+  toolHandler: (params: { name: string; arguments?: any; headers?: Record<string, string> }) => Promise<any>;
 
   // Prompts
   agentBrief: string;
@@ -78,7 +77,7 @@ export interface McpServerData {
   customResources?: IResourceData[] | null;
 
   // Authentication
-  customBasicAuthValidator?: CustomBasicAuthValidator;
+  customAuthValidator?: CustomAuthValidator;
 
   httpComponents?: {
     apiRouter?: Router | null;
