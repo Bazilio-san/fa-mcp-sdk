@@ -229,7 +229,7 @@ curl -X POST http://localhost:3000/mcp \
 
 ## Implementation Details
 
-The authentication check happens in the `authTokenMW` and `createConditionalAuthMiddleware` middleware in `src/core/auth/middleware.ts`. The middleware:
+The authentication check happens in the universal `createAuthMW` middleware in `src/core/auth/middleware.ts`. The middleware:
 
 ### HTTP MCP Endpoint (`/mcp`)
 1. Checks if the request is for the `/mcp` endpoint
@@ -240,7 +240,7 @@ The authentication check happens in the `authTokenMW` and `createConditionalAuth
 6. For all other methods: Requires authentication
 
 ### SSE Endpoints (`/sse`, `/messages`)
-The conditional auth middleware also handles SSE endpoints:
+The universal auth middleware also handles SSE endpoints:
 1. Checks if request is for `/sse`, `/messages`, or `/mcp`
 2. Applies the same public resource/prompt logic as HTTP MCP
 3. Allows public access to `resources/list`, `prompts/list`, and specific public resources/prompts
