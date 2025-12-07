@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
 import fs from 'fs/promises';
+import fss from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import readline from 'readline';
@@ -27,7 +28,9 @@ const printFilled = (paramName, paramValue) => {
   }
 };
 
-const faMcpSdkVersion = require(path.join(PROJ_ROOT, 'package.json')).version;
+const pjContent = fss.readFileSync(path.join(PROJ_ROOT, 'package.json'));
+
+const faMcpSdkVersion = JSON.parse(pjContent).version;
 
 const getAsk = () => {
   const rl = readline.createInterface({
