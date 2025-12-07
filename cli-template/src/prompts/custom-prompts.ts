@@ -1,4 +1,4 @@
-import { IPromptData, IGetPromptRequest } from 'fa-mcp-sdk';
+import { IPromptData, IGetPromptRequest } from '../index-to-remove.js';
 
 export const customPrompts: IPromptData[] = [
   {

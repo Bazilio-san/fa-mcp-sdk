@@ -5,43 +5,25 @@
 import express from 'express';
 import {
   appConfig,
-  enhancedAuthTokenMW,
-  createConfigurableAuthMiddleware,
+  createAuthMW,
   getMultiAuthError,
-  getAuthInfo,
   checkMultiAuth,
+  checkCombinedAuth,
   detectAuthConfiguration,
-  logAuthConfiguration
-} from 'fa-mcp-sdk';
+  logAuthConfiguration,
+  McpServerData,
+  CustomAuthValidator,
+} from '../index-to-remove.js';
 
 // ========================================================================
-// ПРИМЕР 1: ПРОСТАЯ ЗАМЕНА MIDDLEWARE
+// ПРИМЕР:
 // ========================================================================
 
 const app = express();
 
-// Вместо старого authTokenMW используем enhancedAuthTokenMW
-app.use('/api', enhancedAuthTokenMW);
-
-app.get('/api/protected', (req, res) => {
-  const authInfo = (req as any).authInfo;
-  res.json({
-    message: 'Access granted',
-    authType: authInfo?.authType,
-    username: authInfo?.username,
-    tokenType: authInfo?.tokenType,
-  });
-});
-
-// ========================================================================
-// ПРИМЕР 2: КОНФИГУРИРУЕМЫЙ MIDDLEWARE
-// ========================================================================
-
 // Middleware с логированием конфигурации при запуске
-const authWithLogging = createConfigurableAuthMiddleware({
-  logConfiguration: true,
-  forceMultiAuth: false, // Автоматически определяет нужна ли мультиаут
-});
+process.env.LOG_AUTH_CONFIG = 'true';
+const authWithLogging = createAuthMW();
 
 app.use('/api/v2', authWithLogging);
 
@@ -92,18 +74,8 @@ apiRouter.get('/health', (req, res) => {
   res.json({ status: 'ok' });
 });
 
-apiRouter.get('/info', (req, res) => {
-  const authInfo = getAuthInfo();
-  res.json({
-    authEnabled: authInfo.enabled,
-    configuredTypes: authInfo.configured,
-    validTypes: authInfo.valid,
-    usingMultiAuth: authInfo.usingMultiAuth,
-  });
-});
-
 // Защищенные роуты - с мультиаутентификацией
-apiRouter.use('/protected', enhancedAuthTokenMW);
+apiRouter.use('/protected', authWithLogging);
 
 apiRouter.get('/protected/profile', (req, res) => {
   const authInfo = (req as any).authInfo;
@@ -124,9 +96,6 @@ apiRouter.get('/protected/data', (req, res) => {
   switch (authInfo.authType) {
     case 'permanentServerTokens':
       data = { level: 'server', access: 'full' };
-      break;
-    case 'oauth2':
-      data = { level: 'user', access: 'scoped', scopes: authInfo.payload?.scope };
       break;
     case 'basic':
       data = { level: 'basic', access: 'limited', username: authInfo.username };
@@ -158,8 +127,7 @@ app.post('/api/test-token', async (req, res) => {
   }
 
   try {
-    const authConfig = appConfig.webServer.auth;
-    const result = await checkMultiAuth(token, authConfig);
+    const result = await checkMultiAuth(req);
 
     return res.json({
       valid: result.success,
@@ -179,7 +147,7 @@ app.post('/api/test-token', async (req, res) => {
 // ========================================================================
 
 // REST API - требует любую валидную аутентификацию
-app.use('/rest', enhancedAuthTokenMW);
+app.use('/rest', authWithLogging);
 
 // GraphQL API - требует user-level аутентификацию (не server tokens)
 app.use('/graphql', async (req, res, next) => {
@@ -211,9 +179,9 @@ app.use('/ws', async (req, res, next) => {
     }
 
     const authInfo = (req as any).authInfo;
-    if (authInfo.authType !== 'jwtToken' && authInfo.authType !== 'oauth2') {
+    if (authInfo.authType !== 'jwtToken') {
       return res.status(403).json({
-        error: 'WebSocket API requires JWT or OAuth2 tokens for session management',
+        error: 'WebSocket API requires JWT tokens for session management',
       });
     }
 
@@ -224,13 +192,183 @@ app.use('/ws', async (req, res, next) => {
 });
 
 // ========================================================================
+// ПРИМЕР 7: ИСПОЛЬЗОВАНИЕ CHECKCOMBIПEDAUTH С КАСТОМНОЙ ВАЛИДАЦИЕЙ
+// ========================================================================
+
+// Пример кастомной функции аутентификации
+const customAuthValidator: CustomAuthValidator = async (req) => {
+  // Черный ящик для кастомной логики аутентификации
+  const userHeader = req.headers['x-user-id'];
+  const apiKey = req.headers['x-api-key'];
+  const clientIP = req.headers['x-real-ip'] || req.connection?.remoteAddress;
+
+  // Пример: проверка IP-адреса из whitelist
+  const allowedIPs = ['127.0.0.1', '192.168.1.0/24'];
+  if (!isIPAllowed(clientIP, allowedIPs)) {
+    return false;
+  }
+
+  // Пример: проверка специального API ключа
+  if (apiKey && userHeader) {
+    return await validateApiKeyForUser(apiKey, userHeader);
+  }
+
+  // Пример: проверка времени работы (только рабочие часы)
+  const now = new Date();
+  const hour = now.getHours();
+  const isWorkingHours = hour >= 9 && hour <= 17;
+
+  if (!isWorkingHours) {
+    return false;
+  }
+
+  // Пример: проверка заголовка User-Agent
+  const userAgent = req.headers['user-agent'];
+  if (userAgent?.includes('bot') || userAgent?.includes('crawler')) {
+    return false;
+  }
+
+  return true; // Разрешаем доступ
+};
+
+// Демонстрация использования checkCombinedAuth напрямую
+app.post('/api/combined-auth-test', async (req, res) => {
+  try {
+    // checkCombinedAuth проверяет и стандартную auth + кастомный валидатор
+    const result = await checkCombinedAuth(req);
+
+    if (result.success) {
+      res.json({
+        message: 'Combined authentication successful',
+        authType: result.authType,
+        tokenType: result.tokenType,
+        username: result.username,
+      });
+    } else {
+      res.status(401).json({
+        error: 'Combined authentication failed',
+        reason: result.error,
+      });
+    }
+  } catch (error) {
+    res.status(500).json({ error: 'Authentication system error' });
+  }
+});
+
+// Пример middleware, который использует combined auth
+const combinedAuthMiddleware = async (req: any, res: any, next: any) => {
+  try {
+    const result = await checkCombinedAuth(req);
+
+    if (!result.success) {
+      return res.status(401).json({ error: result.error });
+    }
+
+    // Добавляем информацию об аутентификации в request
+    req.authInfo = {
+      authType: result.authType,
+      tokenType: result.tokenType,
+      username: result.username,
+      payload: result.payload,
+    };
+
+    next();
+  } catch {
+    res.status(500).json({ error: 'Authentication error' });
+  }
+};
+
+app.use('/api/protected-combined', combinedAuthMiddleware);
+
+app.get('/api/protected-combined/data', (req, res) => {
+  const authInfo = (req as any).authInfo;
+  res.json({
+    message: 'Access granted with combined auth',
+    auth: authInfo,
+    timestamp: new Date().toISOString(),
+  });
+});
+
+// ========================================================================
+// ПРИМЕР 8: КОНФИГУРАЦИЯ MCP СЕРВЕРА С КАСТОМНЫМ ВАЛИДАТОРОМ
+// ========================================================================
+
+// Пример того, как настроить MCP сервер с кастомным валидатором
+const mcpServerDataExample: McpServerData = {
+  tools: [],
+  toolHandler: async () => ({}),
+  agentBrief: 'Example MCP Server with Custom Auth',
+  agentPrompt: 'An example server demonstrating custom authentication',
+
+  // Кастомный валидатор аутентификации
+  customAuthValidator: async (req) => {
+    console.log('🔐 Custom auth validator called');
+
+    // Логика валидации может быть любой:
+    const authHeader = req.headers.authorization;
+    const specialToken = req.headers['x-special-token'];
+    const clientCert = req.headers['x-client-cert'];
+
+    // Пример 1: Проверка специального токена
+    if (specialToken === 'secret-company-token-2024') {
+      console.log('✅ Authentication via special token');
+      return true;
+    }
+
+    // Пример 2: Проверка клиентского сертификата
+    if (clientCert && await validateClientCertificate(clientCert)) {
+      console.log('✅ Authentication via client certificate');
+      return true;
+    }
+
+    // Пример 3: Интеграция с внешней системой аутентификации
+    if (authHeader?.startsWith('Bearer ')) {
+      const token = authHeader.slice(7);
+      const isValid = await validateExternalToken(token);
+      if (isValid) {
+        console.log('✅ Authentication via external system');
+        return true;
+      }
+    }
+
+    console.log('❌ Custom authentication failed');
+    return false;
+  },
+};
+
+// Утилитные функции для примеров
+async function isIPAllowed (ip: string, allowedIPs: string[]): Promise<boolean> {
+  // Заглушка для проверки IP
+  return allowedIPs.some(allowed => ip.includes(allowed.split('/')[0]!));
+}
+
+async function validateApiKeyForUser (apiKey: string, userId: string): Promise<boolean> {
+  // Заглушка для проверки API ключа пользователя
+  return apiKey.length > 20 && userId.length > 0;
+}
+
+async function validateClientCertificate (cert: string): Promise<boolean> {
+  // Заглушка для проверки клиентского сертификата
+  return cert.includes('-----BEGIN CERTIFICATE-----');
+}
+
+async function validateExternalToken (token: string): Promise<boolean> {
+  // Заглушка для проверки токена во внешней системе
+  try {
+    // Здесь может быть HTTP запрос к внешней системе
+    return token.length > 10;
+  } catch {
+    return false;
+  }
+}
+
+// ========================================================================
 // УТИЛИТНЫЕ ФУНКЦИИ
 // ========================================================================
 
-export function getPermissionsForAuthType (authType: string): string[] {
+function getPermissionsForAuthType (authType: string): string[] {
   const permissions: Record<string, string[]> = {
     'permanentServerTokens': ['read', 'write', 'admin', 'server'],
-    'oauth2': ['read', 'write', 'user'],
     'jwtToken': ['read', 'write', 'session'],
     'pat': ['read', 'write', 'api'],
     'basic': ['read', 'basic'],
@@ -240,102 +378,91 @@ export function getPermissionsForAuthType (authType: string): string[] {
 }
 
 // ========================================================================
-// ПРИМЕР 7: ИНИЦИАЛИЗАЦИЯ С ДИАГНОСТИКОЙ
+// ПРИМЕР 9: ИНИЦИАЛИЗАЦИЯ С ДИАГНОСТИКОЙ
 // ========================================================================
 
-export function initializeAuthSystem () {
-  const authConfig = appConfig.webServer.auth;
-
+function initializeAuthSystem () {
   console.log('🔐 Initializing Multi-Authentication System...');
 
   // Диагностика конфигурации
-  const detection = detectAuthConfiguration(authConfig);
+  const { configured, errors } = detectAuthConfiguration();
 
   console.log('📊 Auth Configuration:');
-  console.log(`   Enabled: ${authConfig.enabled}`);
-  console.log(`   Configured: ${detection.configured.join(', ')}`);
-  console.log(`   Valid: ${detection.valid.join(', ')}`);
+  console.log(`   Enabled: ${!!appConfig.webServer?.auth?.enabled}`);
+  console.log(`   Configured: ${configured.join(', ')}`);
 
-  if (Object.keys(detection.errors).length > 0) {
+  if (Object.keys(errors).length > 0) {
     console.warn('⚠️  Configuration Issues:');
-    Object.entries(detection.errors).forEach(([type, errors]) => {
+    Object.entries(errors).forEach(([type, errors]) => {
       console.warn(`   ${type}: ${(errors as string[]).join(', ')}`);
     });
   }
 
   // Логирование для отладки
-  logAuthConfiguration(authConfig);
+  logAuthConfiguration();
 
   console.log('✅ Multi-Authentication System initialized successfully');
 
   return {
-    configured: detection.configured,
-    valid: detection.valid,
-    errors: detection.errors,
-    usingMultiAuth: !!(authConfig.pat || authConfig.basic || authConfig.oauth2),
+    configured: configured,
+    errors: errors,
   };
 }
 
 // ========================================================================
-// ПРИМЕР 8: ТЕСТИРОВАНИЕ КОНФИГУРАЦИИ
+// ПРИМЕР 11: ТЕСТИРОВАНИЕ COMBINED AUTH
 // ========================================================================
 
-export async function testAuthConfiguration () {
-  const authConfig = appConfig.webServer.auth;
+async function testCombinedAuth () {
+  console.log('🧪 Testing Combined Authentication...');
 
-  console.log('🧪 Testing Authentication Configuration...');
+  // Создаем тестовый запрос
+  const mockRequest = {
+    headers: {
+      authorization: 'Bearer test-token',
+      'x-user-id': 'test-user',
+      'x-api-key': 'test-api-key-12345',
+      'user-agent': 'PostmanRuntime/7.28.0',
+    },
+    connection: { remoteAddress: '127.0.0.1' },
+  };
 
-  const testCases = [
-    // Тест permanent token
-    {
-      name: 'Permanent Server Token',
-      token: authConfig.permanentServerTokens[0],
-      expectedType: 'permanentServerTokens',
-    },
-    // Тест PAT
-    {
-      name: 'Personal Access Token',
-      token: authConfig.pat,
-      expectedType: 'pat',
-    },
-    // Тест basic auth
-    {
-      name: 'Basic Authentication',
-      token: authConfig.basic
-        ? Buffer.from(`${authConfig.basic.username}:${authConfig.basic.password}`).toString('base64')
-        : undefined,
-      expectedType: 'basic',
-    },
-    // Тест OAuth2
-    {
-      name: 'OAuth2 Bearer Token',
-      token: authConfig.oauth2 ? `Bearer ${authConfig.oauth2.accessToken}` : undefined,
-      expectedType: 'oauth2',
-    },
-  ];
+  try {
+    // @ts-ignore
+    const result = await checkCombinedAuth(mockRequest);
 
-  for (const testCase of testCases) {
-    if (!testCase.token) {
-      console.log(`⏭️  Skipping ${testCase.name}: not configured`);
-      continue;
+    if (result.success) {
+      console.log('✅ Combined authentication test: PASSED');
+      console.log(`   Auth Type: ${result.authType}`);
+      console.log(`   Token Type: ${result.tokenType}`);
+      console.log(`   Username: ${result.username || 'N/A'}`);
+    } else {
+      console.log('❌ Combined authentication test: FAILED');
+      console.log(`   Error: ${result.error}`);
     }
-
-    try {
-      const result = await checkMultiAuth(testCase.token, authConfig);
-
-      if (result.success && result.authType === testCase.expectedType) {
-        console.log(`✅ ${testCase.name}: PASSED`);
-      } else {
-        console.log(`❌ ${testCase.name}: FAILED - ${result.error || 'Unexpected auth type'}`);
-      }
-    } catch (error) {
-      console.log(`❌ ${testCase.name}: FAILED - Authentication test error`);
-    }
+  } catch (error) {
+    console.log('❌ Combined authentication test: ERROR');
+    console.log(`   Exception: ${error instanceof Error ? error.message : 'Unknown error'}`);
   }
 
-  console.log('🧪 Authentication testing completed');
+  console.log('🧪 Combined authentication testing completed');
 }
 
 // ========================================================================
 // ЭКСПОРТ ДЛЯ ИСПОЛЬЗОВАНИЯ
 // ========================================================================
+
+// Экспортируем все функции и примеры для использования
+export {
+  // Примеры конфигурации
+  mcpServerDataExample,
+  customAuthValidator,
+  combinedAuthMiddleware,
+
+  // Функции тестирования
+  initializeAuthSystem,
+  testCombinedAuth,
+
+  // Утилиты
+  getPermissionsForAuthType,
+};

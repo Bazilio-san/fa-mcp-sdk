@@ -1,5 +1,5 @@
 import { Router, Request, Response } from 'express';
-import { logger, authTokenMW, IEndpointsOn404 } from 'fa-mcp-sdk';
+import { logger, createAuthMW, IEndpointsOn404 } from '../index-to-remove.js';
 
 export const apiRouter: Router | null = Router();
 
@@ -9,7 +9,7 @@ export const apiRouter: Router | null = Router();
  */
 
 // Example protected endpoint using auth middleware
-apiRouter.get('/example', authTokenMW, async (req: Request, res: Response) => {
+apiRouter.get('/example', createAuthMW(), async (req: Request, res: Response) => {
   try {
     logger.info('Example endpoint called');
 

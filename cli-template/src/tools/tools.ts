@@ -1,5 +1,5 @@
 import { Tool } from '@modelcontextprotocol/sdk/types.js';
-import { IToolInputSchema, IToolProperties } from 'fa-mcp-sdk';
+import { IToolInputSchema, IToolProperties } from '../index-to-remove.js';
 
 /**
  * Template tools configuration for MCP Server

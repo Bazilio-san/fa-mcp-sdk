@@ -1,4 +1,4 @@
-import { logger as lgr, formatToolResult, ToolExecutionError } from 'fa-mcp-sdk';
+import { logger as lgr, formatToolResult, ToolExecutionError } from '../index-to-remove.js';
 import chalk from 'chalk';
 
 const logger = lgr.getSubLogger({ name: chalk.bgGrey('tools') });

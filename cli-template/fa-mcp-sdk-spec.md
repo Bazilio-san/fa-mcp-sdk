@@ -58,16 +58,22 @@ The primary function for starting your MCP server.
 **Example Usage in `src/start.ts`:**
 
 ```typescript
-import { initMcpServer, McpServerData, CustomBasicAuthValidator } from 'fa-mcp-sdk';
+import { initMcpServer, McpServerData, CustomAuthValidator } from 'fa-mcp-sdk';
 import { tools } from './tools/tools.js';
 import { handleToolCall } from './tools/handle-tool-call.js';
 import { AGENT_BRIEF } from './prompts/agent-brief.js';
 import { AGENT_PROMPT } from './prompts/agent-prompt.js';
 
-// Optional: Custom Basic Authentication validator
-const customAuthValidator: CustomBasicAuthValidator = async (username: string, password: string): Promise<boolean> => {
-  // Your custom authentication logic here (database, LDAP, API, etc.)
-  return await authenticateUser(username, password);
+// Optional: Custom Authentication validator (black box function)
+const customAuthValidator: CustomAuthValidator = async (req): Promise<boolean> => {
+  // Your custom authentication logic here - full request object available
+  // Can access headers, IP, user-agent, etc.
+  const authHeader = req.headers.authorization;
+  const userID = req.headers['x-user-id'];
+  const clientIP = req.headers['x-real-ip'] || req.connection?.remoteAddress;
+
+  // Implement any authentication logic (database, LDAP, API, custom rules, etc.)
+  return await authenticateRequest(req);
 };
 
 const serverData: McpServerData = {
@@ -76,8 +82,8 @@ const serverData: McpServerData = {
   agentBrief: AGENT_BRIEF,
   agentPrompt: AGENT_PROMPT,
 
-  // Optional: Provide custom Basic Authentication
-  customBasicAuthValidator: customAuthValidator,
+  // Optional: Provide custom authentication function
+  customAuthValidator: customAuthValidator,
 
   // ... other configuration
 };
@@ -95,7 +101,7 @@ Main configuration interface for your MCP server.
 interface McpServerData {
   // MCP Core Components
   tools: Tool[];                                    // Your tool definitions
-  toolHandler: (params: { name: string; arguments?: any }) => Promise<any>; // Tool execution function
+  toolHandler: (params: { name: string; arguments?: any; headers?: Record<string, string> }) => Promise<any>; // Tool execution function
 
   // Agent Configuration
   agentBrief: string;                              // Brief description of your agent
@@ -107,7 +113,7 @@ interface McpServerData {
   customResources?: IResourceData[] | null;        // Custom resource definitions
 
   // Authentication
-  customBasicAuthValidator?: CustomBasicAuthValidator; // Custom Basic Authentication validator function
+  customAuthValidator?: CustomAuthValidator;           // Custom authentication validator function
 
   // HTTP Server Components (for HTTP transport)
   httpComponents?: {
@@ -229,10 +235,18 @@ export const tools: Tool[] = [
 ```typescript
 import { formatToolResult, ToolExecutionError, logger } from 'fa-mcp-sdk';
 
-export const handleToolCall = async (params: { name: string, arguments?: any }): Promise<any> => {
-  const { name, arguments: args } = params;
+export const handleToolCall = async (params: { name: string, arguments?: any, headers?: Record<string, string> }): Promise<any> => {
+  const { name, arguments: args, headers } = params;
 
   logger.info(`Tool called: ${name}`);
+
+  // Access normalized HTTP headers (all header names are lowercase)
+  if (headers) {
+    const authHeader = headers.authorization;
+    const userAgent = headers['user-agent'];
+    const customHeader = headers['x-custom-header'];
+    logger.info(`Headers available: authorization=${!!authHeader}, user-agent=${userAgent}`);
+  }
 
   try {
     switch (name) {
@@ -265,6 +279,88 @@ async function handleMyCustomTool(args: any): Promise<string> {
   return formatToolResult(result);
 }
 ```
+
+#### HTTP Headers in Tool Handler
+
+The FA-MCP-SDK automatically passes normalized HTTP headers to your `toolHandler` function, enabling context-aware tool execution based on client information.
+
+**Key Features:**
+- All headers are automatically normalized to lowercase
+- Available in both HTTP and SSE transports (SSE provides empty headers object)
+- Headers are sanitized and only string values are passed
+- Array header values are joined with `', '` separator
+
+**Example Usage:**
+
+```typescript
+export const handleToolCall = async (params: {
+  name: string,
+  arguments?: any,
+  headers?: Record<string, string>
+}): Promise<any> => {
+  const { name, arguments: args, headers } = params;
+
+  // Access client information via headers
+  if (headers) {
+    const authHeader = headers.authorization;           // Lowercase normalized
+    const userAgent = headers['user-agent'];           // Browser/client info
+    const clientIP = headers['x-real-ip'] || headers['x-forwarded-for'];  // Proxy headers
+    const customData = headers['x-custom-header'];     // Custom headers
+
+    logger.info(`Tool ${name} called by ${userAgent} from IP ${clientIP}`);
+
+    // Conditional logic based on client
+    if (userAgent?.includes('mobile')) {
+      return await handleMobileRequest(args);
+    }
+
+    // Custom authorization beyond standard auth
+    if (customData === 'admin-mode' && authHeader) {
+      return await handleAdminRequest(args);
+    }
+  }
+
+  // Regular tool logic
+  switch (name) {
+    case 'get_user_data':
+      // Use headers for audit logging
+      return await getUserData(args, {
+        clientIP: headers?.['x-real-ip'],
+        userAgent: headers?.['user-agent']
+      });
+  }
+};
+```
+
+**Header Normalization Details:**
+
+```typescript
+// Original headers from client:
+{
+  'Authorization': 'Bearer token123',
+  'X-Custom-Header': 'value',
+  'USER-AGENT': 'MyClient/1.0'
+}
+
+// Normalized headers passed to toolHandler:
+{
+  'authorization': 'Bearer token123',
+  'x-custom-header': 'value',
+  'user-agent': 'MyClient/1.0'
+}
+```
+
+**Transport Differences:**
+
+- **HTTP Transport**: Full headers available from Express request object
+- **SSE Transport**: Headers preserved from initial SSE connection establishment (GET /sse request)
+
+**Common Use Cases:**
+- Client identification and analytics
+- Custom authorization checks beyond standard authentication
+- Request routing based on client capabilities
+- Audit logging with client context
+- Rate limiting per client type
 
 ### Configuration Management
 
@@ -395,25 +491,45 @@ webServer:
    port: {{port}}
    # array of hosts that CORS skips
    originHosts: ['localhost', '0.0.0.0']
+   # Authentication is configured here only when accessing the MCP server
+   # Authentication in services that enable tools, resources, and prompts
+   # is implemented more deeply. To do this, you need to use the information passed in HTTP headers
+   # You can also use a custom authorization function
    auth:
-      enabled: false # Enables/disables token authorization
-      # An array of fixed tokens that pass to the MCP (use only for MCPs with green data or for development)
-      permanentServerTokens: []
+      enabled: false # Enables/disables authorization
+      # ========================================================================
+      # PERMANENT SERVER TOKENS
+      # Static tokens for server-to-server communication
+      # CPU cost: O(1) - fastest authentication method
+      #
+      # To enable this authentication, you need to set auth.enabled = true
+      # and set one token of at least 20 characters in length
+      # ========================================================================
+      permanentServerTokens: [ ] # Add your server tokens here: ['token1', 'token2']
+
+      # ========================================================================
+      # JWT TOKEN WITH SYMMETRIC ENCRYPTION
+      # Custom JWT tokens with AES-256 encryption
+      # CPU cost: Medium - decryption + JSON parsing
+      #
+      # To enable this authentication, you need to set auth.enabled = true and set
+      # encryptKey to at least 20 characters
+      # ========================================================================
       jwtToken:
-         # Symmetric encryption key to generate a token for this MCP
+         # Symmetric encryption key to generate a token for this MCP (minimum 8 chars)
          encryptKey: '***'
          # If webServer.auth.enabled and the parameter true, the service name and the service specified in the token will be checked
          checkMCPName: true
-      #basic:
-      #  username: '***'
-      #  password: '***'
-      #oauth2:
-      #  type: 'oauth2';
-      #  clientId: '***'
-      #  clientSecret: '***'
-      #  redirectUri?: 'string'
-      #  tokenEndpoint?: string # For custom OAuth providers // VVR
-      #pat: string;
+
+      # ========================================================================
+      # Basic Authentication - Base64 encoded username:password
+      # CPU cost: Medium - Base64 decoding + string comparison
+      # To enable this authentication, you need to set auth.enabled = true
+      # and set username and password to valid values
+      # ========================================================================
+      basic:
+         username: ''
+         password: '***'
 ```
 
 **`config/local.yaml`** - local overrides. Usually contains secrets.
@@ -740,7 +856,6 @@ addErrorMessage(originalError, 'Database operation failed');
 ```typescript
 import {
   authByToken,
-  authTokenMW,
   ICheckTokenResult,
   checkToken,
   generateToken
@@ -856,21 +971,20 @@ import {
   AuthType,
   AuthResult,
   AuthDetectionResult,
-  CustomBasicAuthValidator,
+  CustomAuthValidator,
   checkMultiAuth,
+  checkCombinedAuth,
   detectAuthConfiguration,
   logAuthConfiguration,
-  enhancedAuthTokenMW,
-  createConfigurableAuthMiddleware,
-  getAuthInfo,
-  getMultiAuthError
+  createAuthMW,         // Universal authentication middleware
+  getMultiAuthError,    // Programmatic authentication checking
 } from 'fa-mcp-sdk';
 
 // Authentication types in CPU priority order (low to high cost)
-export type AuthType = 'permanentServerTokens' | 'pat' | 'basic' | 'jwtToken' | 'oauth2';
+export type AuthType = 'permanentServerTokens' | 'basic' | 'jwtToken';
 
-// Custom Basic Authentication validator function
-export type CustomBasicAuthValidator = (username: string, password: string) => Promise<boolean> | boolean;
+// Custom Authentication validator function (black box - receives full request)
+export type CustomAuthValidator = (req: any) => Promise<boolean> | boolean;
 
 // Authentication result interface
 export interface AuthResult {
@@ -879,7 +993,6 @@ export interface AuthResult {
   authType?: AuthType;
   tokenType?: string;
   username?: string;
-  accessToken?: string;
   payload?: any;
 }
 
@@ -894,16 +1007,12 @@ export interface AuthDetectionResult {
 ##### Core Multi-Authentication Functions
 
 ```typescript
-// checkMultiAuth - validate token using all configured authentication methods
+// checkMultiAuth - validate using all configured authentication methods
 // Function Signature:
-async function checkMultiAuth(
-  token: string,
-  authConfig: AppConfig['webServer']['auth']
-): Promise<AuthResult> {...}
+async function checkMultiAuth(req: Request): Promise<AuthResult> {...}
 
 // Example:
-const authConfig = appConfig.webServer.auth;
-const result = await checkMultiAuth('user_token', authConfig);
+const result = await checkMultiAuth(req);
 
 if (result.success) {
   console.log(`Authenticated via ${result.authType} as ${result.username}`);
@@ -911,27 +1020,44 @@ if (result.success) {
   console.log('Authentication failed:', result.error);
 }
 
-// detectAuthConfiguration - analyze auth configuration
+// checkCombinedAuth - validate using configured auth + custom validator
 // Function Signature:
-function detectAuthConfiguration(authConfig: AppConfig['webServer']['auth']): AuthDetectionResult {...}
+async function checkCombinedAuth( req: any ): Promise<AuthResult> {...}
+
+// This is the enhanced function that:
+// 1. Runs standard MCP auth methods (if configured)
+// 2. Additionally runs custom validator (if configured)
+// 3. Can use custom validator as fallback if standard auth fails
 
 // Example:
-const detection = detectAuthConfiguration(appConfig.webServer.auth);
+const authResult = await checkCombinedAuth(req);
+
+if (authResult.success) {
+  console.log(`Authentication successful via ${authResult.authType}`);
+} else {
+  console.log('Combined authentication failed:', authResult.error);
+}
+
+// detectAuthConfiguration - analyze auth configuration
+// Function Signature:
+function detectAuthConfiguration(): AuthDetectionResult {...}
+
+// Example:
+const detection = detectAuthConfiguration();
 console.log('Configured auth types:', detection.configured);
 console.log('Valid auth types:', detection.valid);
 console.log('Configuration errors:', detection.errors);
 
 // logAuthConfiguration - log auth system status (debugging)
 // Function Signature:
-function logAuthConfiguration(authConfig: AppConfig['webServer']['auth']): void {...}
+function logAuthConfiguration(): void {...}
 
 // Example:
-logAuthConfiguration(appConfig.webServer.auth);
+logAuthConfiguration();
 // Output:
 // Auth system configuration:
 // - enabled: true
-// - configured types: permanentServerTokens, basic, pat
-// - valid types: permanentServerTokens, pat
+// - configured types: permanentServerTokens, basic
 ```
 
 ##### Multi-Authentication Middleware
@@ -939,16 +1065,16 @@ logAuthConfiguration(appConfig.webServer.auth);
 ```typescript
 import express from 'express';
 import {
-  enhancedAuthTokenMW,
-  createConfigurableAuthMiddleware,
+  createAuthMW,
   getMultiAuthError,
-  getAuthInfo
 } from 'fa-mcp-sdk';
 
-// enhancedAuthTokenMW - automatic multi-auth middleware
-// Automatically detects if multi-auth is needed based on configuration
+// Universal authentication middleware with flexible options
 const app = express();
-app.use('/api', enhancedAuthTokenMW);
+
+// Basic usage - handles all authentication scenarios automatically
+const authMW = createAuthMW();
+app.use('/api', authMW);
 
 app.get('/api/protected', (req, res) => {
   const authInfo = (req as any).authInfo;
@@ -960,24 +1086,34 @@ app.get('/api/protected', (req, res) => {
   });
 });
 
-// createConfigurableAuthMiddleware - configurable middleware
-// Function Signature:
-function createConfigurableAuthMiddleware(options: {
-  forceMultiAuth?: boolean;
-  logConfiguration?: boolean;
-} = {}): (req: Request, res: Response, next: NextFunction) => void {...}
-
-// Example:
-const authMW = createConfigurableAuthMiddleware({
-  logConfiguration: true,    // Log auth config on first request
-  forceMultiAuth: false      // Auto-detect multi-auth need
+// Advanced usage with custom options
+const customAuthMW = createAuthMW({
+  mcpPaths: ['/mcp', '/messages', '/sse', '/custom'],  // Custom MCP paths
+  logConfig: true,                                     // Force logging
 });
+app.use('/custom-endpoints', customAuthMW);
 
-app.use('/api/v2', authMW);
-
-// getMultiAuthError - programmatic auth checking
+// createAuthMW - Universal authentication middleware
 // Function Signature:
-async function getMultiAuthError(req: Request): Promise<{ code: number, message: string } | undefined> {...}
+function createAuthMW(options?: {
+  mcpPaths?: string[];    // Paths to check for public MCP requests (default: ['/mcp', '/messages', '/sse'])
+  logConfig?: boolean;    // Log auth configuration on first request (default: from LOG_AUTH_CONFIG env)
+}): (req: Request, res: Response, next: NextFunction) => Promise<void>
+
+// Features:
+// ✅ Combines all authentication methods (standard + custom validator)
+// ✅ Supports public MCP resources/prompts (requireAuth: false)
+// ✅ Configurable MCP paths
+// ✅ CPU-optimized authentication order
+// ✅ Automatic auth method detection
+// ✅ Request context enrichment (req.authInfo)
+
+// getMultiAuthError - Programmatic authentication checking
+// Function Signature:
+async function getMultiAuthError(req: Request): Promise<{ code: number, message: string } | undefined>
+
+// Returns error object if authentication failed, undefined if successful
+// Uses checkCombinedAuth internally - supports all authentication methods
 
 // Example - Custom middleware with different auth levels
 app.use('/api/custom', async (req, res, next) => {
@@ -1007,87 +1143,105 @@ app.use('/api/custom', async (req, res, next) => {
   }
 });
 
-// getAuthInfo - get current authentication configuration info
-// Function Signature:
-function getAuthInfo(): {
-  enabled: boolean;
-  configured: AuthType[];
-  valid: AuthType[];
-  errors: Record<string, string[]>;
-  usingMultiAuth: boolean;
-} {...}
-
-// Example:
-app.get('/auth/info', (req, res) => {
-  const authInfo = getAuthInfo();
-  res.json(authInfo);
-});
 ```
 
-##### Custom Basic Authentication
+##### Custom Authentication
 
-You can provide custom Basic Authentication validation functions through the `McpServerData` interface:
+You can provide custom authentication validation functions through the `McpServerData` interface. The custom validator receives the full Express request object, allowing for flexible authentication logic:
 
 ```typescript
-import { McpServerData, CustomBasicAuthValidator } from 'fa-mcp-sdk';
+import { McpServerData, CustomAuthValidator } from 'fa-mcp-sdk';
 
-// Database-backed authentication
-const databaseAuthValidator: CustomBasicAuthValidator = async (username: string, password: string): Promise<boolean> => {
+// Database-backed authentication with request context
+const databaseAuthValidator: CustomAuthValidator = async (req): Promise<boolean> => {
   try {
-    const user = await getUserFromDatabase(username);
-    if (!user) return false;
+    // Extract authentication data from various sources
+    const authHeader = req.headers.authorization;
+    const username = req.headers['x-username'];
+    const apiKey = req.headers['x-api-key'];
 
-    return await comparePassword(password, user.hashedPassword);
+    if (authHeader?.startsWith('Basic ')) {
+      const [user, pass] = Buffer.from(authHeader.slice(6), 'base64').toString().split(':');
+      const dbUser = await getUserFromDatabase(user);
+      return dbUser && await comparePassword(pass, dbUser.hashedPassword);
+    }
+
+    if (apiKey && username) {
+      return await validateUserApiKey(username, apiKey);
+    }
+
+    return false;
   } catch (error) {
     console.error('Database authentication error:', error);
     return false;
   }
 };
 
-// LDAP/Active Directory authentication
-const ldapAuthValidator: CustomBasicAuthValidator = async (username: string, password: string): Promise<boolean> => {
+// IP-based authentication with time restrictions
+const ipBasedAuthValidator: CustomAuthValidator = async (req): Promise<boolean> => {
   try {
-    const result = await authenticateWithLDAP(username, password);
-    return result.success;
+    const clientIP = req.headers['x-real-ip'] || req.connection?.remoteAddress;
+    const userAgent = req.headers['user-agent'];
+
+    // Check IP whitelist
+    if (!isIPAllowed(clientIP)) return false;
+
+    // Block bots and crawlers
+    if (userAgent?.includes('bot') || userAgent?.includes('crawler')) return false;
+
+    // Time-based restrictions (business hours only)
+    const hour = new Date().getHours();
+    if (hour < 9 || hour > 17) return false;
+
+    return true;
   } catch (error) {
-    console.error('LDAP authentication error:', error);
+    console.error('IP authentication error:', error);
     return false;
   }
 };
 
-// External API authentication
-const apiAuthValidator: CustomBasicAuthValidator = async (username: string, password: string): Promise<boolean> => {
+// External service authentication
+const externalServiceAuthValidator: CustomAuthValidator = async (req): Promise<boolean> => {
   try {
+    const token = req.headers.authorization?.replace('Bearer ', '');
+    const clientId = req.headers['x-client-id'];
+
+    if (!token || !clientId) return false;
+
     const response = await fetch('https://auth.example.com/validate', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ username, password })
+      body: JSON.stringify({ token, clientId, ip: req.ip })
     });
 
     if (!response.ok) return false;
     const result = await response.json();
     return result.valid === true;
   } catch (error) {
-    console.error('API authentication error:', error);
+    console.error('External service authentication error:', error);
     return false;
   }
 };
 
-// Multi-factor authentication
-const mfaAuthValidator: CustomBasicAuthValidator = async (username: string, password: string): Promise<boolean> => {
+// Multi-factor authentication with context
+const mfaAuthValidator: CustomAuthValidator = async (req): Promise<boolean> => {
   try {
-    // Password format: "actualPassword:mfaToken"
-    const [actualPassword, mfaToken] = password.split(':');
-    if (!actualPassword || !mfaToken) return false;
+    const authHeader = req.headers.authorization;
+    const mfaToken = req.headers['x-mfa-token'];
+    const userSession = req.headers['x-session-id'];
+
+    if (!authHeader?.startsWith('Basic ') || !mfaToken) return false;
+
+    const [username, password] = Buffer.from(authHeader.slice(6), 'base64').toString().split(':');
 
     // Validate base credentials
     const user = await getUserFromDatabase(username);
-    if (!user || !(await comparePassword(actualPassword, user.hashedPassword))) {
+    if (!user || !(await comparePassword(password, user.hashedPassword))) {
       return false;
     }
 
-    // Validate MFA token
-    return await validateMFAToken(username, mfaToken);
+    // Validate MFA token and session
+    return await validateMFAToken(username, mfaToken, userSession);
   } catch (error) {
     console.error('MFA authentication error:', error);
     return false;
@@ -1101,53 +1255,13 @@ const serverData: McpServerData = {
   agentBrief: 'My MCP Server',
   agentPrompt: 'Server with custom authentication',
 
-  // Provide custom basic auth validator
-  customBasicAuthValidator: databaseAuthValidator, // or ldapAuthValidator, apiAuthValidator, mfaAuthValidator
+  // Provide custom authentication validator (black box function)
+  customAuthValidator: databaseAuthValidator, // or ipBasedAuthValidator, externalServiceAuthValidator, mfaAuthValidator
 
   // ... other configuration
 };
 
 await initMcpServer(serverData);
-```
-
-##### Authentication Configuration
-
-Multi-authentication is configured in `config/default.yaml`:
-
-```yaml
-webServer:
-  auth:
-    enabled: true
-
-    # Permanent server tokens (CPU priority: 1 - fastest)
-    permanentServerTokens:
-      - 'server-token-1'
-      - 'server-token-2'
-
-    # Personal Access Tokens (CPU priority: 2)
-    pat: 'ATATT3xFfGF0...'
-
-    # Basic Authentication (CPU priority: 3)
-    basic:
-      type: 'basic'
-      username: 'admin'
-      password: 'password'
-      # Note: When using customBasicAuthValidator, username/password can be omitted
-
-    # JWT Tokens (CPU priority: 4)
-    jwtToken:
-      encryptKey: 'your-secret-key'
-      checkMCPName: true
-
-    # OAuth2 (CPU priority: 5 - most expensive)
-    oauth2:
-      type: 'oauth2'
-      clientId: 'your-client-id'
-      clientSecret: 'your-client-secret'
-      accessToken: 'your-access-token'
-      refreshToken: 'your-refresh-token'
-      redirectUri: 'https://example.com/callback'
-      tokenEndpoint: 'https://auth.provider.com/token'
 ```
 
 ##### Usage Examples
@@ -1161,7 +1275,7 @@ app.post('/test-token', async (req, res) => {
   }
 
   try {
-    const result = await checkMultiAuth(token, appConfig.webServer.auth);
+    const result = await checkMultiAuth(req);
     res.json({
       valid: result.success,
       authType: result.authType,
@@ -1176,10 +1290,28 @@ app.post('/test-token', async (req, res) => {
 });
 
 // Different authentication requirements for different endpoints
-app.use('/rest', enhancedAuthTokenMW);           // Any valid auth
-app.use('/graphql', userLevelAuthOnly);          // No server tokens
-app.use('/websocket', sessionTokensOnly);       // JWT/OAuth2 only
+app.use('/rest', createAuthMW());                           // Standard auth with all methods
+app.use('/graphql', createAuthMW({ logConfig: false }));    // Silent auth
+app.use('/websocket', createAuthMW({ mcpPaths: [] }));      // No public MCP paths
 ```
+
+**Authentication Logic Flow:**
+
+The enhanced authentication system follows this logic:
+
+1. **If configured auth methods exist** (permanentServerTokens, jwtToken, basic + auth.enabled = true):
+   - Standard MCP authentication runs first
+   - If successful AND custom validator exists → run custom validator additionally
+   - Both must pass for authentication to succeed
+
+2. **If no standard auth OR standard auth fails:**
+   - Custom validator runs as fallback (if configured)
+   - Can authenticate using custom logic alone
+
+3. **Custom validator is completely independent:**
+   - Receives full Express request object
+   - Can implement any authentication/authorization logic
+   - Works as black box as requested
 
 **Client Usage Examples:**
 
@@ -1193,14 +1325,17 @@ curl -H "Authorization: Bearer eyJ0eXAiOiJKV1QiLCJhb..." http://localhost:3000/m
 # Using Basic Authentication
 curl -H "Authorization: Basic $(echo -n 'admin:password' | base64)" http://localhost:3000/mcp
 
-# Using PAT
-curl -H "Authorization: Bearer ATATT3xFfGF0..." http://localhost:3000/mcp
+# Using custom headers for custom validator
+curl -H "X-User-ID: john.doe" \
+     -H "X-API-Key: custom-api-key-12345" \
+     -H "X-Client-IP: 192.168.1.10" \
+     http://localhost:3000/mcp
 
-# Using OAuth2
-curl -H "Authorization: Bearer ya29.A0AfH6..." http://localhost:3000/mcp
-
-# Using MFA Basic Auth (if custom validator supports it)
-curl -H "Authorization: Basic $(echo -n 'admin:password:123456' | base64)" http://localhost:3000/mcp
+# Using custom authentication with context
+curl -H "Authorization: Bearer token123" \
+     -H "X-MFA-Token: 123456" \
+     -H "X-Session-ID: sess_abc123" \
+     http://localhost:3000/mcp
 ```
 
 The multi-authentication system automatically tries authentication methods in CPU-optimized order (fastest first) and returns on the first successful match, providing both performance and flexibility.

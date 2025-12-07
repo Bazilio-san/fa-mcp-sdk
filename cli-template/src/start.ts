@@ -1,5 +1,5 @@
 // Import all project data from existing files
-import { appConfig, initMcpServer, McpServerData, getAsset } from 'fa-mcp-sdk';
+import { appConfig, initMcpServer, McpServerData, getAsset } from './index-to-remove.js';
 import { tools } from './tools/tools.js';
 import { handleToolCall } from './tools/handle-tool-call.js';
 import { AGENT_BRIEF } from './prompts/agent-brief.js';

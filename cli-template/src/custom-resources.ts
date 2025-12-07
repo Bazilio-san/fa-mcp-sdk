@@ -1,4 +1,4 @@
-import { IResourceData } from 'fa-mcp-sdk';
+import { IResourceData } from './index-to-remove.js';
 
 export const customResources: IResourceData[] = [
   {

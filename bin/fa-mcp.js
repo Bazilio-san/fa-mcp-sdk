@@ -100,6 +100,27 @@ const parseConfigFile = (filePath, content) => {
   }
 };
 
+const removeIfExists = async (targetPath, relPath, options = {}) => {
+  const fullPath = path.join(targetPath, relPath);
+
+  try {
+    let finalOptions = { force: true, ...options };
+
+    try {
+      const stat = await fs.lstat(fullPath);
+      if (stat.isDirectory() && finalOptions.recursive === undefined) {
+        finalOptions = { ...finalOptions, recursive: true };
+      }
+    } catch {
+      // lstat упадёт, если файла/папки нет — это ок, просто пойдем в rm с теми же опциями
+    }
+
+    await fs.rm(fullPath, finalOptions);
+  } catch {
+    // игнорируем любые ошибки удаления
+  }
+};
+
 class MCPGenerator {
   constructor () {
     this.templateDir = path.join(__dirname, '..', 'cli-template');
@@ -806,6 +827,7 @@ certificate's public and private keys`,
             modified = true;
           }
         }
+        content = content.replace(/'[^']+index-to-remove.js'/g, 'fa-mcp-sdk');
       }
 
       if (modified) {
@@ -918,21 +940,16 @@ certificate's public and private keys`,
         console.log('⚠️  Warning: Could not create config/_local.yaml file:', error.message);
       }
     }
+    const pathsToRemove = [
+      { rel: 'node_modules' },
+      { rel: 'yarn.lock' },
+      { rel: 'package-lock.json' },
+      { rel: 'src/index-to-remove.ts' },
+    ];
 
-    // Remove node_modules from project if it exists
-    try {
-      const nodeModulesPath = path.join(targetPath, 'node_modules');
-      await fs.access(nodeModulesPath);
-      await fs.rm(nodeModulesPath, { recursive: true, force: true });
-      const yarnLock = path.join(targetPath, 'yarn.lock');
-      await fs.access(yarnLock);
-      await fs.rm(yarnLock, { force: true });
-      const packageLock = path.join(targetPath, 'package-lock.json');
-      await fs.access(packageLock);
-      await fs.rm(packageLock, { force: true });
-    } catch {
-      // node_modules doesn't exist, which is fine
-    }
+    await Promise.all(
+      pathsToRemove.map(({ rel, options }) => removeIfExists(targetPath, rel, options)),
+    );
   }
 
   async run () {

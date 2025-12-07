@@ -1,6 +1,6 @@
 import swaggerJsdoc from 'swagger-jsdoc';
 import swaggerUi from 'swagger-ui-express';
-import { appConfig } from 'fa-mcp-sdk';
+import { appConfig } from '../index-to-remove.js';
 
 /**
  * Generic Swagger configuration template for MCP Server
