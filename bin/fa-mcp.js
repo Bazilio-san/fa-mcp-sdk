@@ -894,6 +894,7 @@ certificate's public and private keys`,
     await fs.mkdir(testsTargetPath, { recursive: true });
     await this.copyDirectory(path.join(PROJ_ROOT, 'src/tests'), testsTargetPath);
     await fs.copyFile(path.join(targetPath, '.env.example'), path.join(targetPath, '.env'));
+    await fs.copyFile(path.join(targetPath, 'cli-template/gitignore'), path.join(targetPath, '.gitignore'));
 
     // Rename mcp-template.com.conf if mcp.domain is provided
     const mcpDomain = config['mcp.domain'];
