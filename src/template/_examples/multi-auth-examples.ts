@@ -285,7 +285,7 @@ app.post('/api/combined-auth-test', async (req, res) => {
         reason: result.error,
       });
     }
-  } catch (error) {
+  } catch {
     res.status(500).json({ error: 'Authentication system error' });
   }
 });
