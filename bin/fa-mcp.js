@@ -46,6 +46,7 @@ const ALLOWED_FILES = [
   '__misc',
   '_tmp',
   '~last-cli-config.json',
+  'yarn.lock',
 ];
 
 const getAsk = () => {
@@ -226,6 +227,11 @@ class MCPGenerator {
         name: 'consul.agent.reg.token',
         defaultValue: '***',
         title: 'Token for registering service with Consul agent',
+      },
+      {
+        name: 'consul.agent.reg.host',
+        defaultValue: '',
+        title: 'The host of the consul agent where the service will be registered',
       },
       {
         name: 'consul.envCode.dev',
@@ -845,6 +851,10 @@ certificate's public and private keys`,
         content = content.replace(/http:\/\/localhost:9876/g, `http://localhost:${config.port}`);
         modified = true;
       }
+      if (filePath.endsWith('test-stdio.js')) {
+        content = content.replace('../dist/template/start.js', 'dist/src/start.js');
+        modified = true;
+      }
 
       if (modified) {
         await fs.writeFile(filePath, content, 'utf8');
@@ -902,7 +912,20 @@ certificate's public and private keys`,
     await this.copyDirectory(path.join(PROJ_ROOT, 'src/tests'), testsTargetPath);
     await fs.copyFile(path.join(targetPath, '.env.example'), path.join(targetPath, '.env'));
     await fs.rename(path.join(targetPath, 'gitignore'), path.join(targetPath, '.gitignore'));
-    await fs.rename(path.join(targetPath, 'run'), path.join(targetPath, '.run'));
+    await fs.rename(path.join(targetPath, 'r'), path.join(targetPath, '.run'));
+
+    // Rename all .xml files in .run directory to .run.xml
+    const runDirPath = path.join(targetPath, '.run');
+    const files = await fs.readdir(runDirPath);
+
+    for (const file of files) {
+      if (file.endsWith('.xml')) {
+        const oldFilePath = path.join(runDirPath, file);
+        const newFileName = file.slice(0, -4) + '.run.xml';
+        const newFilePath = path.join(runDirPath, newFileName);
+        await fs.rename(oldFilePath, newFilePath);
+      }
+    }
 
     // Rename mcp-template.com.conf if mcp.domain is provided
     const mcpDomain = config['mcp.domain'];
@@ -920,15 +943,13 @@ certificate's public and private keys`,
     }
 
     // Read _local.yaml into memory and rename it to local.yaml
-    let localYamlContent = '';
+    let localYamlExampleContent = '';
+    const localYamlExamplePath = path.join(targetPath, 'config', '_local.yaml');
+    const localYamlPath = path.join(targetPath, 'config', 'local.yaml');
     try {
-      const localYamlPath = path.join(targetPath, 'config', '_local.yaml');
-      const localYamlNewPath = path.join(targetPath, 'config', 'local.yaml');
 
-      localYamlContent = await fs.readFile(localYamlPath, 'utf8');
-      await fs.rename(localYamlPath, localYamlNewPath);
+      localYamlExampleContent = await fs.readFile(localYamlExamplePath, 'utf8');
     } catch (error) {
-      // _local.yaml doesn't exist, which might be fine
       console.log('⚠️  Warning: Could not process config/_local.yaml file:', error.message);
     }
 
@@ -936,35 +957,40 @@ certificate's public and private keys`,
     await this.replaceTemplateParameters(config);
 
     // Replace template placeholders with defaultValue from optionalParams and save as _local.yaml
-    if (localYamlContent) {
+    if (localYamlExampleContent) {
       try {
-        let modifiedContent = localYamlContent;
-
+        let localYamlExampleModifiedContent = localYamlExampleContent;
+        let localYamlModifiedContent = localYamlExampleContent;
         // Replace with defaultValue from optionalParams
         for (const param of this.optionalParams) {
           const template = `{{${param.name}}}`;
-          if (modifiedContent.includes(template)) {
+          if (localYamlExampleModifiedContent.includes(template)) {
             const defaultValue = param.defaultValue || '';
-            modifiedContent = modifiedContent.replace(new RegExp(escapeRegExp(template), 'g'), defaultValue);
-          }
-        }
-        // Replacement of the remaining substitution places with what is in the config
-        for (const [paramName, value] of Object.entries(config)) {
-          const template = `{{${paramName}}}`;
-          if (modifiedContent.includes(template)) {
-            modifiedContent = modifiedContent.replace(new RegExp(escapeRegExp(template), 'g'), value);
+            localYamlExampleModifiedContent = localYamlExampleModifiedContent.replace(new RegExp(escapeRegExp(template), 'g'), defaultValue);
           }
         }
 
-        const newLocalYamlPath = path.join(targetPath, 'config', '_local.yaml');
-        await fs.writeFile(newLocalYamlPath, modifiedContent, 'utf8');
+        // Replacement of the remaining substitution places with what is in the config
+        for (const [paramName, value] of Object.entries(config)) {
+          const template = `{{${paramName}}}`;
+          if (localYamlExampleModifiedContent.includes(template)) {
+            localYamlExampleModifiedContent = localYamlExampleModifiedContent.replace(new RegExp(escapeRegExp(template), 'g'), value);
+          }
+          if (localYamlModifiedContent.includes(template)) {
+            localYamlModifiedContent = localYamlModifiedContent.replace(new RegExp(escapeRegExp(template), 'g'), value);
+          }
+        }
+        if (!config['consul.agent.reg.host']) {
+          localYamlModifiedContent = localYamlModifiedContent.replace(/(\n +)host: '[^']*'( # The host of the consul agent)/, '$1# host: \'\'$2');
+        }
+
+        await fs.writeFile(localYamlPath, localYamlModifiedContent, 'utf8');
+        await fs.writeFile(localYamlExamplePath, localYamlExampleModifiedContent, 'utf8');
       } catch (error) {
         console.log('⚠️  Warning: Could not create config/_local.yaml file:', error.message);
       }
     }
     const pathsToRemove = [
-      { rel: 'node_modules' },
-      { rel: 'yarn.lock' },
       { rel: 'package-lock.json' },
     ];
 

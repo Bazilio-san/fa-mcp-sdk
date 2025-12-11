@@ -30,7 +30,7 @@ consul:
       # Token for obtaining information about PROD services
       token: '{{consul.agent.prd.token}}'
     reg:
-      # host: '***' # The host of the consul agent where the service will be registered. If not specified, the server on which the service is running is used
+      host: '{{consul.agent.reg.host}}' # The host of the consul agent where the service will be registered. If not specified, the server on which the service is running is used
       # Token for registering the service in the consul agent
       token: '{{consul.agent.reg.token}}'
   service:

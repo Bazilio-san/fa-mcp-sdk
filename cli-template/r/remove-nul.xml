@@ -1,12 +1,11 @@
 <component name="ProjectRunConfigurationManager">
   <configuration
       default="false"
-      name="kill-server"
+      name="remove-nul.js"
       type="NodeJSConfigurationType"
-      application-parameters="{{port}}"
-      path-to-js-file="kill-port.js"
-      working-dir="$PROJECT_DIR$/scripts"
-  >
+      nameIsGenerated="true"
+      path-to-js-file="scripts/remove-nul.js"
+      working-dir="$PROJECT_DIR$">
     <method v="2"/>
   </configuration>
 </component>

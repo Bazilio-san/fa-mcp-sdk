@@ -1,11 +1,11 @@
 <component name="ProjectRunConfigurationManager">
   <configuration
       default="false"
-      name="kill-token-gen-server"
+      name="kill-server"
       type="NodeJSConfigurationType"
-      application-parameters="3030"
-      path-to-js-file="kill-port.js"
-      working-dir="$PROJECT_DIR$/scripts"
+      application-parameters="{{port}}"
+      path-to-js-file="scripts/kill-port.js"
+      working-dir="$PROJECT_DIR$"
   >
     <method v="2"/>
   </configuration>

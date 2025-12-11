@@ -13,9 +13,8 @@ import { McpStdioClient } from '../../../dist/core/index.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
-const projectRoot = join(__dirname, '../../../');
 
-const serverPath = join(projectRoot, 'dist/template/start.js');
+const serverPath = join(__dirname, '../../../dist/template/start.js');
 
 async function runTestGroup (title, tests, client) {
   console.log(`\n${title}:`);

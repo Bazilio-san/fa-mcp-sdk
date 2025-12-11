@@ -1,5 +1,5 @@
 <component name="ProjectRunConfigurationManager">
-  <configuration default="false" name="remove-nul.js" type="NodeJSConfigurationType" nameIsGenerated="true" path-to-js-file="remove-nul.js" working-dir="$PROJECT_DIR$/scripts">
+  <configuration default="false" name="remove-nul.js" type="NodeJSConfigurationType" nameIsGenerated="true" path-to-js-file="cli-template/scripts/remove-nul.js" working-dir="$PROJECT_DIR$">
     <method v="2" />
   </configuration>
 </component>
