@@ -32,6 +32,22 @@ const pjContent = fss.readFileSync(path.join(PROJ_ROOT, 'package.json'));
 
 const faMcpSdkVersion = JSON.parse(pjContent).version;
 
+const ALLOWED_FILES = [
+  '.git',
+  '.idea',
+  '.vscode',
+  '.swp',
+  '.swo',
+  '.DS_Store',
+  '.sublime-project',
+  '.sublime-workspace',
+  'node_modules',
+  'dist',
+  '__misc',
+  '_tmp',
+  '~last-cli-config.json',
+];
+
 const getAsk = () => {
   const rl = readline.createInterface({
     input: process.stdin,
@@ -694,22 +710,7 @@ certificate's public and private keys`,
     // Check if directory is empty
     try {
       const files = await fs.readdir(tp);
-      const allowedFiles = [
-        '.git',
-        '.idea',
-        '.vscode',
-        '.swp',
-        '.swo',
-        '.DS_Store',
-        '.sublime-project',
-        '.sublime-workspace',
-        'node_modules',
-        'dist',
-        '__misc',
-        '_tmp',
-        '~last-cli-config.json',
-      ];
-      const hasOtherFiles = files.some(file => !allowedFiles.includes(file));
+      const hasOtherFiles = files.some(file => !ALLOWED_FILES.includes(file));
 
       if (hasOtherFiles) {
         console.error(errMsg);
@@ -786,11 +787,14 @@ certificate's public and private keys`,
     }
   }
 
-  async getAllFiles (dir) {
+  async getAllFiles (dir, skipRootDirs) {
     const files = [];
     const entries = await fs.readdir(dir, { withFileTypes: true });
 
     for (const entry of entries) {
+      if (skipRootDirs && skipRootDirs.includes(entry.name)) {
+        continue;
+      }
       const fullPath = path.join(dir, entry.name);
 
       if (entry.isDirectory()) {
@@ -813,8 +817,8 @@ certificate's public and private keys`,
 
   async replaceTemplateParameters (config) {
     const targetPath = config.projectAbsPath;
-    const files = await this.getAllFiles(targetPath);
-
+    const files = await this.getAllFiles(targetPath, ALLOWED_FILES);
+    const importRe = /'[^']+\/core\/index.js'/;
     for (const filePath of files) {
       let content = await fs.readFile(filePath, 'utf8');
       let modified = false;
@@ -832,7 +836,10 @@ certificate's public and private keys`,
             modified = true;
           }
         }
-        content = content.replace(/'[^']+\/core\/index.js'/g, 'fa-mcp-sdk');
+        if (importRe.test(content)) {
+          content = content.replace(importRe, '\'fa-mcp-sdk\'');
+          modified = true;
+        }
       }
       if (filePath.endsWith('test-sse-npm-package.js')) {
         content = content.replace(/http:\/\/localhost:9876/g, `http://localhost:${config.port}`);
@@ -894,7 +901,8 @@ certificate's public and private keys`,
     await fs.mkdir(testsTargetPath, { recursive: true });
     await this.copyDirectory(path.join(PROJ_ROOT, 'src/tests'), testsTargetPath);
     await fs.copyFile(path.join(targetPath, '.env.example'), path.join(targetPath, '.env'));
-    await fs.copyFile(path.join(targetPath, 'gitignore'), path.join(targetPath, '.gitignore'));
+    await fs.rename(path.join(targetPath, 'gitignore'), path.join(targetPath, '.gitignore'));
+    await fs.rename(path.join(targetPath, 'run'), path.join(targetPath, '.run'));
 
     // Rename mcp-template.com.conf if mcp.domain is provided
     const mcpDomain = config['mcp.domain'];
@@ -958,7 +966,6 @@ certificate's public and private keys`,
       { rel: 'node_modules' },
       { rel: 'yarn.lock' },
       { rel: 'package-lock.json' },
-      { rel: 'src/index-to-remove.ts' },
     ];
 
     await Promise.all(
