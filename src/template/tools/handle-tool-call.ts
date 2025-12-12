@@ -21,8 +21,9 @@ export const handleToolCall = async (params: { name: string, arguments?: any }):
       default:
         throw new ToolExecutionError(name, `Unknown tool: ${name}`);
     }
-  } catch (error) {
+  } catch (error: Error | any) {
     logger.error(`Tool execution failed for ${name}:`, error);
+    error.printed = true;
     throw error;
   }
 };

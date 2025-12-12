@@ -2,7 +2,7 @@ import { appConfig } from '../../bootstrap/init-config.js';
 import express, { Request, Response } from 'express';
 import chalk from 'chalk';
 import { getHTMLPage } from './html.js';
-import { checkToken, generateToken } from '../jwt-validation.js';
+import { checkJwtToken, generateToken } from '../jwt.js';
 import { isMainModule } from '../../utils/utils.js';
 import { setupNTLMAuthentication } from './ntlm/ntlm-integration.js';
 import { isNTLMEnabled } from './ntlm/ntlm-domain-config.js';
@@ -120,9 +120,9 @@ export const generateTokenApp = (port?: number) => {
         });
       }
 
-      const result = checkToken({ token });
+      const result = checkJwtToken({ token });
 
-      if ('errorReason' in result) {
+      if (result.errorReason) {
         logger.info(`Token validation failed (${result.errorReason}) by: ${authenticatedUser}`);
         return res.json({
           success: false,
@@ -135,7 +135,6 @@ export const generateTokenApp = (port?: number) => {
       return res.json({
         success: true,
         payload: result.payload,
-        tokenType: result.inTokenType,
       });
 
     } catch (error: any) {

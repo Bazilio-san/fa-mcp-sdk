@@ -5,7 +5,7 @@
  * Uses McpHttpClient (simple POST requests)
  */
 
-import { appConfig, McpHttpClient } from '../../../dist/core/index.js';
+import { appConfig, McpHttpClient, getAuthHeadersForTests } from '../../../dist/core/index.js';
 import TEMPLATE_TESTS from './test-cases.js';
 
 const baseUrl = (process.env.TEST_MCP_SERVER_URL || `http://localhost:${appConfig.webServer.port}`).replace(/\/+$/,'');
@@ -37,7 +37,15 @@ async function main () {
   console.log('🧪 HTTP tests for template MCP server');
   console.log('='.repeat(60));
 
-  const client = new McpHttpClient(baseUrl);
+  // Get authentication headers based on config
+  const headers = getAuthHeadersForTests();
+  if (Object.keys(headers).length) {
+    console.log('  Authentication enabled');
+  } else if (appConfig.webServer?.auth?.enabled) {
+    console.log('⚠️  Warning: Auth is enabled but no valid credentials found');
+  }
+
+  const client = new McpHttpClient(baseUrl, { headers });
   try {
     await client.initialize({
       protocolVersion: '2024-11-05',

@@ -8,9 +8,8 @@ import chalk from 'chalk';
 
 const logger = lgr.getSubLogger({ name: chalk.cyan('token-auth') });
 
-const { jwtToken, permanentServerTokens: pt = [] } = appConfig.webServer?.auth || {};
+const { jwtToken } = appConfig.webServer?.auth || {};
 const checkMCPName = jwtToken?.checkMCPName || false;
-const permanentServerTokensSet: Set<string> = new Set(Array.isArray(pt) ? pt : [pt]);
 
 
 const ALGORITHM = 'aes-256-ctr';
@@ -20,7 +19,7 @@ const KEY = crypto
   .digest('base64')
   .substring(0, 32);
 
-export const tokenRE = /^(\d{13,})\.([\da-fA-F]{32,})$/;
+export const jwtTokenRE = /^(\d{13,})\.([\da-fA-F]{32,})$/;
 
 /**
  * Encrypts the transmitted text with a symmetric key taken from the config
@@ -71,14 +70,13 @@ export const generateToken = (user: string, liveTimeSec: number, payload?: any):
   return `${expire}.${encrypt(JSON.stringify(payload))}`;
 };
 
-
 /**
  * Checks the validity of the token:
  * - Token to be decrypted
  * - the obsolescence time must not be expired
  * - If a user is transferred, it must match
  */
-export const checkToken = (arg: {
+export const checkJwtToken = (arg: {
   token: string,
   expectedUser?: string,
   expectedService?: string,
@@ -91,18 +89,11 @@ export const checkToken = (arg: {
     };
   }
 
-  if (permanentServerTokensSet.has(token)) {
-    return {
-      inTokenType: 'permanent',
-    };
-  }
-
-  const [, expirePartStr, encryptedPayload] = tokenRE.exec(token) || [];
+  const [, expirePartStr, encryptedPayload] = jwtTokenRE.exec(token) || [];
 
   if (!expirePartStr || !encryptedPayload) {
     return {
-      inTokenType: 'permanent',
-      errorReason: 'The token is not a JWT and is not on the list of registered server tokens',
+      errorReason: 'The token is not a JWT',
     };
   }
 
@@ -121,7 +112,6 @@ export const checkToken = (arg: {
   } catch (err: Error | any) {
     logger.error(err);
     return {
-      inTokenType: 'JWT',
       errorReason: `Error deserializing payload of JWT token :: ${err.message}`,
     };
   }
@@ -130,7 +120,6 @@ export const checkToken = (arg: {
   if (expectedUser && payload.user !== expectedUser) {
     return {
       isTokenDecrypted: true,
-      inTokenType: 'JWT',
       errorReason: `JWT Token: user not match :: Expected  '${expectedUser}' / obtained from the token: '${payload.user}'`,
     };
   }
@@ -139,7 +128,6 @@ export const checkToken = (arg: {
     if (expectedService && payload.service !== expectedService) {
       return {
         isTokenDecrypted: true,
-        inTokenType: 'JWT',
         errorReason: `JWT Token: service not match :: Expected  '${expectedService}' / obtained from the token: '${payload.service}'`,
       };
     }
@@ -151,10 +139,9 @@ export const checkToken = (arg: {
     // Token deprecated
     return {
       isTokenDecrypted: true,
-      inTokenType: 'JWT',
       errorReason: `JWT Token expired :: on ${expiredOn} mc`,
     };
   }
   // OK!
-  return { inTokenType: 'JWT', payload };
+  return { payload };
 };

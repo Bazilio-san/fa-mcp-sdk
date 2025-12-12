@@ -246,17 +246,17 @@ export class McpSseClient extends BaseMcpClient {
       // For tool execution errors, we want to throw them so tests can verify expected failures
       if (errorMessage.includes('Failed to execute tool')) {
         console.log(`  ⚠️  Error: ${errorMessage}`);
-        const err = new Error(`MCP Error: ${errorMessage}`);
-        (err as any).data = payload.error?.data;
-        (err as any).fullMcpResponse = payload;
-        (err as any).method = pending.method; // Attach method for error handling
+        const err: any = new Error(`MCP Error: ${errorMessage}`);
+        err.data = payload.error?.data;
+        err.fullMcpResponse = payload;
+        err.method = pending.method; // Attach method for error handling
         pending.reject(err);
         return;
       }
-      const err = new Error(`MCP Error: ${errorMessage}`);
-      (err as any).data = payload.error?.data;
-      (err as any).fullMcpResponse = payload;
-      (err as any).method = pending.method; // Attach method for error handling
+      const err: any = new Error(`MCP Error: ${errorMessage}`);
+      err.data = payload.error?.data;
+      err.fullMcpResponse = payload;
+      err.method = pending.method; // Attach method for error handling
       // Use setImmediate to avoid synchronous rejection that can cause unhandledRejection
       setImmediate(() => {
         pending.reject(err);

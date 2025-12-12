@@ -12,17 +12,18 @@ export interface ITokenPayload {
 }
 
 export interface ICheckTokenResult {
-  inTokenType?: TTokenType
   payload?: ITokenPayload,
   // errorReason is returned only if there is an error. If it is empty, the check is OK
   errorReason?: string,
   isTokenDecrypted?: boolean,
 }
 
-export type AuthType = 'permanentServerTokens' | 'jwtToken' | 'basic';
+export type AuthType = 'permanentServerTokens' | 'jwtToken' | 'basic' | 'custom';
 
 export interface AuthDetectionResult {
   configured: AuthType[];
+  configuredSet: Set<AuthType>;
+  configuredTypes: string;
   errors: Record<string, string[]>;
 }
 
@@ -31,7 +32,7 @@ export interface AuthResult {
   error?: string;
 
   authType?: AuthType;
-  tokenType?: string;
   username?: string;
+  isTokenDecrypted?: boolean | undefined; // only for JWT
   payload?: any;
 }

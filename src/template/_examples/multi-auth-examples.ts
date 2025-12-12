@@ -8,7 +8,6 @@ import {
   createAuthMW,
   getMultiAuthError,
   checkMultiAuth,
-  checkCombinedAuth,
   detectAuthConfiguration,
   logAuthConfiguration,
   McpServerData,
@@ -133,7 +132,6 @@ app.post('/api/test-token', async (req, res) => {
     return res.json({
       valid: result.success,
       authType: result.authType,
-      tokenType: result.tokenType,
       error: result.error,
       username: result.username,
       hasPayload: !!result.payload,
@@ -220,13 +218,12 @@ const customAuthValidator: CustomAuthValidator = async (req): Promise<AuthResult
       return {
         success: true,
         authType: 'basic',
-        tokenType: 'apiKey',
         username: userHeader,
         payload: {
           clientIP,
           apiKeyPrefix: apiKey.substring(0, 8) + '...',
-          validatedAt: new Date().toISOString()
-        }
+          validatedAt: new Date().toISOString(),
+        },
       };
     }
 
@@ -249,51 +246,26 @@ const customAuthValidator: CustomAuthValidator = async (req): Promise<AuthResult
     return {
       success: true,
       authType: 'basic',
-      tokenType: 'custom',
       username: `guest-${clientIP}`,
       payload: {
         clientIP,
         userAgent,
         accessTime: new Date().toISOString(),
-        businessHoursAccess: isWorkingHours
-      }
+        businessHoursAccess: isWorkingHours,
+      },
     };
   } catch (error) {
     return {
       success: false,
-      error: `Custom authentication error: ${error instanceof Error ? error.message : 'Unknown error'}`
+      error: `Custom authentication error: ${error instanceof Error ? error.message : 'Unknown error'}`,
     };
   }
 };
 
-// Демонстрация использования checkCombinedAuth напрямую
-app.post('/api/combined-auth-test', async (req, res) => {
-  try {
-    // checkCombinedAuth проверяет и стандартную auth + кастомный валидатор
-    const result = await checkCombinedAuth(req);
-
-    if (result.success) {
-      res.json({
-        message: 'Combined authentication successful',
-        authType: result.authType,
-        tokenType: result.tokenType,
-        username: result.username,
-      });
-    } else {
-      res.status(401).json({
-        error: 'Combined authentication failed',
-        reason: result.error,
-      });
-    }
-  } catch {
-    res.status(500).json({ error: 'Authentication system error' });
-  }
-});
-
 // Пример middleware, который использует combined auth
 const combinedAuthMiddleware = async (req: any, res: any, next: any) => {
   try {
-    const result = await checkCombinedAuth(req);
+    const result = await checkMultiAuth(req);
 
     if (!result.success) {
       return res.status(401).json({ error: result.error });
@@ -302,7 +274,6 @@ const combinedAuthMiddleware = async (req: any, res: any, next: any) => {
     // Добавляем информацию об аутентификации в request
     req.authInfo = {
       authType: result.authType,
-      tokenType: result.tokenType,
       username: result.username,
       payload: result.payload,
     };
@@ -351,13 +322,12 @@ const mcpServerDataExample: McpServerData = {
         return {
           success: true,
           authType: 'basic',
-          tokenType: 'specialToken',
           username: 'company-user',
           payload: {
             tokenType: 'company',
             issuedAt: new Date().toISOString(),
-            level: 'company-wide'
-          }
+            level: 'company-wide',
+          },
         };
       }
 
@@ -367,13 +337,12 @@ const mcpServerDataExample: McpServerData = {
         return {
           success: true,
           authType: 'basic',
-          tokenType: 'clientCert',
           username: 'cert-user',
           payload: {
             certificateFingerprint: clientCert.substring(0, 32) + '...',
             validatedAt: new Date().toISOString(),
-            level: 'certificate-based'
-          }
+            level: 'certificate-based',
+          },
         };
       }
 
@@ -386,13 +355,12 @@ const mcpServerDataExample: McpServerData = {
           return {
             success: true,
             authType: 'basic',
-            tokenType: 'externalToken',
             username: 'external-user',
             payload: {
               tokenPrefix: token.substring(0, 8) + '...',
               validatedAt: new Date().toISOString(),
-              level: 'external-system'
-            }
+              level: 'external-system',
+            },
           };
         }
       }
@@ -403,7 +371,7 @@ const mcpServerDataExample: McpServerData = {
       console.log('❌ Custom authentication error:', error);
       return {
         success: false,
-        error: `Custom authentication error: ${error instanceof Error ? error.message : 'Unknown error'}`
+        error: `Custom authentication error: ${error instanceof Error ? error.message : 'Unknown error'}`,
       };
     }
   },
@@ -502,12 +470,11 @@ async function testCombinedAuth () {
 
   try {
     // @ts-ignore
-    const result = await checkCombinedAuth(mockRequest);
+    const result = await checkMultiAuth(mockRequest);
 
     if (result.success) {
       console.log('✅ Combined authentication test: PASSED');
       console.log(`   Auth Type: ${result.authType}`);
-      console.log(`   Token Type: ${result.tokenType}`);
       console.log(`   Username: ${result.username || 'N/A'}`);
     } else {
       console.log('❌ Combined authentication test: FAILED');

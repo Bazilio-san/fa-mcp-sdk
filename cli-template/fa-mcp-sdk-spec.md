@@ -79,7 +79,6 @@ const customAuthValidator: CustomAuthValidator = async (req): Promise<AuthResult
     return {
       success: true,
       authType: 'basic',
-      tokenType: 'custom',
       username: userID || 'unknown',
     };
   } else {
@@ -870,13 +869,12 @@ addErrorMessage(originalError, 'Database operation failed');
 ```typescript
 import {
   ICheckTokenResult,
-  checkToken,
+  checkJwtToken,
   generateToken
 } from 'fa-mcp-sdk';
 
 // Types used:
 export interface ICheckTokenResult {
-  inTokenType?: TTokenType          // 'permanent' | 'JWT'
   payload?: ITokenPayload,          // Token payload with user data
   errorReason?: string,             // Error message if validation failed
   isTokenDecrypted?: boolean,       // Whether token was successfully decrypted
@@ -888,16 +886,16 @@ export interface ITokenPayload {
   [key: string]: any,               // Additional payload data
 }
 
-// checkToken - validate token and return detailed result
+// checkJwtToken - validate token and return detailed result
 // Function Signature:
-const checkToken = (arg: {
+const checkJwtToken = (arg: {
   token: string,
   expectedUser?: string,
   expectedService?: string,
 }): ICheckTokenResult {...}
 
 // Example:
-const tokenResult = checkToken({
+const tokenResult = checkJwtToken({
   token: 'user_provided_token',
   expectedUser: 'john_doe',
   expectedService: 'my-mcp-server'
@@ -966,6 +964,86 @@ await generateTokenApp(); // Uses default configuration from appConfig
 //   domainController: 'dc.domain.com'
 ```
 
+#### Test Authentication Headers
+
+```typescript
+import { getAuthHeadersForTests } from 'fa-mcp-sdk';
+
+// getAuthHeadersForTests - automatically generate authentication headers for testing
+// Function Signature:
+function getAuthHeadersForTests(): object {...}
+
+// Determines authentication headers based on appConfig.webServer.auth configuration.
+// Returns Authorization header using the first valid auth method found.
+//
+// Priority order (CPU-optimized, fastest first):
+// 1. permanentServerTokens - if at least one token is defined
+// 2. basic auth - if username AND password are both set
+// 3. JWT token - if jwtToken.encryptKey is set, generates token on the fly
+//
+// Returns empty object if auth is not enabled or no valid method configured.
+
+// Examples:
+const headers = getAuthHeadersForTests();
+
+// Use in fetch requests
+const response = await fetch('http://localhost:3000/mcp', {
+  method: 'POST',
+  headers: {
+    'Content-Type': 'application/json',
+    ...headers  // Automatically adds Authorization header if auth is enabled
+  },
+  body: JSON.stringify(requestBody)
+});
+
+// Use with test clients
+import { McpHttpClient } from 'fa-mcp-sdk';
+
+const client = new McpHttpClient('http://localhost:3000');
+const authHeaders = getAuthHeadersForTests();
+const result = await client.callTool('my_tool', { query: 'test' }, authHeaders);
+
+// Return value examples based on configuration:
+
+// If permanentServerTokens configured:
+// { Authorization: 'Bearer server-token-1' }
+
+// If basic auth configured:
+// { Authorization: 'Basic YWRtaW46cGFzc3dvcmQ=' }  // base64 of 'admin:password'
+
+// If JWT encryptKey configured:
+// { Authorization: 'Bearer eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9...' }
+
+// If auth.enabled = false or no valid method:
+// {}
+
+// Typical test setup:
+import { getAuthHeadersForTests, appConfig } from 'fa-mcp-sdk';
+
+describe('MCP Server Tests', () => {
+  const baseUrl = `http://localhost:${appConfig.webServer.port}`;
+  const authHeaders = getAuthHeadersForTests();
+
+  it('should call tool with authentication', async () => {
+    const response = await fetch(`${baseUrl}/mcp`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...authHeaders
+      },
+      body: JSON.stringify({
+        jsonrpc: '2.0',
+        method: 'tools/call',
+        params: { name: 'my_tool', arguments: { query: 'test' } },
+        id: 1
+      })
+    });
+
+    expect(response.ok).toBe(true);
+  });
+});
+```
+
 #### Multi-Authentication System
 
 The FA-MCP-SDK supports a comprehensive multi-authentication system that allows multiple authentication methods to work together with CPU-optimized performance ordering.
@@ -979,7 +1057,6 @@ import {
   AuthDetectionResult,
   CustomAuthValidator,
   checkMultiAuth,
-  checkCombinedAuth,
   detectAuthConfiguration,
   logAuthConfiguration,
   createAuthMW,         // Universal authentication middleware
@@ -994,12 +1071,12 @@ export type CustomAuthValidator = (req: any) => Promise<AuthResult> | AuthResult
 
 // Authentication result interface
 export interface AuthResult {
-  success: boolean;
-  error?: string;
-  authType?: AuthType;
-  tokenType?: string;
-  username?: string;
-  payload?: any;
+   success: boolean;
+   error?: string;
+   authType?: AuthType;
+   username?: string;
+   isTokenDecrypted?: boolean; // only for JWT
+   payload?: any;
 }
 
 // Authentication detection result
@@ -1024,24 +1101,6 @@ if (result.success) {
   console.log(`Authenticated via ${result.authType} as ${result.username}`);
 } else {
   console.log('Authentication failed:', result.error);
-}
-
-// checkCombinedAuth - validate using configured auth + custom validator
-// Function Signature:
-async function checkCombinedAuth( req: any ): Promise<AuthResult> {...}
-
-// This is the enhanced function that:
-// 1. Runs standard MCP auth methods (if configured)
-// 2. Additionally runs custom validator (if configured)
-// 3. Can use custom validator as fallback if standard auth fails
-
-// Example:
-const authResult = await checkCombinedAuth(req);
-
-if (authResult.success) {
-  console.log(`Authentication successful via ${authResult.authType}`);
-} else {
-  console.log('Combined authentication failed:', authResult.error);
 }
 
 // detectAuthConfiguration - analyze auth configuration
@@ -1088,7 +1147,6 @@ app.get('/api/protected', (req, res) => {
     message: 'Access granted',
     authType: authInfo?.authType,
     username: authInfo?.username,
-    tokenType: authInfo?.tokenType
   });
 });
 
@@ -1119,7 +1177,7 @@ function createAuthMW(options?: {
 async function getMultiAuthError(req: Request): Promise<{ code: number, message: string } | undefined>
 
 // Returns error object if authentication failed, undefined if successful
-// Uses checkCombinedAuth internally - supports all authentication methods
+// Uses checkMultiAuth internally - supports all authentication methods
 
 // Example - Custom middleware with different auth levels
 app.use('/api/custom', async (req, res, next) => {
@@ -1174,7 +1232,6 @@ const databaseAuthValidator: CustomAuthValidator = async (req): Promise<AuthResu
         return {
           success: true,
           authType: 'basic',
-          tokenType: 'basic',
           username: dbUser.username,
           payload: { userId: dbUser.id, roles: dbUser.roles }
         };
@@ -1187,7 +1244,6 @@ const databaseAuthValidator: CustomAuthValidator = async (req): Promise<AuthResu
         return {
           success: true,
           authType: 'basic',
-          tokenType: 'apiKey',
           username: username,
           payload: { apiKey: apiKey.substring(0, 8) + '...' }
         };
@@ -1226,7 +1282,6 @@ const ipBasedAuthValidator: CustomAuthValidator = async (req): Promise<AuthResul
     return {
       success: true,
       authType: 'basic',
-      tokenType: 'ipBased',
       username: `ip-${clientIP}`,
       payload: { clientIP, userAgent, accessTime: new Date().toISOString() }
     };
@@ -1261,7 +1316,6 @@ const externalServiceAuthValidator: CustomAuthValidator = async (req): Promise<A
       return {
         success: true,
         authType: 'basic',
-        tokenType: 'external',
         username: result.username || clientId,
         payload: {
           clientId,
@@ -1303,7 +1357,6 @@ const mfaAuthValidator: CustomAuthValidator = async (req): Promise<AuthResult> =
       return {
         success: true,
         authType: 'basic',
-        tokenType: 'mfa',
         username: username,
         payload: {
           userId: user.id,
@@ -1351,7 +1404,6 @@ app.post('/test-token', async (req, res) => {
     res.json({
       valid: result.success,
       authType: result.authType,
-      tokenType: result.tokenType,
       error: result.error,
       username: result.username,
       hasPayload: !!result.payload

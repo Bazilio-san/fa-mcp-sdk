@@ -5,10 +5,7 @@ import { debugTokenAuth } from '../debug.js';
 import { appConfig } from '../bootstrap/init-config.js';
 import { getResourcesList } from '../mcp/resources.js';
 import { getPromptsList } from '../mcp/prompts.js';
-import {
-  checkCombinedAuth,
-  logAuthConfiguration,
-} from './multi-auth.js';
+import { checkMultiAuth, logAuthConfiguration } from './multi-auth.js';
 import { AuthResult } from './types.js';
 
 
@@ -109,7 +106,7 @@ export const getMultiAuthError = async (req: Request): Promise<{ code: number, m
     return undefined;
   }
 
-  const authResult = await checkCombinedAuth(req);
+  const authResult = await checkMultiAuth(req);
   if (!authResult.success) {
     return debugAuth(req, 401, authResult.error || 'Authentication failed');
   }
@@ -158,7 +155,7 @@ export function createAuthMW (options: AuthMiddlewareOptions = {}) {
 
     try {
       // Use enhanced combined authentication (standard + custom validator)
-      const authResult: AuthResult = await checkCombinedAuth(req);
+      const authResult: AuthResult = await checkMultiAuth(req);
       if (!authResult.success) {
         const errorDetails = debugAuth(req, 401, authResult.error || 'Authentication failed');
         return res.status(errorDetails.code).send(errorDetails.message);

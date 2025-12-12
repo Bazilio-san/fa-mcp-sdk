@@ -57,6 +57,8 @@ export {
 
 export { ValidationError } from './errors/ValidationError.js';
 
+export { generateToken } from './auth/jwt.js';
+
 export async function generateTokenApp (...args: any[]) {
   const { generateTokenApp: generateTokenApp_ } = await import('./auth/token-generator/server.js');
   return generateTokenApp_(...args);
@@ -69,9 +71,9 @@ export {
 
 export {
   checkMultiAuth,
-  checkCombinedAuth,
   detectAuthConfiguration,
   logAuthConfiguration,
+  getAuthHeadersForTests,
 } from './auth/multi-auth.js';
 
 export type {
