@@ -73,34 +73,37 @@ export function detectAuthConfiguration (): AuthDetectionResult {
   const errors: Record<string, string[]> = {};
   const result: AuthDetectionResult = { configured, errors, configuredSet: new Set(), configuredTypes: '' };
 
-  if (!authEnabled) {
-    return result;
-  }
-  // Check permanentServerTokens
-  if (Array.isArray(pt) && pt.filter(Boolean)) {
-    configured.push('permanentServerTokens');
+  if (authEnabled) {
+    // Check permanentServerTokens
+    if (Array.isArray(pt) && pt.filter(Boolean)) {
+      configured.push('permanentServerTokens');
+    }
+
+    // Check JWT Token
+    if (encryptKey?.length) {
+      configured.push('jwtToken');
+    }
+
+    // Check Basic Auth
+    if (bUsername || bPassword) {
+      const errs = [];
+      // Default validation - require both username and password
+      if (!bUsername) {
+        errs.push('Username missing');
+      }
+      if (!bPassword) {
+        errs.push('Password missing');
+      }
+      if (!errs.length) {
+        configured.push('basic');
+      } else {
+        errors.basic = errs;
+      }
+    }
   }
 
-  // Check JWT Token
-  if (encryptKey?.length) {
-    configured.push('jwtToken');
-  }
-
-  // Check Basic Auth
-  if (bUsername || bPassword) {
-    const errs = [];
-    // Default validation - require both username and password
-    if (!bUsername) {
-      errs.push('Username missing');
-    }
-    if (!bPassword) {
-      errs.push('Password missing');
-    }
-    if (!errs.length) {
-      configured.push('basic');
-    } else {
-      errors.basic = errs;
-    }
+  if (CUSTOM_AUTH_VALIDATOR) {
+    configured.push('custom');
   }
 
   result.configured = configured.sort((a, b) => authOrder[a] - authOrder[b]);
@@ -144,7 +147,7 @@ async function checkBasicAuth (credentials: string): Promise<AuthResult> {
  */
 export async function checkMultiAuth (req: Request): Promise<AuthResult> {
   const { configured, configuredSet, configuredTypes } = AUTH_CONFIGURATION;
-  if (!configured.length && !CUSTOM_AUTH_VALIDATOR) {
+  if (!configured.length) {
     return { success: false, error: 'No authentication methods configured' };
   }
   const { scheme: authType, credentials } = getTokenFromHttpHeader(req);
@@ -189,6 +192,9 @@ export async function checkMultiAuth (req: Request): Promise<AuthResult> {
         errorResult = { success: false, error, authType, isTokenDecrypted };
         break;
       }
+
+      case 'custom':
+        break;
 
       default:
         errorResult = { success: false, error: `Unknown auth type: ${authType}` };
