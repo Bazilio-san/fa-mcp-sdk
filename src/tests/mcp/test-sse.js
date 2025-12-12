@@ -5,7 +5,7 @@
  * Uses McpSseClient to send requests via HTTP and receive responses via SSE
  */
 
-import { appConfig, McpSseClient } from '../../../dist/core/index.js';
+import { appConfig, McpSseClient, getAuthHeadersForTests } from '../../../dist/core/index.js';
 import TEMPLATE_TESTS from './test-cases.js';
 
 const baseUrl = (process.env.TEST_MCP_SERVER_URL || `http://localhost:${appConfig.webServer.port}`).replace(/\/+$/,'');
@@ -37,7 +37,15 @@ async function main () {
   console.log('🧪 SSE tests for template MCP server');
   console.log('='.repeat(60));
 
-  const client = new McpSseClient(baseUrl);
+  // Get authentication headers based on config
+  const headers = getAuthHeadersForTests();
+  if (Object.keys(headers).length) {
+    console.log('  Authentication enabled');
+  } else if (appConfig.webServer?.auth?.enabled) {
+    console.log('⚠️  Warning: Auth is enabled but no valid credentials found');
+  }
+
+  const client = new McpSseClient(baseUrl, headers);
   try {
     // Health check (optional)
     await client.health().catch(() => undefined);
