@@ -736,6 +736,9 @@ certificate's public and private keys`,
 
   async copyDirectory (source, target) {
     const entries = await fs.readdir(source, { withFileTypes: true });
+    if (!fss.existsSync(target)) {
+      await fs.mkdir(target, { recursive: true });
+    }
 
     for (const entry of entries) {
       if (entry.name === 'node_modules' || entry.name === 'dist') {
@@ -864,40 +867,14 @@ certificate's public and private keys`,
       await this.transformTargetFile(config, '.env', (c) => c.replace(/^(NODE_CONSUL_ENV)=([^\r\n]*)/m, '#$1=$2'));
     }
     if (config['claude.isBypassPermissions'] === 'true') {
+      const c1 = ['sudo cp', 'sudo', 'bash', 'chmod', 'curl', 'dir', 'echo', 'git', 'find', 'grep', 'jest',
+        'mkdir', 'node', 'npm install', 'npm run', 'npm test', 'npm', 'npx', 'pkill', 'set', 'playwright', 'powershell',
+        'rm', 'taskkill', 'tasklist', 'timeout', 'turbo run', 'wc'];
+      const c2 = ['jobs', 'npm start', 'unset http_proxy'];
+      const i = ' '.repeat(8);
+      const allowBashLines = [...c1.map((c) => `${i}"Bash(${c}:*)",`), ...c2.map((c) => `${i}"Bash(${c})",`)].join('\n');
       const transformFn = (c) => c.replace('"acceptEdits"', '"bypassPermissions"')
-        .replace(/"allow": \[\s+"Edit",/, `"allow": [
-      "Bash(sudo cp:*)",
-      "Bash(sudo:*)",
-      "Bash(bash:*)",
-      "Bash(chmod:*)",
-      "Bash(curl:*)",
-      "Bash(dir:*)",
-      "Bash(echo:*)",
-      "Bash(git:*)",
-      "Bash(find:*)",
-      "Bash(grep:*)",
-      "Bash(jest:*)",
-      "Bash(jobs)",
-      "Bash(mkdir:*)",
-      "Bash(node:*)",
-      "Bash(npm install:*)",
-      "Bash(npm run:*)",
-      "Bash(npm start)",
-      "Bash(npm test:*)",
-      "Bash(npm:*)",
-      "Bash(npx:*)",
-      "Bash(pkill:*)",
-      "Bash(set:*)",
-      "Bash(playwright:*)",
-      "Bash(powershell:*)",
-      "Bash(rm:*)",
-      "Bash(taskkill:*)",
-      "Bash(tasklist:*)",
-      "Bash(timeout:*)",
-      "Bash(turbo run:*)",
-      "Bash(unset http_proxy)",
-      "Bash(wc:*)",
-      "Edit",`);
+        .replace(/"allow": \[\s+"Edit",/, `"allow": [\n${allowBashLines}\n${i}"Edit",`);
       await this.transformTargetFile(config, '.claude/settings.json', transformFn);
     }
   }
@@ -913,6 +890,10 @@ certificate's public and private keys`,
     await fs.copyFile(path.join(targetPath, '.env.example'), path.join(targetPath, '.env'));
     await fs.rename(path.join(targetPath, 'gitignore'), path.join(targetPath, '.gitignore'));
     await fs.rename(path.join(targetPath, 'r'), path.join(targetPath, '.run'));
+
+
+    await fs.mkdir(testsTargetPath, { recursive: true });
+    await this.copyDirectory(path.join(PROJ_ROOT, 'config'), path.join(targetPath, 'config'));
 
     // Rename all .xml files in .run directory to .run.xml
     const runDirPath = path.join(targetPath, '.run');
@@ -1020,7 +1001,9 @@ certificate's public and private keys`,
       process.exit(0);
 
     } catch (error) {
-      console.error('\n❌  Error:', error.message);
+      if (error.message && !(error.stack || '').includes(String(error.message))) {
+        console.error('\n❌  Error:', error.message);
+      }
       console.error(error.stack);
       process.exit(1);
     }

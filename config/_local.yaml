@@ -25,20 +25,20 @@ consul:
   agent:
     dev:
       # Token for getting information about DEV services
-      token: '***'
+      token: '{{consul.agent.dev.token}}'
     prd:
       # Token for obtaining information about PROD services
-      token: '***'
+      token: '{{consul.agent.prd.token}}'
     reg:
-      # host: '***' # The host of the consul agent where the service will be registered. If not specified, the server on which the service is running is used
+      host: '{{consul.agent.reg.host}}' # The host of the consul agent where the service will be registered. If not specified, the server on which the service is running is used
       # Token for registering the service in the consul agent
-      token: '***'
+      token: '{{consul.agent.reg.token}}'
   service:
-    enable: true # true - Allows registration of the service with the consul
-    instance: 'instance-0' # This value will be specified as a suffix in the id of the service
+    enable: {{consul.service.enable}} # true - Allows registration of the service with the consul
+    instance: '{{SERVICE_INSTANCE}}' # This value will be specified as a suffix in the id of the service
   envCode: # Used to generate the service ID
-    prod: <envCode.prod> # Production environment code
-    dev: <envCode.dev> # Development environment code
+    prod: '{{consul.envCode.prod}}' # Production environment code
+    dev: '{{consul.envCode.dev}}' # Development environment code
 
 db:
   postgres:
@@ -46,16 +46,18 @@ db:
       main:
         label: 'Your Database Label'
         database: your_database
-        host: 'your_host' # To exclude the use of the database, you need to set host = ''
+        host: '' # To exclude the use of the database, you need to set host = ''
         port: 5432
         user: your_user
         password: your_password
-        usedExtensions:
-          - pgvector
+#        usedExtensions:
+#          - pgvector
 
 logger:
   level: info
-  useFileLogger: true # To use or not to use logging to a file
+  useFileLogger: {{logger.useFileLogger}} # To use or not to use logging to a file
+  # Absolute path to the folder where logs will be written. Default <proj_root>/../logs
+  dir: '{{logger.dir}}'
 
 mcp:
   transportType: http # 'stdio' or 'http'
@@ -65,20 +67,20 @@ mcp:
     windowMs: 60000  # 1 minute
 
 swagger:
-  servers:  # An array of servers that will be added to swagger docs
-    - url: http://localhost:9876
+  servers: # An array of servers that will be added to swagger docs
+    - url: http://localhost:{{port}}
       description: "Local server"
 
 webServer:
-  port: 9876
+  port: {{port}}
   # array of hosts that CORS skips
-  originHosts: ['localhost', '0.0.0.0']
+  originHosts: [ 'localhost', '0.0.0.0' ]
   # Authentication is configured here only when accessing the MCP server
   # Authentication in services that enable tools, resources, and prompts
   # is implemented more deeply. To do this, you need to use the information passed in HTTP headers
   # You can also use a custom authorization function
   auth:
-    enabled: false # Enables/disables authorization
+    enabled: {{webServer.auth.enabled}} # Enables/disables token authorization
     # ========================================================================
     # PERMANENT SERVER TOKENS
     # Static tokens for server-to-server communication
@@ -99,9 +101,9 @@ webServer:
     # ========================================================================
     jwtToken:
       # Symmetric encryption key to generate a token for this MCP (minimum 8 chars)
-      encryptKey: '***'
+      encryptKey: '{{webServer.auth.token.encryptKey}}'
       # If webServer.auth.enabled and the parameter true, the service name and the service specified in the token will be checked
-      checkMCPName: true
+      checkMCPName: {{webServer.auth.token.checkMCPName}}
 
     # ========================================================================
     # Basic Authentication - Base64 encoded username:password
