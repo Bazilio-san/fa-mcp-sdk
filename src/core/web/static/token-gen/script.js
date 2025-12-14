@@ -142,40 +142,33 @@ function formatTime (ms) {
   return seconds + ' s.';
 }
 
-// Render authentication status
+// Render authentication status in header
 function renderAuthStatus (data) {
   const container = document.getElementById('authStatusContainer');
   if (!container) {return;}
 
   const { authType, isAuthenticated, user, canLogout } = data;
 
-  // Don't show anything if no auth is configured
-  if (!authType) {
+  // Don't show anything if no auth is configured or not authenticated
+  if (!authType || !isAuthenticated || !user) {
     container.style.display = 'none';
     return;
   }
 
-  container.className = 'auth-status auth-enabled';
-
-  let html = '<div class="auth-info"><span>';
-
-  if (isAuthenticated && user) {
-    html += '<span class="auth-indicator enabled"></span>';
-    html += 'Logged in as: <strong>' + user + '</strong>';
-  } else {
-    html += '<span class="auth-indicator disabled"></span>';
-    html += 'Not authenticated';
-  }
-
-  html += '</span></div>';
+  let html = '<div class="header-auth-info">';
+  html += '<img src="/static/token-gen/user.svg" alt="" class="user-icon">';
+  html += '<span class="username">' + user + '</span>';
+  html += '</div>';
 
   // Show logout button only for basic and ntlm auth types
   if (canLogout) {
-    html += '<button class="logout-btn" onclick="logout()">Log out</button>';
+    html += '<button class="header-logout-btn" onclick="logout()" title="Log out">';
+    html += '<img src="/static/token-gen/logout.svg" alt="Log out">';
+    html += '</button>';
   }
 
   container.innerHTML = html;
-  container.classList.add('loaded');
+  container.style.display = 'flex';
 }
 
 // Load authentication status from API

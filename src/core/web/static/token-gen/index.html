@@ -11,15 +11,16 @@
 <div class="simple-container">
   <!-- Header -->
   <header class="simple-header">
-    <div class="service-icon">
-      <img src="/static/token-gen/jwt-icon.svg" alt="JWT">
+    <div class="header-left">
+      <div class="service-icon">
+        <img src="/static/token-gen/jwt-icon.svg" alt="JWT">
+      </div>
+      <h1>Token Generator & Validator</h1>
     </div>
-    <h1>Token Generator & Validator</h1>
+    <div id="authStatusContainer" class="header-right"></div>
   </header>
 
-  <!-- Authentication Status (loaded via JS) -->
   <main class="simple-main">
-    <div id="authStatusContainer"></div>
 
     <div class="tab-container">
       <div class="tabs">

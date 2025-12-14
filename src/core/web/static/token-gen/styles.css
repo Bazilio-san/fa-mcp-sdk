@@ -43,7 +43,20 @@ body {
   border-radius: 6px 6px 0 0;
   display: flex;
   align-items: center;
+  justify-content: space-between;
   gap: 16px;
+}
+
+.header-left {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.header-right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
 }
 
 .simple-header h1 {
@@ -51,6 +64,53 @@ body {
   font-weight: 600;
   margin: 0;
   color: #0052cc;
+}
+
+/* Header auth info */
+.header-auth-info {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 13px;
+  color: #505f79;
+}
+
+.header-auth-info .user-icon {
+  width: 16px;
+  height: 16px;
+  opacity: 0.6;
+}
+
+.header-auth-info .username {
+  color: #172b4d;
+  font-weight: 500;
+}
+
+.header-logout-btn {
+  background: none;
+  border: none;
+  padding: 6px;
+  cursor: pointer;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.2s ease;
+}
+
+.header-logout-btn:hover {
+  background: rgba(220, 38, 38, 0.1);
+}
+
+.header-logout-btn img {
+  width: 18px;
+  height: 18px;
+  opacity: 0.7;
+  transition: opacity 0.2s ease;
+}
+
+.header-logout-btn:hover img {
+  opacity: 1;
 }
 
 /* Simple Main Content */
@@ -138,7 +198,7 @@ input:focus, select:focus, textarea:focus {
 }
 
 input::placeholder, textarea::placeholder {
-  color: #505f79;
+  color: #cecece;
 }
 
 .time-input {
@@ -349,74 +409,6 @@ input::placeholder, textarea::placeholder {
   height: 100%;
 }
 
-/* Authentication status */
-.auth-status {
-  padding: 12px 16px;
-  margin-bottom: 16px;
-  border-radius: 4px;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  font-size: 14px;
-}
-
-.auth-status.auth-enabled {
-  background: rgba(0, 102, 68, 0.1);
-  border: 1px solid rgba(0, 102, 68, 0.2);
-  color: #006644;
-}
-
-.auth-status.auth-disabled {
-  background: rgba(245, 158, 11, 0.1);
-  border: 1px solid rgba(245, 158, 11, 0.2);
-  color: #d97706;
-}
-
-.auth-info {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.auth-indicator {
-  display: inline-block;
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  margin-right: 4px;
-}
-
-.auth-indicator.enabled {
-  background: #006644;
-}
-
-.auth-indicator.disabled {
-  background: #d97706;
-}
-
-.logout-btn {
-  background: #dc2626;
-  color: white;
-  border: none;
-  padding: 6px 12px;
-  border-radius: 3px;
-  font-size: 12px;
-  cursor: pointer;
-  transition: background 0.2s ease;
-}
-
-.logout-btn:hover {
-  background: #b91c1c;
-}
-
-/* Hidden by default, shown via JS */
-#authStatusContainer {
-  display: none;
-}
-
-#authStatusContainer.loaded {
-  display: block;
-}
 
 /* Responsive Design */
 @media (max-width: 640px) {
