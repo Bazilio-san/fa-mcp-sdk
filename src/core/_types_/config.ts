@@ -21,6 +21,10 @@ interface IWebServerConfig {
       }
       permanentServerTokens: string[],
     },
+    adminAuth: {
+      enabled: boolean,
+      type: 'permanentServerTokens' | 'basic' | 'jwtToken' | 'ntlm',
+    },
   }
 }
 
