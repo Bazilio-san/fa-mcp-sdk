@@ -5,7 +5,7 @@
  */
 
 import { Request } from 'express';
-import { checkJwtToken, generateToken, jwtTokenRE } from './jwt.js';
+import { checkJwtToken, generateToken, jwtTokenRE, MIN_ENCRYPT_KEY_LENGTH } from './jwt.js';
 import { logger as lgr } from '../logger.js';
 import { AuthDetectionResult, AuthResult, AuthType } from './types.js';
 import { CustomAuthValidator } from '../_types_/types.js';
@@ -13,6 +13,7 @@ import { normalizeHeaders, trim } from '../utils/utils.js';
 import chalk from 'chalk';
 import { appConfig } from '../bootstrap/init-config.js';
 import { checkPermanentToken } from './permanent.js';
+import { checkBasicAuth } from './basic.js';
 
 const logger = lgr.getSubLogger({ name: chalk.magenta('multi-auth') });
 
@@ -81,7 +82,11 @@ export function detectAuthConfiguration (): AuthDetectionResult {
 
     // Check JWT Token
     if (encryptKey?.length) {
-      configured.push('jwtToken');
+      if (encryptKey.length < MIN_ENCRYPT_KEY_LENGTH) {
+        errors.jwtToken = [`JWT encryption key is too short (${encryptKey.length} chars) Must be at least ${MIN_ENCRYPT_KEY_LENGTH} chars long`];
+      } else {
+        configured.push('jwtToken');
+      }
     }
 
     // Check Basic Auth
@@ -113,34 +118,6 @@ export function detectAuthConfiguration (): AuthDetectionResult {
 }
 
 const AUTH_CONFIGURATION = detectAuthConfiguration();
-
-/**
- * Basic Authentication validation
- */
-async function checkBasicAuth (credentials: string): Promise<AuthResult> {
-  const authConfig = appConfig.webServer.auth;
-  if (!authConfig.basic) {
-    return { success: false, error: 'Basic auth not configured' };
-  }
-
-  try {
-    // Expecting base64 encoded "username:password"
-    const decoded = Buffer.from(credentials, 'base64').toString('utf8');
-    const [username, password] = decoded.split(':');
-
-    if (!username || !password) {
-      return { success: false, error: 'Invalid basic auth format - missing username or password' };
-    }
-
-    if (username === bUsername && password === bPassword) {
-      return { success: true, username };
-    }
-    return { success: false, error: 'Invalid credentials' };
-  } catch {
-    return { success: false, error: 'Invalid basic auth format - not valid base64' };
-  }
-}
-
 
 /**
  * Checks auth using all configured authentication methods in ascending CPU load order
@@ -176,7 +153,7 @@ export async function checkMultiAuth (req: Request): Promise<AuthResult> {
       }
 
       case 'basic': {
-        const result = await checkBasicAuth(credentials);
+        const result = checkBasicAuth(credentials);
         if (result.success) {
           return { ...result, authType };
         }
