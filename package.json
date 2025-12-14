@@ -1,7 +1,7 @@
 {
   "name": "fa-mcp-sdk",
   "productName": "FA MCP SDK",
-  "version": "0.2.159",
+  "version": "0.2.160",
   "description": "Core infrastructure and templates for building Model Context Protocol (MCP) servers with TypeScript",
   "type": "module",
   "main": "dist/core/index.js",
@@ -24,7 +24,8 @@
   },
   "scripts": {
     "start": "npm run template:start",
-    "build": "tsc",
+    "build": "tsc && npm run copy-static",
+    "copy-static": "node scripts/copy-static.js",
     "clean": "rimraf dist",
     "cb": "npm run clean && npm run build",
     "dev": "tsc --watch",

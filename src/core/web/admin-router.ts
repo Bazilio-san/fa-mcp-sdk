@@ -5,14 +5,21 @@
 
 import { Router, Request, Response } from 'express';
 import chalk from 'chalk';
+import { dirname, join } from 'path';
+import { fileURLToPath } from 'url';
 import { appConfig } from '../bootstrap/init-config.js';
 import { checkJwtToken, generateToken } from '../auth/jwt.js';
-import { getHTMLPage } from '../auth/token-generator/html.js';
 import { isNTLMEnabled } from '../auth/token-generator/ntlm/ntlm-domain-config.js';
 import { getSessionStats } from '../auth/token-generator/ntlm/ntlm-session-storage.js';
 import { getLoginPageHTML } from '../auth/token-generator/ntlm/ntlm-templates.js';
 import { AdminAuthType, createAdminAuthMW } from '../auth/admin-auth.js';
 import { logger as lgr } from '../logger.js';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+
+// Path to static files (relative to compiled JS location in dist/)
+const staticPath = join(__dirname, 'static/token-gen');
 
 const logger = lgr.getSubLogger({ name: chalk.bgCyan('admin-router') });
 
@@ -38,6 +45,8 @@ export function createAdminRouter (): Router {
   const adminAuthMW = createAdminAuthMW();
   router.use(adminAuthMW);
 
+  // Note: Static files (CSS, JS) are served globally at /static/token-gen/ by server-http.ts
+
   // Main admin page - Token Generator UI
   router.get('/', (req: Request, res: Response) => {
     const username = req.ntlm?.username || 'Unknown';
@@ -46,13 +55,8 @@ export function createAdminRouter (): Router {
 
     logger.info(`Admin page accessed by: ${domain}\\${username} (Authenticated: ${isAuthenticated})`);
 
-    // Pass auth status to the HTML page
-    res.send(getHTMLPage({
-      isAuthenticated,
-      username,
-      domain,
-      ntlmEnabled,
-    }));
+    // Serve static index.html
+    res.sendFile(join(staticPath, 'index.html'));
   });
 
   // Login page (for NTLM)
@@ -229,20 +233,32 @@ export function createAdminRouter (): Router {
       const domain = req.ntlm?.domain || 'Unknown';
       const isAuthenticated = req.ntlm?.isAuthenticated || false;
 
+      // Determine if logout is available (only for basic and ntlm)
+      const canLogout = isAuthenticated && (adminAuthType === 'basic' || adminAuthType === 'ntlm');
+
+      // Format user display based on auth type
+      let userDisplay: string | null = null;
+      if (isAuthenticated) {
+        if (adminAuthType === 'ntlm') {
+          userDisplay = `${domain}\\${username}`;
+        } else {
+          userDisplay = username;
+        }
+      }
+
       res.json({
         success: true,
-        authType: adminAuthType,
-        ntlmEnabled,
+        authType: adminAuthType || null,
         isAuthenticated,
-        user: isAuthenticated ? `${domain}\\${username}` : null,
+        user: userDisplay,
+        canLogout,
         timestamp: new Date().toISOString(),
       });
     } catch (error: any) {
       res.json({
         success: false,
         error: error.message,
-        authType: adminAuthType,
-        ntlmEnabled,
+        authType: adminAuthType || null,
       });
     }
   });

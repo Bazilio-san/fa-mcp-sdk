@@ -3,6 +3,8 @@ import { CallToolRequestSchema } from '@modelcontextprotocol/sdk/types.js';
 import express from 'express';
 import helmet from 'helmet';
 import { RateLimiterMemory } from 'rate-limiter-flexible';
+import { dirname, join } from 'path';
+import { fileURLToPath } from 'url';
 import { appConfig, getProjectData } from '../bootstrap/init-config.js';
 import { getResource, getResourcesList } from '../mcp/resources.js';
 import { IGetPromptRequest } from '../_types_/types.js';
@@ -17,11 +19,17 @@ import { applyCors } from './cors.js';
 import { faviconSvg } from './favicon-svg.js';
 import chalk from 'chalk';
 import { getPrompt, getPromptsList } from '../mcp/prompts.js';
-import { renderAboutPage } from './about-page/render.js';
+import { handleAboutInfo } from './about-api.js';
 import { getMainDBConnectionStatus } from '../db/pg-db.js';
 import { normalizeHeaders } from '../utils/utils.js';
 import { createAdminRouter } from './admin-router.js';
 import { validateAdminAuthConfig } from '../auth/admin-auth.js';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+
+// Path to static files
+const staticPath = join(__dirname, 'static');
 
 const logger = lgr.getSubLogger({ name: chalk.bgYellow('server-http') });
 
@@ -96,15 +104,15 @@ export async function startHttpServer (): Promise<void> {
 
   app.use(faviconSvg());
 
-  // Root endpoint with About page
-  app.get('/', async (req, res) => {
-    try {
-      const html = await renderAboutPage();
-      res.type('html').send(html);
-    } catch (error) {
-      logger.error('Failed to render about page:', error);
-      res.status(500).send('Error rendering about page');
-    }
+  // Serve static files (CSS, JS, SVG)
+  app.use('/static', express.static(staticPath));
+
+  // About page API endpoint
+  app.get('/api/about-info', handleAboutInfo);
+
+  // Root endpoint - serve static About page
+  app.get('/', (req, res) => {
+    res.sendFile(join(staticPath, 'about', 'index.html'));
   });
 
   // Health check endpoint
@@ -148,10 +156,8 @@ export async function startHttpServer (): Promise<void> {
       logger.error(`Admin auth configuration error: ${adminConfigError}`);
       throw new Error(`Admin auth configuration error: ${adminConfigError}`);
     }
-    // Redirect /admin to /admin/ to ensure relative paths work correctly in HTML
-    app.get('/admin', (req, res) => res.redirect('/admin/'));
     const adminRouter = createAdminRouter();
-    app.use('/admin/', adminRouter);
+    app.use('/admin', adminRouter);
     logger.info('Admin panel mounted at /admin');
   }
 

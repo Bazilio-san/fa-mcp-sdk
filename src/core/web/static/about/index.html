@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>MCP Server</title>
+  <link rel="icon" type="image/svg+xml" href="">
+  <link rel="stylesheet" href="/static/about/styles.css">
+</head>
+<body>
+  <div class="simple-container">
+    <!-- Header -->
+    <header class="simple-header">
+      <div class="header-row">
+        <div class="header-title">
+          <div class="service-icon" id="serviceIcon"></div>
+          <h1 id="serviceTitle"><span class="MCPServer">MCP Server</span></h1>
+        </div>
+      </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="simple-main">
+      <!-- Basic Info -->
+      <section class="info-section">
+        <div class="info-row">
+          <span class="label">Service:</span>
+          <span class="value" id="serviceDescription">Loading...</span>
+        </div>
+        <div class="info-row">
+          <span class="label">Version:</span>
+          <span class="value" id="serviceVersion">-</span>
+        </div>
+        <div class="info-row">
+          <span class="label">Tools:</span>
+          <span class="value clickable" id="toolsCount" onclick="openModal('tools')">-</span>
+        </div>
+        <div class="info-row">
+          <span class="label">Resources:</span>
+          <span class="value clickable" id="resourcesCount" onclick="openModal('resources')">-</span>
+        </div>
+        <div class="info-row">
+          <span class="label">Prompts:</span>
+          <span class="value clickable" id="promptsCount" onclick="openModal('prompts')">-</span>
+        </div>
+        <div class="info-row">
+          <span class="label">Uptime:</span>
+          <span class="value" id="serviceUptime">-</span>
+        </div>
+      </section>
+
+      <!-- Database Info -->
+      <section class="info-section" id="dbSection" style="display: none;">
+        <div class="info-row">
+          <span class="label">Database:</span>
+          <div>
+            <span class="value" id="dbValue"></span>
+            <span class="value" id="dbStatus"></span>
+          </div>
+        </div>
+      </section>
+
+      <!-- Transport Info -->
+      <section class="info-section">
+        <div class="info-row">
+          <span class="label">HTTP Transport:</span>
+          <span class="value"><code>GET /sse</code> • <code>POST /mcp</code></span>
+        </div>
+      </section>
+
+      <!-- Swagger -->
+      <section class="info-section" id="swaggerSection" style="display: none;">
+        <div class="info-row">
+          <span class="label">API Reference:</span>
+          <span class="value">
+            <a href="/docs" target="_blank" rel="noopener" class="clickable">Swagger</a>
+          </span>
+        </div>
+      </section>
+
+      <!-- Consul -->
+      <section class="info-section" id="consulSection" style="display: none;">
+        <div class="info-row">
+          <span class="label">Consul id:</span>
+          <span class="value">
+            <a href="#" id="consulLink" target="_blank" rel="noopener" class="clickable"></a>
+          </span>
+        </div>
+      </section>
+
+      <!-- Health Check -->
+      <section class="info-section">
+        <div class="info-row">
+          <span class="label">Health Check:</span>
+          <span class="value clickable" onclick="openHealthCheckModal()">Check Server Health</span>
+        </div>
+      </section>
+    </main>
+
+    <!-- Modal Overlays -->
+    <!-- Tools Modal -->
+    <div id="tools-modal" class="modal-overlay" style="display: none;">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h3>Available Tools</h3>
+          <button class="modal-close" onclick="closeModal('tools')">&times;</button>
+        </div>
+        <div class="modal-body">
+          <div class="table-container">
+            <table class="details-table" id="tools-table">
+              <thead>
+                <tr>
+                  <th>Name</th>
+                  <th>Description</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                <!-- Content will be dynamically loaded -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Resources Modal -->
+    <div id="resources-modal" class="modal-overlay" style="display: none;">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h3>Available Resources</h3>
+          <button class="modal-close" onclick="closeModal('resources')">&times;</button>
+        </div>
+        <div class="modal-body">
+          <div class="table-container">
+            <table class="details-table" id="resources-table">
+              <thead>
+                <tr>
+                  <th>URI</th>
+                  <th>Name</th>
+                  <th>Description</th>
+                  <th>MIME Type</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                <!-- Content will be dynamically loaded -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Prompts Modal -->
+    <div id="prompts-modal" class="modal-overlay" style="display: none;">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h3>Available Prompts</h3>
+          <button class="modal-close" onclick="closeModal('prompts')">&times;</button>
+        </div>
+        <div class="modal-body">
+          <div class="table-container">
+            <table class="details-table" id="prompts-table">
+              <thead>
+                <tr>
+                  <th>Name</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                <!-- Content will be dynamically loaded -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Health Check Modal -->
+    <div id="health-modal" class="modal-overlay" style="display: none;">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h3>Server Health Check</h3>
+          <button class="modal-close" onclick="closeModal('health')">&times;</button>
+        </div>
+        <div class="modal-body">
+          <div class="loading-cell" id="health-loading">
+            <div class="loading-spinner"></div>
+            Checking server health...
+          </div>
+          <pre class="json-content" id="health-result" style="display: none;"></pre>
+          <div class="error-message" id="health-error" style="display: none;"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Footer -->
+    <footer class="simple-footer">
+      <p id="footerContent"></p>
+    </footer>
+  </div>
+
+  <script src="/static/about/script.js"></script>
+</body>
+</html>

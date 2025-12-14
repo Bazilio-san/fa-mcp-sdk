@@ -1,11 +1,15 @@
 import { appConfig } from '../../bootstrap/init-config.js';
 import express, { Request, Response } from 'express';
 import chalk from 'chalk';
-import { getHTMLPage } from './html.js';
 import { checkJwtToken, generateToken } from '../jwt.js';
 import { isMainModule } from '../../utils/utils.js';
 import { setupNTLMAuthentication } from './ntlm/ntlm-integration.js';
 import { isNTLMEnabled } from './ntlm/ntlm-domain-config.js';
+import { dirname, join } from 'path';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
 
 
 const ntlmEnabled = isNTLMEnabled;
@@ -24,6 +28,10 @@ export const generateTokenApp = (port?: number) => {
   app.use(express.json());
   app.use(express.urlencoded({ extended: true }));
 
+  // Serve static files (CSS, JS) - from unified static location
+  const staticPath = join(__dirname, '../../web/static/token-gen');
+  app.use('/static/token-gen', express.static(staticPath));
+
   // NTLM Authentication middleware
   if (isNTLMEnabled) {
     console.log(chalk.cyan('[TOKEN-GEN]'), 'Setting up NTLM authentication...');
@@ -41,22 +49,37 @@ export const generateTokenApp = (port?: number) => {
     years: 60 * 60 * 24 * 365,
   };
 
+  // Main page - Token Generator UI
   app.get('/', (req: Request, res: Response) => {
     const username = req.ntlm?.username || 'Unknown';
     const domain = req.ntlm?.domain || 'Unknown';
     const isAuthenticated = req.ntlm?.isAuthenticated || false;
     logger.info(`Token generation interface accessed by: ${domain}\\${username} (Authenticated: ${isAuthenticated})`);
 
-    // Pass NTLM status to the HTML page
-    res.send(getHTMLPage({
-      isAuthenticated,
-      username,
-      domain,
-      ntlmEnabled,
-    }));
+    // Serve static index.html from unified static location
+    res.sendFile(join(__dirname, '../../web/static/token-gen', 'index.html'));
   });
 
-  app.post('/api/generate-token', (req: Request, res: Response) => {
+  // Logout endpoint
+  app.get('/admin/logout', (req: Request, res: Response) => {
+    logger.info(`Logout requested by: ${req.ntlm?.domain || 'Unknown'}\\${req.ntlm?.username || 'Unknown'}`);
+
+    if (ntlmEnabled) {
+      // NTLM logout - send 401 to trigger browser auth prompt
+      res.setHeader('WWW-Authenticate', 'NTLM');
+      res.setHeader('Clear-Site-Data', '"cookies", "storage"');
+      return res.status(401).send('Authentication required - please login again');
+    }
+
+    // For other auth types, just clear the session indication
+    res.setHeader('Clear-Site-Data', '"cookies", "storage"');
+    return res.status(401).json({
+      success: true,
+      message: 'Logged out successfully',
+    });
+  });
+
+  app.post('/admin/api/generate-token', (req: Request, res: Response) => {
     try {
       const username = req.ntlm?.username || 'Unknown';
       const domain = req.ntlm?.domain || 'Unknown';
@@ -107,7 +130,7 @@ export const generateTokenApp = (port?: number) => {
     }
   });
 
-  app.post('/api/validate-token', (req: Request, res: Response) => {
+  app.post('/admin/api/validate-token', (req: Request, res: Response) => {
     try {
       const username = req.ntlm?.username || 'Unknown';
       const domain = req.ntlm?.domain || 'Unknown';
@@ -151,7 +174,7 @@ export const generateTokenApp = (port?: number) => {
     }
   });
 
-  app.get('/api/service-info', (req: Request, res: Response) => {
+  app.get('/admin/api/service-info', (req: Request, res: Response) => {
     try {
       const username = req.ntlm?.username || 'Unknown';
       const domain = req.ntlm?.domain || 'Unknown';
@@ -180,24 +203,35 @@ export const generateTokenApp = (port?: number) => {
   });
 
   // Add endpoint for authentication status
-  app.get('/api/auth-status', (req: Request, res: Response) => {
+  app.get('/admin/api/auth-status', (req: Request, res: Response) => {
     try {
       const username = req.ntlm?.username || 'Unknown';
       const domain = req.ntlm?.domain || 'Unknown';
       const isAuthenticated = req.ntlm?.isAuthenticated || false;
 
+      // Standalone server only supports NTLM auth
+      const authType = ntlmEnabled ? 'ntlm' : null;
+      const canLogout = isAuthenticated && ntlmEnabled;
+
+      // Format user display for NTLM (domain\username)
+      let userDisplay: string | null = null;
+      if (isAuthenticated) {
+        userDisplay = `${domain}\\${username}`;
+      }
+
       res.json({
         success: true,
-        ntlmEnabled,
+        authType,
         isAuthenticated,
-        user: isAuthenticated ? `${domain}\\${username}` : null,
+        user: userDisplay,
+        canLogout,
         timestamp: new Date().toISOString(),
       });
     } catch (error: any) {
       res.json({
         success: false,
         error: error.message,
-        ntlmEnabled,
+        authType: ntlmEnabled ? 'ntlm' : null,
       });
     }
   });
@@ -208,12 +242,10 @@ export const generateTokenApp = (port?: number) => {
 
     if (isNTLMEnabled) {
       logger.info('NTLM authentication is ENABLED - valid domain credentials required');
-      logger.info(`Debug endpoints: http://localhost:${port}/debug/sessions (dev only)`);
     } else {
       logger.info('NTLM authentication is DISABLED - running without authentication');
     }
 
-    logger.info(`Health check: http://localhost:${port}/health`);
     logger.info('Press Ctrl+C to stop the server');
   });
 };

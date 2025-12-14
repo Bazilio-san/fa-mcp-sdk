@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang='ru'>
+<head>
+  <meta charset='UTF-8'>
+  <meta name='viewport' content='width=device-width, initial-scale=1.0'>
+  <link rel="icon" type="image/svg+xml" href="/static/token-gen/jwt-icon.svg">
+  <title>Token Generator & Validator</title>
+  <link rel="stylesheet" href="/static/token-gen/styles.css">
+</head>
+<body>
+<div class="simple-container">
+  <!-- Header -->
+  <header class="simple-header">
+    <div class="service-icon">
+      <img src="/static/token-gen/jwt-icon.svg" alt="JWT">
+    </div>
+    <h1>Token Generator & Validator</h1>
+  </header>
+
+  <!-- Authentication Status (loaded via JS) -->
+  <main class="simple-main">
+    <div id="authStatusContainer"></div>
+
+    <div class="tab-container">
+      <div class="tabs">
+        <button class="tab active" onclick="switchTab('generate')">Token generation</button>
+        <button class="tab" onclick="switchTab('validate')">Token validation</button>
+      </div>
+
+    <!-- Token generation -->
+    <div id="generate" class="tab-content active">
+      <form id="generateForm">
+        <div class="form-group">
+          <div class="form-row" style="gap: 20px;">
+            <div style="flex: 1;">
+              <label for="tokenUser">Who is the token issued to:</label>
+              <input type="text" id="tokenUser" name="user" required>
+            </div>
+            <div style="flex: 1;">
+              <label>For how long:</label>
+              <div class="form-row">
+                <input type="number" id="timeValue" name="timeValue" class="time-input" min="1" value="15" required>
+                <select id="timeUnit" name="timeUnit" class="time-unit">
+                  <option value="minutes" selected>minutes</option>
+                  <option value="hours">hours</option>
+                  <option value="days">days</option>
+                  <option value="months">months</option>
+                  <option value="years">years</option>
+                </select>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="form-group">
+          <label>Additional data (key-value):</label>
+          <div id="keyValuePairs"></div>
+          <button type="button" class="add-btn" onclick="addKeyValuePair()">+</button>
+        </div>
+        <button type="submit" class="btn">Generate a token</button>
+      </form>
+      <div id="generateResult"></div>
+    </div>
+
+    <!-- Token validation -->
+    <div id="validate" class="tab-content">
+      <form id="validateForm">
+        <div class="form-group">
+          <label for="tokenInput">Enter the token for verification:</label>
+          <textarea id="tokenInput" name="token" rows="4" required></textarea>
+        </div>
+        <button type="submit" class="btn">Check Token</button>
+      </form>
+      <div id="validateResult"></div>
+    </div>
+    </div>
+  </main>
+</div>
+
+<script src="/static/token-gen/script.js"></script>
+</body>
+</html>
