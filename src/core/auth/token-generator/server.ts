@@ -7,6 +7,8 @@ import { setupNTLMAuthentication } from './ntlm/ntlm-integration.js';
 import { isNTLMEnabled } from './ntlm/ntlm-domain-config.js';
 import { dirname, join } from 'path';
 import { fileURLToPath } from 'url';
+import { createSvgRouter } from '../../web/svg-icons.js';
+import { faviconSvg } from '../../web/favicon-svg.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -28,9 +30,17 @@ export const generateTokenApp = (port?: number) => {
   app.use(express.json());
   app.use(express.urlencoded({ extended: true }));
 
+  // Favicon with color substitution
+  app.use(faviconSvg());
+
   // Serve static files (CSS, JS) - from unified static location
   const staticPath = join(__dirname, '../../web/static/token-gen');
+  const commonStaticPath = join(__dirname, '../../web/static');
   app.use('/static/token-gen', express.static(staticPath));
+  app.use('/static', express.static(commonStaticPath));
+
+  // SVG icons with color substitution
+  app.use('/svg', createSvgRouter());
 
   // NTLM Authentication middleware
   if (isNTLMEnabled) {

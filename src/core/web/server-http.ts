@@ -24,6 +24,7 @@ import { getMainDBConnectionStatus } from '../db/pg-db.js';
 import { normalizeHeaders } from '../utils/utils.js';
 import { createAdminRouter } from './admin-router.js';
 import { validateAdminAuthConfig } from '../auth/admin-auth.js';
+import { createSvgRouter } from './svg-icons.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -106,6 +107,9 @@ export async function startHttpServer (): Promise<void> {
 
   // Serve static files (CSS, JS, SVG)
   app.use('/static', express.static(staticPath));
+
+  // SVG icons with color substitution
+  app.use('/svg', createSvgRouter());
 
   // Home page API endpoint
   app.get('/api/home-info', handleHomeInfo);

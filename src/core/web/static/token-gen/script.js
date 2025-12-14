@@ -163,14 +163,14 @@ function renderAuthStatus (data) {
   }
 
   let html = '<div class="header-auth-info">';
-  html += '<img src="/static/token-gen/user.svg" alt="" class="user-icon">';
+  html += '<img src="/svg/token-gen/user.svg" alt="" class="user-icon">';
   html += '<span class="username">' + user + '</span>';
   html += '</div>';
 
   // Show logout button only for basic and ntlm auth types
   if (canLogout) {
     html += '<button class="header-logout-btn" onclick="logout()" title="Log out">';
-    html += '<img src="/static/token-gen/logout.svg" alt="Log out">';
+    html += '<img src="/svg/token-gen/logout.svg" alt="Log out">';
     html += '</button>';
   }
 
@@ -225,10 +225,10 @@ document.getElementById('generateForm').addEventListener('submit', async (e) => 
 
     if (result.success) {
       resultDiv.innerHTML =
-        '<div class="result success">' +
-        '<strong>The token has been successfully created!</strong><br>' +
-        '<div class="token-output">' + result.token + '</div>' +
-        '</div>';
+        `<div class="result success">
+<strong>The token has been successfully created!</strong><br>
+<div class="token-output">${result.token}</div>
+</div>`;
 
       // Add floating copy button to the token output
       const tokenOutput = resultDiv.querySelector('.token-output');
@@ -243,15 +243,15 @@ document.getElementById('generateForm').addEventListener('submit', async (e) => 
       }
     } else {
       resultDiv.innerHTML =
-        '<div class="result error">' +
-        '<strong>Error:</strong> ' + result.error +
-        '</div>';
+        `<div class="result error">
+<strong>Error:</strong> ${result.error}
+</div>`;
     }
   } catch (error) {
     document.getElementById('generateResult').innerHTML =
-      '<div class="result error">' +
-      '<strong>Error:</strong> ' + error.message +
-      '</div>';
+      `<div class="result error">
+<strong>Error:</strong> ${error.message}
+</div>`;
   }
 });
 
@@ -288,30 +288,30 @@ document.getElementById('validateForm').addEventListener('submit', async (e) => 
       const issuedAtTime = result.payload.iat ? new Date(result.payload.iat).toLocaleString('ru-RU') : 'N/A';
 
       resultDiv.innerHTML =
-        '<div class="result success">' +
-        '<strong>The token is valid!</strong>' +
-        '<div class="token-info">' +
-        '<h4>Token Information:</h4>' +
-        '<p><strong>User:</strong> ' + result.payload.user + '</p>' +
-        (result.payload.service ? '<p><strong>Service:</strong> ' + result.payload.service + '</p>' : '') +
-        '<p><strong>Issued at:</strong> ' + issuedAtTime + '</p>' +
-        '<p><strong>Time remaining:</strong> ' + formatTime(remainingTime) + '</p>' +
-        '<p><strong>Expires:</strong> ' + new Date(result.payload.expire).toLocaleString('ru-RU') + '</p>' +
-        payloadHtml +
-        '</div>' +
-        '</div>';
+        `<div class="result success">
+<strong>The token is valid!</strong>
+<div class="token-info">
+<h4>Token Information:</h4>
+<p><strong>User:</strong> ${result.payload.user}</p>
+${result.payload.service ? `<p><strong>Service:</strong> ${result.payload.service}</p>` : ''}
+<p><strong>Issued at:</strong> ${issuedAtTime}</p>
+<p><strong>Time remaining:</strong> ${formatTime(remainingTime)}</p>
+<p><strong>Expires:</strong> ${new Date(result.payload.expire).toLocaleString('ru-RU')}</p>
+${payloadHtml}
+</div>
+</div>`;
     } else {
       resultDiv.innerHTML =
-        '<div class="result error">' +
-        '<strong>Token invalid!</strong><br>' +
-        'Reason: ' + result.error +
-        '</div>';
+        `<div class="result error">
+<strong>Token invalid!</strong><br>
+Reason: ${result.error}
+</div>`;
     }
   } catch (error) {
     document.getElementById('validateResult').innerHTML =
-      '<div class="result error">' +
-      '<strong>Error:</strong> ' + error.message +
-      '</div>';
+      `<div class="result error">
+<strong>Error:</strong> ${error.message}
+</div>`;
   }
 });
 

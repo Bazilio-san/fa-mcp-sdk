@@ -194,21 +194,21 @@ function generateToolsTableRows (tools) {
     return '<tr><td colspan="3" class="loading-cell">No tools available</td></tr>';
   }
   return tools.map((tool, index) =>
-    '<tr>' +
-    '<td><code>' + tool.name + '</code></td>' +
-    '<td>' + (tool.annotations?.title || tool.description) + '</td>' +
-    '<td>' +
-    '<a class="detail-link" id="tools-toggle-' + index + '" onclick="toggleDetails(\'tools\', ' + index + ')">details</a>' +
-    '</td>' +
-    '</tr>' +
-    '<tr id="tools-detail-' + index + '" class="detail-row" style="display: none;">' +
-    '<td colspan="3">' +
-    '<div class="detail-content">' +
-    '<div class="loading-spinner" style="display: none;"></div>' +
-    '<pre class="json-content" style="display: none;"></pre>' +
-    '</div>' +
-    '</td>' +
-    '</tr>'
+    `<tr>
+<td><code>${tool.name}</code></td>
+<td>${tool.annotations?.title || tool.description}</td>
+<td>
+<a class="detail-link" id="tools-toggle-${index}" onclick="toggleDetails('tools', ${index})">details</a>
+</td>
+</tr>
+<tr id="tools-detail-${index}" class="detail-row" style="display: none;">
+<td colspan="3">
+<div class="detail-content">
+<div class="loading-spinner" style="display: none;"></div>
+<pre class="json-content" style="display: none;"></pre>
+</div>
+</td>
+</tr>`
   ).join('');
 }
 
@@ -217,26 +217,26 @@ function generateResourcesTableRows (resources) {
     return '<tr><td colspan="5" class="loading-cell">No resources available</td></tr>';
   }
   return resources.map((resource, index) =>
-    '<tr>' +
-    '<td><code>' + resource.uri + '</code></td>' +
-    '<td>' + resource.name + '</td>' +
-    '<td>' + resource.description + '</td>' +
-    '<td><code>' + resource.mimeType + '</code></td>' +
-    '<td>' +
-    '<a class="detail-link" id="resources-toggle-details-' + index + '" onclick="toggleResourceDetails(\'resources\', ' + index + ', \'details\')">details</a>' +
-    ' / ' +
-    '<a class="detail-link" id="resources-toggle-resource-' + index + '" onclick="toggleResourceDetails(\'resources\', ' + index + ', \'resource\')">resource</a>' +
-    '</td>' +
-    '</tr>' +
-    '<tr id="resources-detail-' + index + '" class="detail-row" style="display: none;">' +
-    '<td colspan="5">' +
-    '<div class="detail-content">' +
-    '<div class="loading-spinner"></div>' +
-    '<pre class="json-content" style="display: none;"></pre>' +
-    '<div class="resource-content" style="display: none;"></div>' +
-    '</div>' +
-    '</td>' +
-    '</tr>'
+    `<tr>
+<td><code>${resource.uri}</code></td>
+<td>${resource.name}</td>
+<td>${resource.description}</td>
+<td><code>${resource.mimeType}</code></td>
+<td>
+<a class="detail-link" id="resources-toggle-details-${index}" onclick="toggleResourceDetails('resources', ${index}, 'details')">details</a>
+ /
+<a class="detail-link" id="resources-toggle-resource-${index}" onclick="toggleResourceDetails('resources', ${index}, 'resource')">resource</a>
+</td>
+</tr>
+<tr id="resources-detail-${index}" class="detail-row" style="display: none;">
+<td colspan="5">
+<div class="detail-content">
+<div class="loading-spinner"></div>
+<pre class="json-content" style="display: none;"></pre>
+<div class="resource-content" style="display: none;"></div>
+</div>
+</td>
+</tr>`
   ).join('');
 }
 
@@ -245,23 +245,23 @@ function generatePromptsTableRows (prompts) {
     return '<tr><td colspan="2" class="loading-cell">No prompts available</td></tr>';
   }
   return prompts.map((prompt, index) =>
-    '<tr>' +
-    '<td><code>' + prompt.name + '</code></td>' +
-    '<td>' +
-    '<a class="detail-link" id="prompts-toggle-details-' + index + '" onclick="togglePromptDetails(\'prompts\', ' + index + ', \'details\')">details</a>' +
-    ' / ' +
-    '<a class="detail-link" id="prompts-toggle-prompt-' + index + '" onclick="togglePromptDetails(\'prompts\', ' + index + ', \'prompt\')">prompt</a>' +
-    '</td>' +
-    '</tr>' +
-    '<tr id="prompts-detail-' + index + '" class="detail-row" style="display: none;">' +
-    '<td colspan="2">' +
-    '<div class="detail-content">' +
-    '<div class="loading-spinner"></div>' +
-    '<pre class="json-content" style="display: none;"></pre>' +
-    '<div class="prompt-content" style="display: none;"></div>' +
-    '</div>' +
-    '</td>' +
-    '</tr>'
+    `<tr>
+<td><code>${prompt.name}</code></td>
+<td>
+<a class="detail-link" id="prompts-toggle-details-${index}" onclick="togglePromptDetails('prompts', ${index}, 'details')">details</a>
+ /
+<a class="detail-link" id="prompts-toggle-prompt-${index}" onclick="togglePromptDetails('prompts', ${index}, 'prompt')">prompt</a>
+</td>
+</tr>
+<tr id="prompts-detail-${index}" class="detail-row" style="display: none;">
+<td colspan="2">
+<div class="detail-content">
+<div class="loading-spinner"></div>
+<pre class="json-content" style="display: none;"></pre>
+<div class="prompt-content" style="display: none;"></div>
+</div>
+</td>
+</tr>`
   ).join('');
 }
 
