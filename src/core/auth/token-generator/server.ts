@@ -7,6 +7,9 @@ import { isMainModule } from '../../utils/utils.js';
 import { setupNTLMAuthentication } from './ntlm/ntlm-integration.js';
 import { isNTLMEnabled } from './ntlm/ntlm-domain-config.js';
 
+
+const ntlmEnabled = isNTLMEnabled;
+
 export const generateTokenApp = (port?: number) => {
 
   port = port || Number(process.env.TOKEN_GEN_PORT || 3030);
@@ -22,7 +25,7 @@ export const generateTokenApp = (port?: number) => {
   app.use(express.urlencoded({ extended: true }));
 
   // NTLM Authentication middleware
-  if (isNTLMEnabled()) {
+  if (isNTLMEnabled) {
     console.log(chalk.cyan('[TOKEN-GEN]'), 'Setting up NTLM authentication...');
     app.use(setupNTLMAuthentication());
   } else {
@@ -49,7 +52,7 @@ export const generateTokenApp = (port?: number) => {
       isAuthenticated,
       username,
       domain,
-      ntlmEnabled: isNTLMEnabled(),
+      ntlmEnabled,
     }));
   });
 
@@ -160,7 +163,7 @@ export const generateTokenApp = (port?: number) => {
         serviceName: appConfig.name,
         authenticatedUser: `${domain}\\${username}`,
         isAuthenticated,
-        ntlmEnabled: isNTLMEnabled(),
+        ntlmEnabled,
         timestamp: new Date().toISOString(),
       });
     } catch (error: any) {
@@ -171,7 +174,7 @@ export const generateTokenApp = (port?: number) => {
         success: false,
         error: error.message,
         serviceName: 'mcp-server', // fallback
-        ntlmEnabled: isNTLMEnabled(),
+        ntlmEnabled,
       });
     }
   });
@@ -185,7 +188,7 @@ export const generateTokenApp = (port?: number) => {
 
       res.json({
         success: true,
-        ntlmEnabled: isNTLMEnabled(),
+        ntlmEnabled,
         isAuthenticated,
         user: isAuthenticated ? `${domain}\\${username}` : null,
         timestamp: new Date().toISOString(),
@@ -194,7 +197,7 @@ export const generateTokenApp = (port?: number) => {
       res.json({
         success: false,
         error: error.message,
-        ntlmEnabled: isNTLMEnabled(),
+        ntlmEnabled,
       });
     }
   });
@@ -203,7 +206,7 @@ export const generateTokenApp = (port?: number) => {
     logger.info(`Token Generator Server started on port ${port}`);
     logger.info(`Open http://localhost:${port} in your browser`);
 
-    if (isNTLMEnabled()) {
+    if (isNTLMEnabled) {
       logger.info('NTLM authentication is ENABLED - valid domain credentials required');
       logger.info(`Debug endpoints: http://localhost:${port}/debug/sessions (dev only)`);
     } else {

@@ -6,11 +6,11 @@ import { getLoginPageHTML } from './ntlm-templates.js';
 import { isNTLMEnabled } from './ntlm-domain-config.js';
 
 // Create NTLM middleware instance (only if NTLM is enabled)
-const ntlmMiddleware = isNTLMEnabled() ? authNTLM(tokenGenNtlmOptions) : null;
+const ntlmMiddleware = isNTLMEnabled ? authNTLM(tokenGenNtlmOptions) : null;
 
 // Main NTLM authentication setup function
 export const setupNTLMAuthentication = () => {
-  if (!isNTLMEnabled()) {
+  if (!isNTLMEnabled) {
     console.log('[TOKEN-GEN] NTLM authentication is DISABLED - skipping middleware setup');
     // Return middleware that just passes through
     return [(req: Request, res: Response, next: NextFunction) => {

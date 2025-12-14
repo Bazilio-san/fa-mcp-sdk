@@ -4,12 +4,11 @@ import { appConfig } from '../../../bootstrap/init-config.js';
 import { IDcConfig } from '../../../_types_/active-directory-config.js';
 
 // Check if AD configuration is available
-export const isNTLMEnabled = (): boolean => {
-  return !!(appConfig.ad && isObject(appConfig.ad.domains) && Object.keys(appConfig.ad.domains).length);
-};
+export const isNTLMEnabled: boolean = !!(appConfig.ad && isObject(appConfig.ad.domains) && Object.keys(appConfig.ad.domains).length);
+
 
 // If AD config is null or undefined, NTLM authentication is disabled
-if (!isNTLMEnabled()) {
+if (!isNTLMEnabled) {
   console.log('[TOKEN-GEN] NTLM authentication is DISABLED - no AD configuration found');
 } else {
   const { domains } = appConfig.ad;
@@ -23,7 +22,7 @@ export const defaultTokenGenDomainConfig: IDcConfig = { controllers: [], usernam
 export const tokenGenDomains: { [domainName: string]: IDcConfig } = {};
 
 // Process and validate all domains (same logic as main NTLM example)
-if (isNTLMEnabled()) {
+if (isNTLMEnabled) {
   const { domains } = appConfig.ad;
 
   Object.entries(domains).forEach(([domainName, item]) => {
@@ -66,14 +65,14 @@ export const getDomainConfig = (domainName?: string): IDcConfig => {
 };
 
 export const tokenGenDomainConfig = {
-  defaultDomain: isNTLMEnabled() ? defaultTokenGenDomainConfig.name : undefined,
-  domains: isNTLMEnabled() ? tokenGenDomains : {},
-  strategy: isNTLMEnabled() ? (appConfig.ad.strategy || 'NTLM') : undefined, // from config or default NTLM
-  tlsOptions: isNTLMEnabled() ? appConfig.ad.tlsOptions : undefined, // from config if specified
+  defaultDomain: isNTLMEnabled ? defaultTokenGenDomainConfig.name : undefined,
+  domains: isNTLMEnabled ? tokenGenDomains : {},
+  strategy: isNTLMEnabled ? (appConfig.ad.strategy || 'NTLM') : undefined, // from config or default NTLM
+  tlsOptions: isNTLMEnabled ? appConfig.ad.tlsOptions : undefined, // from config if specified
 };
 
 // Debug info VVR
-if (isNTLMEnabled()) {
+if (isNTLMEnabled) {
   console.log(`[TOKEN-GEN] Configured domains: ${Object.keys(tokenGenDomains).join(', ')}`);
   console.log(`[TOKEN-GEN] Default domain: ${tokenGenDomainConfig.defaultDomain}`);
   console.log(`[TOKEN-GEN] Strategy: ${tokenGenDomainConfig.strategy}`);
