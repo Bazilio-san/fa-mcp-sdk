@@ -16,8 +16,8 @@ const isConsulProd = (process.env.NODE_CONSUL_ENV || process.env.NODE_ENV) === '
  * Main function that assembles all project data and starts the MCP server
  */
 const startProject = async (): Promise<void> => {
-  // Read favicon from assets
-  const favicon = getAsset('favicon.svg')!;
+  // Read logo from assets
+  const logoSvg = getAsset('logo.svg')!;
 
   // Assemble all data to pass to the core
   const serverData: McpServerData = {
@@ -45,7 +45,7 @@ const startProject = async (): Promise<void> => {
 
     // Assets
     assets: {
-      favicon,
+      logoSvg: logoSvg,
       maintainerHtml: '<a href="https://support.com/page/2805" target="_blank" rel="noopener" class="clickable">Support</a>',
     },
     // Function to get Consul UI address (if consul enabled: consul.service.enable = true)

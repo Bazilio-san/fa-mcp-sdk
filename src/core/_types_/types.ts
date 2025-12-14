@@ -83,8 +83,8 @@ export interface McpServerData {
   };
 
   assets?: {
-    favicon?: string; // SVG content
-    // An HTML snippet that appears in the footer of the About page and gives information about who to contact for support
+    logoSvg?: string; // SVG content for logo/favicon
+    // An HTML snippet that appears in the footer of the HOME page and gives information about who to contact for support
     maintainerHtml?: string;
   };
   // Function to get Consul UI address (if consul enabled: consul.service.enable = true)

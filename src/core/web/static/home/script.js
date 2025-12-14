@@ -120,7 +120,7 @@ function renderPageInfo (data) {
 // Load page data from API
 async function loadPageData () {
   try {
-    const response = await fetch('/api/about-info');
+    const response = await fetch('/api/home-info');
     if (!response.ok) {
       throw new Error('HTTP ' + response.status);
     }
@@ -131,9 +131,9 @@ async function loadPageData () {
     // Set theme color
     setPrimaryColor(data.primaryColor);
 
-    // Set favicon and header icon
-    setFavicon(data.favicon);
-    setHeaderIcon(data.favicon);
+    // Set favicon and header icon (logo)
+    setFavicon(data.logoSvg);
+    setHeaderIcon(data.logoSvg);
 
     // Store MCP data
     toolsData = data.tools || [];

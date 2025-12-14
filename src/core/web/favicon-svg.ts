@@ -1,8 +1,28 @@
 import { NextFunction, Request, Response, RequestHandler } from 'express';
 import crypto from 'crypto';
+import { readFileSync } from 'fs';
+import { dirname, join } from 'path';
+import { fileURLToPath } from 'url';
 import { config, getProjectData } from '../bootstrap/init-config.js';
 
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+
 const ONE_YEAR_MS = 60 * 60 * 24 * 365 * 1000; // 1 year
+
+// Default logo SVG (loaded from static/logo.svg)
+let defaultLogoSvg: string | null = null;
+
+const loadDefaultLogo = (): string => {
+  if (defaultLogoSvg === null) {
+    try {
+      defaultLogoSvg = readFileSync(join(__dirname, 'static/logo.svg'), 'utf-8');
+    } catch {
+      defaultLogoSvg = '<svg><!-- No logo provided --></svg>';
+    }
+  }
+  return defaultLogoSvg;
+};
 
 const etagS = (entity: string): string => {
   // compute hash of entity
@@ -14,9 +34,9 @@ const etagS = (entity: string): string => {
   return `"${Buffer.byteLength(entity, 'utf8').toString(16)}-${hash}"`;
 };
 
-export const getFaviconSvg = (): string => {
+export const getLogoSvg = (): string => {
   const { assets } = getProjectData();
-  let svg: string = assets?.favicon || '<svg><!-- No favicon provided --></svg>';
+  let svg: string = assets?.logoSvg || loadDefaultLogo();
   return svg.replace('fill="currentColor"', `fill="${config.uiColor.primary}"`);
 };
 
@@ -40,7 +60,7 @@ export const faviconSvg = (): RequestHandler => {
     }
 
     // Lazy load SVG when needed
-    const svg = getFaviconSvg();
+    const svg = getLogoSvg();
 
     res.setHeader('Cache-Control', `public, max-age=${Math.floor(ONE_YEAR_MS / 1000)}`);
     res.setHeader('ETag', etagS(svg));

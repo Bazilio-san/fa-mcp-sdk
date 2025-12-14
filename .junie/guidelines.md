@@ -21,7 +21,7 @@ Runtime layers:
   - `config\default.yaml` contains the primary config (web server, MCP transport, rate limit, optional DB, Consul, Swagger, colors, auth). Environment files may override by NODE_ENV.
 
 - HTTP server + MCP router
-  - `src\core\web\server-http.ts` creates the Express app, security headers (helmet), CORS, rate limiter, health/about endpoints, Swagger (if wired), and the JSON-RPC endpoint handling MCP methods.
+  - `src\core\web\server-http.ts` creates the Express app, security headers (helmet), CORS, rate limiter, health/home endpoints, Swagger (if wired), and the JSON-RPC endpoint handling MCP methods.
   - Supported MCP routes in HTTP mode (JSON-RPC over POST):
     - `initialize`, `ping`,
     - `tools/list`, `tools/call`,
@@ -160,7 +160,7 @@ Adding prompts/resources
 - Add custom resources in `src\template\custom-resources.ts` and ensure each has a unique URI scheme.
 
 Diagnostics
-- Startup logs show product name and transport. About page at `/` includes config and runtime info; health at `/health`.
+- Startup logs show product name and transport. Home page at `/` includes config and runtime info; health at `/health`.
 - JSON-RPC errors go through `createJsonRpcErrorResponse`; for domain errors, prefer throwing `BaseMcpError` or `ValidationError`.
 - To inspect client/server exchange quickly, use the provided testing clients (`McpHttpClient`, `McpSseClient`).
 

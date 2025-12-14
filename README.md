@@ -174,7 +174,7 @@ npm start
 
 Provides endpoints:
 
-- `GET /` - About page with server info
+- `GET /` - Home page with server info
 - `GET /health` - Health check
 - `GET /sse` - Server-Sent Events for MCP communication
 - `POST /mcp` - Direct MCP JSON-RPC endpoint

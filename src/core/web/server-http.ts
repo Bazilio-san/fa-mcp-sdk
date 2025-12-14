@@ -19,7 +19,7 @@ import { applyCors } from './cors.js';
 import { faviconSvg } from './favicon-svg.js';
 import chalk from 'chalk';
 import { getPrompt, getPromptsList } from '../mcp/prompts.js';
-import { handleAboutInfo } from './about-api.js';
+import { handleHomeInfo } from './home-api.js';
 import { getMainDBConnectionStatus } from '../db/pg-db.js';
 import { normalizeHeaders } from '../utils/utils.js';
 import { createAdminRouter } from './admin-router.js';
@@ -107,12 +107,12 @@ export async function startHttpServer (): Promise<void> {
   // Serve static files (CSS, JS, SVG)
   app.use('/static', express.static(staticPath));
 
-  // About page API endpoint
-  app.get('/api/about-info', handleAboutInfo);
+  // Home page API endpoint
+  app.get('/api/home-info', handleHomeInfo);
 
-  // Root endpoint - serve static About page
+  // Root endpoint - serve static Home page
   app.get('/', (req, res) => {
-    res.sendFile(join(staticPath, 'about', 'index.html'));
+    res.sendFile(join(staticPath, 'home', 'index.html'));
   });
 
   // Health check endpoint
@@ -437,7 +437,7 @@ export async function startHttpServer (): Promise<void> {
   // 404 handler for unknown routes
   app.use((req, res) => {
     const availableEndpoints: any = {
-      about: 'GET /',
+      home: 'GET /',
       health: 'GET /health',
       sse: 'GET /sse, POST /sse',
       messages: 'POST /messages',
@@ -474,7 +474,7 @@ export async function startHttpServer (): Promise<void> {
   const port = appConfig.webServer.port;
   app.listen(port, '0.0.0.0', () => {
     let msg = `${chalk.magenta(appConfig.productName)} started with ${chalk.blue('HTTP')} transport on port ${chalk.blue(port)}
-About page: http://localhost:${port}/`;
+Home page: http://localhost:${port}/`;
     if (isAdminEnabled) {
       msg += `\nAdmin panel: http://localhost:${port}/admin`;
     }

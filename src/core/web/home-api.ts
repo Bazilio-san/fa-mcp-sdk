@@ -1,13 +1,13 @@
 /**
- * About page API endpoint
- * Returns all dynamic data needed for the about page
+ * Home page API endpoint
+ * Returns all dynamic data needed for the home page
  */
 
 import { Request, Response } from 'express';
 import { getResourcesList } from '../mcp/resources.js';
 import { getPromptsList } from '../mcp/prompts.js';
 import { getMainDBConnectionStatus } from '../db/pg-db.js';
-import { getFaviconSvg } from './favicon-svg.js';
+import { getLogoSvg } from './favicon-svg.js';
 import { appConfig, getProjectData } from '../bootstrap/init-config.js';
 
 const startTime = new Date();
@@ -28,11 +28,11 @@ const getUptime = (): string => {
   }
 };
 
-export async function handleAboutInfo (_req: Request, res: Response): Promise<void> {
+export async function handleHomeInfo (_req: Request, res: Response): Promise<void> {
   try {
     const { version, repo } = appConfig;
     const serviceTitle = appConfig.productName.replace(/MCP/i, '').replace(/\s{2,}/g, ' ').trim();
-    const favicon = getFaviconSvg();
+    const logoSvg = getLogoSvg();
     const { resources } = getResourcesList();
     const { prompts } = getPromptsList();
     const { tools, httpComponents } = (global as any).__MCP_PROJECT_DATA__;
@@ -76,7 +76,7 @@ export async function handleAboutInfo (_req: Request, res: Response): Promise<vo
       version,
       uptime: getUptime(),
       primaryColor: appConfig.uiColor.primary,
-      favicon,
+      logoSvg,
       toolsCount: tools.length,
       resourcesCount: resources.length,
       promptsCount: prompts.length,
@@ -93,7 +93,7 @@ export async function handleAboutInfo (_req: Request, res: Response): Promise<vo
     res.json(response);
   } catch (error: any) {
     res.status(500).json({
-      error: 'Failed to get about info',
+      error: 'Failed to get home info',
       message: error.message,
     });
   }

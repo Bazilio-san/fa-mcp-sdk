@@ -89,6 +89,6 @@ export interface AppConfig extends IADConfig,
     };
   },
   uiColor: {
-    primary: string; // Font color of the header and a number of interface elements on the ABOUT page
+    primary: string; // Font color of the header and a number of interface elements on the HOME page
   }
 }

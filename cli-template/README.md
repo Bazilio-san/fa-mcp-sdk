@@ -39,7 +39,7 @@ npm run test:mcp-simple # Simple test
 
 **HTTP Mode** (web integration):
 - HTTP server with Server-Sent Events (SSE)
-- About page with server status at `http://localhost:{{port}}/`
+- Home page with server status at `http://localhost:{{port}}/`
 - Health check endpoint at `/health`
 - Direct JSON-RPC 2.0 endpoint at `/mcp`
 
@@ -97,7 +97,7 @@ Add to `claude_desktop_config.json`:
 
 ## HTTP Mode Endpoints
 
-- **/** - About page
+- **/** - Home page
 - **/health** - Health check
 - **/sse** - Server-Sent Events
 - **/mcp** - JSON-RPC 2.0
