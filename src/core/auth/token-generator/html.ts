@@ -720,7 +720,7 @@ document.getElementById('generateForm').addEventListener('submit', async (e) => 
   };
 
   try {
-    const response = await fetch('/api/generate-token', {
+    const response = await fetch('api/generate-token', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(requestData),
@@ -769,7 +769,7 @@ document.getElementById('validateForm').addEventListener('submit', async (e) => 
   const token = formData.get('token').trim();
 
   try {
-    const response = await fetch('/api/validate-token', {
+    const response = await fetch('api/validate-token', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ token }),
@@ -825,7 +825,7 @@ document.getElementById('validateForm').addEventListener('submit', async (e) => 
 async function initializeForm () {
   try {
     // Getting information about the service
-    const response = await fetch('/api/service-info');
+    const response = await fetch('api/service-info');
     const data = await response.json();
     const serviceName = data.serviceName;
 
@@ -843,7 +843,7 @@ async function initializeForm () {
 // Logout function
 async function logout() {
   try {
-    const response = await fetch('/logout', {
+    const response = await fetch('logout', {
       method: 'GET',
       credentials: 'include',
     });

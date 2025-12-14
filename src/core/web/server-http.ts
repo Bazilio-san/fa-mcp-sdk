@@ -20,8 +20,13 @@ import { getPrompt, getPromptsList } from '../mcp/prompts.js';
 import { renderAboutPage } from './about-page/render.js';
 import { getMainDBConnectionStatus } from '../db/pg-db.js';
 import { normalizeHeaders } from '../utils/utils.js';
+import { createAdminRouter } from './admin-router.js';
+import { validateAdminAuthConfig } from '../auth/admin-auth.js';
 
 const logger = lgr.getSubLogger({ name: chalk.bgYellow('server-http') });
+
+const { adminAuth } = appConfig.webServer || {};
+export const isAdminEnabled = adminAuth?.enabled === true;
 
 /**
  * Handle rate limiting with consistent error response
@@ -134,6 +139,20 @@ export async function startHttpServer (): Promise<void> {
   // API routes
   if (apiRouter) {
     app.use('/api', apiRouter);
+  }
+
+  // Admin panel routes (Token Generator & Validator)
+  if (isAdminEnabled) {
+    const adminConfigError = validateAdminAuthConfig();
+    if (adminConfigError) {
+      logger.error(`Admin auth configuration error: ${adminConfigError}`);
+      throw new Error(`Admin auth configuration error: ${adminConfigError}`);
+    }
+    // Redirect /admin to /admin/ to ensure relative paths work correctly in HTML
+    app.get('/admin', (req, res) => res.redirect('/admin/'));
+    const adminRouter = createAdminRouter();
+    app.use('/admin/', adminRouter);
+    logger.info('Admin panel mounted at /admin');
   }
 
   // SSE endpoints for legacy MCP communication
@@ -422,6 +441,9 @@ export async function startHttpServer (): Promise<void> {
     if (swagger) {
       availableEndpoints.docs = 'GET /docs';
     }
+    if (isAdminEnabled) {
+      availableEndpoints.admin = 'GET /admin';
+    }
     Object.assign(availableEndpoints, {
       ...(httpComponents?.endpointsOn404 || {}),
     });
@@ -445,8 +467,11 @@ export async function startHttpServer (): Promise<void> {
   // Start HTTP server
   const port = appConfig.webServer.port;
   app.listen(port, '0.0.0.0', () => {
-    const msg = `${chalk.magenta(appConfig.productName)} started with ${chalk.blue('HTTP')} transport on port ${chalk.blue(port)}
+    let msg = `${chalk.magenta(appConfig.productName)} started with ${chalk.blue('HTTP')} transport on port ${chalk.blue(port)}
 About page: http://localhost:${port}/`;
+    if (isAdminEnabled) {
+      msg += `\nAdmin panel: http://localhost:${port}/admin`;
+    }
     console.log(msg);
   });
 }
