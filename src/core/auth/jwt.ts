@@ -11,11 +11,12 @@ const logger = lgr.getSubLogger({ name: chalk.cyan('token-auth') });
 const { jwtToken } = appConfig.webServer?.auth || {};
 const checkMCPName = jwtToken?.checkMCPName || false;
 
+export const MIN_ENCRYPT_KEY_LENGTH = 8;
 
 const ALGORITHM = 'aes-256-ctr';
 const KEY = crypto
   .createHash('sha256')
-  .update(String(jwtToken?.encryptKey || 'secret'))
+  .update(String(jwtToken?.encryptKey || '11111111-7777-8888-9999-000000000000'))
   .digest('base64')
   .substring(0, 32);
 
