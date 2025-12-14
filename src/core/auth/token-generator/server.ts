@@ -184,6 +184,7 @@ export const generateTokenApp = (port?: number) => {
       res.json({
         success: true,
         serviceName: appConfig.name,
+        primaryColor: appConfig.uiColor.primary,
         authenticatedUser: `${domain}\\${username}`,
         isAuthenticated,
         ntlmEnabled,

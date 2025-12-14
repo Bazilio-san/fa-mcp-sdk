@@ -206,6 +206,7 @@ export function createAdminRouter (): Router {
       res.json({
         success: true,
         serviceName: appConfig.name,
+        primaryColor: appConfig.uiColor.primary,
         authenticatedUser: `${domain}\\${username}`,
         isAuthenticated,
         authType: adminAuthType,

@@ -1,5 +1,12 @@
 let keyValuePairCount = 0;
 
+// Set primary color CSS variable
+function setPrimaryColor (color) {
+  if (color) {
+    document.documentElement.style.setProperty('--primary-color', color);
+  }
+}
+
 function switchTab (tabName) {
   document.querySelectorAll('.tab-content').forEach(content => {
     content.classList.remove('active');
@@ -315,6 +322,9 @@ async function initializeForm () {
     const response = await fetch('/admin/api/service-info');
     const data = await response.json();
     const serviceName = data.serviceName;
+
+    // Set theme color
+    setPrimaryColor(data.primaryColor);
 
     // Adding a pre-filled pair serviceName
     addKeyValuePair('service', serviceName, true);
