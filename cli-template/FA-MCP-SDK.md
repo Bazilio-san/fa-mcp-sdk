@@ -1171,7 +1171,7 @@ import {
 } from 'fa-mcp-sdk';
 
 // Authentication types in CPU priority order (low to high cost)
-export type AuthType = 'permanentServerTokens' | 'basic' | 'jwtToken';
+export type AuthType = 'permanentServerTokens' | 'jwtToken' | 'basic' | 'custom';
 
 // Custom Authentication validator function (black box - receives full request)
 export type CustomAuthValidator = (req: any) => Promise<AuthResult> | AuthResult;
