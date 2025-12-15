@@ -51,7 +51,6 @@ yarn.lock
 pnpm-lock.yaml
 
 # Scripts and tools
-scripts/
 src/template/tools/
 deploy/
 

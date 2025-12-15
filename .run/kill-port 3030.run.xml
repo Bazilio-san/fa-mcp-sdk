@@ -1,10 +1,5 @@
 <component name="ProjectRunConfigurationManager">
-  <configuration default="false"
-                 name="kill-port 3030"
-                 type="NodeJSConfigurationType"
-                 application-parameters="3030"
-                 path-to-js-file="cli-template/scripts/kill-port.js"
-                 working-dir="$PROJECT_DIR$">
-    <method v="2"/>
+  <configuration default="false" name="kill-port 3030" type="NodeJSConfigurationType" application-parameters="3030" path-to-js-file="$PROJECT_DIR$/scripts/kill-port.js" working-dir="$PROJECT_DIR$">
+    <method v="2" />
   </configuration>
 </component>

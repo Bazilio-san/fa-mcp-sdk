@@ -884,16 +884,19 @@ certificate's public and private keys`,
     // Copy template files
     await this.copyDirectory(path.join(PROJ_ROOT, 'cli-template'), targetPath);
     await this.copyDirectory(path.join(PROJ_ROOT, 'src/template'), path.join(targetPath, 'src'));
-    let testsTargetPath = path.join(targetPath, 'tests');
-    await fs.mkdir(testsTargetPath, { recursive: true });
+
+    const testsTargetPath = path.join(targetPath, 'tests');
+
     await this.copyDirectory(path.join(PROJ_ROOT, 'src/tests'), testsTargetPath);
     await fs.copyFile(path.join(targetPath, '.env.example'), path.join(targetPath, '.env'));
     await fs.rename(path.join(targetPath, 'gitignore'), path.join(targetPath, '.gitignore'));
     await fs.rename(path.join(targetPath, 'r'), path.join(targetPath, '.run'));
 
-
-    await fs.mkdir(testsTargetPath, { recursive: true });
     await this.copyDirectory(path.join(PROJ_ROOT, 'config'), path.join(targetPath, 'config'));
+
+    const scriptsTargetPath = path.join(targetPath, 'scripts');
+    await this.copyDirectory(path.join(PROJ_ROOT, 'scripts'), scriptsTargetPath);
+    await fs.rm(path.join(targetPath, 'scripts/copy-static.js'), { force: true });
 
     // Rename all .xml files in .run directory to .run.xml
     const runDirPath = path.join(targetPath, '.run');
