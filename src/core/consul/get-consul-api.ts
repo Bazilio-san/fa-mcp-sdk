@@ -1,4 +1,4 @@
-import { getAPI } from 'af-consul-ts';
+import { getAPI } from 'fa-consul';
 import { logger as lgr } from '../logger.js';
 import { eventEmitter } from '../ee.js';
 import { appConfig, getProjectData } from '../bootstrap/init-config.js';

@@ -1,4 +1,4 @@
-import { accessPointsUpdater } from 'af-consul-ts';
+import { accessPointsUpdater } from 'fa-consul';
 import { logger as lgr } from '../logger.js';
 import { eventEmitter } from '../ee.js';
 import { appConfig } from '../bootstrap/init-config.js';

@@ -1,6 +1,6 @@
 import { TFileLogLevel } from 'af-logger-ts';
 import { IAFDatabasesConfig } from 'af-db-ts';
-import { IAFConsulConfig, IAccessPoints } from 'af-consul-ts';
+import { IAFConsulConfig, IAccessPoints } from 'fa-consul';
 import { IADConfig } from './active-directory-config.js';
 
 

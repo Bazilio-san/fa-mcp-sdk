@@ -460,13 +460,6 @@
   dependencies:
     "@types/node" "*"
 
-"@types/consul@^0.40.2":
-  version "0.40.3"
-  resolved "https://registry.yarnpkg.com/@types/consul/-/consul-0.40.3.tgz#7e01a575d3750e8e7c2d961087fc508b7b1d845f"
-  integrity sha512-SLGbeLxfKJFO/3qpJTK226v0vVQzofy4g68uADDUElTmMeBPMircp7gS5ob6Ix0QGzo1dnu5oXNt/BldR5OwDQ==
-  dependencies:
-    "@types/node" "*"
-
 "@types/cors@^2.8.19":
   version "2.8.19"
   resolved "https://registry.yarnpkg.com/@types/cors/-/cors-2.8.19.tgz#d93ea2673fd8c9f697367f5eeefc2bbfa94f0342"
@@ -850,17 +843,6 @@ af-color@^0.0.8:
   resolved "https://registry.yarnpkg.com/af-color/-/af-color-0.0.8.tgz#c3a9810f54fe58af60471cde7ff15855085dd006"
   integrity sha512-FdVZeSA6c1UkM7FjhkKtS+t5pC6uJUwt7F96M/JTCPHuHxUvcZ2yYlqfhFWv+QHhau3gSg0J8FUsw3U0BDqTzw==
 
-af-consul-ts@^4.0.14:
-  version "4.0.14"
-  resolved "https://registry.yarnpkg.com/af-consul-ts/-/af-consul-ts-4.0.14.tgz#5cd9c996f6db6c47f7ded06b6470e1f88d202c18"
-  integrity sha512-ndQOQB0p/Ct2wMAHV0SWRVvNPP8KfgmONT4dtE2zwD1DSgWP0OKgfCGhyNVC3FaWsLHAV+PMoNzH9jqOVfnG/Q==
-  dependencies:
-    "@types/consul" "^0.40.2"
-    async-mutex "^0.4.0"
-    consul "^1.2.0"
-    lodash "^4.17.21"
-    xxhashjs "^0.2.2"
-
 af-db-ts@^3.0.23:
   version "3.0.23"
   resolved "https://registry.yarnpkg.com/af-db-ts/-/af-db-ts-3.0.23.tgz#c36e5e2cfe6f15069098e7462d098fe27713a587"
@@ -909,7 +891,7 @@ af-tools-ts@^1.0.78, af-tools-ts@^1.0.87:
     json-to-pretty-yaml "^1.2.2"
     luxon "^3.4.3"
 
-af-tools-ts@^1.1.8:
+af-tools-ts@^1.1.5, af-tools-ts@^1.1.8:
   version "1.1.8"
   resolved "https://registry.yarnpkg.com/af-tools-ts/-/af-tools-ts-1.1.8.tgz#bbbfc23aa6086ff154f4323bdb3f8657a1f84955"
   integrity sha512-ztZxHZbvF03Wki6bTO3rOIC0trSwUn1A2YT2EdDgd8PoSOThlLkG6UvMU5ySchWOT3VGN4KOWeHPc2zoshsLqw==
@@ -1079,10 +1061,10 @@ async-function@^1.0.0:
   resolved "https://registry.yarnpkg.com/async-function/-/async-function-1.0.0.tgz#509c9fca60eaf85034c6829838188e4e4c8ffb2b"
   integrity sha512-hsU18Ae8CDTR6Kgu9DYf0EbCr/a5iGL0rytQDobUcdpYOKokk8LEjVphnXkDkgpi0wYVsqrXuP0bZxJaTqdgoA==
 
-async-mutex@^0.4.0:
-  version "0.4.1"
-  resolved "https://registry.yarnpkg.com/async-mutex/-/async-mutex-0.4.1.tgz#bccf55b96f2baf8df90ed798cb5544a1f6ee4c2c"
-  integrity sha512-WfoBo4E/TbCX1G95XTjbWTE3X2XLG0m1Xbv2cwOtuPdyH9CZvnaA5nCt1ucjaKEgW2A5IF71hxrRhr83Je5xjA==
+async-mutex@^0.5.0:
+  version "0.5.0"
+  resolved "https://registry.yarnpkg.com/async-mutex/-/async-mutex-0.5.0.tgz#353c69a0b9e75250971a64ac203b0ebfddd75482"
+  integrity sha512-1A94B18jkJ3DYq284ohPxoXbfTA5HsQ7/Mf4DEhcyLx3Bz27Rh59iScbB6EPiP+B+joue6YCxcMXSbFC1tZKwA==
   dependencies:
     tslib "^2.4.0"
 
@@ -1371,13 +1353,6 @@ confusing-browser-globals@^1.0.10:
   version "1.0.11"
   resolved "https://registry.yarnpkg.com/confusing-browser-globals/-/confusing-browser-globals-1.0.11.tgz#ae40e9b57cdd3915408a2805ebd3a5585608dc81"
   integrity sha512-JsPKdmh8ZkmnHxDk55FZ1TqVLvEQTvoByJZRN9jzI0UjxK/QgAmsphz7PGtqgPieQZ/CQcHWXCR7ATDNhGe+YA==
-
-consul@^1.2.0:
-  version "1.2.0"
-  resolved "https://registry.yarnpkg.com/consul/-/consul-1.2.0.tgz#9c1357da0e0780c05a29d97f5d66ca445052d800"
-  integrity sha512-xWMEDRszShfzKI7XQKq12gr3359VUHUFOrAC2ETNpNe8PFO6AUnY0sbscB7JW5WhUEfuveDcI5ScYqM//20bow==
-  dependencies:
-    papi "^1.1.0"
 
 content-disposition@^1.0.0:
   version "1.0.1"
@@ -2174,6 +2149,15 @@ extend@^3.0.0:
   version "3.0.2"
   resolved "https://registry.yarnpkg.com/extend/-/extend-3.0.2.tgz#f8b1136b4071fbd8eb140aff858b1019ec2915fa"
   integrity sha512-fjquC59cD7CyW6urNXK0FBufkZcoiGG80wTuPujX590cB5Ttln20E2UB4S/WARVqhXffZl2LNgS+gQdPIIim/g==
+
+fa-consul@^1.0.4:
+  version "1.0.4"
+  resolved "https://registry.yarnpkg.com/fa-consul/-/fa-consul-1.0.4.tgz#9c314d6e405337317dc3b14595723c42401541df"
+  integrity sha512-wGtJSseaaG7k3XPTGqfqxqbLzcoDmLqEa7lAKm06CEXxZL4aN8Zy+5xNwDX4w209w0oxY8nwkhDhWj/zT9GY8w==
+  dependencies:
+    af-tools-ts "^1.1.5"
+    async-mutex "^0.5.0"
+    xxhashjs "^0.2.2"
 
 fast-deep-equal@^3.1.1, fast-deep-equal@^3.1.3:
   version "3.1.3"
@@ -3484,11 +3468,6 @@ package-json-from-dist@^1.0.1:
   version "1.0.1"
   resolved "https://registry.yarnpkg.com/package-json-from-dist/-/package-json-from-dist-1.0.1.tgz#4f1471a010827a86f94cfd9b0727e36d267de505"
   integrity sha512-UEZIS3/by4OC8vL3P2dTXRETpebLI2NiI5vIrjaD/5UtrkFX/tNbwjTSRAGC/+7CAo2pIcBaRgWmcBBHcsaCIw==
-
-papi@^1.1.0:
-  version "1.1.2"
-  resolved "https://registry.yarnpkg.com/papi/-/papi-1.1.2.tgz#5b1d7686834bec489f1f823103c5e8554f2b984f"
-  integrity sha512-cwM6pPpfAYgPe3EQi23SmB5J5s4XFS9lou9z63I5BbnMGmFaR8LAKvKboW7n1IUAKj76OtnyK0YU16JjnZrqVg==
 
 parent-module@^1.0.0:
   version "1.0.1"

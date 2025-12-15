@@ -2,12 +2,11 @@
 Output of startup diagnostics to the console
 */
 import { configInfo, consulInfo, databasesInfo, infoBlock, nodeConfigEnvInfo, TInfoLine } from 'af-tools-ts';
-import { IAFConsulAPI } from 'af-consul-ts';
+import { IAFConsulAPI, IMeta } from 'fa-consul';
 import { yellow } from 'af-color';
 import { AppConfig } from '../_types_/config.js';
 import { fileLogger, useFileLogger, logger as lgr } from '../logger.js';
 import { getConsulAPI } from '../consul/get-consul-api.js';
-import { IMeta } from 'af-consul-ts';
 import chalk from 'chalk';
 import { appConfig } from './init-config.js';
 
