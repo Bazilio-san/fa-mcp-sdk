@@ -2150,10 +2150,10 @@ extend@^3.0.0:
   resolved "https://registry.yarnpkg.com/extend/-/extend-3.0.2.tgz#f8b1136b4071fbd8eb140aff858b1019ec2915fa"
   integrity sha512-fjquC59cD7CyW6urNXK0FBufkZcoiGG80wTuPujX590cB5Ttln20E2UB4S/WARVqhXffZl2LNgS+gQdPIIim/g==
 
-fa-consul@^1.0.4:
-  version "1.0.4"
-  resolved "https://registry.yarnpkg.com/fa-consul/-/fa-consul-1.0.4.tgz#9c314d6e405337317dc3b14595723c42401541df"
-  integrity sha512-wGtJSseaaG7k3XPTGqfqxqbLzcoDmLqEa7lAKm06CEXxZL4aN8Zy+5xNwDX4w209w0oxY8nwkhDhWj/zT9GY8w==
+fa-consul@^1.0.5:
+  version "1.0.5"
+  resolved "https://registry.yarnpkg.com/fa-consul/-/fa-consul-1.0.5.tgz#edff7b94d1f324d84bbfe15660b331d391bb701b"
+  integrity sha512-9OyaxDaLpdKOolFf0bw7DTywqM17kjrsUSVK0drRGpXSq85eTmQ7hFecWlxGBlEo8BIhrC/+F+Ova0yk+NIRhw==
   dependencies:
     af-tools-ts "^1.1.5"
     async-mutex "^0.5.0"
