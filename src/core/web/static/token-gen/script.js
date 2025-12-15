@@ -56,12 +56,22 @@ async function authFetch (url, options = {}) {
 
   const response = await fetch(url, options);
 
-  // Handle 401 Unauthorized - show token modal
+  // Handle 401 Unauthorized - show token modal if available
   if (response.status === 401 && requiresBearerToken) {
     clearStoredToken();
     const errorData = await response.json().catch(() => ({}));
-    showTokenModal(errorData.error || 'Authentication failed. Please enter a valid token.');
-    throw new Error('Unauthorized');
+    const errorMessage = errorData.error || 'Authentication failed';
+
+    // Try to show modal, but if it's not available, throw with descriptive error
+    const modal = document.getElementById('tokenModal');
+    if (modal) {
+      showTokenModal(errorMessage + '. Please enter a valid token.');
+    }
+
+    // Throw error with status code for form error handling
+    const error = new Error(`401 Unauthorized: ${errorMessage}`);
+    error.status = 401;
+    throw error;
   }
 
   return response;
@@ -337,9 +347,7 @@ async function loadAuthStatus () {
       renderAuthStatus(data);
     }
   } catch (error) {
-    if (error.message !== 'Unauthorized') {
-      console.error('Error loading auth status:', error);
-    }
+    console.error('Error loading auth status:', error);
   }
 }
 
@@ -400,12 +408,10 @@ document.getElementById('generateForm').addEventListener('submit', async (e) => 
 </div>`;
     }
   } catch (error) {
-    if (error.message !== 'Unauthorized') {
-      document.getElementById('generateResult').innerHTML =
-        `<div class="result error">
+    document.getElementById('generateResult').innerHTML =
+      `<div class="result error">
 <strong>Error:</strong> ${error.message}
 </div>`;
-    }
   }
 });
 
@@ -462,12 +468,10 @@ Reason: ${result.error}
 </div>`;
     }
   } catch (error) {
-    if (error.message !== 'Unauthorized') {
-      document.getElementById('validateResult').innerHTML =
-        `<div class="result error">
+    document.getElementById('validateResult').innerHTML =
+      `<div class="result error">
 <strong>Error:</strong> ${error.message}
 </div>`;
-    }
   }
 });
 
@@ -492,9 +496,7 @@ async function initializeForm () {
     addKeyValuePair('issue', '', true, 'URL of request for the issuance of a token in JIRA');
 
   } catch (error) {
-    if (error.message !== 'Unauthorized') {
-      console.error('Error loading service info:', error);
-    }
+    console.error('Error loading service info:', error);
     return;
   }
   // Add one empty pair for the user

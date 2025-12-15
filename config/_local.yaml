@@ -121,7 +121,7 @@ webServer:
   # Supports 4 authentication methods: permanentServerTokens, basic, jwtToken, ntlm
   # ========================================================================
   adminAuth:
-    enabled: false  # Enable/disable admin panel
+    enabled: true  # Enable/disable admin panel
     # Authentication type for admin panel: 'permanentServerTokens' | 'basic' | 'jwtToken' | 'ntlm'
     # For permanentServerTokens, basic, jwtToken - uses credentials from webServer.auth section
     # For ntlm - uses AD configuration from ad.domains section (no additional credentials needed)
