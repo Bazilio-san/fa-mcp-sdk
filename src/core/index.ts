@@ -110,3 +110,5 @@ export { McpHttpClient } from './utils/testing/McpHttpClient.js';
 export { McpSseClient } from './utils/testing/McpSseClient.js';
 export { McpStdioClient } from './utils/testing/McpStdioClient.js';
 export { McpStreamableHttpClient } from './utils/testing/McpStreamableHttpClient.js';
+
+export { initADGroupChecker } from './ad/group-checker.js';

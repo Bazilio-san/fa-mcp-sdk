@@ -26,6 +26,12 @@ ad:
       username: '***'
       # Service account password.
       password: '***'
+      # Base DN for LDAP searches. Auto-derived from controller URL if not set.
+      # baseDn: 'DC=corp,DC=com'
+  # Cache TTL for group membership checks (default: 600000 = 10 min)
+  # groupCacheTtlMs: 600000
+  # Cache TTL for user/group DN lookups (default: 86400000 = 24 hours)
+  # dnCacheTtlMs: 86400000
 
 # ... existing code ...
 # --------------------------------------------------

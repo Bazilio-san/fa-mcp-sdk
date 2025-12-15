@@ -10,6 +10,8 @@ export interface IDcConfig {
   // Service account name and password for AD requests
   username: string,
   password: string,
+  // Base DN for LDAP searches. Auto-derived from controller URL if not set.
+  baseDn?: string,
   default?: boolean,
 
   // ============= Assigned when processing the config in NTLM module ==========
@@ -31,5 +33,9 @@ export interface IADConfig {
     }
     tlsOptions?: ConnectionOptions;
     strategy?: EAuthStrategy;
+    // Cache TTL in milliseconds for group membership checks (default: 10 minutes)
+    groupCacheTtlMs?: number;
+    // DN cache TTL in milliseconds for user/group DN lookups (default: 24 hours)
+    dnCacheTtlMs?: number;
   }
 }

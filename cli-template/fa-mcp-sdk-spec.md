@@ -1464,6 +1464,35 @@ curl -H "Authorization: Bearer token123" \
 
 The multi-authentication system automatically tries authentication methods in CPU-optimized order (fastest first) and returns on the first successful match, providing both performance and flexibility.
 
+### Check if a user belongs to an AD group
+
+#### Configuration (`config/local.yaml`)
+
+```yaml
+ad:
+  domains:
+    MYDOMAIN:
+      default: true
+      controllers: ['ldap://dc1.corp.com']
+      username: 'svc_account@corp.com'
+      password: '***'
+      # baseDn: 'DC=corp,DC=com'  # Optional, auto-derived from controller URL
+```
+
+#### Usage
+
+```typescript
+import { initADGroupChecker } from 'fa-mcp-sdk';
+
+const { isUserInGroup, groupChecker } = initADGroupChecker();
+
+const isAdmin = await isUserInGroup('john.doe', 'Admins');
+const isDeveloper = await isUserInGroup('john.doe', 'Developers');
+
+groupChecker.clearCache();  // Clear cache if needed
+```
+
+
 ### Utility Functions
 
 #### General Utilities
