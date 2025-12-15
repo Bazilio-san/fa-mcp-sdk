@@ -7,13 +7,15 @@ import { Router, Request, Response } from 'express';
 import chalk from 'chalk';
 import { dirname, join } from 'path';
 import { fileURLToPath } from 'url';
-import { appConfig } from '../bootstrap/init-config.js';
+import { appConfig, getProjectData } from '../bootstrap/init-config.js';
 import { checkJwtToken, generateToken } from '../auth/jwt.js';
 import { isNTLMEnabled } from '../auth/token-generator/ntlm/ntlm-domain-config.js';
 import { getSessionStats } from '../auth/token-generator/ntlm/ntlm-session-storage.js';
 import { getLoginPageHTML } from '../auth/token-generator/ntlm/ntlm-templates.js';
 import { AdminAuthType, createAdminAuthMW } from '../auth/admin-auth.js';
 import { logger as lgr } from '../logger.js';
+import { TokenGenAuthInput } from '../_types_/types.js';
+import { AuthResult } from '../auth/types.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -37,6 +39,51 @@ const ntlmEnabled = adminAuthType === 'ntlm' && isNTLMEnabled;
 
 // Check if auth type requires Bearer token (handled by frontend modal)
 const requiresBearerToken = adminAuthType === 'permanentServerTokens' || adminAuthType === 'jwtToken';
+
+/**
+ * Checks custom authorization for Token Generator access
+ * Returns null if authorized, or AuthResult with error if not
+ */
+async function checkTokenGenAuthorization (req: Request): Promise<AuthResult | null> {
+  const projectData = getProjectData();
+  const handler = projectData?.tokenGenAuthHandler;
+
+  // If no custom handler is configured, allow access
+  if (typeof handler !== 'function') {
+    return null;
+  }
+
+  // Build input based on auth type
+  const input: TokenGenAuthInput = {
+    user: req.ntlm?.username || 'Unknown',
+    authType: (adminAuthType || 'permanentServerTokens') as TokenGenAuthInput['authType'],
+  };
+
+  // Add domain for NTLM
+  if (adminAuthType === 'ntlm' && req.ntlm?.domain) {
+    input.domain = req.ntlm.domain;
+  }
+
+  // Add payload for JWT
+  if (adminAuthType === 'jwtToken') {
+    input.payload = (req as any).authPayload;
+  }
+
+  try {
+    const result = await handler(input);
+    if (!result.success) {
+      logger.info(`Token Generator authorization denied for ${input.user}: ${result.error}`);
+      return result;
+    }
+    return null; // Authorized
+  } catch (error: any) {
+    logger.error('Token Generator authorization handler error:', error);
+    return {
+      success: false,
+      error: `Authorization check failed: ${error.message}`,
+    };
+  }
+}
 
 /**
  * Creates admin router with all token generation endpoints
@@ -137,8 +184,17 @@ export function createAdminRouter (): Router {
   });
 
   // API: Generate token
-  router.post('/api/generate-token', (req: Request, res: Response) => {
+  router.post('/api/generate-token', async (req: Request, res: Response) => {
     try {
+      // Check custom authorization
+      const authError = await checkTokenGenAuthorization(req);
+      if (authError) {
+        return res.status(403).json({
+          success: false,
+          error: authError.error || 'Authorization denied',
+        });
+      }
+
       const username = req.ntlm?.username || 'Unknown';
       const domain = req.ntlm?.domain || 'Unknown';
       const authenticatedUser = `${domain}\\${username}`;

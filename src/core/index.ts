@@ -22,6 +22,8 @@ export type {
   IToolProperties,
   IToolInputSchema,
   CustomAuthValidator,
+  TokenGenAuthHandler,
+  TokenGenAuthInput,
 } from './_types_/types.js';
 
 export { appConfig } from './bootstrap/init-config.js';

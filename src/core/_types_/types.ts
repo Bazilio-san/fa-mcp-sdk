@@ -2,6 +2,42 @@ import { Tool } from '@modelcontextprotocol/sdk/types.js';
 import { Router } from 'express';
 import { AuthResult } from '../auth/types.js';
 
+/**
+ * Input data for Token Generator authorization handler
+ * Contains user information based on the admin auth type
+ */
+export interface TokenGenAuthInput {
+  /** Username (from JWT payload, basic auth, or NTLM) */
+  user: string;
+  /** Domain name (only for NTLM authentication) */
+  domain?: string;
+  /** Full JWT payload (only for jwtToken authentication) */
+  payload?: Record<string, any>;
+  /** The authentication type used */
+  authType: 'jwtToken' | 'basic' | 'ntlm' | 'permanentServerTokens';
+}
+
+/**
+ * Custom authorization handler for Token Generator admin page
+ * Called after standard authentication to perform additional authorization checks
+ *
+ * @param input - User information from the authentication layer
+ * @returns AuthResult indicating whether user is authorized to access Token Generator
+ *
+ * @example
+ * // Only allow users from specific AD groups
+ * const tokenGenAuthHandler: TokenGenAuthHandler = async (input) => {
+ *   if (input.authType === 'ntlm') {
+ *     const isAdmin = await isUserInGroup(input.user, 'TokenGeneratorAdmins');
+ *     if (!isAdmin) {
+ *       return { success: false, error: 'User is not in TokenGeneratorAdmins group' };
+ *     }
+ *   }
+ *   return { success: true, username: input.user };
+ * };
+ */
+export type TokenGenAuthHandler = (input: TokenGenAuthInput) => Promise<AuthResult> | AuthResult;
+
 export interface IPromptData {
   name: string,
   description: string,
@@ -79,8 +115,12 @@ export interface McpServerData {
   requiredHttpHeaders?: IRequiredHttpHeader[] | null;
   customResources?: IResourceData[] | null;
 
-  // Authentication
+  // Optional custom authentication feature
   customAuthValidator?: CustomAuthValidator;
+
+  // Optional custom authorization handler for Token Generator admin page
+  // Called after standard admin auth to perform additional authorization checks
+  tokenGenAuthHandler?: TokenGenAuthHandler;
 
   httpComponents?: {
     apiRouter?: Router | null;

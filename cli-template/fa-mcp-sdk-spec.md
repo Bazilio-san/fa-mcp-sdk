@@ -1044,6 +1044,113 @@ describe('MCP Server Tests', () => {
 });
 ```
 
+#### Token Generator Authorization Handler
+
+The Token Generator admin page (`/admin/`) can be protected with an additional 
+custom authorization layer beyond the standard authentication. This allows you 
+to implement fine-grained access control, such as restricting access to specific 
+AD groups or roles.
+
+##### Types
+
+```typescript
+import { TokenGenAuthHandler, TokenGenAuthInput, AuthResult } from 'fa-mcp-sdk';
+
+// Input data passed to the authorization handler
+interface TokenGenAuthInput {
+  user: string;                    // Username from authentication
+  domain?: string;                 // Domain (only for NTLM auth)
+  payload?: Record<string, any>;   // JWT payload (only for jwtToken auth)
+  authType: 'jwtToken' | 'basic' | 'ntlm' | 'permanentServerTokens';
+}
+
+// Authorization handler function type
+type TokenGenAuthHandler = (input: TokenGenAuthInput) => Promise<AuthResult> | AuthResult;
+```
+
+##### Configuration
+
+Add `tokenGenAuthHandler` to your `McpServerData` in `src/start.ts`:
+
+```typescript
+import { initMcpServer, McpServerData, TokenGenAuthHandler, initADGroupChecker } from 'fa-mcp-sdk';
+
+// Example 1: Restrict to specific AD groups (NTLM authentication)
+const { isUserInGroup } = initADGroupChecker();
+
+const tokenGenAuthHandler: TokenGenAuthHandler = async (input) => {
+  // Only check for NTLM-authenticated users
+  if (input.authType === 'ntlm') {
+    const isAdmin = await isUserInGroup(input.user, 'TokenGeneratorAdmins');
+    if (!isAdmin) {
+      return {
+        success: false,
+        error: `User ${input.user} is not authorized to access Token Generator`,
+      };
+    }
+  }
+  return { success: true, username: input.user };
+};
+
+// Example 2: Check JWT payload for specific claims
+const tokenGenAuthHandler: TokenGenAuthHandler = async (input) => {
+  if (input.authType === 'jwtToken') {
+    const roles = input.payload?.roles || [];
+    if (!roles.includes('token-admin')) {
+      return {
+        success: false,
+        error: 'Missing required role: token-admin',
+      };
+    }
+  }
+  return { success: true, username: input.user };
+};
+
+// Example 3: Simple whitelist check
+const allowedUsers = ['admin', 'john.doe', 'jane.smith'];
+
+const tokenGenAuthHandler: TokenGenAuthHandler = (input) => {
+  if (!allowedUsers.includes(input.user.toLowerCase())) {
+    return {
+      success: false,
+      error: `User ${input.user} is not in the allowed users list`,
+    };
+  }
+  return { success: true, username: input.user };
+};
+
+// Use in McpServerData
+const serverData: McpServerData = {
+  tools,
+  toolHandler: handleToolCall,
+  agentBrief: AGENT_BRIEF,
+  agentPrompt: AGENT_PROMPT,
+
+  // Add custom authorization for Token Generator
+  tokenGenAuthHandler,
+
+  // ... other configuration
+};
+
+await initMcpServer(serverData);
+```
+
+##### Behavior
+
+- **If `tokenGenAuthHandler` is not provided**: All authenticated users can access Token Generator
+- **If handler returns `{ success: true }`**: User is authorized
+- **If handler returns `{ success: false, error: '...' }`**: User receives 403 Forbidden with error message
+- **Handler errors**: Caught and returned as 403 with error message
+
+##### Auth Type Input Details
+
+| Auth Type | `user` | `domain` | `payload` |
+|-----------|--------|----------|-----------|
+| `ntlm` | NTLM username | NTLM domain | - |
+| `basic` | Basic auth username | - | - |
+| `jwtToken` | JWT `user` claim | - | Full JWT payload |
+| `permanentServerTokens` | "Unknown" | - | - |
+
 #### Multi-Authentication System
 
 The FA-MCP-SDK supports a comprehensive multi-authentication system that allows multiple authentication methods to work together with CPU-optimized performance ordering.
