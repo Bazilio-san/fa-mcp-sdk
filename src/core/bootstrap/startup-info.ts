@@ -9,6 +9,7 @@ import { fileLogger, useFileLogger, logger as lgr } from '../logger.js';
 import { getConsulAPI } from '../consul/get-consul-api.js';
 import chalk from 'chalk';
 import { appConfig } from './init-config.js';
+import { detectAuthConfiguration } from '../auth/multi-auth.js';
 
 const logger = lgr.getSubLogger({ name: chalk.cyan('config') });
 
@@ -36,6 +37,26 @@ export const startupInfo = async (args: { dotEnvResult: any, cfg: AppConfig }) =
 
   const dbInfo = appConfig.isMainDBUsed ? [...databasesInfo(cfg, ['main'])] : [['DB', 'not used']];
 
+  // Authentication info
+  const authConfig = cfg.webServer?.auth;
+  const adminAuthConfig = cfg.webServer?.adminAuth;
+  const { configured: mcpAuthTypes, errors: authErrors } = detectAuthConfiguration();
+
+  const mcpAuthInfo = authConfig?.enabled
+    ? (mcpAuthTypes.length ? mcpAuthTypes.join(', ') : 'enabled but not configured')
+    : 'disabled';
+
+  const adminAuthInfo = adminAuthConfig?.enabled
+    ? adminAuthConfig.type
+    : 'disabled';
+
+  // Log auth configuration errors if any
+  if (Object.keys(authErrors).length > 0) {
+    Object.entries(authErrors).forEach(([type, errors]) => {
+      logger.warn(`Auth config error [${type}]: ${(errors as string[]).join(', ')}`);
+    });
+  }
+
   const info = [
     `${yellow}${cfg.productName || cfg.name} (v ${cfg.version})`,
     nodeConfigEnvInfo(),
@@ -45,6 +66,8 @@ export const startupInfo = async (args: { dotEnvResult: any, cfg: AppConfig }) =
     ['DEBUG', (process.env.DEBUG || '')],
     useFileLogger ? ['Logs dir', fileLogger?.logDir] : '',
     ...dbInfo,
+    ['MCP Auth', mcpAuthInfo],
+    ['Admin Auth', adminAuthInfo],
     consulInfoItem,
   ].filter(Boolean) as TInfoLine[];
 
