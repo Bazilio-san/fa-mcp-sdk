@@ -9,6 +9,7 @@ import { getPromptsList } from '../mcp/prompts.js';
 import { getMainDBConnectionStatus } from '../db/pg-db.js';
 import { getLogoSvg } from './favicon-svg.js';
 import { appConfig, getProjectData } from '../bootstrap/init-config.js';
+import { detectAuthConfiguration } from '../auth/multi-auth.js';
 
 const startTime = new Date();
 
@@ -70,6 +71,19 @@ export async function handleHomeInfo (_req: Request, res: Response): Promise<voi
       }
     }
 
+    // Authentication info (same logic as startup-info.ts)
+    const authConfig = appConfig.webServer?.auth;
+    const adminAuthConfig = appConfig.webServer?.adminAuth;
+    const { configured: mcpAuthTypes } = detectAuthConfiguration();
+
+    const mcpAuth = authConfig?.enabled
+      ? (mcpAuthTypes.length ? mcpAuthTypes.join(', ') : 'enabled but not configured')
+      : 'disabled';
+
+    const adminAuth = adminAuthConfig?.enabled
+      ? adminAuthConfig.type
+      : 'disabled';
+
     const response = {
       serviceTitle,
       description: appConfig.description,
@@ -86,6 +100,8 @@ export async function handleHomeInfo (_req: Request, res: Response): Promise<voi
       db,
       swagger: !!httpComponents?.swagger,
       consul,
+      mcpAuth,
+      adminAuth,
       repo,
       footer: footerParts.join(' • '),
     };

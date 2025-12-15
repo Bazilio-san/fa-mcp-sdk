@@ -95,6 +95,13 @@ function renderPageInfo (data) {
     swaggerSection.style.display = data.swagger ? 'block' : 'none';
   }
 
+  // Auth info
+  const mcpAuthEl = document.getElementById('mcpAuthValue');
+  if (mcpAuthEl) {mcpAuthEl.textContent = data.mcpAuth || 'disabled';}
+
+  const adminAuthEl = document.getElementById('adminAuthValue');
+  if (adminAuthEl) {adminAuthEl.textContent = data.adminAuth || 'disabled';}
+
   // Consul info
   const consulSection = document.getElementById('consulSection');
   if (consulSection) {
