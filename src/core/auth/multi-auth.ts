@@ -155,7 +155,8 @@ export async function checkMultiAuth (req: Request): Promise<AuthResult> {
       case 'basic': {
         const result = checkBasicAuth(credentials);
         if (result.success) {
-          return { ...result, authType };
+          // For basic auth, create payload with user property
+          return { ...result, authType, payload: { user: result.username! } };
         }
         errorResult = { ...result, authType };
         break;

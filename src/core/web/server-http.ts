@@ -166,27 +166,29 @@ export async function startHttpServer (): Promise<void> {
   }
 
   // SSE endpoints for legacy MCP communication
-  // Store SSE transports by session ID with transport, server, and preserved headers
+  // Store SSE transports by session ID with transport, server, preserved headers, and auth payload
   const sseTransports = new Map<string, {
     transport: SSEServerTransport,
     server: any,
-    headers: Record<string, string>
+    headers: Record<string, string>,
+    payload?: { user: string; [key: string]: any }
   }>();
 
-  // Create SSE server instance with preserved headers from connection establishment
-  async function createSseServer (preservedHeaders: Record<string, string>) {
+  // Create SSE server instance with preserved headers and auth payload from connection establishment
+  async function createSseServer (preservedHeaders: Record<string, string>, authPayload?: { user: string; [key: string]: any }) {
     const sseServer = createMcpServer();
 
-    // Override the tool call handler to include rate limiting and preserved headers
+    // Override the tool call handler to include rate limiting, preserved headers and auth payload
     sseServer.setRequestHandler(CallToolRequestSchema, async (request) => {
       // Apply rate limiting for each SSE tool call
       const toolCallClientId = 'sse-tool-unknown';
       await handleRateLimit(rateLimiter, toolCallClientId, 'unknown', `SSE tool call | tool: ${request.params.name}`);
 
-      // Execute the tool call with preserved headers from SSE connection establishment
+      // Execute the tool call with preserved headers and payload from SSE connection establishment
       const result = await toolHandler({
         ...request.params,
-        headers: preservedHeaders // Use headers from when SSE connection was established
+        headers: preservedHeaders, // Use headers from when SSE connection was established
+        payload: authPayload // Use auth payload from when SSE connection was established
       });
       return {
         content: result.content,
@@ -209,17 +211,22 @@ export async function startHttpServer (): Promise<void> {
       const preservedHeaders = normalizeHeaders(req.headers);
       logger.debug('SSE connection headers preserved:', Object.keys(preservedHeaders));
 
+      // Extract auth payload from middleware (set by authMW)
+      const authInfo = (req as any).authInfo;
+      const authPayload = authInfo?.payload;
+
       // Create SSE transport that will use the same endpoint for POST requests
       const transport = new SSEServerTransport('/sse', res);
 
-      // Create a dedicated server instance with preserved headers for this SSE connection
-      const sseServer = await createSseServer(preservedHeaders);
+      // Create a dedicated server instance with preserved headers and auth payload for this SSE connection
+      const sseServer = await createSseServer(preservedHeaders, authPayload);
 
-      // Store transport, server, and headers for cleanup and reference
+      // Store transport, server, headers, and payload for cleanup and reference
       sseTransports.set(transport.sessionId, {
         transport,
         server: sseServer,
-        headers: preservedHeaders
+        headers: preservedHeaders,
+        payload: authPayload
       });
 
       // Clean up transport and server on connection close
@@ -364,9 +371,12 @@ export async function startHttpServer (): Promise<void> {
           // Apply rate limiting for tool calls
           const toolCallClientId = `tool-${req.ip || 'unknown'}`;
           await handleRateLimit(rateLimiter, toolCallClientId, req.ip || 'unknown', `tool call | tool: ${params?.name || 'unknown'}`, res, id);
+          // Extract auth payload from middleware (set by authMW)
+          const mcpAuthPayload = (req as any).authInfo?.payload;
           result = await toolHandler({
             ...params,
-            headers: normalizeHeaders(req.headers)
+            headers: normalizeHeaders(req.headers),
+            payload: mcpAuthPayload
           });
           break;
 

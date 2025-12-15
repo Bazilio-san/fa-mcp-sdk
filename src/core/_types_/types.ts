@@ -62,7 +62,13 @@ export type CustomAuthValidator = (req: any) => Promise<AuthResult> | AuthResult
 export interface McpServerData {
   // MCP components
   tools: Tool[];
-  toolHandler: (params: { name: string; arguments?: any; headers?: Record<string, string> }) => Promise<any>;
+  toolHandler: (params: {
+                  name: string;
+                  arguments?: any;
+                  headers?: Record<string, string>;
+                  payload?: { user: string; [key: string]: any } | undefined
+                },
+  ) => Promise<any>;
 
   // Prompts
   agentBrief: string;
