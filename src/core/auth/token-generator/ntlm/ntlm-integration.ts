@@ -70,6 +70,14 @@ export const setupNTLMAuthentication = () => {
         return next();
       }
 
+      // Clear non-NTLM Authorization header (e.g., Basic auth cached by browser for same origin)
+      // This forces NTLM middleware to send 401 with WWW-Authenticate: NTLM
+      const authHeader = req.headers.authorization;
+      if (authHeader && !authHeader.startsWith('NTLM ')) {
+        console.log('[TOKEN-GEN] Clearing non-NTLM Authorization header to trigger NTLM auth');
+        delete req.headers.authorization;
+      }
+
       // Run NTLM authentication
       console.log(`[TOKEN-GEN] Starting NTLM authentication for: ${req.method} ${req.path}`);
       ntlmMiddleware!(req, res, next);
