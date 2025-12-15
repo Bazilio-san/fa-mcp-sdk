@@ -35,52 +35,91 @@ const { adminAuth } = appConfig.webServer || {};
 const adminAuthType: AdminAuthType | undefined = adminAuth?.enabled === true ? adminAuth.type : undefined;
 const ntlmEnabled = adminAuthType === 'ntlm' && isNTLMEnabled;
 
+// Check if auth type requires Bearer token (handled by frontend modal)
+const requiresBearerToken = adminAuthType === 'permanentServerTokens' || adminAuthType === 'jwtToken';
+
 /**
  * Creates admin router with all token generation endpoints
  */
 export function createAdminRouter (): Router {
   const router = Router();
 
-  // Apply admin authentication middleware to all admin routes
+  // ============================
+  // PUBLIC ENDPOINTS (no auth required)
+  // ============================
+
+  // Public endpoint - auth config (frontend needs this to know if token modal is required)
+  router.get('/api/auth-config', (req: Request, res: Response) => {
+    res.json({
+      success: true,
+      authType: adminAuthType || null,
+      requiresBearerToken,
+      timestamp: new Date().toISOString(),
+    });
+  });
+
+  // Main admin page - always serve HTML (auth is handled by frontend for Bearer tokens)
+  // For NTLM/Basic - middleware will handle auth before this route
+  if (requiresBearerToken) {
+    // For Bearer token auth: serve page without auth, frontend will handle token modal
+    router.get('/', (req: Request, res: Response) => {
+      logger.info('Admin page accessed (Bearer token auth - frontend handles authentication)');
+      res.sendFile(join(staticPath, 'index.html'));
+    });
+
+    // Logout for Bearer token auth - just return success, frontend clears sessionStorage
+    router.get('/logout', (req: Request, res: Response) => {
+      res.setHeader('Clear-Site-Data', '"storage"');
+      return res.status(200).json({
+        success: true,
+        message: 'Logged out successfully',
+      });
+    });
+  }
+
+  // ============================
+  // PROTECTED ENDPOINTS (auth required)
+  // ============================
+
+  // Apply admin authentication middleware to protected routes
   const adminAuthMW = createAdminAuthMW();
   router.use(adminAuthMW);
 
   // Note: Static files (CSS, JS) are served globally at /static/token-gen/ by server-http.ts
 
-  // Main admin page - Token Generator UI
-  router.get('/', (req: Request, res: Response) => {
-    const username = req.ntlm?.username || 'Unknown';
-    const domain = req.ntlm?.domain || 'Unknown';
-    const isAuthenticated = req.ntlm?.isAuthenticated || false;
+  // Main admin page - for NTLM/Basic auth (middleware already authenticated)
+  if (!requiresBearerToken) {
+    router.get('/', (req: Request, res: Response) => {
+      const username = req.ntlm?.username || 'Unknown';
+      const domain = req.ntlm?.domain || 'Unknown';
+      const isAuthenticated = req.ntlm?.isAuthenticated || false;
 
-    logger.info(`Admin page accessed by: ${domain}\\${username} (Authenticated: ${isAuthenticated})`);
+      logger.info(`Admin page accessed by: ${domain}\\${username} (Authenticated: ${isAuthenticated})`);
+      res.sendFile(join(staticPath, 'index.html'));
+    });
 
-    // Serve static index.html
-    res.sendFile(join(staticPath, 'index.html'));
-  });
+    // Logout for NTLM auth
+    router.get('/logout', (req: Request, res: Response) => {
+      logger.info(`Logout requested by: ${req.ntlm?.domain || 'Unknown'}\\${req.ntlm?.username || 'Unknown'}`);
+
+      if (adminAuthType === 'ntlm') {
+        res.setHeader('WWW-Authenticate', 'NTLM');
+        res.setHeader('Clear-Site-Data', '"cookies", "storage"');
+        return res.status(401).send('Authentication required - please login again');
+      }
+
+      // For basic auth
+      res.setHeader('Clear-Site-Data', '"cookies", "storage"');
+      return res.status(401).json({
+        success: true,
+        message: 'Logged out successfully',
+      });
+    });
+  }
 
   // Login page (for NTLM)
   router.get('/login', (req: Request, res: Response) => {
     res.send(getLoginPageHTML(req.ntlm?.username || ''));
-  });
-
-  // Logout endpoint
-  router.get('/logout', (req: Request, res: Response) => {
-    logger.info(`Logout requested by: ${req.ntlm?.domain || 'Unknown'}\\${req.ntlm?.username || 'Unknown'}`);
-
-    if (adminAuthType === 'ntlm') {
-      // NTLM logout - send 401 to trigger browser auth prompt
-      res.setHeader('WWW-Authenticate', 'NTLM');
-      res.setHeader('Clear-Site-Data', '"cookies", "storage"');
-      return res.status(401).send('Authentication required - please login again');
-    }
-
-    // For other auth types, just clear the session indication
-    res.setHeader('Clear-Site-Data', '"cookies", "storage"');
-    return res.status(401).json({
-      success: true,
-      message: 'Logged out successfully',
-    });
   });
 
   // Debug endpoint for session stats (development only)
@@ -234,8 +273,8 @@ export function createAdminRouter (): Router {
       const domain = req.ntlm?.domain || 'Unknown';
       const isAuthenticated = req.ntlm?.isAuthenticated || false;
 
-      // Determine if logout is available (only for basic and ntlm)
-      const canLogout = isAuthenticated && (adminAuthType === 'basic' || adminAuthType === 'ntlm');
+      // Determine if logout is available (for all auth types except disabled)
+      const canLogout = isAuthenticated && !!adminAuthType;
 
       // Format user display based on auth type
       let userDisplay: string | null = null;

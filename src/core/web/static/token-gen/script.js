@@ -1,5 +1,155 @@
 let keyValuePairCount = 0;
 
+// ===========================
+// Token Authentication Module
+// ===========================
+
+const AUTH_TOKEN_KEY = 'adminAuthToken';
+let requiresBearerToken = false;
+
+// Get stored auth token from sessionStorage
+function getStoredToken () {
+  return sessionStorage.getItem(AUTH_TOKEN_KEY);
+}
+
+// Store auth token in sessionStorage
+function storeToken (token) {
+  sessionStorage.setItem(AUTH_TOKEN_KEY, token);
+}
+
+// Clear stored auth token
+function clearStoredToken () {
+  sessionStorage.removeItem(AUTH_TOKEN_KEY);
+}
+
+// Show token authentication modal
+function showTokenModal (errorMessage = null) {
+  const modal = document.getElementById('tokenModal');
+  const errorDiv = document.getElementById('tokenAuthError');
+
+  if (errorMessage) {
+    errorDiv.innerHTML = `<strong>Error:</strong> ${errorMessage}`;
+    errorDiv.style.display = 'block';
+  } else {
+    errorDiv.style.display = 'none';
+  }
+
+  modal.style.display = 'flex';
+}
+
+// Hide token authentication modal
+function hideTokenModal () {
+  const modal = document.getElementById('tokenModal');
+  modal.style.display = 'none';
+}
+
+// Authenticated fetch wrapper - adds Authorization header if token auth is required
+async function authFetch (url, options = {}) {
+  const token = getStoredToken();
+
+  if (requiresBearerToken && token) {
+    options.headers = {
+      ...options.headers,
+      'Authorization': `Bearer ${token}`,
+    };
+  }
+
+  const response = await fetch(url, options);
+
+  // Handle 401 Unauthorized - show token modal
+  if (response.status === 401 && requiresBearerToken) {
+    clearStoredToken();
+    const errorData = await response.json().catch(() => ({}));
+    showTokenModal(errorData.error || 'Authentication failed. Please enter a valid token.');
+    throw new Error('Unauthorized');
+  }
+
+  return response;
+}
+
+// Check auth config and initialize authentication if needed
+async function initializeAuth () {
+  try {
+    // Get auth config from public endpoint (no auth required)
+    const response = await fetch('/admin/api/auth-config');
+    const config = await response.json();
+
+    if (config.success && config.requiresBearerToken) {
+      requiresBearerToken = true;
+
+      // Check if we have a stored token
+      const storedToken = getStoredToken();
+      if (!storedToken) {
+        showTokenModal();
+        return false;
+      }
+
+      // Verify token is still valid by making an authenticated request
+      try {
+        const verifyResponse = await authFetch('/admin/api/auth-status');
+        const verifyData = await verifyResponse.json();
+
+        if (!verifyData.success || !verifyData.isAuthenticated) {
+          clearStoredToken();
+          showTokenModal('Token is invalid or expired.');
+          return false;
+        }
+      } catch (error) {
+        // authFetch already handles 401 and shows modal
+        return false;
+      }
+    }
+
+    return true;
+  } catch (error) {
+    console.error('Error checking auth config:', error);
+    return true; // Continue anyway if config check fails
+  }
+}
+
+// Handle token authentication form submission
+function setupTokenAuthForm () {
+  const form = document.getElementById('tokenAuthForm');
+  if (!form) {return;}
+
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+
+    const tokenInput = document.getElementById('authTokenInput');
+    const token = tokenInput.value.trim();
+
+    if (!token) {
+      showTokenModal('Please enter a token.');
+      return;
+    }
+
+    // Store token and try to authenticate
+    storeToken(token);
+
+    try {
+      const response = await authFetch('/admin/api/auth-status');
+      const data = await response.json();
+
+      if (data.success && data.isAuthenticated) {
+        hideTokenModal();
+        tokenInput.value = '';
+        // Reload auth status and initialize form
+        loadAuthStatus();
+        initializeForm();
+      } else {
+        clearStoredToken();
+        showTokenModal(data.error || 'Invalid token.');
+      }
+    } catch (error) {
+      // Error already handled in authFetch
+      if (error.message !== 'Unauthorized') {
+        clearStoredToken();
+        showTokenModal('Authentication failed: ' + error.message);
+      }
+    }
+  });
+}
+
 // Set primary color CSS variable
 function setPrimaryColor (color) {
   if (color) {
@@ -181,13 +331,15 @@ function renderAuthStatus (data) {
 // Load authentication status from API
 async function loadAuthStatus () {
   try {
-    const response = await fetch('/admin/api/auth-status');
+    const response = await authFetch('/admin/api/auth-status');
     const data = await response.json();
     if (data.success) {
       renderAuthStatus(data);
     }
   } catch (error) {
-    console.error('Error loading auth status:', error);
+    if (error.message !== 'Unauthorized') {
+      console.error('Error loading auth status:', error);
+    }
   }
 }
 
@@ -214,7 +366,7 @@ document.getElementById('generateForm').addEventListener('submit', async (e) => 
   };
 
   try {
-    const response = await fetch('/admin/api/generate-token', {
+    const response = await authFetch('/admin/api/generate-token', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(requestData),
@@ -248,10 +400,12 @@ document.getElementById('generateForm').addEventListener('submit', async (e) => 
 </div>`;
     }
   } catch (error) {
-    document.getElementById('generateResult').innerHTML =
-      `<div class="result error">
+    if (error.message !== 'Unauthorized') {
+      document.getElementById('generateResult').innerHTML =
+        `<div class="result error">
 <strong>Error:</strong> ${error.message}
 </div>`;
+    }
   }
 });
 
@@ -263,7 +417,7 @@ document.getElementById('validateForm').addEventListener('submit', async (e) => 
   const token = formData.get('token').trim();
 
   try {
-    const response = await fetch('/admin/api/validate-token', {
+    const response = await authFetch('/admin/api/validate-token', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ token }),
@@ -308,10 +462,12 @@ Reason: ${result.error}
 </div>`;
     }
   } catch (error) {
-    document.getElementById('validateResult').innerHTML =
-      `<div class="result error">
+    if (error.message !== 'Unauthorized') {
+      document.getElementById('validateResult').innerHTML =
+        `<div class="result error">
 <strong>Error:</strong> ${error.message}
 </div>`;
+    }
   }
 });
 
@@ -319,19 +475,27 @@ Reason: ${result.error}
 async function initializeForm () {
   try {
     // Getting information about the service
-    const response = await fetch('/admin/api/service-info');
+    const response = await authFetch('/admin/api/service-info');
     const data = await response.json();
     const serviceName = data.serviceName;
 
     // Set theme color
     setPrimaryColor(data.primaryColor);
 
+    // Clear existing key-value pairs before re-initializing
+    const container = document.getElementById('keyValuePairs');
+    container.innerHTML = '';
+    keyValuePairCount = 0;
+
     // Adding a pre-filled pair serviceName
     addKeyValuePair('service', serviceName, true);
     addKeyValuePair('issue', '', true, 'URL of request for the issuance of a token in JIRA');
 
   } catch (error) {
-    console.error('Error loading service info:', error);
+    if (error.message !== 'Unauthorized') {
+      console.error('Error loading service info:', error);
+    }
+    return;
   }
   // Add one empty pair for the user
   addKeyValuePair();
@@ -340,6 +504,19 @@ async function initializeForm () {
 // Logout function
 async function logout () {
   try {
+    // For token-based auth, just clear the stored token
+    if (requiresBearerToken) {
+      clearStoredToken();
+      showTokenModal();
+      // Clear auth status display
+      const container = document.getElementById('authStatusContainer');
+      if (container) {
+        container.style.display = 'none';
+      }
+      return;
+    }
+
+    // For other auth types (NTLM, Basic), make logout request
     const response = await fetch('/admin/logout', {
       method: 'GET',
       credentials: 'include',
@@ -359,7 +536,16 @@ async function logout () {
 }
 
 // Initialization on page load
-document.addEventListener('DOMContentLoaded', () => {
-  loadAuthStatus();
-  initializeForm();
+document.addEventListener('DOMContentLoaded', async () => {
+  // Setup token auth form handler
+  setupTokenAuthForm();
+
+  // Initialize authentication (check if token is needed and valid)
+  const authOk = await initializeAuth();
+
+  if (authOk) {
+    // Load auth status and form only if authenticated
+    loadAuthStatus();
+    initializeForm();
+  }
 });
