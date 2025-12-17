@@ -27,13 +27,13 @@ export interface ErrorResponse {
  * This demonstrates how to use tsoa decorators for automatic OpenAPI generation
  */
 @Route('api')
-@Tags('Example')
 export class ExampleController {
   /**
    * Example protected endpoint
    * Template endpoint - customize as needed
    */
   @Get('example')
+  @Tags('Example')
   public async getExample (): Promise<ExampleResponse> {
     try {
       logger.info('Example endpoint called');
