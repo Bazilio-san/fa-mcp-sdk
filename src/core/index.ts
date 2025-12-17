@@ -120,4 +120,4 @@ export {
   createSwaggerUIAssetsMiddleware,
   type OpenAPISpecResponse,
   type SwaggerUIConfig,
-} from './api/openapi.js';
+} from './web/openapi.js';
