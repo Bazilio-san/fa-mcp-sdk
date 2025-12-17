@@ -16,7 +16,6 @@ export type {
   IResourceData,
 
   IEndpointsOn404,
-  ISwaggerData,
   IRequiredHttpHeader,
 
   IToolProperties,
@@ -114,3 +113,11 @@ export { McpStdioClient } from './utils/testing/McpStdioClient.js';
 export { McpStreamableHttpClient } from './utils/testing/McpStreamableHttpClient.js';
 
 export { initADGroupChecker } from './ad/group-checker.js';
+
+// OpenAPI/Swagger utilities
+export {
+  configureOpenAPI,
+  createSwaggerUIAssetsMiddleware,
+  type OpenAPISpecResponse,
+  type SwaggerUIConfig,
+} from './api/openapi.js';

@@ -1,7 +1,7 @@
 {
   "name": "fa-mcp-sdk",
   "productName": "FA MCP SDK",
-  "version": "0.2.184",
+  "version": "0.2.185",
   "description": "Core infrastructure and templates for building Model Context Protocol (MCP) servers with TypeScript",
   "type": "module",
   "main": "dist/core/index.js",
@@ -38,7 +38,8 @@
     "prepublishOnly": "npm run cb",
     "template:start": "node dist/template/start.js",
     "template:stdio": "node dist/template/start.js stdio",
-    "token-gen": "node dist/core/auth/token-generator/server.js"
+    "token-gen": "node dist/core/auth/token-generator/server.js",
+    "tsoa:spec": "tsoa spec"
   },
   "keywords": [
     "mcp",
@@ -66,6 +67,7 @@
   "homepage": "https://github.com/Bazilio-san/fa-mcp-sdk#readme",
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.24.3",
+    "@tsoa/runtime": "^6.4.0",
     "af-ad-ts": "^0.0.69",
     "af-db-ts": "^3.0.23",
     "af-logger-ts": "^0.0.24",
@@ -80,23 +82,22 @@
     "node-cache": "^5.1.2",
     "pgvector": "^0.2.1",
     "rate-limiter-flexible": "^9.0.0",
+    "swagger-ui-express": "^5.0.1",
+    "tsoa": "^6.4.0",
     "uuid": "^13.0.0",
     "ya-express-ntlm": "^1.0.39"
   },
-  "optionalDependencies": {
-    "swagger-jsdoc": "^6.2.8",
-    "swagger-ui-express": "^5.0.1"
-  },
   "devDependencies": {
+    "@tsoa/cli": "^6.4.0",
     "@types/config": "^3.3.5",
     "@types/cors": "^2.8.19",
     "@types/express": "^5.0.6",
     "@types/js-yaml": "^4.0.9",
     "@types/mssql": "^9.1.8",
     "@types/node": "^24.10.1",
-    "@types/swagger-jsdoc": "^6.0.4",
     "@types/swagger-ui-express": "^4.1.8",
     "eslint": "^9.39.1",
+    "eslint-config-at-26": "^25.12.23",
     "rimraf": "^6.1.2",
     "typescript": "^5.9.3"
   }

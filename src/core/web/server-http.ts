@@ -8,6 +8,7 @@ import { fileURLToPath } from 'url';
 import { appConfig, getProjectData } from '../bootstrap/init-config.js';
 import { getResource, getResourcesList } from '../mcp/resources.js';
 import { IGetPromptRequest } from '../_types_/types.js';
+import { configureOpenAPI, createSwaggerUIAssetsMiddleware } from '../api/openapi.js';
 
 import { createAuthMW } from '../auth/middleware.js';
 import { createMcpServer } from '../mcp/create-mcp-server.js';
@@ -138,19 +139,19 @@ export async function startHttpServer (): Promise<void> {
   });
 
   const { httpComponents, tools, toolHandler } = getProjectData();
-  const swagger = httpComponents?.swagger;
   const apiRouter = httpComponents?.apiRouter;
 
-  if (swagger) {
-    app.use('/docs', swagger.swaggerUi.serve, swagger.swaggerUi.setup(swagger.swaggerSpecs, {
-      customCss: '.swagger-ui .topbar { display: none }',
-      customSiteTitle: 'MCP Staff Search API Documentation',
-    }));
-  }
+  // Auto-configure OpenAPI documentation if apiRouter is provided
+  const openAPIConfig = apiRouter ? configureOpenAPI(apiRouter) : null;
 
   // API routes
   if (apiRouter) {
     app.use('/api', apiRouter);
+
+    // Serve Swagger UI assets if OpenAPI is configured
+    if (openAPIConfig) {
+      app.use('/docs', createSwaggerUIAssetsMiddleware(), openAPIConfig.swaggerUi);
+    }
   }
 
   // Admin panel routes (Token Generator & Validator)
@@ -458,8 +459,10 @@ export async function startHttpServer (): Promise<void> {
       mcp: 'POST /mcp',
     };
 
-    if (swagger) {
-      availableEndpoints.docs = 'GET /docs';
+    if (openAPIConfig) {
+      availableEndpoints.swagger = 'GET /docs';
+      availableEndpoints.openapi = 'GET /api/openapi.json';
+      availableEndpoints.openapiYaml = 'GET /api/openapi.yaml';
     }
     if (isAdminEnabled) {
       availableEndpoints.admin = 'GET /admin';

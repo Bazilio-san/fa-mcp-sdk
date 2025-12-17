@@ -80,11 +80,6 @@ export interface IResource {
 
 export type IEndpointsOn404 = Record<string, string | string[]>
 
-export interface ISwaggerData {
-  swaggerSpecs: any;
-  swaggerUi: any;
-}
-
 /**
  * Custom Authentication validation function
  * @param req - Express request object containing all authentication information
@@ -125,7 +120,6 @@ export interface McpServerData {
   httpComponents?: {
     apiRouter?: Router | null;
     endpointsOn404?: IEndpointsOn404;
-    swagger?: ISwaggerData | null;
   };
 
   assets?: {

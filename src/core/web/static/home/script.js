@@ -89,10 +89,10 @@ function renderPageInfo (data) {
     }
   }
 
-  // Swagger info
+  // OpenAPI info
   const swaggerSection = document.getElementById('swaggerSection');
   if (swaggerSection) {
-    swaggerSection.style.display = data.swagger ? 'block' : 'none';
+    swaggerSection.style.display = data.openAPI ? 'block' : 'none';
   }
 
   // Auth info

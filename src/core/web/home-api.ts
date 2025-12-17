@@ -98,7 +98,7 @@ export async function handleHomeInfo (_req: Request, res: Response): Promise<voi
       resources,
       prompts,
       db,
-      swagger: !!httpComponents?.swagger,
+      openAPI: !!httpComponents?.apiRouter,
       consul,
       mcpAuth,
       adminAuth,
