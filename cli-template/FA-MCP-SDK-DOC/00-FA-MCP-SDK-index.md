@@ -4,6 +4,43 @@
 
 The FA-MCP-SDK is a comprehensive TypeScript framework for building Model Context Protocol (MCP) servers. This is the documentation index - read the relevant sections based on your task.
 
+## Using with Claude Code
+
+This project includes a specialized agent `.claude/agents/fa-mcp-sdk.md` for Claude Code. The agent automatically reads relevant documentation sections and follows SDK patterns.
+
+### Example Prompts
+
+**Creating tools:**
+```
+Use the fa-mcp-sdk subagent to add a tool "get_user" that fetches user data by ID from the database
+```
+
+**Adding REST API:**
+```
+Use the fa-mcp-sdk subagent to create REST endpoint POST /api/users for user registration with validation
+```
+
+**Setting up authentication:**
+```
+Use the fa-mcp-sdk subagent to configure JWT authentication with 1 hour token expiration
+```
+
+**Database integration:**
+```
+Use the fa-mcp-sdk subagent to add PostgreSQL integration and create a tool to query orders table
+```
+
+**Complex tasks:**
+```
+Use the fa-mcp-sdk subagent to create an MCP server for managing TODO lists with:
+- tools: add_todo, list_todos, complete_todo, delete_todo
+- PostgreSQL storage
+- JWT authentication
+- REST API for web client
+```
+
+The agent will read the appropriate documentation files and implement the functionality following SDK conventions.
+
 ## Quick Start
 
 ```bash
@@ -98,25 +135,32 @@ import { initADGroupChecker } from 'fa-mcp-sdk';
 ```
 my-mcp-server/
 ├── config/
-│   ├── default.yaml        # Base configuration
-│   ├── local.yaml          # Local secrets (gitignored)
-│   └── production.yaml     # Production overrides
+│   ├── default.yaml             # Base configuration
+│   ├── development.yaml         # Development overrides
+│   ├── local.yaml               # Local secrets (gitignored)
+│   └── production.yaml          # Production overrides
 ├── src/
+│   ├── _types_/
+│   │   ├── common.d.ts          # Common type declarations
+│   │   └── custom-config.ts     # Custom config interface
 │   ├── api/
-│   │   └── router.ts       # REST endpoints with tsoa decorators
+│   │   └── router.ts            # REST endpoints with tsoa decorators
+│   ├── asset/
+│   │   └── logo.svg             # Static assets
 │   ├── prompts/
-│   │   ├── agent-brief.ts
-│   │   ├── agent-prompt.ts
-│   │   └── custom-prompts.ts
+│   │   ├── agent-brief.ts       # Short agent description
+│   │   ├── agent-prompt.ts      # Full agent system prompt
+│   │   └── custom-prompts.ts    # Additional prompts
 │   ├── tools/
-│   │   ├── tools.ts        # Tool definitions
-│   │   └── handle-tool-call.ts
-│   ├── custom-resources.ts
-│   └── start.ts            # Entry point
+│   │   ├── handle-tool-call.ts  # Tool execution logic
+│   │   └── tools.ts             # Tool definitions
+│   ├── custom-resources.ts      # Custom MCP resources
+│   └── start.ts                 # Entry point
 ├── swagger/
-│   └── openapi.yaml        # Auto-generated (gitignored)
+│   └── openapi.yaml             # Auto-generated (gitignored)
 └── tests/
 ```
+
 
 ## Minimal Example
 
