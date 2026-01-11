@@ -478,9 +478,6 @@ export async function startHttpServer (): Promise<void> {
     if (isAdminEnabled) {
       availableEndpoints.admin = 'GET /admin';
     }
-    Object.assign(availableEndpoints, {
-      ...(httpComponents?.endpointsOn404 || {}),
-    });
 
     res.status(404).json({
       error: 'Not Found',

@@ -112,11 +112,6 @@ export async function startProject(): Promise<void> {
     // Optional: HTTP components
     httpComponents: {
       apiRouter, // Express router for custom endpoints
-      endpointsOn404, // 404 handler
-      swagger: {
-        swaggerSpecs: swaggerSpecs, // OpenAPI specs
-        swaggerUi: swaggerUi, // Swagger UI configuration
-      },
     },
 
     // Optional: Assets

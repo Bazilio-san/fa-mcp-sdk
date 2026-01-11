@@ -1,4 +1,3 @@
-
 // Import all project data from existing files
 import { appConfig, initMcpServer, McpServerData, getAsset } from '../core/index.js';
 import { tools } from './tools/tools.js';
@@ -7,7 +6,7 @@ import { AGENT_BRIEF } from './prompts/agent-brief.js';
 import { AGENT_PROMPT } from './prompts/agent-prompt.js';
 import { customPrompts } from './prompts/custom-prompts.js';
 import { customResources } from './custom-resources.js';
-import { apiRouter, endpointsOn404 } from './api/router.js';
+import { apiRouter } from './api/router.js';
 
 const isConsulProd = (process.env.NODE_CONSUL_ENV || process.env.NODE_ENV) === 'production';
 
@@ -35,7 +34,6 @@ const startProject = async (): Promise<void> => {
     // HTTP components
     httpComponents: {
       apiRouter,
-      endpointsOn404,
     },
 
     // Assets

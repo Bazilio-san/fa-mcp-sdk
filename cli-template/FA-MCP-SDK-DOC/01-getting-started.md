@@ -126,8 +126,6 @@ interface McpServerData {
   // HTTP Server Components (for HTTP transport)
   httpComponents?: {
     apiRouter?: Router | null;                     // Express router for additional endpoints
-    endpointsOn404?: IEndpointsOn404;             // Custom 404 handling
-    swagger?: ISwaggerData | null;                // OpenAPI/Swagger configuration
   };
 
   // UI Assets

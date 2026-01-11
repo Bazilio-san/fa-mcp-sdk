@@ -151,8 +151,8 @@ async function generateSpecOnDemand (specPath: string): Promise<void> {
  * @returns Object with swaggerSpecs and swaggerUi middleware, or null if apiRouter not provided
  */
 export async function configureOpenAPI (apiRouter?: Router | null): Promise<{
-  swaggerSpecs?: any;
   swaggerUi?: any;
+  swaggerSpecs?: any;
 } | null> {
   if (!apiRouter) {
     return null;
@@ -193,8 +193,8 @@ export async function configureOpenAPI (apiRouter?: Router | null): Promise<{
 
     // Return swagger-compatible objects for backward compatibility
     return {
-      swaggerSpecs: enhancedSpec,
       swaggerUi: createSwaggerUIMiddleware(enhancedSpec),
+      swaggerSpecs: enhancedSpec,
     };
 
   } catch (error) {

@@ -119,7 +119,6 @@ export interface McpServerData {
 
   httpComponents?: {
     apiRouter?: Router | null;
-    endpointsOn404?: IEndpointsOn404;
   };
 
   assets?: {

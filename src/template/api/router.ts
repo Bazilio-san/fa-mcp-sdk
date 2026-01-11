@@ -1,6 +1,6 @@
 import { Router, Request, Response } from 'express';
 import { Route, Get, Tags } from 'tsoa';
-import { logger, createAuthMW, IEndpointsOn404 } from '../../core/index.js';
+import { logger, createAuthMW } from '../../core/index.js';
 
 export const apiRouter: Router | null = Router();
 
@@ -14,12 +14,6 @@ export interface ExampleResponse {
   data: {
     timestamp: string;
   };
-}
-
-export interface ErrorResponse {
-  success: boolean;
-  error: string;
-  code?: string;
 }
 
 /**
@@ -93,8 +87,3 @@ apiRouter.get('/example', authMW, async (req: Request, res: Response) => {
     });
   }
 });
-
-export const endpointsOn404: IEndpointsOn404 = {
-  myEndpoints1: ['/my-endpoint-1', '/my-endpoint-2'],
-  myEndpoint3: '/my-endpoint-3',
-};
