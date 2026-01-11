@@ -716,10 +716,11 @@ certificate's public and private keys`,
     // Check if directory is empty
     try {
       const files = await fs.readdir(tp);
-      const hasOtherFiles = files.some(file => !ALLOWED_FILES.includes(file));
+      const firstDeprecatedFile = files.find((file) => !ALLOWED_FILES.includes(file));
 
-      if (hasOtherFiles) {
+      if (firstDeprecatedFile) {
         console.error(errMsg);
+        console.error(`    First deprecated file: ${hl(firstDeprecatedFile)}`);
         process.exit(1);
       }
     } catch (error) {
