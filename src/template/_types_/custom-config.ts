@@ -1,45 +1,45 @@
 /**
- * Пример расширения конфигурации fa-mcp-sdk кастомным блоком настроек.
+ * An example of extending the fa-mcp-sdk configuration with a custom settings block.
  *
- * Этот файл демонстрирует, как добавить собственные настройки
- * (например, для проверки членства пользователя в AD-группе).
+ * This file demonstrates how to add your own settings
+ * (for example, to check the user's membership in an AEC group).
  */
 
 import { AppConfig } from '../../core/index.js';
 
 /**
- * Настройки проверки членства в AD-группе
+ * AD Group Membership Verification Settings
  */
 export interface IGroupAccessConfig {
   groupAccess: {
-    /** AD-группа, членство в которой требуется для доступа */
+    /** AD Group whose membership is required for access */
     requiredGroup: string;
 
-    /** Опционально: разрешить доступ без проверки группы (для отладки) */
+    /** Optional: Allow access without checking the group (for debugging) */
     bypassGroupCheck?: boolean;
 
-    /** Опционально: кэшировать результат проверки (секунды) */
+    /** Optional: cache the result of the check (seconds) */
     cacheTtlSeconds?: number;
 
-    /** Опционально: список групп с разными уровнями доступа */
+    /** Optional: List of groups with different access levels */
     accessLevels?: {
-      /** Группа для полного доступа (read/write) */
+      /** Full access group (read/write) */
       fullAccess?: string;
-      /** Группа только для чтения */
+      /** Read-only group */
       readOnly?: string;
-      /** Группа администраторов */
+      /** Administrators group */
       admin?: string;
     };
   };
 }
 
 /**
- * Расширенный конфиг приложения с настройками проверки групп
+ * Extended app config with group checking settings
  */
 export interface CustomAppConfig extends AppConfig, IGroupAccessConfig {}
 
 // ========================================================================
-// ПРИМЕР YAML-КОНФИГУРАЦИИ (config/default.yaml)
+// YAML CONFIGURATION EXAMPLE (config/default.yaml)
 // ========================================================================
 /*
 groupAccess:
@@ -53,18 +53,18 @@ groupAccess:
 */
 
 // ========================================================================
-// ПРИМЕР ИСПОЛЬЗОВАНИЯ В КОДЕ
+// EXAMPLE OF USE IN CODE
 // ========================================================================
 /*
 import { appConfig } from '../core/index.js';
 
-// Типизированный доступ к кастомным настройкам
+// TYPED ACCESS TO CUSTOM SETTINGS
 const config = appConfig as CustomAppConfig;
 
 const requiredGroup = config.groupAccess.requiredGroup;
 const shouldBypass = config.groupAccess.bypassGroupCheck;
 
-// Проверка уровня доступа из payload
+// Checking the Access Level from Payload
 function getUserAccessLevel(payload: { user: string; groups?: string[] }): 'admin' | 'full' | 'readonly' | 'none' {
   const { accessLevels } = config.groupAccess;
   const userGroups = payload.groups || [];

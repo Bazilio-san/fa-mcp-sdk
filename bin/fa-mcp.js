@@ -142,12 +142,12 @@ const removeIfExists = async (targetPath, relPath, options = {}) => {
         finalOptions = { ...finalOptions, recursive: true };
       }
     } catch {
-      // lstat упадёт, если файла/папки нет — это ок, просто пойдем в rm с теми же опциями
+      // lstat will crash if there is no file/folder – that's ok, just go to rm with the same options
     }
 
     await fs.rm(fullPath, finalOptions);
   } catch {
-    // игнорируем любые ошибки удаления
+    // ignore any deletion errors
   }
 };
 
