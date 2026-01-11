@@ -66,6 +66,10 @@ async function generateSpecOnDemand (specPath: string): Promise<void> {
       entryFile = './src/template/api/router.ts';
     }
 
+    // перед generateSpec
+    const needsAuth = !!appConfig.webServer?.auth?.enabled;
+    const servers = buildServersArray(); // уже есть в файле, можно вызывать
+
     // ExtendedSpecConfig structure for generateSpec
     const specConfig = {
       outputDirectory: specDir,
@@ -75,6 +79,40 @@ async function generateSpecOnDemand (specPath: string): Promise<void> {
       entryFile,
       noImplicitAdditionalProperties: 'throw-on-extras' as const,
       controllerPathGlobs,
+
+      // Info metadata
+      name: appConfig.productName || 'MCP Server API',
+      version: appConfig.version || '1.0.0',
+      description: appConfig.description,
+
+      spec: {
+        ...(needsAuth && {
+          security: [{ bearerAuth: [] }],
+          components: {
+            securitySchemes: {
+              bearerAuth: {
+                type: 'http',
+                scheme: 'bearer',
+                bearerFormat: 'JWT',
+                description: 'JWT authorization token',
+              },
+            },
+          },
+        }),
+
+        // If the top-level name/version/description fields are not applied by your version of tsoa, you can duplicate the info here:
+        info: {
+          title: appConfig.productName || 'MCP Server API',
+          version: appConfig.version || '1.0.0',
+          description: appConfig.description,
+        },
+
+        // In case top-level servers are not available in your version of tsoa:
+        servers,
+      },
+
+      // How to merge spec with what tsoa will generate
+      specMerging: 'recursive' as const,
     };
 
     // Use tsoa programmatic API
