@@ -88,7 +88,7 @@ export const createSvgRouter = (): Router => {
 
   // Handle /svg/:file.svg paths (root level)
   router.get('/:file', (req: Request, res: Response) => {
-    handleSvgRequest(req.params.file || '', res);
+    handleSvgRequest(String(req.params.file || ''), res);
   });
 
   return router;
