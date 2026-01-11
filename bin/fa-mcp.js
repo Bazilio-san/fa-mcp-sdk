@@ -835,7 +835,7 @@ certificate's public and private keys`,
   async replaceTemplateParameters (config) {
     const targetPath = config.projectAbsPath;
     const files = await this.getAllFiles(targetPath, ALLOWED_FILES);
-    const importRe = /'[^']+\/core\/index.js'/;
+    const importRe = /'[^']+\/core\/index.js'/ig;
     for (const filePath of files) {
       let content = await fs.readFile(filePath, 'utf8');
       let modified = false;
