@@ -71,18 +71,15 @@ const isPublicMcpRequest = (req: Request): boolean => {
   const { method } = req.body || {};
 
   switch (method) {
+    case 'initialize':
+    case 'prompts/list':
     case 'resources/list':
-      // Resources list is always public
       return true;
 
     case 'resources/read': {
       const uri = req.body?.params?.uri;
       return uri ? isPublicResource(uri) : false;
     }
-
-    case 'prompts/list':
-      // Prompts list is always public
-      return true;
 
     case 'prompts/get': {
       const name = req.body?.params?.name;
