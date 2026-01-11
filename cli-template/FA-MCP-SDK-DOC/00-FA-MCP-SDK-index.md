@@ -2,14 +2,14 @@
 
 ## Overview
 
-The FA-MCP-SDK is a comprehensive TypeScript framework for building Model Context 
-Protocol (MCP) servers. This is the documentation index - read the relevant 
+The FA-MCP-SDK is a comprehensive TypeScript framework for building Model Context
+Protocol (MCP) servers. This is the documentation index - read the relevant
 sections based on your task.
 
 ## Using with Claude Code
 
-This project includes a specialized agent `.claude/agents/fa-mcp-sdk.md` for 
-Claude Code. The agent automatically reads relevant documentation sections and 
+This project includes a specialized agent `.claude/agents/fa-mcp-sdk.md` for
+Claude Code. The agent automatically reads relevant documentation sections and
 follows SDK patterns.
 
 ### Example Prompts
@@ -43,7 +43,7 @@ Use the fa-mcp-sdk subagent to create an MCP server for managing TODO lists with
 - REST API for web client
 ```
 
-The agent will read the appropriate documentation files and implement the 
+The agent will read the appropriate documentation files and implement the
 functionality following SDK conventions.
 
 ## Quick Start
@@ -54,28 +54,41 @@ npm install fa-mcp-sdk
 
 ## Documentation Structure
 
-| File | Content | Read When |
-|------|---------|-----------|
-| [01-getting-started.md](01-getting-started.md) | Installation, project structure, `initMcpServer()`, core types (`McpServerData`, `IPromptData`, `IResourceData`) | Starting a new project, understanding project structure |
-| [02-tools-and-api.md](02-tools-and-api.md) | Tool definitions, `toolHandler`, HTTP headers, REST API with tsoa decorators, OpenAPI/Swagger auto-generation | Creating MCP tools, adding REST endpoints |
-| [03-configuration.md](03-configuration.md) | `appConfig`, YAML configuration, cache management, database integration (PostgreSQL) | Configuring the server, using cache or database |
-| [04-authentication.md](04-authentication.md) | Multi-auth system, JWT tokens, Basic auth, server tokens, custom validators, `createAuthMW()` | Setting up authentication |
-| [05-ad-authorization.md](05-ad-authorization.md) | AD group-based authorization examples: HTTP level, all tools, per-tool | Implementing AD group restrictions |
-| [06-utilities.md](06-utilities.md) | Error handling, utility functions, logging, events, Consul integration, graceful shutdown | Error handling, logging, service discovery |
+| File                                                       | Content | Read When |
+|------------------------------------------------------------|---------|-----------|
+| [01-getting-started.md](01-getting-started.md)             | Installation, project structure, `initMcpServer()`, core types (`McpServerData`, `IPromptData`, `IResourceData`) | Starting a new project, understanding project structure |
+| [02-1-tools-and-api.md](02-1-tools-and-api.md)             | Tool definitions, `toolHandler`, HTTP headers, REST API with tsoa decorators, OpenAPI/Swagger auto-generation | Creating MCP tools, adding REST endpoints |
+| [02-2-prompts-and-resources.md](02-2-prompts-and-resources.md) | Standard prompts (agent-brief, agent-prompt), custom prompts, standard resources, custom resources, `requireAuth` | Configuring prompts and resources |
+| [03-configuration.md](03-configuration.md)                 | `appConfig`, YAML configuration, cache management, database integration (PostgreSQL) | Configuring the server, using cache or database |
+| [04-authentication.md](04-authentication.md)               | Multi-auth system, JWT tokens, Basic auth, server tokens, custom validators, `createAuthMW()` | Setting up authentication |
+| [05-ad-authorization.md](05-ad-authorization.md)           | AD group-based authorization examples: HTTP level, all tools, per-tool | Implementing AD group restrictions |
+| [06-utilities.md](06-utilities.md)                         | Error handling, utility functions, logging, events, Consul integration, graceful shutdown | Error handling, logging, service discovery |
 | [07-testing-and-operations.md](07-testing-and-operations.md) | Test clients (STDIO, HTTP, SSE), transport types, best practices | Testing, deployment, operations |
 
 ## Common Tasks Quick Reference
 
 ### Create a new MCP server
-Read: `01-getting-started.md` → `02-tools-and-api.md`
+Read: `01-getting-started.md` → `02-1-tools-and-api.md`
 
 ### Add MCP tools
-Read: `02-tools-and-api.md` (Tool Development section)
+Read: `02-1-tools-and-api.md` (Tool Development section)
 
 ### Add REST API endpoints
-Read: `02-tools-and-api.md` (REST API Endpoints section)
+Read: `02-1-tools-and-api.md` (REST API Endpoints section)
 - Use tsoa decorators (`@Route`, `@Get`, `@Post`, `@Tags`)
 - Swagger generates automatically if `swagger/openapi.yaml` doesn't exist
+
+### Configure prompts
+Read: `02-2-prompts-and-resources.md`
+- Standard: `agent-brief.ts` (short description), `agent-prompt.ts` (full instructions)
+- Custom: add to `customPrompts` array in `src/prompts/custom-prompts.ts`
+- Use `requireAuth: true` to protect prompts
+
+### Configure resources
+Read: `02-2-prompts-and-resources.md`
+- Standard: `project://id`, `project://name`, `doc://readme`, `required://http-headers`
+- Custom: add to `customResources` array in `src/custom-resources.ts`
+- Use `requireAuth: true` to protect resources
 
 ### Configure authentication
 Read: `04-authentication.md`

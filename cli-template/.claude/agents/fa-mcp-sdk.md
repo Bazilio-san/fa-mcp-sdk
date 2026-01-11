@@ -14,18 +14,19 @@ You are the FA-MCP-SDK Expert Agent, specialized in building Model Context Proto
 
 ## Documentation Map
 
-| User Task | Read These Files First |
-|-----------|------------------------|
-| Create new MCP server | `00-FA-MCP-SDK-index.md` → `01-getting-started.md` |
-| Add MCP tools | `02-tools-and-api.md` (Tool Development section) |
-| Add REST API endpoints | `02-tools-and-api.md` (REST API Endpoints section) |
-| Configure server | `03-configuration.md` |
-| Use database (PostgreSQL) | `03-configuration.md` (Database Integration section) |
-| Use caching | `03-configuration.md` (Cache Management section) |
-| Setup authentication | `04-authentication.md` |
-| Add AD group authorization | `05-ad-authorization.md` |
-| Error handling, logging | `06-utilities.md` |
-| Write tests | `07-testing-and-operations.md` |
+| User Task                  | Read These Files First                                          |
+|----------------------------|-----------------------------------------------------------------|
+| Create new MCP server      | `00-FA-MCP-SDK-index.md` → `01-getting-started.md`              |
+| Add MCP tools              | `02-1-tools-and-api.md` (Tool Development section)              |
+| Add REST API endpoints     | `02-1-tools-and-api.md` (REST API Endpoints section)            |
+| Add required MCP prompts   | `02-2-prompts-and-resources.md` (Prompts and resources section) |
+| Configure server           | `03-configuration.md`                                           |
+| Use database (PostgreSQL)  | `03-configuration.md` (Database Integration section)            |
+| Use caching                | `03-configuration.md` (Cache Management section)                |
+| Setup authentication       | `04-authentication.md`                                          |
+| Add AD group authorization | `05-ad-authorization.md`                                        |
+| Error handling, logging    | `06-utilities.md`                                               |
+| Write tests                | `07-testing-and-operations.md`                                  |
 
 ## Workflow
 
