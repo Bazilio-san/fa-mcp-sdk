@@ -2,11 +2,15 @@
 
 ## Overview
 
-The FA-MCP-SDK is a comprehensive TypeScript framework for building Model Context Protocol (MCP) servers. This is the documentation index - read the relevant sections based on your task.
+The FA-MCP-SDK is a comprehensive TypeScript framework for building Model Context 
+Protocol (MCP) servers. This is the documentation index - read the relevant 
+sections based on your task.
 
 ## Using with Claude Code
 
-This project includes a specialized agent `.claude/agents/fa-mcp-sdk.md` for Claude Code. The agent automatically reads relevant documentation sections and follows SDK patterns.
+This project includes a specialized agent `.claude/agents/fa-mcp-sdk.md` for 
+Claude Code. The agent automatically reads relevant documentation sections and 
+follows SDK patterns.
 
 ### Example Prompts
 
@@ -39,7 +43,8 @@ Use the fa-mcp-sdk subagent to create an MCP server for managing TODO lists with
 - REST API for web client
 ```
 
-The agent will read the appropriate documentation files and implement the functionality following SDK conventions.
+The agent will read the appropriate documentation files and implement the 
+functionality following SDK conventions.
 
 ## Quick Start
 

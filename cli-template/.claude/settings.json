@@ -28,6 +28,19 @@
     "DISABLE_COST_WARNINGS": "0",
     "DISABLE_TELEMETRY": "0"
   },
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node .claude/hooks/eslint-fix.cjs"
+          }
+        ]
+      }
+    ]
+  },
   "hasCompletedOnboarding": true,
   "hasTrustDialogAccepted": true,
   "hasCompletedProjectOnboarding": true,
