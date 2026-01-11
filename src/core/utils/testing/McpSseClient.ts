@@ -239,13 +239,11 @@ export class McpSseClient extends BaseMcpClient {
       const errorMessage = payload.error?.message || 'Unknown error';
       // In test environment, log validation errors but don't crash
       if (errorMessage.includes('invalid_type')) {
-        console.log(`  ⚠️  Parameter validation error: ${errorMessage}`);
         pending.resolve(null);
         return;
       }
       // For tool execution errors, we want to throw them so tests can verify expected failures
       if (errorMessage.includes('Failed to execute tool')) {
-        console.log(`  ⚠️  Error: ${errorMessage}`);
         const err: any = new Error(`MCP Error: ${errorMessage}`);
         err.data = payload.error?.data;
         err.fullMcpResponse = payload;

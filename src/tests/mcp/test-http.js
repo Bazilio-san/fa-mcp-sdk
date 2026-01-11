@@ -8,7 +8,7 @@
 import { appConfig, McpHttpClient, getAuthHeadersForTests } from '../../../dist/core/index.js';
 import TEMPLATE_TESTS from './test-cases.js';
 
-const baseUrl = (process.env.TEST_MCP_SERVER_URL || `http://localhost:${appConfig.webServer.port}`).replace(/\/+$/,'');
+const baseUrl = (process.env.TEST_MCP_SERVER_URL || `http://localhost:${appConfig.webServer.port}`).replace(/\/+$/, '');
 
 async function runTestGroup (title, tests, client) {
   console.log(`\n${title}:`);
@@ -65,7 +65,11 @@ async function main () {
   }
 }
 
-main().catch((e) => {
-  console.error('Test failed:', e?.message || e);
-  process.exit(1);
-});
+main()
+  .then(() => {
+    process.exit(0);
+  })
+  .catch((e) => {
+    console.error('Test failed:', e?.message || e);
+    process.exit(1);
+  });
