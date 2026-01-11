@@ -53,6 +53,9 @@ update_version(){
     repo=`cat package.json | grep name | head -1 | awk -F: '{ print $2 }' | sed 's/[\",]//g' | tr -d '[[:space:]]'`
     echo -e "$c**** Bumping version of $g$repo$c: $y$old_version$c -> $g$new_version$c  ****$c0"
     sed -i -e "0,/$old_version/s/$old_version/$new_version/" package.json
+    # Update the dependency version in cli-template/package.json: "fa-mcp-sdk": "^<new_version>"
+    # Version match is built on a regular expression that allows any current version (with an optional ^)
+    sed -i -E "s/(\"fa-mcp-sdk\":\s*\")\^?[^\"]+(\"[,\r\n\s]*)/\1^${new_version}\2/" cli-template/package.json
     echo -e "$g"
     npm version 2>&1 | head -2 | tail -1
     echo -e "$c0"
