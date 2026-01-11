@@ -32,6 +32,13 @@ const pjContent = fss.readFileSync(path.join(PROJ_ROOT, 'package.json'));
 
 const faMcpSdkVersion = JSON.parse(pjContent).version;
 
+// Print version and exit on -V or --version
+const argv = process.argv.slice(2);
+if (argv.includes('-V') || argv.includes('--version')) {
+  console.log(faMcpSdkVersion);
+  process.exit(0);
+}
+
 const ALLOWED_FILES = [
   '.git',
   '.idea',
