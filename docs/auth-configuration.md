@@ -4,7 +4,16 @@ This document describes how to configure authentication requirements for MCP res
 
 ## Overview
 
-By default, all MCP endpoints require authentication. However, you can now configure specific resources and prompts to be accessible without authentication by setting the `requireAuth` property.
+MCP endpoints than not require authentication:
+- ping
+- initialize
+- notifications/initialized
+- tools/list
+- prompts/list
+- resources/list
+
+For the specific prompts or resources you can now configure whether they should 
+be accessible with authentication by setting the `requireAuth` property to `true`.
 
 ## Built-in Public Resources and Prompts
 
@@ -69,11 +78,7 @@ const customPrompts: IPromptData[] = [
 ];
 ```
 
-## Default Behavior
-
-- **Built-in resources and prompts**: Public by default (`requireAuth: false`)
-- **Custom resources and prompts**: Private by default (if `requireAuth` is not specified, authentication is required)
-- **Unknown resources/prompts**: Authentication required (security-first approach)
+Resources and prompts Public by default (`requireAuth: false`)
 
 ## API Access
 
@@ -222,10 +227,9 @@ curl -X POST http://localhost:3000/mcp \
 
 ## Security Considerations
 
-1. **Default to Private**: Always explicitly set `requireAuth: false` for public resources. Don't rely on defaults.
-2. **Sensitive Data**: Never make resources or prompts containing sensitive information public.
-3. **Access Logs**: Monitor access to public resources to detect potential abuse.
-4. **Regular Review**: Periodically review which resources are public and adjust as needed.
+1. **Sensitive Data**: Never make resources or prompts containing sensitive information public.
+2. **Access Logs**: Monitor access to public resources to detect potential abuse.
+3. **Regular Review**: Periodically review which resources are public and adjust as needed.
 
 ## Implementation Details
 

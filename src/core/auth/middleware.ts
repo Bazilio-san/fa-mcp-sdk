@@ -44,8 +44,7 @@ const isPublicResource = (uri: string): boolean => {
     return false; // Unknown resources require auth by default
   }
 
-  // Check if resource explicitly sets requireAuth to false (undefined means true for custom resources)
-  return resource.requireAuth === false;
+  return resource.requireAuth !== true;
 };
 
 /**
@@ -60,8 +59,7 @@ const isPublicPrompt = (name: string): boolean => {
     return false; // Unknown prompts require auth by default
   }
 
-  // Check if prompt explicitly sets requireAuth to false (undefined means true for custom prompts)
-  return (prompt as any).requireAuth === false;
+  return (prompt as any).requireAuth !== true;
 };
 
 /**
@@ -71,7 +69,10 @@ const isPublicMcpRequest = (req: Request): boolean => {
   const { method } = req.body || {};
 
   switch (method) {
+    case 'ping':
     case 'initialize':
+    case 'notifications/initialized':
+    case 'tools/list':
     case 'prompts/list':
     case 'resources/list':
       return true;
