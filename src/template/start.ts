@@ -48,8 +48,8 @@ const startProject = async (): Promise<void> => {
         return '--consul-ui-not-configured--';
       }
       return `${isConsulProd
-        ? `https://${agent.prd.host}/ui/dc-msk-infra`
-        : `https://${agent.dev.host}/ui/dc-dev`
+        ? `https://${agent.prd.host}/ui/${agent.prd.dc}`
+        : `https://${agent.dev.host}/ui/${agent.dev.dc}`
       }/services/${serviceId}/instances`;
     },
   };
