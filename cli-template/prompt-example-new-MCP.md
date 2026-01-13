@@ -51,18 +51,20 @@ accessPoints:
    currencyService:
       token: '88888888-4444-4444-4444-bbbbbbbbbbbb'
 
+consul:
+   service:
+      enable: false
+
 webServer:
    auth:
       enabled: true
       jwtToken:
          encryptKey: 'dbbe87db-90d0-4732-aae3-4089763ec392'
          checkMCPName: true
-      basic:
-         username: 'userTest'
-         password: 'passTest'
+      permanentServerTokens: ['psToken1']
 
    adminAuth:
-      type: 'basic'
+      type: 'permanentServerTokens'
 ```
 
 
