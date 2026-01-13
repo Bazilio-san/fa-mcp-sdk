@@ -96,10 +96,14 @@ The CLI collects required and optional parameters through interactive prompts or
 
 ### Configuration File Examples
 
+
+> **[YAML Example with detailed comments](https://github.com/Bazilio-san/fa-mcp-sdk/blob/master/cli-config.example.yaml)**
+
 The utility supports both **JSON** and **YAML** configuration formats.
 Use either `.json`, `.yaml`, or `.yml` file extensions.
 
 #### Usage:
+
 ```bash
 # Interactive setup (will prompt for all parameters)
 fa-mcp
@@ -113,120 +117,6 @@ fa-mcp config.yaml
 fa-mcp --config=my-config.yml
 ```
 
-#### YAML Example (with detailed comments):
-```yaml
-# =============================================================================
-# REQUIRED PARAMETERS
-# =============================================================================
-
-# Project name used in package.json and for MCP server identification
-project.name: "mcp-example"
-
-# Project description displayed in package.json
-project.description: "MCP Server example description"
-
-# Product name displayed in UI and documentation
-project.productName: "MCP Example"
-
-# Web server port for HTTP endpoints and MCP protocol
-port: "8888"
-
-# =============================================================================
-# PROJECT SETUP
-# =============================================================================
-
-# Absolute path where the project will be created
-projectAbsPath: "/opt/node/mcp-example"
-
-# Auto-accept configuration without confirmation prompts
-forceAcceptConfig: "y"
-
-# =============================================================================
-# AUTHOR INFORMATION
-# =============================================================================
-
-# Author email for package.json
-author.email: "author@company.com"
-
-# Author name for package.json
-author.name: "Author Name"
-
-# =============================================================================
-# CONSUL SERVICE DISCOVERY
-# =============================================================================
-
-# Enable service registration with Consul
-consul.service.enable: "true"
-
-# Development environment Consul settings
-consul.agent.dev.dc: "dc-dev"
-consul.agent.dev.host: "consul.my.ui"
-consul.agent.dev.token: "12345678-90ab-cdef-cdef-90ab12345678"
-
-# Production environment Consul settings
-consul.agent.prd.dc: "dc-prod"
-consul.agent.prd.host: "consul.my.ui"
-consul.agent.prd.token: "21345678-90ab-cdef-cdef-90ab12345678"
-
-# Consul service registration token
-consul.agent.reg.token: "12345678-90ab-cdef-cdef-90ab12345678"
-
-# Environment codes for service ID generation
-consul.envCode.dev: "envCode-dev"
-consul.envCode.prod: "envCode-prod"
-
-# Affects how the Consul service ID is formed - as a product or development ID. Valid values: "" | "development" | "production"
-NODE_CONSUL_ENV: ""
-
-# =============================================================================
-# WEB SERVER & DOMAIN CONFIGURATION
-# =============================================================================
-
-# Domain name for nginx configuration
-mcp.domain: "mcp-example.company.com"
-
-# Relative path to SSL certificate configuration
-ssl-wildcard.conf.rel.path: "snippets/ssl-wildcard-company-com.conf"
-
-# Nginx upstream name (auto-generated from domain)
-upstream: "mcp-example-company-com"
-
-# =============================================================================
-# AUTHENTICATION & SECURITY
-# =============================================================================
-
-# Enable token-based authorization for MCP server
-webServer.auth.enabled: "true"
-
-# Check MCP server name in authentication tokens
-webServer.auth.token.checkMCPName: "true"
-
-# Encryption key for MCP authentication tokens
-webServer.auth.token.encryptKey: "b7cdde45-3896-46a3-868a-ff4fe4******"
-
-# Enable "GOD Mode" for Claude Code (development only)
-claude.isBypassPermissions: "false"
-
-# =============================================================================
-# ENVIRONMENT & DEPLOYMENT
-# =============================================================================
-
-# Git repository base URL
-git-base-url: "gitlab.company.com/PROJ_NAME"
-
-# File-based logging configuration
-logger.useFileLogger: "false"
-
-# Support/maintainer URL
-maintainerUrl: "https://support.company.com/dept/1234"
-
-# Environment settings (auto-configured)
-NODE_ENV: "development"
-SERVICE_INSTANCE: "dev"
-PM2_NAMESPACE: "dev"
-```
-
-> **Note**: For a complete YAML example with detailed comments for every parameter, see [`cli-config.example.yaml`](./cli-config.example.yaml)
 
 ## Generated Project Features
 
@@ -238,6 +128,7 @@ PM2_NAMESPACE: "dev"
 - ESLint configuration and Jest testing
 - PM2 deployment scripts
 - Nginx configuration templates
+
 
 ## Project Structure
 
@@ -332,7 +223,7 @@ Note: The `dist/` directory (compiled JavaScript) is created after running `npm 
 ## Server runs at
 `http://localhost:3000` with:
 - MCP endpoints at `/mcp/*`
-- Swagger UI at `/swagger`
+- Swagger UI at `/docs`
 - Health check at `/health`
 
 ## Directory Requirements
