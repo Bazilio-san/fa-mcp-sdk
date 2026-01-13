@@ -34,6 +34,11 @@ The framework uses dependency injection to keep the core completely agnostic of 
    ```bash
    fa-mcp
    ```
+   Or using configuration file:
+    
+   ```bash
+   fa-mcp config.yaml
+   ```
 
 3) Launching the template MCP server:
    - Navigate to the target directory: `cd <targetPath>`
@@ -47,13 +52,7 @@ The framework uses dependency injection to keep the core completely agnostic of 
      You can find an example prompt for creating an MCP server (e.g., a currency exchange rate provider) in `cli-template/prompt-example-new-MCP.md`.
    - Launch your AI coder and provide it with the instructions to build your new MCP server.
 
-`
 
-### Using Configuration File
-
-```bash
-fa-mcp config.yaml
-```
 
 ## Configuration
 
@@ -123,6 +122,7 @@ fa-mcp --config=my-config.yml
 - TypeScript MCP server with HTTP/STDIO transport
 - Express.js web server with Swagger documentation
 - JWT authentication support (optional)
+- Admin panel for generating JWT access tokens (optional)
 - Consul service discovery integration (optional)
 - File and console logging
 - ESLint configuration and Jest testing
@@ -223,14 +223,28 @@ Note: The `dist/` directory (compiled JavaScript) is created after running `npm 
 ## Server runs at
 `http://localhost:3000` with:
 - MCP endpoints at `/mcp/*`
+- Admin panel for generating access tokens at `/admin`
 - Swagger UI at `/docs`
 - Health check at `/health`
 
 ## Directory Requirements
 
-- **Empty directories only** - CLI aborts if files exist
-- Allowed files: `.git`, `.idea`, `.vscode`, `.DS_Store`, `node_modules`, `dist`, `__misc`, `_tmp`, `.swp`, `.swo`, `.sublime-project`, `.sublime-workspace`, `~last-cli-config.json`
 - Use absolute paths for target directory
+- **Empty directories only** - CLI aborts if files exist except for the following:
+
+      .git/
+      .idea/
+      .vscode
+      .DS_Store
+      node_modules/
+      dist/
+      __misc/
+      _tmp/
+      .swp
+      .swo
+      .sublime-project
+      .sublime-workspace
+      ~last-cli-config.json
 
 ## Deployment
 
