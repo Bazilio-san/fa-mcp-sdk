@@ -66,9 +66,8 @@ async function generateSpecOnDemand (specPath: string): Promise<void> {
       entryFile = './src/template/api/router.ts';
     }
 
-    // перед generateSpec
     const needsAuth = !!appConfig.webServer?.auth?.enabled;
-    const servers = buildServersArray(); // уже есть в файле, можно вызывать
+    const servers = buildServersArray();
 
     // ExtendedSpecConfig structure for generateSpec
     const specConfig = {

@@ -907,6 +907,7 @@ certificate's public and private keys`,
     const scriptsTargetPath = path.join(targetPath, 'scripts');
     await this.copyDirectory(path.join(PROJ_ROOT, 'scripts'), scriptsTargetPath);
     await fs.rm(path.join(targetPath, 'scripts/copy-static.js'), { force: true });
+    await fs.rm(path.join(targetPath, 'scripts/publish.sh'), { force: true });
 
     // Rename all .xml files in .run directory to .run.xml
     const runDirPath = path.join(targetPath, '.run');

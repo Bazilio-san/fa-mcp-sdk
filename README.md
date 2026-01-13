@@ -1,7 +1,9 @@
-# fa-mcp-sdk
+# MCP Server Template Generator (`fa-mcp`)
 
-Production-ready core framework for building MCP (Model Context Protocol) servers with comprehensive 
+Production-ready core framework for building MCP (Model Context Protocol) servers with comprehensive
 infrastructure support.
+
+CLI utility that creates ready-to-use MCP (Model Context Protocol) server projects from the official template.
 
 ## Overview
 
@@ -18,284 +20,348 @@ This framework provides complete infrastructure for building enterprise-grade MC
 
 The framework uses dependency injection to keep the core completely agnostic of project-specific implementations.
 
-## Project Structure
 
-```
-fa-mcp-sdk/
-├── src/core/           # Core framework (published to npm)
-│   ├── bootstrap/      # Configuration and startup
-│   ├── mcp/            # MCP protocol implementation
-│   ├── web/            # HTTP server and endpoints
-│   ├── db/             # PostgreSQL integration
-│   ├── cache/          # Caching system with node-cache wrapper
-│   ├── consul/         # Service discovery
-│   ├── token/          # Authentication
-│   ├── errors/         # Error handling
-│   ├── utils/          # Utilities
-│   └── index.ts        # Public API
-│
-└── src/template/       # Reference implementation
-    ├── tools/          # Example MCP tools
-    ├── prompts/        # Agent prompts
-    ├── api/            # Custom HTTP endpoints
-    └── start.ts        # Entry point
-```
+## Steps to Get Started
 
-## Quick Start
+1) Install `fa-mcp-sdk` globally:
 
-### 1. Install Dependencies
+   ```bash
+   npm install -g fa-mcp-sdk
+   ```
 
-```bash
-npm install
-```
+2) Run the CLI, specify the target directory, and follow the interactive prompts:
 
-### 2. Configure
+   ```bash
+   fa-mcp
+   ```
 
-Create configuration files in `config/`:
+3) Launching the template MCP server:
+   - Navigate to the target directory: `cd <targetPath>`
+   - Install dependencies: `npm install`
+   - Build the project: `npm run build`
+   - Start the server: `npm start`
 
-See [config/default.yaml](config/default.yaml) for all available options.
-See [config/_local.yaml](config/_local.yaml) for template of local configuration.
+4) Vibe-coding your MCP server logic:
+   - Create an instruction file (prompt) for your preferred AI coding assistant.
+     `fa-mcp-sdk` comes ready for use with `Claude Code`.
+     You can find an example prompt for creating an MCP server (e.g., a currency exchange rate provider) in `cli-template/prompt-example-new-MCP.md`.
+   - Launch your AI coder and provide it with the instructions to build your new MCP server.
 
+`
 
-### 3. Basic Usage
-
-```typescript
-import { initMcpServer, isMainModule, McpServerData } from '../core/index.js';
-import { readFileSync } from 'fs';
-import { join } from 'path';
-
-export async function startProject(): Promise<void> {
-  // Read favicon from assets
-  const faviconPath = join(process.cwd(), 'src/template/asset/favicon.svg');
-  let favicon: string;
-
-  try {
-    favicon = readFileSync(faviconPath, 'utf-8');
-  } catch (_error) {
-    // Fallback if favicon not found
-    favicon = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16">
-<rect width="16" height="16" fill="#007ACC"/>
-</svg>`;
-  }
-
-  // Assemble all data to pass to the core
-  const serverData: McpServerData = {
-    // Required: MCP components
-    tools: [
-      {
-        name: 'example_tool',
-        description: 'Example tool',
-        inputSchema: {
-          type: 'object',
-          properties: {
-            query: { type: 'string', description: 'Query parameter' }
-          }
-        }
-      }
-    ],
-    toolHandler: async (params) => {
-      const { name, arguments: args } = params;
-      if (name === 'example_tool') {
-        return `Result: ${args.query}`;
-      }
-      throw new Error(`Unknown tool: ${name}`);
-    },
-
-    // Required: Agent identification
-    agentBrief: "My MCP Server - Brief description for agent selection",
-    agentPrompt: "Detailed system prompt for the agent",
-
-    // Optional: Custom prompts and resources
-    customPrompts: [],
-    customResources: [],
-
-    // Optional: HTTP components
-    httpComponents: {
-      apiRouter, // Express router for custom endpoints
-    },
-
-    // Optional: Assets
-    assets: { favicon },
-
-    // Optional: Function to get Consul UI address
-    getConsulUIAddress: (serviceId: string) =>
-      `https://consul.my.ui/ui/dc-dev/services/${serviceId}/instances`,
-  };
-
-  // Start MCP server with assembled data
-  await initMcpServer(serverData);
-}
-
-// Auto-start if this file is run directly
-if (isMainModule(import.meta.url)) {
-  startProject().catch(error => {
-    console.error('Failed to start project:', error);
-    process.exit(1);
-  });
-}
-```
-
-For NPM package usage:
-
-```typescript
-import { initMcpServer, McpServerData } from '@mcp-staff/server-core';
-// Rest of the code is similar, but with package imports
-```
-
-## Transport Modes
-
-### STDIO Mode (Claude Desktop)
-
-For integration with Claude Desktop:
+### Using Configuration File
 
 ```bash
-# Set transport in config
-mcp.transportType: stdio
-
-# Or via command line
-npm start stdio
+fa-mcp config.yaml
 ```
-
-Communication happens via stdin/stdout using JSON-RPC protocol.
-
-### HTTP Mode (Web Integration)
-
-For web applications and API access:
-
-```bash
-# Default mode
-npm start
-```
-
-Provides endpoints:
-
-- `GET /` - Home page with server info
-- `GET /health` - Health check
-- `GET /sse` - Server-Sent Events for MCP communication
-- `POST /mcp` - Direct MCP JSON-RPC endpoint
-- `GET /docs` - Swagger API documentation
-- `/api/*` - Custom API endpoints
-
-## Core Features
-
-### Database Integration
-
-Built-in PostgreSQL support with connection pooling:
-
-All available functions see [src/core/db/pg-db.ts](src/core/db/pg-db.ts)
-
-
-
-## Template Project
-
-The `src/template/` directory contains a complete reference implementation:
-
-### Running the Template
-
-```bash
-# Development mode (watch for changes)
-npm run template:dev
-
-# Production mode
-npm run template:start
-
-# STDIO mode for Claude Desktop
-npm run template:stdio
-```
-
-### Template Structure
-
-- **Tools**: `src/template/tools/tools.ts` - Define your MCP tools
-- **Handlers**: `src/template/tools/handle-tool-call.ts` - Implement tool logic
-- **Prompts**: `src/template/prompts/` - Agent system prompts
-- **API**: `src/template/api/router.ts` - Custom HTTP endpoints
-- **Config**: `config/` - Configuration files
 
 ## Configuration
 
-### Environment Variables
+The CLI collects required and optional parameters through interactive prompts or configuration file.
 
-Set via `config/custom-environment-variables.yaml`:
+### Required Parameters
 
+| Parameter             | Description | Example |
+|-----------------------|-------------|---------|
+| `project.name`        | Package.json name and MCP server identification | `"my-mcp-server"` |
+| `project.description` | Package.json description | `"A custom MCP server"` |
+| `project.productName` | Display name for UI and documentation | `"My MCP Server"` |
+| `port`                | Web server port for HTTP and MCP protocol | `"3000"` |
+
+### Optional Parameters
+
+| Parameter                           | Description | Default |
+|-------------------------------------|-------------|---------|
+| `author.name`                       | Package.json author name | `""` |
+| `author.email`                      | Package.json author email | `""` |
+| `git-base-url`                      | Git repository base URL | `"github.com/username"` |
+| `consul.service.enable`             | Enable Consul service registration | `"false"` |
+| `consul.agent.reg.token`            | Token for registering service with Consul | `"***"` |
+| `consul.envCode.dev`                | Development environment code | `"<envCode.dev>"` |
+| `consul.envCode.prod`               | Production environment code | `"<envCode.prod>"` |
+| `consul.agent.dev.dc`               | Development Consul datacenter | `""` |
+| `consul.agent.dev.host`             | Development Consul UI host | `"consul.my.ui"` |
+| `consul.agent.dev.token`            | Development Consul access token | `"***"` |
+| `consul.agent.prd.dc`               | Production Consul datacenter | `""` |
+| `consul.agent.prd.host`             | Production Consul UI host | `"consul.my.ui"` |
+| `consul.agent.prd.token`            | Production Consul access token | `"***"` |
+| `mcp.domain`                        | Domain name for nginx configuration | `""` |
+| `ssl-wildcard.conf.rel.path`        | Relative path to SSL config in /etc/nginx | `"snippets/ssl-wildcard.conf"` |
+| `webServer.auth.enabled`            | Enable token authorization | `"false"` |
+| `webServer.auth.token.checkMCPName` | Check MCP name in token | `"false"` |
+| `isProduction`                      | Production mode flag | `"false"` |
+| `SERVICE_INSTANCE`                  | Service name suffix for Consul and PM2 | `""` |
+| `maintainerUrl`                     | Support/maintainer URL | `""` |
+| `logger.useFileLogger`              | Enable file logging | `""` |
+
+### Configuration File Examples
+
+The utility supports both **JSON** and **YAML** configuration formats.
+Use either `.json`, `.yaml`, or `.yml` file extensions.
+
+#### Usage:
 ```bash
-DB_HOST=localhost # To exclude the use of the database, you need to set host = ''
-DB_NAME=mydb
-DB_USER=user
-DB_PASSWORD=password
-MCP_TRANSPORT_TYPE=http
-WS_PORT=9876
-WS_AUTH_ENABLED=false
+# Interactive setup (will prompt for all parameters)
+fa-mcp
+
+# Using JSON configuration
+fa-mcp config.json
+fa-mcp --config=my-config.json
+
+# Using YAML configuration (NEW!)
+fa-mcp config.yaml
+fa-mcp --config=my-config.yml
 ```
 
-### Configuration Priority
+#### YAML Example (with detailed comments):
+```yaml
+# =============================================================================
+# REQUIRED PARAMETERS
+# =============================================================================
 
-1. Environment variables
-2. Environment-specific YAML (`development.yaml`, `production.yaml`)
-3. `config/default.yaml`
-4. Package.json metadata
+# Project name used in package.json and for MCP server identification
+project.name: "mcp-example"
 
-## Development
+# Project description displayed in package.json
+project.description: "MCP Server example description"
 
-### Building
+# Product name displayed in UI and documentation
+project.productName: "MCP Example"
 
+# Web server port for HTTP endpoints and MCP protocol
+port: "8888"
+
+# =============================================================================
+# PROJECT SETUP
+# =============================================================================
+
+# Absolute path where the project will be created
+projectAbsPath: "/opt/node/mcp-example"
+
+# Auto-accept configuration without confirmation prompts
+forceAcceptConfig: "y"
+
+# =============================================================================
+# AUTHOR INFORMATION
+# =============================================================================
+
+# Author email for package.json
+author.email: "author@company.com"
+
+# Author name for package.json
+author.name: "Author Name"
+
+# =============================================================================
+# CONSUL SERVICE DISCOVERY
+# =============================================================================
+
+# Enable service registration with Consul
+consul.service.enable: "true"
+
+# Development environment Consul settings
+consul.agent.dev.dc: "dc-dev"
+consul.agent.dev.host: "consul.my.ui"
+consul.agent.dev.token: "12345678-90ab-cdef-cdef-90ab12345678"
+
+# Production environment Consul settings
+consul.agent.prd.dc: "dc-prod"
+consul.agent.prd.host: "consul.my.ui"
+consul.agent.prd.token: "21345678-90ab-cdef-cdef-90ab12345678"
+
+# Consul service registration token
+consul.agent.reg.token: "12345678-90ab-cdef-cdef-90ab12345678"
+
+# Environment codes for service ID generation
+consul.envCode.dev: "envCode-dev"
+consul.envCode.prod: "envCode-prod"
+
+# Affects how the Consul service ID is formed - as a product or development ID. Valid values: "" | "development" | "production"
+NODE_CONSUL_ENV: ""
+
+# =============================================================================
+# WEB SERVER & DOMAIN CONFIGURATION
+# =============================================================================
+
+# Domain name for nginx configuration
+mcp.domain: "mcp-example.company.com"
+
+# Relative path to SSL certificate configuration
+ssl-wildcard.conf.rel.path: "snippets/ssl-wildcard-company-com.conf"
+
+# Nginx upstream name (auto-generated from domain)
+upstream: "mcp-example-company-com"
+
+# =============================================================================
+# AUTHENTICATION & SECURITY
+# =============================================================================
+
+# Enable token-based authorization for MCP server
+webServer.auth.enabled: "true"
+
+# Check MCP server name in authentication tokens
+webServer.auth.token.checkMCPName: "true"
+
+# Encryption key for MCP authentication tokens
+webServer.auth.token.encryptKey: "b7cdde45-3896-46a3-868a-ff4fe4******"
+
+# Enable "GOD Mode" for Claude Code (development only)
+claude.isBypassPermissions: "false"
+
+# =============================================================================
+# ENVIRONMENT & DEPLOYMENT
+# =============================================================================
+
+# Git repository base URL
+git-base-url: "gitlab.company.com/PROJ_NAME"
+
+# File-based logging configuration
+logger.useFileLogger: "false"
+
+# Support/maintainer URL
+maintainerUrl: "https://support.company.com/dept/1234"
+
+# Environment settings (auto-configured)
+NODE_ENV: "development"
+SERVICE_INSTANCE: "dev"
+PM2_NAMESPACE: "dev"
+```
+
+> **Note**: For a complete YAML example with detailed comments for every parameter, see [`cli-config.example.yaml`](./cli-config.example.yaml)
+
+## Generated Project Features
+
+- TypeScript MCP server with HTTP/STDIO transport
+- Express.js web server with Swagger documentation
+- JWT authentication support (optional)
+- Consul service discovery integration (optional)
+- File and console logging
+- ESLint configuration and Jest testing
+- PM2 deployment scripts
+- Nginx configuration templates
+
+## Project Structure
+
+```
+my-mcp-server/
+├── .claude/                     # Settings, Agents, Hooks for Claude Code
+│   ├── agents/                  # Folder with Claude Code agents. Including the agent fa-mcp-sdk 
+│   ├── hooks/                   # Code formatting hook after changes made by Claude Code
+│   └── settings.json            # Claude Code settings
+├── .run/                        # JetBrains IDE run configurations
+├── config/                      # Environment configurations
+│   ├── _local.yaml              # Local configuration template
+│   ├── custom-environment-variables.yaml # Environment mapping
+│   ├── default.yaml             # Base configuration
+│   ├── development.yaml         # Development settings
+│   ├── local.yaml               # Local configuration
+│   ├── production.yaml          # Production settings
+│   └── test.yaml                # Test environment
+├── deploy/                      # Deployment configurations
+│   ├── .gitkeep                 # Git directory keeper
+│   ├── NGINX/                   # Nginx configuration templates
+│   │   ├── sites-enabled/       # Nginx site configurations
+│   │   └── snippets/            # Nginx configuration snippets
+│   ├── config.example.yml       # Deployment config example
+│   ├── pm2.config.js            # PM2 process manager config
+│   ├── pm2reg.sh                # PM2 registration script
+│   ├── srv.cjs                  # Server management script
+│   └── srv.sh.readme.md         # Server script documentation
+├── FA-MCP-SDK-DOC/              # FA-MCP-SDK Documentation
+├── scripts/                     # Utility scripts
+│   ├── npm/                     # NPM utility scripts
+│   ├── kill-port.js             # Port cleanup utility
+│   ├── pre-commit               # Git pre-commit hook
+│   └── remove-nul.js            # File cleanup utility
+├── src/                         # Source code
+│   ├── _types_/                 # TypeScript type definitions
+│   ├── api/                     # REST API routes
+│   │   └── router.ts            # Express router
+│   ├── asset/                   # Static assets
+│   │   └── logo.svg             # Application logo/favicon
+│   ├── prompts/                 # Agent prompts
+│   │   ├── agent-brief.ts       # Agent brief
+│   │   ├── agent-prompt.ts      # Main agent prompt
+│   │   └── custom-prompts.ts    # Custom prompts
+│   ├── tools/                   # MCP tool implementations
+│   │   ├── handle-tool-call.ts  # Tool execution handler
+│   │   └── tools.ts             # Tool definitions
+│   ├── custom-resources.ts      # Custom MCP resources
+│   └── start.ts                 # Application entry point
+├── swagger/                     
+│   └── openapi.yaml             # API description. Generated if none
+├── tests/                       # Test suites
+│   ├── mcp/                     # MCP protocol tests
+│   ├── jest-simple-reporter.js  # Custom Jest reporter
+│   └── utils.ts                 # Test utilities
+├── .editorconfig                # Editor configuration
+├── .env                         # Environment variables
+├── .env.example                 # Environment variables template
+├── .envrc                       # direnv configuration
+├── .gitignore                   # Git ignore rules
+├── eslint.config.js             # ESLint configuration
+├── jest.config.js               # Jest test configuration
+├── LICENSE                      # MIT license file
+├── package.json                 # NPM package configuration
+├── prompt-example-new-MCP.md    # Example of instructions for Claude Code for vibe coding of a custom MCP server 
+├── README.md
+├── tsconfig.json                # TypeScript configuration
+└── update.cjs                   # Project update script
+```
+
+Note: The `dist/` directory (compiled JavaScript) is created after running `npm run build`.
+
+## Available Scripts
+
+| Script | Description |
+|--------|-------------|
+| `npm start` | Start compiled MCP server |
+| `npm run build` | Compile TypeScript |
+| `npm run cb` | Clean and build |
+| `npm run ci` | Install dependencies |
+| `npm run reinstall` | Reinstall all dependencies |
+| `npm run lint` | Run ESLint |
+| `npm run lint:fix` | Fix ESLint issues |
+| `npm run test:mcp` | Test MCP tools |
+| `npm run test:mcp-http` | Test HTTP transport |
+| `npm run test:mcp-sse` | Test SSE transport |
+| `npm run test:mcp-stdio` | Test STDIO transport |
+| `npm run generate-token` | Generate JWT tokens |
+| `npm run consul:unreg` | Deregister from Consul |
+
+
+## Server runs at
+`http://localhost:3000` with:
+- MCP endpoints at `/mcp/*`
+- Swagger UI at `/swagger`
+- Health check at `/health`
+
+## Directory Requirements
+
+- **Empty directories only** - CLI aborts if files exist
+- Allowed files: `.git`, `.idea`, `.vscode`, `.DS_Store`, `node_modules`, `dist`, `__misc`, `_tmp`, `.swp`, `.swo`, `.sublime-project`, `.sublime-workspace`, `~last-cli-config.json`
+- Use absolute paths for target directory
+
+## Deployment
+
+### PM2 Production
 ```bash
-npm run build     # Build TypeScript
-npm run clean     # Clean dist/
-npm run cb        # Clean + build
+npm run build
+pm2 start deploy/pm2.config.js
 ```
 
-### Linting
-
+### Systemd Service
 ```bash
-npm run lint      # Check code style
-npm run lint:fix  # Fix automatically
+npm run build
+chmod +x deploy/srv.cjs
+./deploy/srv.cjs install
 ```
 
-### Type Checking
+### Consul Registration
+Set `consul.service.enable: true` and provide required tokens for automatic service registration.
 
-```bash
-npm run typecheck
-```
-
-### Testing
-
-The framework includes built-in testing utilities for MCP servers:
-
-```javascript
-import { McpSseClient } from 'fa-mcp-sdk';
-
-// For npm package usage - prevents unhandledRejection
-const client = McpSseClient.createWithErrorHandler('http://localhost:3000');
-
-try {
-  const response = await client.callTool('tool_name', { param: 'value' });
-  console.log('Success:', response);
-} catch (error) {
-  console.log('Error:', error.message); // Properly caught
-} finally {
-  await client.close();
-}
-```
-
-**Note**: When using `fa-mcp-sdk` as an npm package, use `McpSseClient.createWithErrorHandler()` to prevent `unhandledRejection` errors that can occur with SSE-based error handling.
-
-## API Reference
-
-### McpServerData Interface
-
-See: [src/core/_types_/types.ts](src/core/_types_/types.ts)
-
-### Core Exports
-
-See: [src/core/index.ts](src/core/index.ts)
-
-## Requirements
-
-- **Node.js**: >= 18.0.0
-- **TypeScript**: >= 5.0.0
-- **PostgreSQL**: >= 12 (optional)
-- **Consul**: Any version (optional)
+### Nginx Configuration
+Generated nginx configuration files in `deploy/NGINX/` for domain-based routing.
 
 ## License
 
-MIT
+MIT License
