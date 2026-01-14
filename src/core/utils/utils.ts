@@ -1,5 +1,6 @@
 import fs from 'fs';
 import path from 'path';
+import { Tool } from '@modelcontextprotocol/sdk/types.js';
 import { ROOT_PROJECT_DIR } from '../constants.js';
 
 export const trim = (s: any): string => String(s || '').trim();
@@ -69,3 +70,7 @@ export const normalizeHeaders = (headers: Record<string, any>): Record<string, s
 
   return normalized;
 };
+
+export function resetTools (tools: Tool[]): void {
+  global.__MCP_PROJECT_DATA__.tools.splice(0, global.__MCP_PROJECT_DATA__.tools.length, ...tools);
+}

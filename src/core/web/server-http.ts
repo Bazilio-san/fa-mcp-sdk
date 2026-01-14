@@ -149,7 +149,7 @@ export async function startHttpServer (): Promise<void> {
     }
   });
 
-  const { httpComponents, tools, toolHandler } = getProjectData();
+  const { httpComponents } = getProjectData();
   const apiRouter = httpComponents?.apiRouter;
 
   // Auto-configure OpenAPI documentation if apiRouter is provided
@@ -197,6 +197,7 @@ export async function startHttpServer (): Promise<void> {
       await handleRateLimit(rateLimiter, toolCallClientId, 'unknown', `SSE tool call | tool: ${request.params.name}`);
 
       // Execute the tool call with preserved headers and payload from SSE connection establishment
+      const { toolHandler } = getProjectData();
       const result = await toolHandler({
         ...request.params,
         headers: preservedHeaders, // Use headers from when SSE connection was established
@@ -376,6 +377,7 @@ export async function startHttpServer (): Promise<void> {
           break;
 
         case 'tools/list':
+          const { tools } = getProjectData();
           result = { tools };
           break;
 
@@ -385,6 +387,7 @@ export async function startHttpServer (): Promise<void> {
           await handleRateLimit(rateLimiter, toolCallClientId, req.ip || 'unknown', `tool call | tool: ${params?.name || 'unknown'}`, res, id);
           // Extract auth payload from middleware (set by authMW)
           const mcpAuthPayload = (req as any).authInfo?.payload;
+          const { toolHandler } = getProjectData();
           result = await toolHandler({
             ...params,
             headers: normalizeHeaders(req.headers),
