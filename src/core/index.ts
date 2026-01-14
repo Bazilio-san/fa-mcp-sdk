@@ -25,7 +25,7 @@ export type {
   TokenGenAuthInput,
 } from './_types_/types.js';
 
-export { appConfig } from './bootstrap/init-config.js';
+export { appConfig, getProjectData, getSafeAppConfig } from './bootstrap/init-config.js';
 
 export { accessPointUpdater } from './consul/access-points-updater.js';
 export { deregisterServiceFromConsul } from './consul/deregister.js';
