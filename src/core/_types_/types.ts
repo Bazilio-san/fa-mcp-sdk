@@ -87,19 +87,21 @@ export type IEndpointsOn404 = Record<string, string | string[]>
  */
 export type CustomAuthValidator = (req: any) => Promise<AuthResult> | AuthResult;
 
+export interface ToolHandlerParams {
+  name: string;
+  arguments?: any;
+  headers?: Record<string, string>;
+  payload?: { user: string; [key: string]: any } | undefined
+}
+
+
 /**
  * All data that needs to be passed to initialize the MCP server
  */
 export interface McpServerData {
   // MCP components
   tools: Tool[] | (() => Promise<Tool[]>);
-  toolHandler: (params: {
-                  name: string;
-                  arguments?: any;
-                  headers?: Record<string, string>;
-                  payload?: { user: string; [key: string]: any } | undefined
-                },
-  ) => Promise<any>;
+  toolHandler: (params: ToolHandlerParams) => Promise<any>;
 
   // Prompts
   agentBrief: string;
