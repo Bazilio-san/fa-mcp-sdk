@@ -71,6 +71,12 @@ export const normalizeHeaders = (headers: Record<string, any>): Record<string, s
   return normalized;
 };
 
-export function resetTools (tools: Tool[]): void {
-  global.__MCP_PROJECT_DATA__.tools.splice(0, global.__MCP_PROJECT_DATA__.tools.length, ...tools);
+export async function getTools (): Promise<Tool[]> {
+  const toolsOrFn = global.__MCP_PROJECT_DATA__.tools;
+  let toolsArray: Tool[];
+  if (typeof toolsOrFn === 'function') {
+    toolsArray = await toolsOrFn();
+    return toolsArray;
+  }
+  return toolsOrFn as Tool[];
 }

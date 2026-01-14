@@ -22,7 +22,7 @@ import chalk from 'chalk';
 import { getPrompt, getPromptsList } from '../mcp/prompts.js';
 import { handleHomeInfo } from './home-api.js';
 import { getMainDBConnectionStatus } from '../db/pg-db.js';
-import { normalizeHeaders } from '../utils/utils.js';
+import { getTools, normalizeHeaders } from '../utils/utils.js';
 import { createAdminRouter } from './admin-router.js';
 import { validateAdminAuthConfig } from '../auth/admin-auth.js';
 import { createSvgRouter } from './svg-icons.js';
@@ -377,7 +377,7 @@ export async function startHttpServer (): Promise<void> {
           break;
 
         case 'tools/list':
-          const { tools } = getProjectData();
+          const tools = await getTools();
           result = { tools };
           break;
 

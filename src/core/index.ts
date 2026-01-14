@@ -98,7 +98,7 @@ export {
   encodeSvgForDataUri,
   getAsset,
   normalizeHeaders,
-  resetTools,
+  getTools,
 } from './utils/utils.js';
 export { isPortAvailable, checkPortAvailability } from './utils/port-checker.js';
 
