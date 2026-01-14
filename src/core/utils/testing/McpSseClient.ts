@@ -4,8 +4,8 @@ import { BaseMcpClient } from './BaseMcpClient.js';
 // Global unhandled rejection handler setup for npm package usage
 // This prevents PromiseRejectionHandledWarning messages during error testing
 function setupGlobalRejectionHandler () {
-  if (!(global as any)._faMcpSdkRejectionHandler) {
-    (global as any)._faMcpSdkRejectionHandler = true;
+  if (!global._faMcpSdkRejectionHandler) {
+    global._faMcpSdkRejectionHandler = true;
 
     // Track rejected promises that we've handled to prevent warnings
     const handledPromises = new WeakSet<Promise<any>>();

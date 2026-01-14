@@ -58,7 +58,7 @@ export const getTokenFromHttpHeader = (req: Request): { scheme?: AuthType, crede
  * Gets custom auth validator from global context
  */
 function getCustomAuthValidator (): CustomAuthValidator | undefined {
-  const projectData = (global as any).__MCP_PROJECT_DATA__;
+  const projectData = global.__MCP_PROJECT_DATA__;
   const fn = projectData?.customAuthValidator;
   return typeof fn === 'function' ? fn : undefined;
 }

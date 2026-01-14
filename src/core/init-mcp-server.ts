@@ -83,7 +83,7 @@ export async function initMcpServer (data: McpServerData): Promise<void> {
   process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
 
   // Temporarily store data in a global context for access from _core functions
-  (global as any).__MCP_PROJECT_DATA__ = data;
+  global.__MCP_PROJECT_DATA__ = data;
 
   const { transportType } = appConfig.mcp;
 

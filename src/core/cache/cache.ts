@@ -17,6 +17,13 @@ const DEFAULT_TTL_SECONDS = appConfig.cache.ttlSeconds || 300;
 const DEFAULT_MAX_ITEMS = appConfig.cache.maxItems || 1000;
 const DEFAULT_CHECK_PERIOD = 120;
 
+interface CacheManagerConstructorOptions {
+  ttlSeconds?: number;
+  maxItems?: number;
+  checkPeriod?: number;
+  verbose?: boolean;
+}
+
 /**
  * Enhanced cache manager with TTL support and statistics
  */
@@ -31,20 +38,13 @@ export class CacheManager {
     deletes: number;
   };
 
-  constructor (
-    options: {
-      ttlSeconds?: number;
-      maxItems?: number;
-      checkPeriod?: number;
-      verbose?: boolean;
-    } = {},
-  ) {
+  constructor (options?: CacheManagerConstructorOptions) {
     const {
       ttlSeconds = DEFAULT_TTL_SECONDS,
       maxItems = DEFAULT_MAX_ITEMS,
       checkPeriod = DEFAULT_CHECK_PERIOD,
       verbose = false,
-    } = options;
+    } = options || {};
 
     this.defaultTtl = ttlSeconds;
     this.verbose = verbose;
@@ -338,12 +338,7 @@ let globalCache: CacheManager | null = null;
 /**
  * Get or create global cache instance
  */
-export function getCache (options?: {
-  ttlSeconds?: number;
-  maxItems?: number;
-  checkPeriod?: number;
-  verbose?: boolean;
-}): CacheManager {
+export function getCache (options?: CacheManagerConstructorOptions): CacheManager {
   if (!globalCache) {
     globalCache = new CacheManager(options);
   }

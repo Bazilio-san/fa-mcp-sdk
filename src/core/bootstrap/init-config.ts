@@ -75,6 +75,6 @@ export function getSafeAppConfig (): any {
 }
 
 export function getProjectData (): McpServerData {
-  return (global as any).__MCP_PROJECT_DATA__;
+  return global.__MCP_PROJECT_DATA__;
 }
 
