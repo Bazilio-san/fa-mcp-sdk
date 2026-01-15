@@ -101,6 +101,11 @@ export const checkJwtToken = (arg: {
   let payloadStr: string = '';
   try {
     payloadStr = decrypt(encryptedPayload);
+    if (!payloadStr.startsWith('{')) {
+      return {
+        errorReason: 'Error decrypting JWT token :: the transcribed text is not JSON',
+      };
+    }
   } catch (err: Error | any) {
     logger.error(err);
     return {
