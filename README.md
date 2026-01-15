@@ -1,4 +1,4 @@
-# MCP Server Template Generator (`fa-mcp`)
+# MCP Server Template Generator
 
 Production-ready core framework for building MCP (Model Context Protocol) servers with comprehensive
 infrastructure support.
