@@ -87,7 +87,7 @@ export type IEndpointsOn404 = Record<string, string | string[]>
  */
 export type CustomAuthValidator = (req: any) => Promise<AuthResult> | AuthResult;
 
-export interface ToolHandlerParams {
+export interface IToolHandlerParams {
   name: string;
   arguments?: any;
   headers?: Record<string, string>;
@@ -101,7 +101,7 @@ export interface ToolHandlerParams {
 export interface McpServerData {
   // MCP components
   tools: Tool[] | (() => Promise<Tool[]>);
-  toolHandler: (params: ToolHandlerParams) => Promise<any>;
+  toolHandler: (params: IToolHandlerParams) => Promise<any>;
 
   // Prompts
   agentBrief: string;
