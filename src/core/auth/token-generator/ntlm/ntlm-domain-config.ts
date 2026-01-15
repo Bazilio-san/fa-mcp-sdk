@@ -70,12 +70,3 @@ export const tokenGenDomainConfig = {
   strategy: isNTLMEnabled ? (appConfig.ad.strategy || 'NTLM') : undefined, // from config or default NTLM
   tlsOptions: isNTLMEnabled ? appConfig.ad.tlsOptions : undefined, // from config if specified
 };
-
-// Debug info VVR
-if (isNTLMEnabled) {
-  console.log(`[TOKEN-GEN] Configured domains: ${Object.keys(tokenGenDomains).join(', ')}`);
-  console.log(`[TOKEN-GEN] Default domain: ${tokenGenDomainConfig.defaultDomain}`);
-  console.log(`[TOKEN-GEN] Strategy: ${tokenGenDomainConfig.strategy}`);
-} else {
-  console.log('[TOKEN-GEN] NTLM authentication disabled - no domain configuration available');
-}
