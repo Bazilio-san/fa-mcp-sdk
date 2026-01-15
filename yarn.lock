@@ -2126,10 +2126,10 @@ ext@^1.7.0:
   dependencies:
     type "^2.7.2"
 
-fa-consul@^1.0.6:
-  version "1.0.6"
-  resolved "https://registry.yarnpkg.com/fa-consul/-/fa-consul-1.0.6.tgz#b3aeb5a0a71d349c7c3a31dd2b0fc0009cd00b42"
-  integrity sha512-NtT5GqlUFTRPmnxHEnBZKO9OojKOgZSLdT6I/1oVyVLOQQKIBIM7C0P/eyLKWnPws5JFXnZm96UougzGJSkqIw==
+fa-consul@^1.0.7:
+  version "1.0.7"
+  resolved "https://registry.yarnpkg.com/fa-consul/-/fa-consul-1.0.7.tgz#701005d8fc32ec044b3c0251680903470263de3b"
+  integrity sha512-OIoeQfUuxRjoqRUiKaMJHf8gBK8TOENCPMCV3lIsAam7KaeRQKgT8XGUqaDuUcicszaDTmJ92zUOMvtKYZIJbg==
   dependencies:
     af-tools-ts "^1.1.5"
     async-mutex "^0.5.0"
