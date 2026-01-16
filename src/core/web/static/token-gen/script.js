@@ -104,7 +104,7 @@ async function initializeAuth () {
           showTokenModal('Token is invalid or expired.');
           return false;
         }
-      } catch (error) {
+      } catch {
         // authFetch already handles 401 and shows modal
         return false;
       }
@@ -207,6 +207,7 @@ function addKeyValuePair (key = '', value = '', readonly = false, placeholder = 
   keyValuePairCount++;
 }
 
+// eslint-disable-next-line unused-imports/no-unused-vars
 function removeKeyValuePair (button) {
   button.parentElement.remove();
   keyValuePairCount--;
@@ -251,7 +252,7 @@ function addCopyButtonToTokenOutput (tokenOutput, token) {
         notification.classList.remove('show');
       }, 1000);
 
-    } catch (err) {
+    } catch {
       // Fallback for browsers that don't support clipboard API
       const textArea = document.createElement('textarea');
       textArea.value = token;
@@ -504,6 +505,7 @@ async function initializeForm () {
 }
 
 // Logout function
+// eslint-disable-next-line unused-imports/no-unused-vars
 async function logout () {
   try {
     // For token-based auth, just clear the stored token

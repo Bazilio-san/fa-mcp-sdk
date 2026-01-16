@@ -2,7 +2,6 @@
 let toolsData = [];
 let resourcesData = [];
 let promptsData = [];
-let pageData = {};
 
 // Set primary color CSS variable
 function setPrimaryColor (color) {
@@ -133,7 +132,6 @@ async function loadPageData () {
     }
 
     const data = await response.json();
-    pageData = data;
 
     // Set theme color
     setPrimaryColor(data.primaryColor);
@@ -155,6 +153,7 @@ async function loadPageData () {
   }
 }
 
+// eslint-disable-next-line unused-imports/no-unused-vars
 function openModal (sectionName) {
   const modal = document.getElementById(sectionName + '-modal');
   const tableBody = document.getElementById(sectionName + '-table').querySelector('tbody');
@@ -272,6 +271,7 @@ function generatePromptsTableRows (prompts) {
   ).join('');
 }
 
+// eslint-disable-next-line unused-imports/no-unused-vars
 function toggleDetails (sectionName, index) {
   const detailRow = document.getElementById(sectionName + '-detail-' + index);
   const toggleLink = document.getElementById(sectionName + '-toggle-' + index);
@@ -322,6 +322,7 @@ function toggleDetails (sectionName, index) {
 }
 
 // Handle prompt details and prompt content display
+// eslint-disable-next-line unused-imports/no-unused-vars
 async function togglePromptDetails (sectionName, index, displayType) {
   const detailRow = document.getElementById(sectionName + '-detail-' + index);
   const toggleLinkDetails = document.getElementById(sectionName + '-toggle-details-' + index);
@@ -414,6 +415,7 @@ async function togglePromptDetails (sectionName, index, displayType) {
 }
 
 // Handle resource details and resource content display
+// eslint-disable-next-line unused-imports/no-unused-vars
 async function toggleResourceDetails (sectionName, index, displayType) {
   const detailRow = document.getElementById(sectionName + '-detail-' + index);
   const toggleLinkDetails = document.getElementById(sectionName + '-toggle-details-' + index);
@@ -516,6 +518,7 @@ async function toggleResourceDetails (sectionName, index, displayType) {
 }
 
 // Health Check Modal
+// eslint-disable-next-line unused-imports/no-unused-vars
 async function openHealthCheckModal () {
   const modal = document.getElementById('health-modal');
   const loading = document.getElementById('health-loading');
@@ -599,7 +602,7 @@ function addCopyButton (contentElement) {
         notification.classList.remove('show');
       }, 1000);
 
-    } catch (err) {
+    } catch {
       // Fallback for browsers that don't support clipboard API
       const textArea = document.createElement('textarea');
       textArea.value = textToCopy;

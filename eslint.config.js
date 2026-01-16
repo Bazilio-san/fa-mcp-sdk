@@ -29,14 +29,19 @@ export default [
     rules: {
       ...tsPlugin.configs.recommended.rules,
       '@typescript-eslint/ban-ts-comment': 'off',
-      '@typescript-eslint/no-unused-vars': 'off',
+      '@typescript-eslint/no-unused-vars': ['warn', {
+        'argsIgnorePattern': '^_',
+        'varsIgnorePattern': '^_',
+        'caughtErrorsIgnorePattern': '^_',
+        'ignoreRestSiblings': true,
+      }],
       '@typescript-eslint/no-unsafe-function-type': 'off',
       'unused-imports/no-unused-imports': 'error',
       'unused-imports/no-unused-vars': ['warn', {
         'argsIgnorePattern': '^_',
         'varsIgnorePattern': '^_',
         'caughtErrorsIgnorePattern': '^_',
-        'ignoreRestSiblings': true
+        'ignoreRestSiblings': true,
       }],
       '@typescript-eslint/no-explicit-any': 'off',
       '@typescript-eslint/no-unsafe-member-access': 'off',
@@ -45,9 +50,9 @@ export default [
         'ts': 'never',
         'js': 'always',
         'pattern': {
-          '**/*.ts': 'always'
+          '**/*.ts': 'always',
         },
-        'ignorePackages': true
+        'ignorePackages': true,
       }],
       // Formatting rules
       'semi': ['error', 'always'],
@@ -55,7 +60,7 @@ export default [
       'space-before-function-paren': ['error', {
         'anonymous': 'always',
         'named': 'always',
-        'asyncArrow': 'always'
+        'asyncArrow': 'always',
       }],
       'object-curly-spacing': ['error', 'always'],
       'curly': ['error', 'all'],
@@ -77,16 +82,25 @@ export default [
     },
     plugins: {
       'import': importPlugin,
+      'unused-imports': unusedImports,
     },
     rules: {
       'import/no-default-export': 'off',
+      // Unused variables/imports rules
+      'unused-imports/no-unused-imports': 'warn',
+      'unused-imports/no-unused-vars': ['warn', {
+        'argsIgnorePattern': '^_',
+        'varsIgnorePattern': '^_',
+        'caughtErrorsIgnorePattern': '^_',
+        'ignoreRestSiblings': true,
+      }],
       // Formatting rules
       'semi': ['error', 'always'],
       'quotes': ['error', 'single', { 'avoidEscape': true }],
       'space-before-function-paren': ['error', {
         'anonymous': 'always',
         'named': 'always',
-        'asyncArrow': 'always'
+        'asyncArrow': 'always',
       }],
       'object-curly-spacing': ['error', 'always'],
       'curly': ['error', 'all'],

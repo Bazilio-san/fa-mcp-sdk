@@ -49,7 +49,7 @@ app.use((req, res, next) => {
     // Simple NTLM simulation - decode Basic auth
     const base64Credentials = auth.split(' ')[1];
     const credentials = Buffer.from(base64Credentials, 'base64').toString('ascii');
-    const [username, password] = credentials.split(':');
+    const [username] = credentials.split(':');
 
     // Mitigate the NTLM object
     req.ntlm = {
