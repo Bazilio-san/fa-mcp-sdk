@@ -78,10 +78,10 @@ consul:
       token: '***'
   service:
     enable: {{consul.service.enable}} # true - Allows registration of the service with the consul
-    name: <name> # <name> will be replaced by <package.json>.name at initialization
+    name: <name> # Here you can specify an alternative name for the service. String "<name>" will be replaced by <package.json>.name at initialization
     instance: '{{SERVICE_INSTANCE}}' # This value will be specified as a suffix in the id of the service
-    version: <version> # <version> will be replaced by <package.json>.version at initialization
-    description: <description> # <description> will be replaced by <package.json>.description at initialization
+    version: <version> # String "<version>" will be replaced by <package.json>.version at initialization
+    description: <description> # Here you can specify an alternative name description. String "<description>" will be replaced by <package.json>.description at initialization
     tags: [ ] # If null or empty array - Will be pulled up from package.keywords at initialization
     meta:
       # "Home" page link template

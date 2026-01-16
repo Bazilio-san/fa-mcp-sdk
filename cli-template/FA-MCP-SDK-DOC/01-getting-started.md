@@ -108,8 +108,8 @@ Main configuration interface for your MCP server.
 ```typescript
 interface McpServerData {
   // MCP Core Components
-  tools: Tool[];                                    // Your tool definitions
-  toolHandler: (params: { name: string; arguments?: any; headers?: Record<string, string> }) => Promise<any>; // Tool execution function
+  tools: Tool[] | (() => Promise<Tool[]>);         // Your tool definitions (static array or async function)
+  toolHandler: (params: IToolHandlerParams) => Promise<any>; // Tool execution function
 
   // Agent Configuration
   agentBrief: string;                              // Brief description of your agent
@@ -121,7 +121,8 @@ interface McpServerData {
   customResources?: IResourceData[] | null;        // Custom resource definitions
 
   // Authentication
-  customAuthValidator?: CustomAuthValidator;           // Custom authentication validator function
+  customAuthValidator?: CustomAuthValidator;       // Custom authentication validator function
+  tokenGenAuthHandler?: TokenGenAuthHandler;       // Custom authorization for Token Generator admin page
 
   // HTTP Server Components (for HTTP transport)
   httpComponents?: {
@@ -130,12 +131,19 @@ interface McpServerData {
 
   // UI Assets
   assets?: {
-    favicon?: string;                              // SVG content for favicon
+    logoSvg?: string;                              // SVG content for logo/favicon
     maintainerHtml?: string;                       // Support contact HTML snippet
   };
 
   // Consul Integration
   getConsulUIAddress?: (serviceId: string) => string; // Function to generate Consul UI URLs
+}
+
+interface IToolHandlerParams {
+  name: string;
+  arguments?: any;
+  headers?: Record<string, string>;
+  payload?: { user: string; [key: string]: any } | undefined; // JWT payload if authenticated
 }
 ```
 
@@ -184,9 +192,13 @@ interface IResourceData {
   title?: string;                                  // Optional display title
   description: string;                             // Human-readable description
   mimeType: string;                                // MIME type (e.g., "text/plain", "application/json")
-  content: IResourceContent;                       // Static content or dynamic function
+  content: IResourceContent;                       // Static string, object, or dynamic function
   requireAuth?: boolean;                           // Whether authentication is required
 }
+
+// Content types for resources
+type IResourceContent = string | object | TResourceContentFunction;
+type TResourceContentFunction = (uri: string) => string | Promise<string>;
 ```
 
 Example `src/custom-resources.ts`:

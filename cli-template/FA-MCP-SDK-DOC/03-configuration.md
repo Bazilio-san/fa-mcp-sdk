@@ -315,8 +315,7 @@ const execMAIN = async (
 ): Promise<number | undefined> {...}
 
 // Examples:
-await execMAIN('INSERT INTO logs (message, created_at) VALUES ($1, $2)',
-  ['Server started', new Date()]);
+await execMAIN({ sqlText: 'INSERT INTO logs (message, created_at) VALUES ($1, $2)', sqlValues: ['Server started', new Date()] });
 await execMAIN({ sqlText: 'UPDATE users SET active = $1 WHERE id = $2', sqlValues: [false, userId] });
 
 // queryRsMAIN - execute SQL and return rows array directly

@@ -33,9 +33,11 @@ interface AuthResult {
 ```typescript
 import {
   ICheckTokenResult,
-  checkJwtToken,
+  ITokenPayload,
   generateToken
 } from 'fa-mcp-sdk';
+
+// Note: checkJwtToken is internal. Use createAuthMW() or getMultiAuthError() for authentication.
 
 // Types used:
 export interface ICheckTokenResult {
@@ -50,26 +52,8 @@ export interface ITokenPayload {
   [key: string]: any,               // Additional payload data
 }
 
-// checkJwtToken - validate token and return detailed result
-// Function Signature:
-const checkJwtToken = (arg: {
-  token: string,
-  expectedUser?: string,
-  expectedService?: string,
-}): ICheckTokenResult {...}
-
-// Example:
-const tokenResult = checkJwtToken({
-  token: 'user_provided_token',
-  expectedUser: 'john_doe',
-  expectedService: 'my-mcp-server'
-});
-
-if (!tokenResult.errorReason) {
-  console.log('Valid token for user:', tokenResult.payload?.user);
-} else {
-  console.log('Auth failed:', tokenResult.errorReason);
-}
+// Note: Token validation is handled automatically by createAuthMW() middleware.
+// For programmatic validation, use getMultiAuthError() which supports all auth methods.
 
 // generateToken - create JWT token
 // Function Signature:
@@ -319,9 +303,10 @@ export interface AuthResult {
 
 // Authentication detection result
 export interface AuthDetectionResult {
-  configured: AuthType[];    // Authentication types found in configuration
-  valid: AuthType[];        // Authentication types properly configured and ready
-  errors: Record<string, string[]>;  // Configuration errors by auth type
+  configured: AuthType[];           // Authentication types found in configuration
+  configuredSet: Set<AuthType>;     // Set of configured auth types for quick lookup
+  configuredTypes: string;          // Comma-separated string of configured types
+  errors: Record<string, string[]>; // Configuration errors by auth type
 }
 ```
 
@@ -348,7 +333,7 @@ function detectAuthConfiguration(): AuthDetectionResult {...}
 // Example:
 const detection = detectAuthConfiguration();
 console.log('Configured auth types:', detection.configured);
-console.log('Valid auth types:', detection.valid);
+console.log('Configured types string:', detection.configuredTypes);
 console.log('Configuration errors:', detection.errors);
 
 // logAuthConfiguration - log auth system status (debugging)
@@ -630,14 +615,12 @@ interface GenerateTokenRequest {
 
 ```typescript
 // Programmatic token generation (without UI)
-import { generateToken, checkJwtToken } from 'fa-mcp-sdk';
+import { generateToken } from 'fa-mcp-sdk';
 
 // Generate a 1-hour token
 const token = generateToken('john.doe', 3600, { role: 'admin' });
+console.log('Generated token:', token);
 
-// Validate the token
-const result = checkJwtToken({ token });
-if (!result.errorReason) {
-  console.log('Token is valid for user:', result.payload?.user);
-}
+// Token validation is handled automatically by createAuthMW() middleware
+// or use getMultiAuthError() for programmatic validation
 ```

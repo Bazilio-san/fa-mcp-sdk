@@ -121,8 +121,9 @@ import {
   CustomAuthValidator,
   AuthResult,
   initADGroupChecker,
-  checkJwtToken,
 } from 'fa-mcp-sdk';
+// Note: JWT validation is handled automatically by the SDK's multi-auth system.
+// The customAuthValidator receives parsed JWT payload when jwtToken auth is enabled.
 import { tools } from './tools/tools.js';
 import { handleToolCall } from './tools/handle-tool-call.js';
 import { AGENT_BRIEF } from './prompts/agent-brief.js';
@@ -137,38 +138,28 @@ const { isUserInGroup } = initADGroupChecker();
 
 /**
  * Custom authentication validator with AD group membership check
+ * This validator is called AFTER the SDK's standard JWT validation.
+ * The req object contains parsed authInfo from the standard auth flow.
  * Returns 403 Forbidden if user is not in the required AD group
  */
 const customAuthValidator: CustomAuthValidator = async (req): Promise<AuthResult> => {
-  const authHeader = req.headers.authorization;
+  // Extract user info from request (populated by standard auth)
+  const authInfo = (req as any).authInfo;
 
-  if (!authHeader?.startsWith('Bearer ')) {
-    return { success: false, error: 'Missing or invalid Authorization header' };
+  // If standard auth failed or no user info, let standard auth handle it
+  if (!authInfo?.username) {
+    return { success: false, error: 'User information not available' };
   }
 
-  const token = authHeader.slice(7);
-
-  // Validate JWT token
-  const tokenResult = checkJwtToken({ token });
-  if (tokenResult.errorReason) {
-    return { success: false, error: tokenResult.errorReason };
-  }
-
-  const payload = tokenResult.payload;
-  if (!payload?.user) {
-    return { success: false, error: 'Invalid token: missing user' };
-  }
-
-  const username = payload.user;
+  const username = authInfo.username;
 
   // Bypass group check if configured (for debugging)
   if (config.groupAccess.bypassGroupCheck) {
     return {
       success: true,
-      authType: 'jwtToken',
+      authType: authInfo.authType,
       username,
-      payload,
-      isTokenDecrypted: tokenResult.isTokenDecrypted,
+      payload: authInfo.payload,
     };
   }
 
@@ -186,10 +177,9 @@ const customAuthValidator: CustomAuthValidator = async (req): Promise<AuthResult
 
     return {
       success: true,
-      authType: 'jwtToken',
+      authType: authInfo.authType,
       username,
-      payload,
-      isTokenDecrypted: tokenResult.isTokenDecrypted,
+      payload: authInfo.payload,
     };
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
@@ -238,6 +228,7 @@ import {
   logger,
   appConfig,
   initADGroupChecker,
+  IToolHandlerParams,
 } from 'fa-mcp-sdk';
 import { CustomAppConfig } from '../_types_/custom-config.js';
 
@@ -250,7 +241,7 @@ const { isUserInGroup } = initADGroupChecker();
 /**
  * Check if user has access to MCP tools based on AD group membership
  */
-async function checkToolAccess(payload: { user: string; [key: string]: any } | undefined): Promise<void> {
+async function checkToolAccess(payload: IToolHandlerParams['payload']): Promise<void> {
   // Skip check if bypass is enabled
   if (config.groupAccess.bypassGroupCheck) {
     return;
@@ -282,12 +273,7 @@ async function checkToolAccess(payload: { user: string; [key: string]: any } | u
   }
 }
 
-export const handleToolCall = async (params: {
-  name: string;
-  arguments?: any;
-  headers?: Record<string, string>;
-  payload?: { user: string; [key: string]: any };
-}): Promise<any> => {
+export const handleToolCall = async (params: IToolHandlerParams): Promise<any> => {
   const { name, arguments: args, headers, payload } = params;
 
   logger.info(`Tool called: ${name} by user: ${payload?.user || 'unknown'}`);
@@ -387,6 +373,7 @@ import {
   logger,
   appConfig,
   initADGroupChecker,
+  IToolHandlerParams,
 } from 'fa-mcp-sdk';
 import { CustomAppConfig } from '../_types_/custom-config.js';
 
@@ -401,7 +388,7 @@ const { isUserInGroup } = initADGroupChecker();
  */
 async function checkToolAccess(
   toolName: string,
-  payload: { user: string; [key: string]: any } | undefined
+  payload: IToolHandlerParams['payload']
 ): Promise<void> {
   const toolAccess = config.toolGroupAccess;
 
@@ -459,12 +446,7 @@ async function checkToolAccess(
   }
 }
 
-export const handleToolCall = async (params: {
-  name: string;
-  arguments?: any;
-  headers?: Record<string, string>;
-  payload?: { user: string; [key: string]: any };
-}): Promise<any> => {
+export const handleToolCall = async (params: IToolHandlerParams): Promise<any> => {
   const { name, arguments: args, headers, payload } = params;
 
   logger.info(`Tool called: ${name} by user: ${payload?.user || 'unknown'}`);

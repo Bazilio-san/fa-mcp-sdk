@@ -124,7 +124,7 @@ import { initMcpServer, McpServerData } from 'fa-mcp-sdk';
 import { appConfig, AppConfig, getProjectData, getSafeAppConfig, ROOT_PROJECT_DIR } from 'fa-mcp-sdk';
 
 // Authentication
-import { createAuthMW, checkJwtToken, generateToken, getAuthHeadersForTests, TTokenType, generateTokenApp } from 'fa-mcp-sdk';
+import { createAuthMW, generateToken, getAuthHeadersForTests, TTokenType, generateTokenApp } from 'fa-mcp-sdk';
 
 // Tools
 import { formatToolResult, ToolExecutionError, getTools } from 'fa-mcp-sdk';

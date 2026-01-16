@@ -8,8 +8,7 @@ Create tests in your `tests/` directory:
 
 **`tests/utils.ts`** - Test utilities:
 ```typescript
-import { ITestResult, logResultToFile, formatResultAsMarkdown } from 'fa-mcp-sdk';
-
+// Test result interface for tracking test outcomes
 export interface ITestResult {
   fullId: string;
   toolName: string;
@@ -22,11 +21,21 @@ export interface ITestResult {
   error: string | null;
 }
 
-// Log test results
-await logResultToFile(testResult);
+// Example utility functions for your test suite
+export const formatResultAsMarkdown = (result: ITestResult): string => {
+  const statusIcon = result.status === 'passed' ? '✅' : '❌';
+  return `${statusIcon} ${result.toolName} - ${result.description}\n` +
+    `Duration: ${result.duration}ms\n` +
+    (result.error ? `Error: ${result.error}\n` : '');
+};
 
-// Format as markdown
-const markdown = formatResultAsMarkdown(testResult);
+export const logResultToFile = async (result: ITestResult): Promise<void> => {
+  const fs = await import('fs/promises');
+  const path = await import('path');
+  const filename = `${result.toolName}.md`;
+  const filepath = path.join(process.cwd(), '_logs/mcp', filename);
+  await fs.writeFile(filepath, formatResultAsMarkdown(result), 'utf-8');
+};
 ```
 
 ### Test Clients

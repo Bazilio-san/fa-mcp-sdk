@@ -260,11 +260,9 @@ const normalized = normalizeHeaders(rawHeaders);
 // }
 
 // Common use case - accessing headers in tool handler:
-export const handleToolCall = async (params: {
-  name: string;
-  arguments?: any;
-  headers?: Record<string, string>;
-}): Promise<any> => {
+import { IToolHandlerParams } from 'fa-mcp-sdk';
+
+export const handleToolCall = async (params: IToolHandlerParams): Promise<any> => {
   const { headers } = params;
 
   // Headers are already normalized by SDK, access with lowercase keys

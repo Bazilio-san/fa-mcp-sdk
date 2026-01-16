@@ -33,10 +33,11 @@ export const tools: Tool[] = [
 ### Tool Handler in `src/tools/handle-tool-call.ts`
 
 ```typescript
-import { formatToolResult, ToolExecutionError, logger } from 'fa-mcp-sdk';
+import { formatToolResult, ToolExecutionError, logger, IToolHandlerParams } from 'fa-mcp-sdk';
 
-export const handleToolCall = async (params: { name: string, arguments?: any, headers?: Record<string, string> }): Promise<any> => {
-  const { name, arguments: args, headers } = params;
+export const handleToolCall = async (params: IToolHandlerParams): Promise<any> => {
+  const { name, arguments: args, headers, payload } = params;
+  // payload contains { user: string, ... } if JWT authentication is enabled
 
   logger.info(`Tool called: ${name}`);
 
@@ -93,12 +94,10 @@ The FA-MCP-SDK automatically passes normalized HTTP headers to your `toolHandler
 **Example Usage:**
 
 ```typescript
-export const handleToolCall = async (params: {
-  name: string,
-  arguments?: any,
-  headers?: Record<string, string>
-}): Promise<any> => {
-  const { name, arguments: args, headers } = params;
+import { IToolHandlerParams } from 'fa-mcp-sdk';
+
+export const handleToolCall = async (params: IToolHandlerParams): Promise<any> => {
+  const { name, arguments: args, headers, payload } = params;
 
   // Access client information via headers
   if (headers) {
