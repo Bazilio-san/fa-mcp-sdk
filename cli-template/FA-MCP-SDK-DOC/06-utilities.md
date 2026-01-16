@@ -5,7 +5,7 @@
 ### Custom Error Classes
 
 ```typescript
-import { BaseMcpError, ToolExecutionError, ValidationError } from 'fa-mcp-sdk';
+import { BaseMcpError, ToolExecutionError, ValidationError, ServerError } from 'fa-mcp-sdk';
 
 // Create custom error types
 class MyCustomError extends BaseMcpError {
@@ -23,6 +23,40 @@ if (toolFailed) {
   throw new ToolExecutionError('my_tool', 'Tool execution failed');
 }
 ```
+
+### `ServerError`
+
+Server-related error class for internal MCP server failures. Use for unexpected server-side errors that aren't tool-specific.
+
+```typescript
+import { ServerError } from 'fa-mcp-sdk';
+
+// Class Definition:
+class ServerError extends BaseMcpError {
+  constructor(
+    message: string,
+    details?: Record<string, unknown>,
+    printed?: boolean
+  );
+}
+
+// Examples:
+throw new ServerError('Database connection failed');
+
+throw new ServerError('Configuration error', {
+  configKey: 'webServer.port',
+  expected: 'number',
+  received: 'string'
+});
+
+// With printed flag (prevents duplicate logging)
+throw new ServerError('Internal error', undefined, true);
+```
+
+**Properties:**
+- `code`: Always `'SERVER_ERROR'`
+- `httpStatus`: Always `500`
+- `details`: Optional additional error context
 
 ### Error Utilities
 
@@ -76,6 +110,35 @@ const originalError = new Error('Connection failed');
 addErrorMessage(originalError, 'Database operation failed');
 // originalError.message is now: 'Database operation failed. Connection failed'
 ```
+
+---
+
+## Constants
+
+### `ROOT_PROJECT_DIR`
+
+Absolute path to the project root directory. Calculated at runtime based on `process.cwd()`.
+
+```typescript
+import { ROOT_PROJECT_DIR } from 'fa-mcp-sdk';
+
+// Constant Definition:
+const ROOT_PROJECT_DIR: string = process.cwd();
+
+// Example usage:
+import * as path from 'path';
+
+const configPath = path.join(ROOT_PROJECT_DIR, 'config', 'default.yaml');
+const assetsPath = path.join(ROOT_PROJECT_DIR, 'src', 'assets');
+
+console.log('Project root:', ROOT_PROJECT_DIR);
+// Output: /home/user/my-mcp-server
+```
+
+**Use Cases:**
+- Building absolute paths to project files
+- Locating configuration files
+- Resolving asset paths
 
 ---
 
@@ -163,6 +226,80 @@ const getAsset = (relPathFromAssetRoot: string): string | undefined {...}
 // Example:
 const logoContent = getAsset('logo.svg');         // Reads from src/asset/logo.svg
 const iconContent = getAsset('icons/star.svg');   // Reads from src/asset/icons/star.svg
+```
+
+### HTTP Utilities
+
+```typescript
+import { normalizeHeaders } from 'fa-mcp-sdk';
+
+// normalizeHeaders - Normalize HTTP headers for consistent access
+// Function Signature:
+function normalizeHeaders(headers: Record<string, any>): Record<string, string>;
+
+// Features:
+// - Converts all header names to lowercase
+// - Joins array values with ', ' separator
+// - Filters out null/undefined values
+// - Converts non-string values to strings
+
+// Example:
+const rawHeaders = {
+  'Authorization': 'Bearer token123',
+  'X-Custom-Header': 'value',
+  'Accept-Language': ['en', 'ru'],
+  'X-Null-Header': null,
+};
+
+const normalized = normalizeHeaders(rawHeaders);
+// Result:
+// {
+//   'authorization': 'Bearer token123',
+//   'x-custom-header': 'value',
+//   'accept-language': 'en, ru'
+// }
+
+// Common use case - accessing headers in tool handler:
+export const handleToolCall = async (params: {
+  name: string;
+  arguments?: any;
+  headers?: Record<string, string>;
+}): Promise<any> => {
+  const { headers } = params;
+
+  // Headers are already normalized by SDK, access with lowercase keys
+  const authHeader = headers?.authorization;
+  const userAgent = headers?.['user-agent'];
+  const clientIP = headers?.['x-real-ip'] || headers?.['x-forwarded-for'];
+
+  // ...
+};
+```
+
+### Tool Utilities
+
+```typescript
+import { getTools } from 'fa-mcp-sdk';
+import { Tool } from '@modelcontextprotocol/sdk/types.js';
+
+// getTools - Get the list of registered MCP tools
+// Function Signature:
+async function getTools(): Promise<Tool[]>;
+
+// Retrieves tools from the project data passed to initMcpServer()
+// Supports both static arrays and dynamic tool functions
+
+// Example:
+const tools = await getTools();
+console.log(`Registered tools: ${tools.length}`);
+tools.forEach(tool => {
+  console.log(`- ${tool.name}: ${tool.description}`);
+});
+
+// Useful for:
+// - Introspection and debugging
+// - Dynamic tool documentation
+// - Tool validation in tests
 ```
 
 ### Network Utilities

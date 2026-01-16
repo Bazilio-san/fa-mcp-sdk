@@ -77,6 +77,82 @@ const client = new McpSseClient('http://localhost:3000');
 const result = await client.callTool('my_custom_tool', { query: 'test' });
 ```
 
+**Streamable HTTP Transport Testing (MCP 2025 Specification):**
+
+```typescript
+import { McpStreamableHttpClient } from 'fa-mcp-sdk';
+
+// McpStreamableHttpClient - Test client for MCP Streamable HTTP transport
+// Implements the new MCP 2025 streamable HTTP specification with NDJSON
+// Supports long-lived connections, multiple requests/responses, and notifications
+
+// Constructor:
+const client = new McpStreamableHttpClient(baseUrl: string, options?: {
+  endpointPath?: string;        // Default: '/mcp'
+  headers?: Record<string, string>;
+  requestTimeoutMs?: number;    // Default: 120000 (2 minutes)
+});
+
+// Example usage:
+const client = new McpStreamableHttpClient('http://localhost:3000', {
+  headers: { 'Authorization': 'Bearer your-token' },
+  requestTimeoutMs: 60000,
+});
+
+// Initialize connection (required before other operations)
+await client.initialize({
+  protocolVersion: '2024-11-05',
+  clientInfo: { name: 'test-client', version: '1.0.0' },
+});
+
+console.log('Server:', client.serverInfo);
+console.log('Capabilities:', client.capabilities);
+
+// Call tools
+const toolResult = await client.callTool('my_custom_tool', { query: 'test' });
+console.log('Tool result:', toolResult);
+
+// Get prompts
+const prompt = await client.getPrompt('agent_brief');
+
+// List and read resources
+const resources = await client.listResources();
+const content = await client.readResource('custom-resource://data1');
+
+// Subscribe to notifications
+const unsubscribe = client.onNotification('notifications/tools/list_changed', (params) => {
+  console.log('Tools changed:', params);
+});
+
+// Send custom RPC
+const customResult = await client.sendRpc('custom/method', { foo: 'bar' });
+
+// Close connection when done
+await client.close();
+```
+
+**Key Features:**
+- **NDJSON Streaming**: Newline-delimited JSON over HTTP for efficient communication
+- **Bidirectional**: Supports both requests and server notifications
+- **Persistent Connection**: Single HTTP connection for multiple operations
+- **Timeout Handling**: Configurable request timeouts with automatic cleanup
+
+**Available Methods:**
+
+| Method                              | Description                       |
+|-------------------------------------|-----------------------------------|
+| `initialize(params)`                | Initialize MCP session            |
+| `close()`                           | Close connection gracefully       |
+| `callTool(name, args, headers?)`    | Execute an MCP tool               |
+| `getPrompt(name, args?)`            | Retrieve a prompt                 |
+| `listResources()`                   | List available resources          |
+| `readResource(uri)`                 | Read resource content             |
+| `listTools()`                       | List available tools              |
+| `listPrompts()`                     | List available prompts            |
+| `sendRpc(method, params, timeout?)` | Send custom JSON-RPC request      |
+| `notify(method, params?)`           | Send notification (no response)   |
+| `onNotification(method, handler)`   | Subscribe to server notifications |
+
 ### Test Categories and Recommendations
 
 1. **Prompt Tests**:

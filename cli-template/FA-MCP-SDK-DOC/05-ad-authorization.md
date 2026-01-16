@@ -4,6 +4,76 @@ This document demonstrates how to implement additional authorization based on Ac
 group membership. These examples assume JWT token authentication (`jwtToken`) is configured,
 and the user information is extracted from the JWT payload.
 
+## AD Configuration Types
+
+### `IADConfig`
+
+Main Active Directory configuration interface for group membership checks and NTLM authentication.
+
+```typescript
+import { IADConfig } from 'fa-mcp-sdk';
+
+// Type Definition:
+interface IADConfig {
+  ad: {
+    domains: {
+      // Key is domain name (e.g., 'OFFICE', 'CORP')
+      [domainName: string]: IDcConfig;
+    };
+    tlsOptions?: ConnectionOptions;  // TLS options for LDAPS connections
+    strategy?: EAuthStrategy;        // NTLM authentication strategy
+    groupCacheTtlMs?: number;        // Cache TTL for group checks (default: 10 minutes)
+    dnCacheTtlMs?: number;           // Cache TTL for DN lookups (default: 24 hours)
+  };
+}
+```
+
+### `IDcConfig`
+
+Domain Controller configuration for individual AD domains.
+
+```typescript
+import { IDcConfig } from 'fa-mcp-sdk';
+
+// Type Definition:
+interface IDcConfig {
+  controllers: string[];     // LDAP URLs: ['ldap://dc1.corp.com', 'ldap://dc2.corp.com']
+  username: string;          // Service account for LDAP queries
+  password: string;          // Service account password
+  baseDn?: string;           // Base DN for searches (auto-derived from URL if not set)
+  default?: boolean;         // Mark as default domain for operations
+
+  // Internal fields (assigned during config processing):
+  name?: string;             // Domain name
+  hostReSource?: string;     // RegExp source for hostname matching
+  hostRe?: RegExp;           // Compiled hostname matcher
+}
+```
+
+**Configuration Example (`config/default.yaml`):**
+
+```yaml
+ad:
+  groupCacheTtlMs: 600000    # 10 minutes
+  dnCacheTtlMs: 86400000     # 24 hours
+  domains:
+    CORP:
+      default: true
+      controllers:
+        - 'ldap://dc1.corp.com'
+        - 'ldap://dc2.corp.com'
+      username: 'svc_mcp@corp.com'
+      password: '${AD_SERVICE_PASSWORD}'  # From environment variable
+      baseDn: 'DC=corp,DC=com'            # Optional, auto-derived if omitted
+    PARTNER:
+      controllers:
+        - 'ldap://dc1.partner.local'
+      username: 'svc_reader@partner.local'
+      password: '${AD_PARTNER_PASSWORD}'
+```
+
+---
+
 ## Configuration for AD Group Authorization
 
 First, extend your configuration to include the required AD group:

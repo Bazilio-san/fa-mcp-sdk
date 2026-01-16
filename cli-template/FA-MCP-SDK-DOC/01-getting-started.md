@@ -205,3 +205,79 @@ export const customResources: IResourceData[] = [
   },
 ];
 ```
+
+---
+
+## Configuration API
+
+### `AppConfig`
+
+Base configuration type for MCP server applications. Extends multiple configuration interfaces for database, logging, web server, MCP, and Active Directory settings.
+
+```typescript
+import { appConfig, AppConfig } from 'fa-mcp-sdk';
+
+// appConfig is a singleton with merged configuration from:
+// - config/default.yaml (base)
+// - config/{NODE_ENV}.yaml (environment-specific)
+// - Environment variables (highest priority)
+
+// Access configuration values
+const port = appConfig.webServer.port;
+const serviceName = appConfig.name;
+const isAuthEnabled = appConfig.webServer.auth.enabled;
+```
+
+**Key Properties:**
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `name` | string | Package name from package.json |
+| `shortName` | string | Name without 'mcp' suffix |
+| `version` | string | Package version |
+| `description` | string | Package description |
+| `webServer` | object | HTTP server configuration (host, port, auth) |
+| `mcp` | object | MCP protocol settings (transportType, rateLimit) |
+| `logger` | object | Logging configuration (level, useFileLogger) |
+| `ad` | object | Active Directory configuration |
+| `consul` | object | Consul service discovery settings |
+
+### `getProjectData()`
+
+Retrieves the MCP server project data that was passed to `initMcpServer()`.
+
+```typescript
+import { getProjectData, McpServerData } from 'fa-mcp-sdk';
+
+// Function Signature:
+function getProjectData(): McpServerData;
+
+// Example - Access project data from anywhere in your application:
+const projectData = getProjectData();
+console.log('Agent brief:', projectData.agentBrief);
+console.log('Tools count:', projectData.tools.length);
+```
+
+### `getSafeAppConfig()`
+
+Returns a deep clone of the application configuration with sensitive data masked. Use this for logging configuration without exposing secrets.
+
+```typescript
+import { getSafeAppConfig } from 'fa-mcp-sdk';
+
+// Function Signature:
+function getSafeAppConfig(): any;
+
+// Example - Log configuration safely:
+const safeConfig = getSafeAppConfig();
+console.log('Current configuration:', JSON.stringify(safeConfig, null, 2));
+
+// Sensitive values are masked:
+// - Database passwords: '[MASKED]'
+// - JWT keys, API tokens, etc.
+```
+
+**Typical Use Cases:**
+- Debugging configuration issues
+- Audit logging of startup parameters
+- Displaying configuration in admin interfaces

@@ -1,5 +1,33 @@
 # Authentication and Security
 
+## Authentication Types
+
+### `TTokenType`
+
+Type identifier for authentication methods. Used to indicate which authentication mechanism was used for a request.
+
+```typescript
+import { TTokenType } from 'fa-mcp-sdk';
+
+// Type Definition:
+type TTokenType = 'permanent' | 'JWT';
+
+// Usage in authentication results:
+interface AuthResult {
+  success: boolean;
+  authType?: TTokenType;  // Indicates which auth method succeeded
+  username?: string;
+  // ...
+}
+```
+
+| Value | Description |
+|-------|-------------|
+| `'permanent'` | Permanent server token from `permanentServerTokens` config |
+| `'JWT'` | JSON Web Token authentication |
+
+---
+
 ## Token-based Authentication
 
 ```typescript
@@ -542,3 +570,74 @@ See the separate documentation file `05-ad-authorization.md` for detailed exampl
 1. **HTTP Server Level Access Restriction** - Using `customAuthValidator`
 2. **Access Restriction to ALL MCP Tools** - Checking in `toolHandler`
 3. **Access Restriction to SPECIFIC MCP Tools** - Per-tool group requirements
+
+---
+
+## Token Generator Application
+
+### `generateTokenApp()`
+
+Launches a standalone Token Generator web application for administrative JWT token generation. The application provides a web UI for creating and validating tokens.
+
+```typescript
+import { generateTokenApp } from 'fa-mcp-sdk';
+
+// Function Signature:
+function generateTokenApp(port?: number): Server;
+
+// Start Token Generator on default port (3030)
+generateTokenApp();
+
+// Start on custom port
+generateTokenApp(8080);
+
+// Can also be run directly from command line:
+// npx ts-node node_modules/fa-mcp-sdk/dist/core/auth/token-generator/server.js
+```
+
+**Features:**
+- Web UI for JWT token generation
+- Token validation interface
+- NTLM authentication support (if configured in AD settings)
+- Service info endpoint with authentication status
+
+**Environment Variables:**
+- `TOKEN_GEN_PORT` - Override default port (3030)
+
+**Endpoints:**
+
+| Endpoint                    | Method | Description               |
+|-----------------------------|--------|---------------------------|
+| `/`                         | GET    | Token Generator web UI    |
+| `/admin/api/generate-token` | POST   | Generate new JWT token    |
+| `/admin/api/validate-token` | POST   | Validate existing token   |
+| `/admin/api/service-info`   | GET    | Get service information   |
+| `/admin/api/auth-status`    | GET    | Get authentication status |
+| `/admin/logout`             | GET    | Logout endpoint           |
+
+**Request Body for Token Generation:**
+
+```typescript
+interface GenerateTokenRequest {
+  user: string;           // Username for the token
+  timeValue: number;      // Duration value
+  timeUnit: 'minutes' | 'hours' | 'days' | 'months' | 'years';
+  payload?: Record<string, any>;  // Optional additional payload
+}
+```
+
+**Example Usage:**
+
+```typescript
+// Programmatic token generation (without UI)
+import { generateToken, checkJwtToken } from 'fa-mcp-sdk';
+
+// Generate a 1-hour token
+const token = generateToken('john.doe', 3600, { role: 'admin' });
+
+// Validate the token
+const result = checkJwtToken({ token });
+if (!result.errorReason) {
+  console.log('Token is valid for user:', result.payload?.user);
+}
+```

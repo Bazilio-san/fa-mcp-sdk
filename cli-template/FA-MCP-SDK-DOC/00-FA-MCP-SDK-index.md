@@ -54,16 +54,16 @@ npm install fa-mcp-sdk
 
 ## Documentation Structure
 
-| File                                                       | Content | Read When |
-|------------------------------------------------------------|---------|-----------|
-| [01-getting-started.md](01-getting-started.md)             | Installation, project structure, `initMcpServer()`, core types (`McpServerData`, `IPromptData`, `IResourceData`) | Starting a new project, understanding project structure |
-| [02-1-tools-and-api.md](02-1-tools-and-api.md)             | Tool definitions, `toolHandler`, HTTP headers, REST API with tsoa decorators, OpenAPI/Swagger auto-generation | Creating MCP tools, adding REST endpoints |
+| File                                                           | Content | Read When |
+|----------------------------------------------------------------|---------|-----------|
+| [01-getting-started.md](01-getting-started.md)                 | Installation, project structure, `initMcpServer()`, core types (`McpServerData`, `IPromptData`, `IResourceData`), Configuration API (`AppConfig`, `getProjectData`, `getSafeAppConfig`) | Starting a new project, understanding project structure |
+| [02-1-tools-and-api.md](02-1-tools-and-api.md)                 | Tool definitions, `toolHandler`, HTTP headers, REST API with tsoa decorators, OpenAPI/Swagger (`configureOpenAPI`, `OpenAPISpecResponse`, `SwaggerUIConfig`) | Creating MCP tools, adding REST endpoints, configuring Swagger |
 | [02-2-prompts-and-resources.md](02-2-prompts-and-resources.md) | Standard prompts (agent-brief, agent-prompt), custom prompts, standard resources, custom resources, `requireAuth` | Configuring prompts and resources |
-| [03-configuration.md](03-configuration.md)                 | `appConfig`, YAML configuration, cache management, database integration (PostgreSQL) | Configuring the server, using cache or database |
-| [04-authentication.md](04-authentication.md)               | Multi-auth system, JWT tokens, Basic auth, server tokens, custom validators, `createAuthMW()` | Setting up authentication |
-| [05-ad-authorization.md](05-ad-authorization.md)           | AD group-based authorization examples: HTTP level, all tools, per-tool | Implementing AD group restrictions |
-| [06-utilities.md](06-utilities.md)                         | Error handling, utility functions, logging, events, Consul integration, graceful shutdown | Error handling, logging, service discovery |
-| [07-testing-and-operations.md](07-testing-and-operations.md) | Test clients (STDIO, HTTP, SSE), transport types, best practices | Testing, deployment, operations |
+| [03-configuration.md](03-configuration.md)                     | `appConfig`, YAML configuration, cache management, database integration (PostgreSQL) | Configuring the server, using cache or database |
+| [04-authentication.md](04-authentication.md)                   | Multi-auth system, JWT tokens (`TTokenType`), Basic auth, server tokens, custom validators, `createAuthMW()`, Token Generator (`generateTokenApp`) | Setting up authentication, generating tokens |
+| [05-ad-authorization.md](05-ad-authorization.md)               | AD configuration types (`IADConfig`, `IDcConfig`), AD group-based authorization examples: HTTP level, all tools, per-tool | Implementing AD group restrictions |
+| [06-utilities.md](06-utilities.md)                             | Error handling (`ServerError`), utility functions (`normalizeHeaders`, `getTools`), constants (`ROOT_PROJECT_DIR`), logging, events, Consul integration, graceful shutdown | Error handling, logging, service discovery |
+| [07-testing-and-operations.md](07-testing-and-operations.md)   | Test clients (STDIO, HTTP, SSE, Streamable HTTP - `McpStreamableHttpClient`), transport types, best practices | Testing, deployment, operations |
 
 ## Common Tasks Quick Reference
 
@@ -121,13 +121,16 @@ Read: `07-testing-and-operations.md`
 import { initMcpServer, McpServerData } from 'fa-mcp-sdk';
 
 // Configuration
-import { appConfig } from 'fa-mcp-sdk';
+import { appConfig, AppConfig, getProjectData, getSafeAppConfig, ROOT_PROJECT_DIR } from 'fa-mcp-sdk';
 
 // Authentication
-import { createAuthMW, checkJwtToken, generateToken, getAuthHeadersForTests } from 'fa-mcp-sdk';
+import { createAuthMW, checkJwtToken, generateToken, getAuthHeadersForTests, TTokenType, generateTokenApp } from 'fa-mcp-sdk';
 
 // Tools
-import { formatToolResult, ToolExecutionError } from 'fa-mcp-sdk';
+import { formatToolResult, ToolExecutionError, getTools } from 'fa-mcp-sdk';
+
+// Errors
+import { ServerError, BaseMcpError, ValidationError } from 'fa-mcp-sdk';
 
 // Database
 import { queryMAIN, execMAIN, oneRowMAIN, checkMainDB } from 'fa-mcp-sdk';
@@ -139,13 +142,16 @@ import { getCache } from 'fa-mcp-sdk';
 import { logger, fileLogger } from 'fa-mcp-sdk';
 
 // Utilities
-import { trim, ppj, toError, toStr } from 'fa-mcp-sdk';
+import { trim, ppj, toError, toStr, normalizeHeaders } from 'fa-mcp-sdk';
 
 // Test clients
-import { McpHttpClient, McpStdioClient, McpSseClient } from 'fa-mcp-sdk';
+import { McpHttpClient, McpStdioClient, McpSseClient, McpStreamableHttpClient } from 'fa-mcp-sdk';
 
 // AD Groups
-import { initADGroupChecker } from 'fa-mcp-sdk';
+import { initADGroupChecker, IADConfig, IDcConfig } from 'fa-mcp-sdk';
+
+// OpenAPI/Swagger
+import { configureOpenAPI, createSwaggerUIAssetsMiddleware, OpenAPISpecResponse, SwaggerUIConfig } from 'fa-mcp-sdk';
 ```
 
 ## Project Structure
