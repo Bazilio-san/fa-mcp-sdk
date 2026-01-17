@@ -15,6 +15,66 @@ const dbEnabled = appConfig.isMainDBUsed;
 const transport = appConfig.mcp.transportType; // 'stdio' | 'http'
 ```
 
+### Service Identification
+
+The SDK uses two primary identifiers for the service:
+
+#### SERVICE_NAME → `appConfig.name`
+
+**Formation:**
+```
+process.env.SERVICE_NAME || package.json.name
+```
+
+A derivative value `appConfig.shortName` is also created by removing "mcp" from the name:
+```typescript
+shortName = name.replace(/[\s\-]*\bmcp\b[\s\-]*/ig, '');
+// Example: "my-mcp-service" → "my-service"
+```
+
+**Usage locations:**
+
+| Component    | Property              | Purpose                                 |
+|--------------|-----------------------|-----------------------------------------|
+| Consul       | `consul.service.name` | Service registration in Consul          |
+| MCP Server   | Server name           | MCP protocol server identifier          |
+| Logger       | File prefix           | Log file naming (`<name>.log`)          |
+| JWT Auth     | `expectedService`     | Token validation - checks service claim |
+| Admin API    | `serviceName`         | Service identification in API responses |
+| MCP Resource | `project://id`        | Returns service identifier              |
+| Cache        | `keyPrefix`           | Uses `shortName` for cache key prefixes |
+| PM2          | Process name          | `<name>[--<SERVICE_INSTANCE>]`          |
+
+#### PRODUCT_NAME → `appConfig.productName`
+
+**Formation:**
+```
+process.env.PRODUCT_NAME || package.json.productName
+```
+
+This is the human-readable display name for the service.
+
+**Usage locations:**
+
+| Component       | Purpose                               |
+|-----------------|---------------------------------------|
+| OpenAPI/Swagger | API title in documentation            |
+| Home page       | Service title in web UI header        |
+| Server startup  | Displayed in console startup message  |
+| MCP Resource    | `project://name` returns product name |
+
+#### Environment Variables
+
+Set these in `.env` file to override `package.json` values:
+
+```bash
+# Service identifier (technical name)
+SERVICE_NAME=my-mcp-service
+
+# Human-readable display name
+PRODUCT_NAME=My MCP Service
+```
+
 ### Configuration Files
 
 **`config/default.yaml`** - Base configuration:
