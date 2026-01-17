@@ -574,7 +574,7 @@ function generateTokenApp(port?: number): Server;
 generateTokenApp();
 
 // Start on custom port
-generateTokenApp(8080);
+generateTokenApp(1234);
 
 // Can also be run directly from command line:
 // npx ts-node node_modules/fa-mcp-sdk/dist/core/auth/token-generator/server.js

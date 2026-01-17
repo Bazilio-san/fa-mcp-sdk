@@ -310,9 +310,9 @@ import { isPortAvailable, checkPortAvailability } from 'fa-mcp-sdk';
 function isPortAvailable (port: number, host: string = '0.0.0.0'): Promise<boolean> {...}
 
 // Examples:
-const available1 = await isPortAvailable(3000);                    // Check on all interfaces
-const available2 = await isPortAvailable(3000, 'localhost');       // Check on localhost
-const available3 = await isPortAvailable(8080, '192.168.1.10');   // Check on specific IP
+const available1 = await isPortAvailable(1234);                    // Check on all interfaces
+const available2 = await isPortAvailable(1234, 'localhost');       // Check on localhost
+const available3 = await isPortAvailable(1234, '192.168.1.10');   // Check on specific IP
 
 if (available1) {
   console.log('Port 3000 is available');

@@ -11,7 +11,10 @@ import * as path from 'path';
 import { trim } from '../utils/utils.js';
 import { McpServerData } from '../_types_/types.js';
 
-const { name, productName, version, description, keywords, repository, homepage } = JSON.parse(readFileSync(path.join(process.cwd(), 'package.json'), 'utf-8'));
+const pj = JSON.parse(readFileSync(path.join(process.cwd(), 'package.json'), 'utf-8'));
+const { version, description, keywords, repository, homepage } = pj;
+const name = process.env.SERVICE_NAME || pj.name;
+const productName = process.env.PRODUCT_NAME || pj.productName;
 
 /**
  * Build application configuration from YAML and environment variables

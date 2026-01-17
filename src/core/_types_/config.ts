@@ -74,12 +74,12 @@ export interface AppConfig extends IADConfig,
 
   isMainDBUsed: boolean, // = !!appConfig.db.postgres?.dbs.main?.host
   // Package metadata (enriched from package.json)
-  name: string;
+  name: string; // env SERVICE_NAME | <package.json>.name
   shortName: string; // name without 'mcp'
   repo: string;
   version: string;
-  productName: string,
-  description: string;
+  productName: string, // env PRODUCT_NAME | <package.json>.productName
+  description: string; // <package.json>.description
 
   accessPoints: IAccessPoints,
   consul: IAFConsulConfig & {
