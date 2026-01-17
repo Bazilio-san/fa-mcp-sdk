@@ -21,6 +21,7 @@
     "generate-token": "node node_modules/fa-mcp-sdk/dist/core/auth/token-generator/server.js",
     "dead:exports": "ts-prune",
     "dead:files": "knip",
+    "update-sdk-docs": "node ../scripts/update-doc.js",
     "postinstall": "node ../scripts/npm/patch_node_modules.js",
     "consul:unreg": "node node_modules/fa-mcp-sdk/dist/core/consul/deregister.js",
     "test": "jest",
