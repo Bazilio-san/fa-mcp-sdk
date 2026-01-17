@@ -90,7 +90,7 @@ export function createAdminAuthMW (): RequestHandler[] {
   }
 
   const authType = adminAuth.type;
-  logger.info(`Admin authentication enabled with type: ${authType}`);
+  // logger.info(`Admin authentication enabled with type: ${authType}`);
 
   // For NTLM, use existing NTLM middleware
   if (authType === 'ntlm') {

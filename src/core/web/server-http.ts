@@ -174,7 +174,6 @@ export async function startHttpServer (): Promise<void> {
     }
     const adminRouter = createAdminRouter();
     app.use('/admin', adminRouter);
-    logger.info('Admin panel mounted at /admin');
   }
 
   // SSE endpoints for legacy MCP communication
