@@ -1,5 +1,5 @@
 import { SSEServerTransport } from '@modelcontextprotocol/sdk/server/sse.js';
-import { CallToolRequestSchema } from '@modelcontextprotocol/sdk/types.js';
+import { CallToolRequestSchema, ListToolsRequestSchema, ListPromptsRequestSchema } from '@modelcontextprotocol/sdk/types.js';
 import express from 'express';
 import helmet from 'helmet';
 import { RateLimiterMemory } from 'rate-limiter-flexible';
@@ -189,6 +189,19 @@ export async function startHttpServer (): Promise<void> {
   async function createSseServer (preservedHeaders: Record<string, string>, mcpAuthPayload?: { user: string; [key: string]: any }) {
     const sseServer = createMcpServer();
 
+    const sseArgs = { transport: 'sse' as const, headers: preservedHeaders, payload: mcpAuthPayload };
+
+    // Override tools/list to pass correct transport and context
+    sseServer.setRequestHandler(ListToolsRequestSchema, async () => {
+      const tools = await getTools(sseArgs);
+      return { tools };
+    });
+
+    // Override prompts/list to pass correct transport and context
+    sseServer.setRequestHandler(ListPromptsRequestSchema, async () => {
+      return await getPromptsList(sseArgs);
+    });
+
     // Override the tool call handler to include rate limiting, preserved headers and auth payload
     sseServer.setRequestHandler(CallToolRequestSchema, async (request) => {
       // Apply rate limiting for each SSE tool call
@@ -358,12 +371,8 @@ export async function startHttpServer (): Promise<void> {
 
       const mcpAuthPayload = (req as any).authInfo?.payload;
       const preservedHeaders = normalizeHeaders(req.headers);
-      const unifiedArgs = {
-        ...params,
-        headers: preservedHeaders,
-        payload: mcpAuthPayload,
-        transport: 'http' as const,
-      };
+      const httpArgs = { transport: 'http' as const, headers: preservedHeaders, payload: mcpAuthPayload };
+
       let result;
 
       switch (method) {
@@ -384,8 +393,8 @@ export async function startHttpServer (): Promise<void> {
           };
           break;
 
-        case '':
-          const tools = await getTools(unifiedArgs);
+        case 'tools/list':
+          const tools = await getTools(httpArgs);
           result = { tools };
           break;
 
@@ -393,17 +402,16 @@ export async function startHttpServer (): Promise<void> {
           // Apply rate limiting for tool calls
           const toolCallClientId = `tool-${req.ip || 'unknown'}`;
           await handleRateLimit(rateLimiter, toolCallClientId, req.ip || 'unknown', `tool call | tool: ${params?.name || 'unknown'}`, res, id);
-          // Extract auth payload from middleware (set by authMW)
           const { toolHandler } = getProjectData();
-          result = await toolHandler(unifiedArgs);
+          result = await toolHandler({ ...params, ...httpArgs });
           break;
 
         case 'prompts/list':
-          result = getPromptsList();
+          result = await getPromptsList(httpArgs);
           break;
 
         case 'prompts/get': {
-          result = await getPrompt(request as IGetPromptRequest);
+          result = await getPrompt(request as IGetPromptRequest, httpArgs);
           break;
         }
 

@@ -92,16 +92,27 @@ export type TransportType = 'stdio' | 'sse' | 'http';
 export interface IToolHandlerParams {
   name: string;
   arguments?: any;
+  transport: TransportType;
   headers?: Record<string, string>;
   payload?: { user: string; [key: string]: any } | undefined;
-  transport?: TransportType;
 }
 
-export interface IUnifiedArgs {
+export interface IGetToolsArgs {
+  transport: TransportType;
   headers?: Record<string, string>;
   payload?: { user: string; [key: string]: any } | undefined
+}
 
-  [x: string]: unknown;
+export interface IGetPromptsArgs {
+  transport: TransportType;
+  headers?: Record<string, string>;
+  payload?: { user: string; [key: string]: any } | undefined
+}
+
+export interface IGetPromptRequest {
+  id?: string | number; // if an RPC identifier is used
+  method: 'prompts/get' | 'prompts/content';
+  params: IGetPromptParams;
 }
 
 /**
@@ -109,13 +120,13 @@ export interface IUnifiedArgs {
  */
 export interface McpServerData {
   // MCP components
-  tools: Tool[] | ((unifiedArgs: IUnifiedArgs) => Promise<Tool[]>);
+  tools: Tool[] | ((args: IGetToolsArgs) => Promise<Tool[]>);
   toolHandler: (params: IToolHandlerParams) => Promise<any>;
 
   // Prompts
   agentBrief: string;
   agentPrompt: string;
-  customPrompts?: IPromptData[];
+  customPrompts?: IPromptData[] | ((args: IGetPromptsArgs) => Promise<IPromptData[]>);
 
   // Resources
   usedHttpHeaders?: IUsedHttpHeader[] | null;
@@ -142,12 +153,6 @@ export interface McpServerData {
   getConsulUIAddress?: (serviceId: string) => string,
 }
 
-
-export interface IGetPromptRequest {
-  id?: string | number; // if an RPC identifier is used
-  method: 'prompts/get' | 'prompts/content';
-  params: IGetPromptParams;
-}
 
 export type TPromptContentFunction = (request: IGetPromptRequest) => string | Promise<string>
 export type IPromptContent = string | TPromptContentFunction;

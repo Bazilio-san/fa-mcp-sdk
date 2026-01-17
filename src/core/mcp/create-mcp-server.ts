@@ -31,30 +31,27 @@ export function createMcpServer (): Server {
     },
   );
 
+  const stdioArgs = { transport: 'stdio' as const };
+
   // Handler for listing available tools
   server.setRequestHandler(ListToolsRequestSchema, async () => {
-    const tools = await getTools({ transport: 'stdio' });
+    const tools = await getTools(stdioArgs);
     return { tools };
   });
 
   // Handler for tool execution
   server.setRequestHandler(CallToolRequestSchema, async (request) => {
     const { toolHandler } = getProjectData();
-    const result = await toolHandler({
-      ...request.params,
-      transport: 'stdio',
-    });
-    return {
-      content: result.content,
-    };
+    const result = await toolHandler({ ...request.params, ...stdioArgs });
+    return { content: result.content };
   });
 
   // Handler for listing available prompts
-  server.setRequestHandler(ListPromptsRequestSchema, async () => getPromptsList());
+  server.setRequestHandler(ListPromptsRequestSchema, async () => getPromptsList(stdioArgs));
 
   // Handler for getting prompt content
   // @ts-ignore
-  server.setRequestHandler(GetPromptRequestSchema, async (request: IGetPromptRequest) => await getPrompt(request));
+  server.setRequestHandler(GetPromptRequestSchema, async (request: IGetPromptRequest) => await getPrompt(request, stdioArgs));
 
   // Handler for listing available resources
   server.setRequestHandler(ListResourcesRequestSchema, async () => getResourcesList());

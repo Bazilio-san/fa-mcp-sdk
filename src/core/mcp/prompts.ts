@@ -2,22 +2,32 @@
  * MCP Prompts for fin-office SQL Agent
  * Two-level agent description system for LLM agent selection
  */
-import { IGetPromptRequest, IPromptContent } from '../_types_/types.js';
+import { IGetPromptRequest, IGetPromptsArgs, IPromptContent, IPromptData } from '../_types_/types.js';
 import { getProjectData } from '../bootstrap/init-config.js';
 
-function createPrompts () {
+async function getPrompts (args: IGetPromptsArgs): Promise<IPromptData[]> {
   const projectData = getProjectData();
   if (!projectData) {
     console.error('Error: Project data not initialized. Make sure initMcpServer() has been called.');
     return [];
   }
 
-  const { agentBrief, agentPrompt, customPrompts = [] } = projectData;
+  const { agentBrief, agentPrompt, customPrompts } = projectData;
 
   // Validate that required prompts are available
   if (!agentBrief || !agentPrompt) {
     console.error('Error: Required prompts (agentBrief, agentPrompt) are missing from project data');
     return [];
+  }
+
+  // Resolve customPrompts - can be array or async function
+  let resolvedCustomPrompts: IPromptData[] = [];
+  if (customPrompts) {
+    if (typeof customPrompts === 'function') {
+      resolvedCustomPrompts = await customPrompts(args);
+    } else {
+      resolvedCustomPrompts = customPrompts;
+    }
   }
 
   return [
@@ -35,38 +45,27 @@ function createPrompts () {
       content: agentPrompt,
       requireAuth: false,
     },
-    ...customPrompts,
+    ...resolvedCustomPrompts,
   ];
 }
 
-// Lazy initialization - prompts are created when first accessed
-let _prompts: any[] | null = null;
-
-function getPrompts () {
-  if (!_prompts) {
-    _prompts = createPrompts();
-  }
-  return _prompts;
-}
-
-
-export function getPromptsList () {
-  const prompts = getPrompts();
+export async function getPromptsList (args: IGetPromptsArgs) {
+  const prompts = await getPrompts(args);
   return {
     prompts: prompts.map(({ content, ...rest }) => ({ ...rest })),
   };
 }
 
-export const getPrompt = async (request: IGetPromptRequest): Promise<any> => {
+export const getPrompt = async (request: IGetPromptRequest, args: IGetPromptsArgs): Promise<any> => {
   const { name } = request.params;
-  const prompts = getPrompts();
+  const prompts = await getPrompts(args);
 
   // Check if prompts are available
   if (!prompts || prompts.length === 0) {
     throw new Error('No prompts available. Project data may not be properly initialized.');
   }
 
-  let content: IPromptContent = prompts.filter((p) => p.name === name).map((p) => p.content)[0] || null;
+  let content: IPromptContent | null = prompts.filter((p) => p.name === name).map((p) => p.content)[0] || null;
   if (typeof content === 'function') {
     content = await content(request);
   }

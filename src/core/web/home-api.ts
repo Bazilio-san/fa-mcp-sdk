@@ -35,11 +35,12 @@ export async function handleHomeInfo (_req: Request, res: Response): Promise<voi
     const { version, repo } = appConfig;
     const serviceTitle = appConfig.productName.replace(/MCP/i, '').replace(/\s{2,}/g, ' ').trim();
     const logoSvg = getLogoSvg();
+    const httpArgs = { transport: 'http' as const };
     const { resources } = getResourcesList();
-    const { prompts } = getPromptsList();
+    const { prompts } = await getPromptsList(httpArgs);
     const { httpComponents } = global.__MCP_PROJECT_DATA__;
     const toolsOrFn = global.__MCP_PROJECT_DATA__.tools;
-    let tools: Tool[] = typeof toolsOrFn === 'function' ? await toolsOrFn({ transport: 'http' }) : toolsOrFn;
+    let tools: Tool[] = typeof toolsOrFn === 'function' ? await toolsOrFn(httpArgs) : toolsOrFn;
     const { getConsulUIAddress = (_s: string) => '', assets } = getProjectData();
 
     // Build footer HTML

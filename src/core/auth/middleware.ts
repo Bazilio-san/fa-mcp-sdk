@@ -50,9 +50,9 @@ const isPublicResource = (uri: string): boolean => {
 /**
  * Check if a prompt name is public (doesn't require authentication)
  */
-const isPublicPrompt = (name: string): boolean => {
+const isPublicPrompt = async (name: string): Promise<boolean> => {
   // Get all prompts including built-in and custom
-  const allPrompts = getPromptsList().prompts;
+  const { prompts: allPrompts } = await getPromptsList({ transport: 'http' });
   const prompt = allPrompts.find(p => p.name === name);
 
   if (!prompt) {
@@ -65,7 +65,7 @@ const isPublicPrompt = (name: string): boolean => {
 /**
  * Check if the current MCP request is for a public resource or prompt
  */
-const isPublicMcpRequest = (req: Request): boolean => {
+const isPublicMcpRequest = async (req: Request): Promise<boolean> => {
   const { method } = req.body || {};
 
   switch (method) {
@@ -84,7 +84,7 @@ const isPublicMcpRequest = (req: Request): boolean => {
 
     case 'prompts/get': {
       const name = req.body?.params?.name;
-      return name ? isPublicPrompt(name) : false;
+      return name ? await isPublicPrompt(name) : false;
     }
 
     default:
@@ -142,7 +142,7 @@ export function createAuthMW (options: AuthMiddlewareOptions = {}) {
 
     // Check if this is a public MCP request on any of the configured paths
     const isMcpRequest = mcpPaths.includes(req.path);
-    if (isMcpRequest && isPublicMcpRequest(req)) {
+    if (isMcpRequest && await isPublicMcpRequest(req)) {
       return next();
     }
 
