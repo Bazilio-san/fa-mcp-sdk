@@ -1,295 +1,140 @@
-# Getting Started with FA-MCP-SDK
+# Getting Started
 
-## Overview
+## initMcpServer(data: McpServerData): Promise<void>
 
-The FA-MCP-SDK is a comprehensive TypeScript framework for building Model Context
-Protocol (MCP) servers. This documentation covers how to use the SDK
-to create your own MCP server project.
-
-## Installation
-
-```bash
-npm install fa-mcp-sdk
-```
-
-## Project Structure
-
-When creating a new MCP server, your project structure should follow this pattern:
-
-```
-my-mcp-server/
-├── config/                      # Environment configurations
-│   ├── default.yaml             # Base configuration
-│   ├── development.yaml         # Development settings
-│   ├── production.yaml          # Production settings
-│   └── test.yaml                # Test environment
-├── src/                         # Source code
-│   ├── _types_/                 # TypeScript type definitions
-│   ├── api/                     # REST API routes (HTTP transport)
-│   │   └── router.ts            # Express router with tsoa controllers
-│   ├── prompts/                 # Agent prompts
-│   │   ├── agent-brief.ts       # Agent brief
-│   │   ├── agent-prompt.ts      # Main agent prompt
-│   │   └── custom-prompts.ts    # Custom prompts
-│   ├── tools/                   # MCP tool implementations
-│   │   ├── handle-tool-call.ts  # Tool execution handler
-│   │   └── tools.ts             # Tool definitions
-│   ├── custom-resources.ts      # Custom MCP resources
-│   └── start.ts                 # Application entry point
-├── tests/                       # Test suites
-│   ├── mcp/                     # MCP protocol tests
-│   └── utils.ts                 # Test utilities
-├── .env                         # Environment variables
-├── package.json                 # NPM package configuration
-└── tsconfig.json                # TypeScript configuration
-```
-
-## Main Initialization Function
-
-### `initMcpServer(data: McpServerData): Promise<void>`
-
-The primary function for starting your MCP server.
-
-**Example Usage in `src/start.ts`:**
+Primary function for starting your MCP server.
 
 ```typescript
 import { initMcpServer, McpServerData, CustomAuthValidator } from 'fa-mcp-sdk';
 import { tools } from './tools/tools.js';
 import { handleToolCall } from './tools/handle-tool-call.js';
-import { AGENT_BRIEF } from './prompts/agent-brief.js';
-import { AGENT_PROMPT } from './prompts/agent-prompt.js';
-
-// Optional: Custom Authentication validator (black box function)
-const customAuthValidator: CustomAuthValidator = async (req): Promise<AuthResult> => {
-  // Your custom authentication logic here - full request object available
-  // Can access headers, IP, user-agent, etc.
-  const authHeader = req.headers.authorization;
-  const userID = req.headers['x-user-id'];
-  const clientIP = req.headers['x-real-ip'] || req.connection?.remoteAddress;
-
-  // Implement any authentication logic (database, LDAP, API, custom rules, etc.)
-  const isAuthenticated = await authenticateRequest(req);
-
-  if (isAuthenticated) {
-    return {
-      success: true,
-      authType: 'basic',
-      username: userID || 'unknown',
-    };
-  } else {
-    return {
-      success: false,
-      error: 'Custom authentication failed',
-    };
-  }
-};
 
 const serverData: McpServerData = {
   tools,
   toolHandler: handleToolCall,
-  agentBrief: AGENT_BRIEF,
-  agentPrompt: AGENT_PROMPT,
-
-  // Optional: Provide custom authentication function
-  customAuthValidator: customAuthValidator,
-
-  // ... other configuration
+  agentBrief: 'My agent description',
+  agentPrompt: 'Full agent instructions',
+  customAuthValidator: async (req) => { /* custom auth logic */ },
 };
 
 await initMcpServer(serverData);
 ```
 
-## Core Types and Interfaces
+## Core Types
 
-### `McpServerData`
-
-Main configuration interface for your MCP server.
+### McpServerData
 
 ```typescript
 interface McpServerData {
-  // MCP Core Components
-  tools: Tool[] | (() => Promise<Tool[]>);         // Your tool definitions (static array or async function)
-  toolHandler: (params: IToolHandlerParams) => Promise<any>; // Tool execution function
-
-  // Agent Configuration
-  agentBrief: string;                              // Brief description of your agent
-  agentPrompt: string;                             // System prompt for your agent
-  customPrompts?: IPromptData[];                   // Additional custom prompts
-
-  // Resources
-  usedHttpHeaders?: IUsedHttpHeader[] | null;      // HTTP headers used for MCP server operation. Including for authorization
-  customResources?: IResourceData[] | null;        // Custom resource definitions
-
-  // Authentication
-  customAuthValidator?: CustomAuthValidator;       // Custom authentication validator function
-  tokenGenAuthHandler?: TokenGenAuthHandler;       // Custom authorization for Token Generator admin page
-
-  // HTTP Server Components (for HTTP transport)
-  httpComponents?: {
-    apiRouter?: Router | null;                     // Express router for additional endpoints
-  };
-
-  // UI Assets
-  assets?: {
-    logoSvg?: string;                              // SVG content for logo/favicon
-    maintainerHtml?: string;                       // Support contact HTML snippet
-  };
-
-  // Consul Integration
-  getConsulUIAddress?: (serviceId: string) => string; // Function to generate Consul UI URLs
+  tools: Tool[] | (() => Promise<Tool[]>);           // Tool definitions
+  toolHandler: (params: IToolHandlerParams) => Promise<any>;
+  agentBrief: string;                                 // Brief description
+  agentPrompt: string;                                // System prompt
+  customPrompts?: IPromptData[];                      // Additional prompts
+  usedHttpHeaders?: IUsedHttpHeader[] | null;         // HTTP headers for auth
+  customResources?: IResourceData[] | null;           // Custom resources
+  customAuthValidator?: CustomAuthValidator;          // Custom auth function
+  tokenGenAuthHandler?: TokenGenAuthHandler;          // Token Generator auth
+  httpComponents?: { apiRouter?: Router | null };     // Express router
+  assets?: { logoSvg?: string; maintainerHtml?: string };
+  getConsulUIAddress?: (serviceId: string) => string;
 }
 
 interface IToolHandlerParams {
   name: string;
   arguments?: any;
   headers?: Record<string, string>;
-  payload?: { user: string; [key: string]: any } | undefined; // JWT payload if authenticated
+  payload?: { user: string; [key: string]: any };     // JWT payload if authenticated
+  transport?: 'stdio' | 'sse' | 'http';
 }
 ```
 
-### `IPromptData`
+### IPromptData
 
-Configuration for custom prompts in `src/prompts/custom-prompts.ts`.
+For custom prompts in `src/prompts/custom-prompts.ts`:
 
 ```typescript
 interface IPromptData {
-  name: string;                                    // Unique prompt identifier
-  description: string;                             // Human-readable description
-  arguments: [];                                   // Expected arguments (currently empty array)
-  content: IPromptContent;                         // Static string or dynamic function
-  requireAuth?: boolean;                           // Whether authentication is required
+  name: string;
+  description: string;
+  arguments: [];
+  content: string | ((request: IGetPromptRequest) => string | Promise<string>);
+  requireAuth?: boolean;
 }
 
-type IPromptContent = string | TPromptContentFunction;
-type TPromptContentFunction = (request: IGetPromptRequest) => string | Promise<string>;
+// Example:
+export const customPrompts: IPromptData[] = [{
+  name: 'custom_prompt',
+  description: 'A custom prompt',
+  arguments: [],
+  content: (request) => `Content with param: ${request.params.arguments?.sample}`,
+}];
 ```
 
-Example `src/prompts/custom-prompts.ts`:
-```typescript
-import { IPromptData } from 'fa-mcp-sdk';
+### IResourceData
 
-export const customPrompts: IPromptData[] = [
-  {
-    name: 'custom_prompt',
-    description: 'A custom prompt for specific tasks',
-    arguments: [],
-    content: (request) => {
-      const { sample } = request.params.arguments || {};
-      return `Custom prompt content with parameter: ${sample}`;
-    },
-  },
-];
-```
-
-### `IResourceData`
-
-Configuration for custom resources in `src/custom-resources.ts`.
+For custom resources in `src/custom-resources.ts`:
 
 ```typescript
 interface IResourceData {
-  uri: string;                                     // Unique resource URI (e.g., "custom-resource://data1")
-  name: string;                                    // Resource name
-  title?: string;                                  // Optional display title
-  description: string;                             // Human-readable description
-  mimeType: string;                                // MIME type (e.g., "text/plain", "application/json")
-  content: IResourceContent;                       // Static string, object, or dynamic function
-  requireAuth?: boolean;                           // Whether authentication is required
+  uri: string;            // e.g., "custom-resource://data1"
+  name: string;
+  title?: string;
+  description: string;
+  mimeType: string;       // e.g., "text/plain", "application/json"
+  content: string | object | ((uri: string) => string | Promise<string>);
+  requireAuth?: boolean;
 }
 
-// Content types for resources
-type IResourceContent = string | object | TResourceContentFunction;
-type TResourceContentFunction = (uri: string) => string | Promise<string>;
+// Example:
+export const customResources: IResourceData[] = [{
+  uri: 'custom-resource://resource1',
+  name: 'resource1',
+  description: 'Dynamic content example',
+  mimeType: 'text/plain',
+  content: (uri) => `Dynamic content for ${uri}`,
+}];
 ```
-
-Example `src/custom-resources.ts`:
-```typescript
-import { IResourceData } from 'fa-mcp-sdk';
-
-export const customResources: IResourceData[] = [
-  {
-    uri: 'custom-resource://resource1',
-    name: 'resource1',
-    description: 'Example resource with dynamic content',
-    mimeType: 'text/plain',
-    content: (uri) => {
-      return `Dynamic content for ${uri} at ${new Date().toISOString()}`;
-    },
-  },
-];
-```
-
----
 
 ## Configuration API
 
-### `AppConfig`
+### appConfig
 
-Base configuration type for MCP server applications. Extends multiple configuration interfaces for database, logging, web server, MCP, and Active Directory settings.
+Singleton with merged configuration from YAML files and environment variables:
 
 ```typescript
 import { appConfig, AppConfig } from 'fa-mcp-sdk';
 
-// appConfig is a singleton with merged configuration from:
-// - config/default.yaml (base)
-// - config/{NODE_ENV}.yaml (environment-specific)
-// - Environment variables (highest priority)
-
-// Access configuration values
 const port = appConfig.webServer.port;
 const serviceName = appConfig.name;
 const isAuthEnabled = appConfig.webServer.auth.enabled;
 ```
 
-**Key Properties:**
+| Property | Description |
+|----------|-------------|
+| `name` | Package name from package.json |
+| `shortName` | Name without 'mcp' suffix |
+| `version` | Package version |
+| `webServer` | HTTP server config (host, port, auth) |
+| `mcp` | MCP settings (transportType, rateLimit) |
+| `logger` | Logging config |
+| `ad` | Active Directory config |
+| `consul` | Service discovery settings |
 
-| Property | Type | Description |
-|----------|------|-------------|
-| `name` | string | Package name from package.json |
-| `shortName` | string | Name without 'mcp' suffix |
-| `version` | string | Package version |
-| `description` | string | Package description |
-| `webServer` | object | HTTP server configuration (host, port, auth) |
-| `mcp` | object | MCP protocol settings (transportType, rateLimit) |
-| `logger` | object | Logging configuration (level, useFileLogger) |
-| `ad` | object | Active Directory configuration |
-| `consul` | object | Consul service discovery settings |
+### getProjectData(): McpServerData
 
-### `getProjectData()`
-
-Retrieves the MCP server project data that was passed to `initMcpServer()`.
+Returns the data passed to `initMcpServer()`.
 
 ```typescript
-import { getProjectData, McpServerData } from 'fa-mcp-sdk';
-
-// Function Signature:
-function getProjectData(): McpServerData;
-
-// Example - Access project data from anywhere in your application:
 const projectData = getProjectData();
-console.log('Agent brief:', projectData.agentBrief);
-console.log('Tools count:', projectData.tools.length);
+console.log(projectData.agentBrief, projectData.tools.length);
 ```
 
-### `getSafeAppConfig()`
+### getSafeAppConfig(): any
 
-Returns a deep clone of the application configuration with sensitive data masked. Use this for logging configuration without exposing secrets.
+Returns config clone with sensitive data masked. Use for logging:
 
 ```typescript
-import { getSafeAppConfig } from 'fa-mcp-sdk';
-
-// Function Signature:
-function getSafeAppConfig(): any;
-
-// Example - Log configuration safely:
 const safeConfig = getSafeAppConfig();
-console.log('Current configuration:', JSON.stringify(safeConfig, null, 2));
-
-// Sensitive values are masked:
-// - Database passwords: '[MASKED]'
-// - JWT keys, API tokens, etc.
+console.log(JSON.stringify(safeConfig, null, 2)); // passwords masked
 ```
-
-**Typical Use Cases:**
-- Debugging configuration issues
-- Audit logging of startup parameters
-- Displaying configuration in admin interfaces
