@@ -118,6 +118,7 @@ export function detectAuthConfiguration (): AuthDetectionResult {
 }
 
 const AUTH_CONFIGURATION = detectAuthConfiguration();
+const E_PFX = 'MCP Auth: ';
 
 /**
  * Checks auth using all configured authentication methods in ascending CPU load order
@@ -125,30 +126,30 @@ const AUTH_CONFIGURATION = detectAuthConfiguration();
 export async function checkMultiAuth (req: Request): Promise<AuthResult> {
   const { configured, configuredSet, configuredTypes } = AUTH_CONFIGURATION;
   if (!configured.length) {
-    return { success: false, error: 'No authentication methods configured' };
+    return { success: false, error: `${E_PFX}No authentication methods configured` };
   }
   const { scheme: authType, credentials } = getTokenFromHttpHeader(req);
   if (!credentials) {
-    return { success: false, error: 'Auth credentials not provided' };
+    return { success: false, error: `${E_PFX}credentials not provided` };
   }
   if (!authType) {
-    return { success: false, error: 'Cannot detect auth type from Authorization header' };
+    return { success: false, error: `${E_PFX}Cannot detect auth type from Authorization header` };
   }
   logger.debug(`Checking auth types: ${configuredTypes}`);
 
   if (!configuredSet.has(authType)) {
-    return { success: false, error: `Detected in Authorisation header auth type ${authType} not configured` };
+    return { success: false, error: `${E_PFX}Detected in Authorisation header auth type ${authType} not configured` };
   }
 
   let errorResult: AuthResult | undefined = undefined;
   try {
     switch (authType) {
       case 'permanentServerTokens': {
-        const error = checkPermanentToken(credentials).errorReason;
-        if (!error) {
+        const { errorReason } = checkPermanentToken(credentials);
+        if (!errorReason) {
           return { success: true, authType };
         }
-        errorResult = { success: false, authType, error };
+        errorResult = { success: false, authType, error: `${E_PFX}${errorReason}` };
         break;
       }
 
@@ -163,11 +164,11 @@ export async function checkMultiAuth (req: Request): Promise<AuthResult> {
       }
 
       case 'jwtToken': {
-        const { errorReason: error, payload, isTokenDecrypted } = checkJwtToken({ token: credentials });
-        if (!error) {
+        const { errorReason, payload, isTokenDecrypted } = checkJwtToken({ token: credentials });
+        if (!errorReason) {
           return { success: true, authType, payload };
         }
-        errorResult = { success: false, error, authType, isTokenDecrypted };
+        errorResult = { success: false, error: `${E_PFX}${errorReason}`, authType, isTokenDecrypted };
         break;
       }
 
@@ -175,23 +176,23 @@ export async function checkMultiAuth (req: Request): Promise<AuthResult> {
         break;
 
       default:
-        errorResult = { success: false, error: `Unknown auth type: ${authType}` };
+        errorResult = { success: false, error: `${E_PFX}Unknown auth type: ${authType}` };
     }
-  } catch (error) {
-    logger.warn(`Auth type ${authType} failed with exception:`, error instanceof Error ? error.message : 'Unknown error');
+  } catch (error: Error | any) {
+    logger.warn(`Auth type ${authType} failed with exception:`, error instanceof Error ? E_PFX + error.message : 'Unknown error');
   }
   if (CUSTOM_AUTH_VALIDATOR) {
     const requestWithNormalizedHeaders = { ...req, headers: normalizeHeaders(req.headers || {}) };
     try {
       const customResult = await CUSTOM_AUTH_VALIDATOR(requestWithNormalizedHeaders);
       return customResult;
-    } catch (error) {
+    } catch (error: Error | any) {
       logger.error('Custom auth validator failed:', error);
-      return { success: false, error: 'Custom authentication validation failed' };
+      return { success: false, error: `${E_PFX}Custom authentication validation failed${error instanceof Error ? `: ${error.message}` : ''}` };
     }
   }
 
-  return errorResult || { success: false, error: `Authentication failed for all configured methods: ${configuredTypes}` };
+  return errorResult || { success: false, error: `${E_PFX}Authentication failed for all configured methods: ${configuredTypes}` };
 }
 
 /**

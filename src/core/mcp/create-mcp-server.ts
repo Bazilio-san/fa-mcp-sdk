@@ -33,14 +33,17 @@ export function createMcpServer (): Server {
 
   // Handler for listing available tools
   server.setRequestHandler(ListToolsRequestSchema, async () => {
-    const tools = await getTools();
+    const tools = await getTools({ transport: 'stdio' });
     return { tools };
   });
 
   // Handler for tool execution
   server.setRequestHandler(CallToolRequestSchema, async (request) => {
     const { toolHandler } = getProjectData();
-    const result = await toolHandler(request.params);
+    const result = await toolHandler({
+      ...request.params,
+      transport: 'stdio',
+    });
     return {
       content: result.content,
     };

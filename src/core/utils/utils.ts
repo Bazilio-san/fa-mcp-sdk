@@ -2,6 +2,7 @@ import fs from 'fs';
 import path from 'path';
 import { Tool } from '@modelcontextprotocol/sdk/types.js';
 import { ROOT_PROJECT_DIR } from '../constants.js';
+import { IUnifiedArgs } from '../_types_/types.js';
 
 export const trim = (s: any): string => String(s || '').trim();
 
@@ -71,11 +72,11 @@ export const normalizeHeaders = (headers: Record<string, any>): Record<string, s
   return normalized;
 };
 
-export async function getTools (): Promise<Tool[]> {
+export async function getTools (unifiedArgs: IUnifiedArgs): Promise<Tool[]> {
   const toolsOrFn = global.__MCP_PROJECT_DATA__.tools;
   let toolsArray: Tool[];
   if (typeof toolsOrFn === 'function') {
-    toolsArray = await toolsOrFn();
+    toolsArray = await toolsOrFn(unifiedArgs);
     return toolsArray;
   }
   return toolsOrFn as Tool[];

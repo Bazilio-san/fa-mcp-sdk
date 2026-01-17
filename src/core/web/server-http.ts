@@ -186,7 +186,7 @@ export async function startHttpServer (): Promise<void> {
   }>();
 
   // Create SSE server instance with preserved headers and auth payload from connection establishment
-  async function createSseServer (preservedHeaders: Record<string, string>, authPayload?: { user: string; [key: string]: any }) {
+  async function createSseServer (preservedHeaders: Record<string, string>, mcpAuthPayload?: { user: string; [key: string]: any }) {
     const sseServer = createMcpServer();
 
     // Override the tool call handler to include rate limiting, preserved headers and auth payload
@@ -200,7 +200,8 @@ export async function startHttpServer (): Promise<void> {
       const result = await toolHandler({
         ...request.params,
         headers: preservedHeaders, // Use headers from when SSE connection was established
-        payload: authPayload // Use auth payload from when SSE connection was established
+        payload: mcpAuthPayload, // Use auth payload from when SSE connection was established
+        transport: 'sse',
       });
       return {
         content: result.content,
@@ -238,7 +239,7 @@ export async function startHttpServer (): Promise<void> {
         transport,
         server: sseServer,
         headers: preservedHeaders,
-        payload: authPayload
+        payload: authPayload,
       });
 
       // Clean up transport and server on connection close
@@ -355,6 +356,14 @@ export async function startHttpServer (): Promise<void> {
 
       logger.info(`HTTP MCP request received: ${method} | id: ${id}`);
 
+      const mcpAuthPayload = (req as any).authInfo?.payload;
+      const preservedHeaders = normalizeHeaders(req.headers);
+      const unifiedArgs = {
+        ...params,
+        headers: preservedHeaders,
+        payload: mcpAuthPayload,
+        transport: 'http' as const,
+      };
       let result;
 
       switch (method) {
@@ -375,8 +384,8 @@ export async function startHttpServer (): Promise<void> {
           };
           break;
 
-        case 'tools/list':
-          const tools = await getTools();
+        case '':
+          const tools = await getTools(unifiedArgs);
           result = { tools };
           break;
 
@@ -385,13 +394,8 @@ export async function startHttpServer (): Promise<void> {
           const toolCallClientId = `tool-${req.ip || 'unknown'}`;
           await handleRateLimit(rateLimiter, toolCallClientId, req.ip || 'unknown', `tool call | tool: ${params?.name || 'unknown'}`, res, id);
           // Extract auth payload from middleware (set by authMW)
-          const mcpAuthPayload = (req as any).authInfo?.payload;
           const { toolHandler } = getProjectData();
-          result = await toolHandler({
-            ...params,
-            headers: normalizeHeaders(req.headers),
-            payload: mcpAuthPayload
-          });
+          result = await toolHandler(unifiedArgs);
           break;
 
         case 'prompts/list':

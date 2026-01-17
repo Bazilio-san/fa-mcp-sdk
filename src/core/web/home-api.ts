@@ -39,7 +39,7 @@ export async function handleHomeInfo (_req: Request, res: Response): Promise<voi
     const { prompts } = getPromptsList();
     const { httpComponents } = global.__MCP_PROJECT_DATA__;
     const toolsOrFn = global.__MCP_PROJECT_DATA__.tools;
-    let tools: Tool[] = typeof toolsOrFn === 'function' ? await toolsOrFn() : toolsOrFn;
+    let tools: Tool[] = typeof toolsOrFn === 'function' ? await toolsOrFn({ transport: 'http' }) : toolsOrFn;
     const { getConsulUIAddress = (_s: string) => '', assets } = getProjectData();
 
     // Build footer HTML

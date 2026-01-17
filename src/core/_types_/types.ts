@@ -87,20 +87,29 @@ export type IEndpointsOn404 = Record<string, string | string[]>
  */
 export type CustomAuthValidator = (req: any) => Promise<AuthResult> | AuthResult;
 
+export type TransportType = 'stdio' | 'sse' | 'http';
+
 export interface IToolHandlerParams {
   name: string;
   arguments?: any;
   headers?: Record<string, string>;
-  payload?: { user: string; [key: string]: any } | undefined
+  payload?: { user: string; [key: string]: any } | undefined;
+  transport?: TransportType;
 }
 
+export interface IUnifiedArgs {
+  headers?: Record<string, string>;
+  payload?: { user: string; [key: string]: any } | undefined
+
+  [x: string]: unknown;
+}
 
 /**
  * All data that needs to be passed to initialize the MCP server
  */
 export interface McpServerData {
   // MCP components
-  tools: Tool[] | (() => Promise<Tool[]>);
+  tools: Tool[] | ((unifiedArgs: IUnifiedArgs) => Promise<Tool[]>);
   toolHandler: (params: IToolHandlerParams) => Promise<any>;
 
   // Prompts
@@ -173,3 +182,4 @@ export interface IToolInputSchema {
 
   [x: string]: unknown;
 }
+

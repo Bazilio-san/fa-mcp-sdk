@@ -36,8 +36,9 @@ export const tools: Tool[] = [
 import { formatToolResult, ToolExecutionError, logger, IToolHandlerParams } from 'fa-mcp-sdk';
 
 export const handleToolCall = async (params: IToolHandlerParams): Promise<any> => {
-  const { name, arguments: args, headers, payload } = params;
+  const { name, arguments: args, headers, payload, transport } = params;
   // payload contains { user: string, ... } if JWT authentication is enabled
+  // transport indicates the connection type: 'stdio' | 'sse' | 'http'
 
   logger.info(`Tool called: ${name}`);
 
@@ -97,7 +98,7 @@ The FA-MCP-SDK automatically passes normalized HTTP headers to your `toolHandler
 import { IToolHandlerParams } from 'fa-mcp-sdk';
 
 export const handleToolCall = async (params: IToolHandlerParams): Promise<any> => {
-  const { name, arguments: args, headers, payload } = params;
+  const { name, arguments: args, headers, payload, transport } = params;
 
   // Access client information via headers
   if (headers) {
@@ -160,6 +161,29 @@ export const handleToolCall = async (params: IToolHandlerParams): Promise<any> =
 - Request routing based on client capabilities
 - Audit logging with client context
 - Rate limiting per client type
+
+### Transport Type
+
+The `transport` field indicates connection type: `'stdio'` | `'sse'` | `'http'`
+
+| Transport | Trust | Credential Source | Use Case |
+|-----------|-------|-------------------|----------|
+| `stdio` | High | ENV variables | IDE plugins, Claude Desktop |
+| `sse` | Medium | Headers (from connection) | Persistent connections |
+| `http` | Medium | Headers (per request) | Direct API calls |
+
+**Example: Transport-Based Credentials**
+
+```typescript
+function getApiKey(params: IToolHandlerParams): string {
+  const { transport, headers } = params;
+
+  if (transport === 'stdio') {
+    return process.env.EXTERNAL_API_KEY || '';  // Local: use ENV
+  }
+  return headers?.['x-api-key'] || '';  // HTTP/SSE: use headers
+}
+```
 
 ---
 
