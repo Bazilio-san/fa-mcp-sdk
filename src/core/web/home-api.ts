@@ -3,6 +3,7 @@
  * Returns all dynamic data needed for the home page
  */
 
+import { Tool } from '@modelcontextprotocol/sdk/types.js';
 import { Request, Response } from 'express';
 import { getResourcesList } from '../mcp/resources.js';
 import { getPromptsList } from '../mcp/prompts.js';
@@ -36,7 +37,9 @@ export async function handleHomeInfo (_req: Request, res: Response): Promise<voi
     const logoSvg = getLogoSvg();
     const { resources } = getResourcesList();
     const { prompts } = getPromptsList();
-    const { tools, httpComponents } = global.__MCP_PROJECT_DATA__;
+    const { httpComponents } = global.__MCP_PROJECT_DATA__;
+    const toolsOrFn = global.__MCP_PROJECT_DATA__.tools;
+    let tools: Tool[] = typeof toolsOrFn === 'function' ? await toolsOrFn() : toolsOrFn;
     const { getConsulUIAddress = (_s: string) => '', assets } = getProjectData();
 
     // Build footer HTML
