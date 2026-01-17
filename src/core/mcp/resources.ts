@@ -6,7 +6,7 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { ROOT_PROJECT_DIR } from '../constants.js';
 import { appConfig, getProjectData } from '../bootstrap/init-config.js';
-import { IRequiredHttpHeader, IResource, IResourceData, IResourceInfo } from '../_types_/types.js';
+import { IUsedHttpHeader, IResource, IResourceData, IResourceInfo } from '../_types_/types.js';
 
 let readme = fs.readFileSync(path.join(ROOT_PROJECT_DIR, './README.md'), 'utf-8');
 let packageJson: any;
@@ -19,7 +19,7 @@ try {
 
 
 const createResources = (): IResourceData[] => {
-  let { customResources, requiredHttpHeaders } = getProjectData();
+  let { customResources, usedHttpHeaders } = getProjectData();
   customResources = (customResources || []) as IResourceData[];
   const resources: IResourceData[] = [
     {
@@ -53,15 +53,15 @@ This information is used by searching for this MCP server and its information in
       requireAuth: false,
     },
   ];
-  requiredHttpHeaders = (requiredHttpHeaders || []) as IRequiredHttpHeader[];
-  if (requiredHttpHeaders.length) {
+  usedHttpHeaders = (usedHttpHeaders || []) as IUsedHttpHeader[];
+  if (usedHttpHeaders.length) {
     resources.push(
       {
-        uri: 'required://http-headers',
+        uri: 'use://http-headers',
         name: 'Required http headers',
         description: 'Required http headers',
         mimeType: 'application/json',
-        content: requiredHttpHeaders,
+        content: usedHttpHeaders,
         requireAuth: false,
       },
     );

@@ -27,7 +27,7 @@ const startProject = async (): Promise<void> => {
     agentBrief: AGENT_BRIEF,
     agentPrompt: AGENT_PROMPT,
     customPrompts,
-    requiredHttpHeaders: [{ name: 'Authorization', description: 'JWT Token issued on request' }],
+    usedHttpHeaders: [{ name: 'Authorization', description: 'JWT Token issued on request' }],
     // Resources
     customResources,
 

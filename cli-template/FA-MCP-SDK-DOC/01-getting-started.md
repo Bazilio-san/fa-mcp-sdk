@@ -117,7 +117,7 @@ interface McpServerData {
   customPrompts?: IPromptData[];                   // Additional custom prompts
 
   // Resources
-  requiredHttpHeaders?: IRequiredHttpHeader[] | null; // HTTP headers for authentication
+  usedHttpHeaders?: IUsedHttpHeader[] | null;      // HTTP headers used for MCP server operation. Including for authorization
   customResources?: IResourceData[] | null;        // Custom resource definitions
 
   // Authentication

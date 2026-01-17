@@ -17,7 +17,7 @@ export type {
   IResourceData,
 
   IEndpointsOn404,
-  IRequiredHttpHeader,
+  IUsedHttpHeader,
 
   IToolProperties,
   IToolInputSchema,

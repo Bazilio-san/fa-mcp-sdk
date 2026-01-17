@@ -138,11 +138,11 @@ export async function startHttpServer (): Promise<void> {
     res.json(health);
   });
 
-  // Public endpoint: returns required HTTP headers configured in the template (optional)
-  app.get('/required-http-headers', (req, res) => {
+  // Public endpoint: returns used HTTP headers configured in the template (optional)
+  app.get('/used-http-headers', (req, res) => {
     try {
-      const { requiredHttpHeaders } = getProjectData();
-      res.json(requiredHttpHeaders || []);
+      const { usedHttpHeaders } = getProjectData();
+      res.json(usedHttpHeaders || []);
     } catch (_e) {
       // If fetching project data fails for any reason, return empty list
       res.json([]);

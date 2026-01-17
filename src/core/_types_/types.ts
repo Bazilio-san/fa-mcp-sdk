@@ -46,7 +46,7 @@ export interface IPromptData {
   requireAuth?: boolean,
 }
 
-export interface IRequiredHttpHeader {
+export interface IUsedHttpHeader {
   name: string, // E.g. "Authorization",
   description: string, // E.g. "JWT Token issued on request"
   isOptional?: boolean,
@@ -109,7 +109,7 @@ export interface McpServerData {
   customPrompts?: IPromptData[];
 
   // Resources
-  requiredHttpHeaders?: IRequiredHttpHeader[] | null;
+  usedHttpHeaders?: IUsedHttpHeader[] | null;
   customResources?: IResourceData[] | null;
 
   // Optional custom authentication feature

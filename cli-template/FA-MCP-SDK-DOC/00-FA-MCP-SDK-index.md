@@ -86,7 +86,7 @@ Read: `02-2-prompts-and-resources.md`
 
 ### Configure resources
 Read: `02-2-prompts-and-resources.md`
-- Standard: `project://id`, `project://name`, `doc://readme`, `required://http-headers`
+- Standard: `project://id`, `project://name`, `doc://readme`, `use://http-headers`
 - Custom: add to `customResources` array in `src/custom-resources.ts`
 - Use `requireAuth: true` to protect resources
 

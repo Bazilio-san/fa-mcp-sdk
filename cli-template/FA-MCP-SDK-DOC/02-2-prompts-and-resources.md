@@ -175,18 +175,18 @@ The SDK provides standard resources and supports custom resources.
 
 The SDK automatically provides the following resources:
 
-| URI                       | Name | Description |
-|---------------------------|------|-------------|
-| `project://id`            | project-id | Stable project identifier. Used for MCP server identification in registries and JWT authorization |
-| `project://name`          | product-name | Human-readable product name for UI display |
-| `doc://readme`            | README.md | Project documentation from README.md file. Used by RAG systems in MCP registries for search |
-| `required://http-headers` | Required http headers | List of required HTTP headers (if configured via `requiredHttpHeaders`) |
+| URI                  | Name              | Description                                                                                                   |
+|----------------------|-------------------|---------------------------------------------------------------------------------------------------------------|
+| `project://id`       | project-id        | Stable project identifier. Used for MCP server identification in registries and JWT authorization             |
+| `project://name`     | product-name      | Human-readable product name for UI display                                                                    |
+| `doc://readme`       | README.md         | Project documentation from README.md file. Used by RAG systems in MCP registries for search                   |
+| `use://http-headers` | Used http headers | HTTP headers used for MCP server operation. Including for authorization (if configured via `usedHttpHeaders`) |
 
 **Resource content sources:**
 - `project://id` → `appConfig.name` from configuration
 - `project://name` → `appConfig.productName` from configuration
 - `doc://readme` → `README.md` file from project root
-- `required://http-headers` → `requiredHttpHeaders` array from `McpServerData`
+- `use://http-headers` → `usedHttpHeaders` array from `McpServerData`
 
 ### Custom Resources
 
@@ -282,12 +282,12 @@ const serverData: McpServerData = {
 await initMcpServer(serverData);
 ```
 
-### Required HTTP Headers
+### Used HTTP Headers
 
-You can define required HTTP headers that clients must send when making requests:
+You can define used HTTP headers that clients must send when making requests:
 
 ```typescript
-interface IRequiredHttpHeader {
+interface IUsedHttpHeader {
   name: string;         // Header name (e.g., "Authorization")
   description: string;  // Description (e.g., "JWT Token issued on request")
   isOptional?: boolean; // If true, header is optional
@@ -301,7 +301,7 @@ const serverData: McpServerData = {
   toolHandler: handleToolCall,
   agentBrief: AGENT_BRIEF,
   agentPrompt: AGENT_PROMPT,
-  requiredHttpHeaders: [
+  usedHttpHeaders: [
     {
       name: 'Authorization',
       description: 'JWT token in Bearer format',
@@ -315,7 +315,7 @@ const serverData: McpServerData = {
 };
 ```
 
-When `requiredHttpHeaders` is configured, the resource `required://http-headers` becomes available with this information.
+When `usedHttpHeaders` is configured, the resource `use://http-headers` becomes available with this information.
 
 ---
 
