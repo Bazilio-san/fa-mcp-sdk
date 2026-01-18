@@ -1,11 +1,8 @@
 #!/usr/bin/env node
 import { cpSync, existsSync, rmSync } from 'fs';
-import { join, dirname } from 'path';
-import { fileURLToPath } from 'url';
+import { join } from 'path';
 
-const __dirname = dirname(fileURLToPath(import.meta.url));
-
-const src = join(__dirname, '..', 'cli-template', 'FA-MCP-SDK-DOC');
+const src = join(process.cwd(), './node_modules/fa-mcp-sdk/cli-template/FA-MCP-SDK-DOC');
 const dest = join(process.cwd(), 'FA-MCP-SDK-DOC');
 
 if (!existsSync(src)) {
