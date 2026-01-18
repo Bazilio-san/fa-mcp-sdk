@@ -47,6 +47,50 @@ Pass to server:
 const serverData: McpServerData = { ..., customPrompts };
 ```
 
+### Dynamic Prompts (Function)
+
+For dynamic prompt lists based on transport type, headers, or user:
+
+```typescript
+import { IPromptData, IGetPromptsArgs } from 'fa-mcp-sdk';
+
+export const customPrompts = async (args: IGetPromptsArgs): Promise<IPromptData[]> => {
+  const { transport, headers, payload } = args;
+
+  const prompts: IPromptData[] = [
+    { name: 'greeting', description: 'Greeting message', arguments: [],
+      content: 'Hello! How can I help?' },
+  ];
+
+  // Add user-specific prompts
+  if (payload?.user) {
+    prompts.push({
+      name: 'user_context',
+      description: `Context for ${payload.user}`,
+      arguments: [],
+      content: `You are assisting user: ${payload.user}`,
+    });
+  }
+
+  // Add transport-specific prompts
+  if (transport === 'http') {
+    prompts.push({
+      name: 'http_mode',
+      description: 'HTTP-specific instructions',
+      arguments: [],
+      content: 'Respond in JSON format for HTTP clients',
+    });
+  }
+
+  return prompts;
+};
+```
+
+`IGetPromptsArgs` includes:
+- `transport`: `'stdio' | 'sse' | 'http'`
+- `headers`: HTTP headers (only for HTTP/SSE transport)
+- `payload`: Auth payload with user info (if authenticated)
+
 ## Resources
 
 ### Standard Resources
