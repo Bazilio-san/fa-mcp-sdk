@@ -3,9 +3,7 @@ export type { IADConfig, IDcConfig } from './_types_/active-directory-config.js'
 export type {
   McpServerData,
   IToolHandlerParams,
-  IGetToolsArgs,
-  IGetPromptsArgs,
-  IGetResourcesArgs,
+  ITransportContext,
   TTransportType,
   IGetPromptParams,
   IGetPromptRequest,

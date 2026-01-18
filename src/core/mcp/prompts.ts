@@ -2,10 +2,10 @@
  * MCP Prompts for fin-office SQL Agent
  * Two-level agent description system for LLM agent selection
  */
-import { IGetPromptRequest, IGetPromptsArgs, IPromptContent, IPromptData } from '../_types_/types.js';
+import { IGetPromptRequest, ITransportContext, IPromptContent, IPromptData } from '../_types_/types.js';
 import { getProjectData } from '../bootstrap/init-config.js';
 
-async function getPrompts (args: IGetPromptsArgs): Promise<IPromptData[]> {
+async function getPrompts (args: ITransportContext): Promise<IPromptData[]> {
   const projectData = getProjectData();
   if (!projectData) {
     console.error('Error: Project data not initialized. Make sure initMcpServer() has been called.');
@@ -49,14 +49,14 @@ async function getPrompts (args: IGetPromptsArgs): Promise<IPromptData[]> {
   ];
 }
 
-export async function getPromptsList (args: IGetPromptsArgs) {
+export async function getPromptsList (args: ITransportContext) {
   const prompts = await getPrompts(args);
   return {
     prompts: prompts.map(({ content, ...rest }) => ({ ...rest })),
   };
 }
 
-export const getPrompt = async (request: IGetPromptRequest, args: IGetPromptsArgs): Promise<any> => {
+export const getPrompt = async (request: IGetPromptRequest, args: ITransportContext): Promise<any> => {
   const { name } = request.params;
   const prompts = await getPrompts(args);
 

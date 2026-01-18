@@ -97,19 +97,7 @@ export interface IToolHandlerParams {
   payload?: { user: string; [key: string]: any } | undefined;
 }
 
-export interface IGetToolsArgs {
-  transport: TTransportType;
-  headers?: Record<string, string>;
-  payload?: { user: string; [key: string]: any } | undefined
-}
-
-export interface IGetPromptsArgs {
-  transport: TTransportType;
-  headers?: Record<string, string>;
-  payload?: { user: string; [key: string]: any } | undefined
-}
-
-export interface IGetResourcesArgs {
+export interface ITransportContext {
   transport: TTransportType;
   headers?: Record<string, string>;
   payload?: { user: string; [key: string]: any } | undefined
@@ -126,17 +114,17 @@ export interface IGetPromptRequest {
  */
 export interface McpServerData {
   // MCP components
-  tools: Tool[] | ((args: IGetToolsArgs) => Promise<Tool[]>);
+  tools: Tool[] | ((args: ITransportContext) => Promise<Tool[]>);
   toolHandler: (params: IToolHandlerParams) => Promise<any>;
 
   // Prompts
   agentBrief: string;
   agentPrompt: string;
-  customPrompts?: IPromptData[] | ((args: IGetPromptsArgs) => Promise<IPromptData[]>);
+  customPrompts?: IPromptData[] | ((args: ITransportContext) => Promise<IPromptData[]>);
 
   // Resources
   usedHttpHeaders?: IUsedHttpHeader[] | null;
-  customResources?: IResourceData[] | ((args: IGetResourcesArgs) => Promise<IResourceData[]>) | null;
+  customResources?: IResourceData[] | ((args: ITransportContext) => Promise<IResourceData[]>) | null;
 
   // Optional custom authentication feature
   customAuthValidator?: CustomAuthValidator;

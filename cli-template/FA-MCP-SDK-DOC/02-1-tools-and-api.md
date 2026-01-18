@@ -59,20 +59,9 @@ const clientIP = headers?.['x-real-ip'] || headers?.['x-forwarded-for'];
 
 ### Transport-Based Credentials
 
-```typescript
-type TTransportType = 'stdio' | 'sse' | 'http';
-```
+`IToolHandlerParams` includes `ITransportContext` fields (`transport`, `headers`, `payload`).
+See [ITransportContext](./02-2-prompts-and-resources.md#itransportcontext).
 
-The transport parameter is useful if you need to pass credentials for authorization to the API of third-party services
-
-```typescript
-function getApiKey(params: IToolHandlerParams): string {
-  if (params.transport === 'stdio') {
-    return process.env.EXTERNAL_API_KEY || '';  // Local: ENV
-  }
-  return params.headers?.['x-api-key'] || '';   // HTTP/SSE: headers
-}
-```
 
 ## REST API Endpoints
 

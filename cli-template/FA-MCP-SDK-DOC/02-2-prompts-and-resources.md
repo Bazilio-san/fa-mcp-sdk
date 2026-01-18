@@ -47,15 +47,35 @@ Pass to server:
 const serverData: McpServerData = { ..., customPrompts };
 ```
 
+### ITransportContext
+
+Universal type for dynamic tools/prompts/resources functions:
+
+```typescript
+interface ITransportContext {
+  transport: 'stdio' | 'sse' | 'http';
+  headers?: Record<string, string>;  // HTTP headers (HTTP/SSE only)
+  payload?: { user: string; [key: string]: any };  // Auth payload (if authenticated HTTP/SSE only)
+}
+```
+
+Use for transport-based credential routing:
+```typescript
+function getApiKey(ctx: ITransportContext): string {
+  if (ctx.transport === 'stdio') return process.env.API_KEY || '';
+  return ctx.headers?.['x-api-key'] || '';
+}
+```
+
 ### Dynamic Prompts (Function)
 
 For dynamic prompt lists based on transport type, headers, or user:
 
 ```typescript
-import { IPromptData, IGetPromptsArgs } from 'fa-mcp-sdk';
+import { IPromptData, ITransportContext } from 'fa-mcp-sdk';
 
-export const customPrompts = async (args: IGetPromptsArgs): Promise<IPromptData[]> => {
-  const { transport, headers, payload } = args;
+export const customPrompts = async (ctx: ITransportContext): Promise<IPromptData[]> => {
+  const { transport, headers, payload } = ctx;
 
   const prompts: IPromptData[] = [
     { name: 'greeting', description: 'Greeting message', arguments: [],
@@ -85,11 +105,6 @@ export const customPrompts = async (args: IGetPromptsArgs): Promise<IPromptData[
   return prompts;
 };
 ```
-
-`IGetPromptsArgs` includes:
-- `transport`: `'stdio' | 'sse' | 'http'`
-- `headers`: HTTP headers (only for HTTP/SSE transport)
-- `payload`: Auth payload with user info (if authenticated)
 
 ## Resources
 
@@ -136,10 +151,10 @@ const serverData: McpServerData = { ..., customResources };
 For dynamic resource lists based on transport type, headers, or user:
 
 ```typescript
-import { IResourceData, IGetResourcesArgs } from 'fa-mcp-sdk';
+import { IResourceData, ITransportContext } from 'fa-mcp-sdk';
 
-export const customResources = async (args: IGetResourcesArgs): Promise<IResourceData[]> => {
-  const { transport, headers, payload } = args;
+export const customResources = async (ctx: ITransportContext): Promise<IResourceData[]> => {
+  const { transport, headers, payload } = ctx;
 
   const resources: IResourceData[] = [
     { uri: 'custom://config', name: 'Config', description: 'Server config',
@@ -160,11 +175,6 @@ export const customResources = async (args: IGetResourcesArgs): Promise<IResourc
   return resources;
 };
 ```
-
-`IGetResourcesArgs` includes:
-- `transport`: `'stdio' | 'sse' | 'http'`
-- `headers`: HTTP headers (only for HTTP/SSE transport)
-- `payload`: Auth payload with user info (if authenticated)
 
 ### Used HTTP Headers
 

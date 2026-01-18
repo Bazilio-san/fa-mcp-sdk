@@ -6,7 +6,7 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { ROOT_PROJECT_DIR } from '../constants.js';
 import { appConfig, getProjectData } from '../bootstrap/init-config.js';
-import { IUsedHttpHeader, IResource, IResourceData, IResourceInfo, IGetResourcesArgs } from '../_types_/types.js';
+import { IUsedHttpHeader, IResource, IResourceData, IResourceInfo, ITransportContext } from '../_types_/types.js';
 
 let readme = fs.readFileSync(path.join(ROOT_PROJECT_DIR, './README.md'), 'utf-8');
 let packageJson: any;
@@ -18,7 +18,7 @@ try {
 }
 
 
-const createResources = async (args: IGetResourcesArgs): Promise<IResourceData[]> => {
+const createResources = async (args: ITransportContext): Promise<IResourceData[]> => {
   const { customResources, usedHttpHeaders: usedHttpHeadersRaw } = getProjectData();
 
   // Resolve customResources - can be array or async function
@@ -79,14 +79,14 @@ This information is used by searching for this MCP server and its information in
   return [...resources, ...resolvedCustomResources];
 };
 
-export const getResourcesList = async (args: IGetResourcesArgs): Promise<{ resources: IResourceInfo[] }> => {
+export const getResourcesList = async (args: ITransportContext): Promise<{ resources: IResourceInfo[] }> => {
   const resources: IResourceData[] = await createResources(args);
   return {
     resources: resources.map(({ content, ...rest }) => ({ ...rest })),
   };
 };
 
-export const getResource = async (uri: string, args: IGetResourcesArgs): Promise<IResource> => {
+export const getResource = async (uri: string, args: ITransportContext): Promise<IResource> => {
   const resources = await createResources(args);
   const resource = resources.find((r) => r.uri === uri);
   if (!resource) {
