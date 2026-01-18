@@ -87,6 +87,41 @@ Pass to server:
 const serverData: McpServerData = { ..., customResources };
 ```
 
+### Dynamic Resources (Function)
+
+For dynamic resource lists based on transport type, headers, or user:
+
+```typescript
+import { IResourceData, IGetResourcesArgs } from 'fa-mcp-sdk';
+
+export const customResources = async (args: IGetResourcesArgs): Promise<IResourceData[]> => {
+  const { transport, headers, payload } = args;
+
+  const resources: IResourceData[] = [
+    { uri: 'custom://config', name: 'Config', description: 'Server config',
+      mimeType: 'text/plain', content: 'Version: 1.0.0' },
+  ];
+
+  // Add user-specific resources
+  if (payload?.user) {
+    resources.push({
+      uri: `user://${payload.user}/preferences`,
+      name: 'User Preferences',
+      description: `Preferences for ${payload.user}`,
+      mimeType: 'application/json',
+      content: await getUserPreferences(payload.user),
+    });
+  }
+
+  return resources;
+};
+```
+
+`IGetResourcesArgs` includes:
+- `transport`: `'stdio' | 'sse' | 'http'`
+- `headers`: HTTP headers (only for HTTP/SSE transport)
+- `payload`: Auth payload with user info (if authenticated)
+
 ### Used HTTP Headers
 
 Define required client headers:

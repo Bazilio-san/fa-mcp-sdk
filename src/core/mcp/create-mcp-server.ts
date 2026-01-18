@@ -54,11 +54,11 @@ export function createMcpServer (): Server {
   server.setRequestHandler(GetPromptRequestSchema, async (request: IGetPromptRequest) => await getPrompt(request, stdioArgs));
 
   // Handler for listing available resources
-  server.setRequestHandler(ListResourcesRequestSchema, async () => getResourcesList());
+  server.setRequestHandler(ListResourcesRequestSchema, async () => getResourcesList(stdioArgs));
 
   // Handler for reading resource content
   server.setRequestHandler(ReadResourceRequestSchema, async (request: IReadResourceRequest) => {
-    return await getResource(request.params.uri) as any;
+    return await getResource(request.params.uri, stdioArgs) as any;
   });
 
   return server;

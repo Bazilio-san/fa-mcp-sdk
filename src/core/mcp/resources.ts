@@ -6,7 +6,7 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { ROOT_PROJECT_DIR } from '../constants.js';
 import { appConfig, getProjectData } from '../bootstrap/init-config.js';
-import { IUsedHttpHeader, IResource, IResourceData, IResourceInfo } from '../_types_/types.js';
+import { IUsedHttpHeader, IResource, IResourceData, IResourceInfo, IGetResourcesArgs } from '../_types_/types.js';
 
 let readme = fs.readFileSync(path.join(ROOT_PROJECT_DIR, './README.md'), 'utf-8');
 let packageJson: any;
@@ -18,9 +18,19 @@ try {
 }
 
 
-const createResources = (): IResourceData[] => {
-  let { customResources, usedHttpHeaders } = getProjectData();
-  customResources = (customResources || []) as IResourceData[];
+const createResources = async (args: IGetResourcesArgs): Promise<IResourceData[]> => {
+  const { customResources, usedHttpHeaders: usedHttpHeadersRaw } = getProjectData();
+
+  // Resolve customResources - can be array or async function
+  let resolvedCustomResources: IResourceData[] = [];
+  if (customResources) {
+    if (typeof customResources === 'function') {
+      resolvedCustomResources = await customResources(args);
+    } else {
+      resolvedCustomResources = customResources;
+    }
+  }
+
   const resources: IResourceData[] = [
     {
       uri: 'project://id',
@@ -53,7 +63,7 @@ This information is used by searching for this MCP server and its information in
       requireAuth: false,
     },
   ];
-  usedHttpHeaders = (usedHttpHeaders || []) as IUsedHttpHeader[];
+  const usedHttpHeaders = (usedHttpHeadersRaw || []) as IUsedHttpHeader[];
   if (usedHttpHeaders.length) {
     resources.push(
       {
@@ -66,28 +76,18 @@ This information is used by searching for this MCP server and its information in
       },
     );
   }
-  return [...resources, ...customResources];
+  return [...resources, ...resolvedCustomResources];
 };
 
-// Lazy initialization - resources are created when first accessed
-let _resources: IResourceData[] = [];
-
-const getResources = (): IResourceData[] => {
-  if (!_resources?.length) {
-    _resources = createResources();
-  }
-  return _resources;
-};
-
-export const getResourcesList = (): { resources: IResourceInfo[] } => {
-  const resources: IResourceData[] = getResources();
+export const getResourcesList = async (args: IGetResourcesArgs): Promise<{ resources: IResourceInfo[] }> => {
+  const resources: IResourceData[] = await createResources(args);
   return {
     resources: resources.map(({ content, ...rest }) => ({ ...rest })),
   };
 };
 
-export const getResource = async (uri: string): Promise<IResource> => {
-  const resources = getResources();
+export const getResource = async (uri: string, args: IGetResourcesArgs): Promise<IResource> => {
+  const resources = await createResources(args);
   const resource = resources.find((r) => r.uri === uri);
   if (!resource) {
     throw new Error(`Unknown resource: ${uri}`);

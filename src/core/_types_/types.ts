@@ -109,6 +109,12 @@ export interface IGetPromptsArgs {
   payload?: { user: string; [key: string]: any } | undefined
 }
 
+export interface IGetResourcesArgs {
+  transport: TransportType;
+  headers?: Record<string, string>;
+  payload?: { user: string; [key: string]: any } | undefined
+}
+
 export interface IGetPromptRequest {
   id?: string | number; // if an RPC identifier is used
   method: 'prompts/get' | 'prompts/content';
@@ -130,7 +136,7 @@ export interface McpServerData {
 
   // Resources
   usedHttpHeaders?: IUsedHttpHeader[] | null;
-  customResources?: IResourceData[] | null;
+  customResources?: IResourceData[] | ((args: IGetResourcesArgs) => Promise<IResourceData[]>) | null;
 
   // Optional custom authentication feature
   customAuthValidator?: CustomAuthValidator;

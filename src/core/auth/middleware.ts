@@ -35,9 +35,9 @@ const debugAuth = (req: Request, code: number, message: string): { code: number,
 /**
  * Check if a resource URI is public (doesn't require authentication)
  */
-const isPublicResource = (uri: string): boolean => {
+const isPublicResource = async (uri: string): Promise<boolean> => {
   // Get all resources including built-in and custom
-  const allResources = getResourcesList().resources;
+  const { resources: allResources } = await getResourcesList({ transport: 'http' });
   const resource = allResources.find(r => r.uri === uri);
 
   if (!resource) {
@@ -79,7 +79,7 @@ const isPublicMcpRequest = async (req: Request): Promise<boolean> => {
 
     case 'resources/read': {
       const uri = req.body?.params?.uri;
-      return uri ? isPublicResource(uri) : false;
+      return uri ? await isPublicResource(uri) : false;
     }
 
     case 'prompts/get': {

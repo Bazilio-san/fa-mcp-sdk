@@ -1,5 +1,11 @@
 import { SSEServerTransport } from '@modelcontextprotocol/sdk/server/sse.js';
-import { CallToolRequestSchema, ListToolsRequestSchema, ListPromptsRequestSchema } from '@modelcontextprotocol/sdk/types.js';
+import {
+  CallToolRequestSchema,
+  ListToolsRequestSchema,
+  ListPromptsRequestSchema,
+  ListResourcesRequestSchema,
+  ReadResourceRequestSchema,
+} from '@modelcontextprotocol/sdk/types.js';
 import express from 'express';
 import helmet from 'helmet';
 import { RateLimiterMemory } from 'rate-limiter-flexible';
@@ -200,6 +206,16 @@ export async function startHttpServer (): Promise<void> {
     // Override prompts/list to pass correct transport and context
     sseServer.setRequestHandler(ListPromptsRequestSchema, async () => {
       return await getPromptsList(sseArgs);
+    });
+
+    // Override resources/list to pass correct transport and context
+    sseServer.setRequestHandler(ListResourcesRequestSchema, async () => {
+      return await getResourcesList(sseArgs);
+    });
+
+    // Override resources/read to pass correct transport and context
+    sseServer.setRequestHandler(ReadResourceRequestSchema, async (request: any) => {
+      return await getResource(request.params.uri, sseArgs) as any;
     });
 
     // Override the tool call handler to include rate limiting, preserved headers and auth payload
@@ -416,11 +432,11 @@ export async function startHttpServer (): Promise<void> {
         }
 
         case 'resources/list':
-          result = getResourcesList();
+          result = await getResourcesList(httpArgs);
           break;
 
         case 'resources/read': {
-          result = await getResource(params.uri);
+          result = await getResource(params.uri, httpArgs);
           break;
         }
 

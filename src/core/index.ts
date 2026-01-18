@@ -5,6 +5,7 @@ export type {
   IToolHandlerParams,
   IGetToolsArgs,
   IGetPromptsArgs,
+  IGetResourcesArgs,
   TransportType,
   IGetPromptParams,
   IGetPromptRequest,
