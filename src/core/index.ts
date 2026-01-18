@@ -6,7 +6,7 @@ export type {
   IGetToolsArgs,
   IGetPromptsArgs,
   IGetResourcesArgs,
-  TransportType,
+  TTransportType,
   IGetPromptParams,
   IGetPromptRequest,
   IPromptContent,

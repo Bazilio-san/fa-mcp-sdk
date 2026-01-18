@@ -87,30 +87,30 @@ export type IEndpointsOn404 = Record<string, string | string[]>
  */
 export type CustomAuthValidator = (req: any) => Promise<AuthResult> | AuthResult;
 
-export type TransportType = 'stdio' | 'sse' | 'http';
+export type TTransportType = 'stdio' | 'sse' | 'http';
 
 export interface IToolHandlerParams {
   name: string;
   arguments?: any;
-  transport: TransportType;
+  transport: TTransportType;
   headers?: Record<string, string>;
   payload?: { user: string; [key: string]: any } | undefined;
 }
 
 export interface IGetToolsArgs {
-  transport: TransportType;
+  transport: TTransportType;
   headers?: Record<string, string>;
   payload?: { user: string; [key: string]: any } | undefined
 }
 
 export interface IGetPromptsArgs {
-  transport: TransportType;
+  transport: TTransportType;
   headers?: Record<string, string>;
   payload?: { user: string; [key: string]: any } | undefined
 }
 
 export interface IGetResourcesArgs {
-  transport: TransportType;
+  transport: TTransportType;
   headers?: Record<string, string>;
   payload?: { user: string; [key: string]: any } | undefined
 }
