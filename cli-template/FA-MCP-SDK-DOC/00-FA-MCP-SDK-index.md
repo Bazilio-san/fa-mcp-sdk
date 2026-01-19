@@ -37,7 +37,7 @@ import { formatToolResult, ToolExecutionError, ServerError, BaseMcpError, Valida
 import { queryMAIN, execMAIN, oneRowMAIN, checkMainDB, getCache } from 'fa-mcp-sdk';
 
 // Utilities
-import { logger, fileLogger, trim, ppj, toError, toStr, normalizeHeaders } from 'fa-mcp-sdk';
+import { logger, fileLogger, Logger, trim, ppj, toError, toStr, normalizeHeaders } from 'fa-mcp-sdk';
 
 // Test Clients
 import { McpHttpClient, McpStdioClient, McpSseClient, McpStreamableHttpClient } from 'fa-mcp-sdk';

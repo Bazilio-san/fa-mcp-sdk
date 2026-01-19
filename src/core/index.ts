@@ -125,3 +125,5 @@ export {
   type OpenAPISpecResponse,
   type SwaggerUIConfig,
 } from './web/openapi.js';
+
+export { Logger } from 'af-logger-ts';

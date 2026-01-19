@@ -101,7 +101,7 @@ await checkPortAvailability(3000, 'localhost', true);
 ## Logging
 
 ```typescript
-import { logger, fileLogger } from 'fa-mcp-sdk';
+import { logger, fileLogger, Logger } from 'fa-mcp-sdk';
 
 logger.info('Server started');
 logger.warn('Warning');
@@ -109,7 +109,12 @@ logger.error('Error', error);
 
 fileLogger.info('To file');
 await fileLogger.asyncFinish();  // Flush before shutdown
+
+// Logger type for typing custom logger references
+const myLogger: Logger = logger;
 ```
+
+**`Logger`** — тип логгера из `af-logger-ts`, используется для типизации переменных и параметров функций.
 
 ## Event System
 
