@@ -34,23 +34,45 @@ const cleanUndefinedDeep = (value: any): void => {
  * Format tool result based on configuration
  * Returns either structured content (JSON) or formatted text
  */
-export function formatToolResult (json: any): any {
+export function asTextContent (text: string): { content: { type: 'text', text: string }[] } {
+  return {
+    content: [
+      {
+        type: 'text',
+        text,
+      },
+    ],
+  };
+}
+
+/**
+ * Format tool result based on configuration
+ * Returns either structured content (JSON) or formatted text
+ */
+export function asJson<T = any> (json: T): { structuredContent: T } {
   if (isObject(json)) {
     cleanUndefinedDeep(json);
   }
+  return {
+    structuredContent: json,
+  };
+}
 
-  return appConfig.mcp.toolAnswerAs === 'structuredContent'
-    ? {
-      structuredContent: json,
-    }
-    : {
-      content: [
-        {
-          type: 'text',
-          text: ppj(json),
-        },
-      ],
-    };
+/**
+ * Format tool result based on configuration
+ * Returns either structured content (JSON) or formatted text
+ */
+export function formatToolResult (json: any): any {
+  if (appConfig.mcp.toolAnswerAs === 'structuredContent') {
+    return asJson(json);
+  }
+  if (isObject(json)) {
+    cleanUndefinedDeep(json);
+  }
+  if (typeof json === 'string') {
+    return asTextContent(json);
+  }
+  return asTextContent(ppj(json));
 }
 
 export const getJsonFromResult = <T = any> (result: any): T => {

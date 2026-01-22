@@ -76,7 +76,7 @@ const normalized = normalizeHeaders({
 ## Tool Utilities
 
 ```typescript
-import { getTools, formatToolResult, getJsonFromResult } from 'fa-mcp-sdk';
+import { getTools, formatToolResult, getJsonFromResult, asTextContent, asJson } from 'fa-mcp-sdk';
 
 const tools = await getTools();  // Get registered tools
 
@@ -85,6 +85,10 @@ const result = formatToolResult({ message: 'Done', data: {} });
 
 // Extract original JSON from formatted result
 const original = getJsonFromResult<MyType>(result);
+
+// Direct formatting helpers (ignore toolAnswerAs config):
+asTextContent('Hello');           // { content: [{ type: 'text', text: 'Hello' }] }
+asJson({ status: 'ok' });         // { structuredContent: { status: 'ok' } }
 ```
 
 ## Network Utilities
