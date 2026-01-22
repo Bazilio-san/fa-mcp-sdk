@@ -1,7 +1,7 @@
 {
   "name": "fa-mcp-sdk",
   "productName": "FA MCP SDK",
-  "version": "0.2.266",
+  "version": "0.2.267",
   "description": "Core infrastructure and templates for building Model Context Protocol (MCP) servers with TypeScript",
   "type": "module",
   "main": "dist/core/index.js",
@@ -69,7 +69,7 @@
     "@modelcontextprotocol/sdk": "^1.25.2",
     "@tsoa/runtime": "^6.4.0",
     "af-ad-ts": "^0.0.69",
-    "af-db-ts": "^3.0.23",
+    "af-db-ts": "^3.0.24",
     "af-logger-ts": "^0.0.24",
     "chalk": "^5.6.2",
     "config": "^4.1.1",

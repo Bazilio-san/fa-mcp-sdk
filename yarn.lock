@@ -1020,10 +1020,10 @@ af-color@^0.0.8:
   resolved "https://registry.yarnpkg.com/af-color/-/af-color-0.0.8.tgz#c3a9810f54fe58af60471cde7ff15855085dd006"
   integrity sha512-FdVZeSA6c1UkM7FjhkKtS+t5pC6uJUwt7F96M/JTCPHuHxUvcZ2yYlqfhFWv+QHhau3gSg0J8FUsw3U0BDqTzw==
 
-af-db-ts@^3.0.23:
-  version "3.0.23"
-  resolved "https://registry.yarnpkg.com/af-db-ts/-/af-db-ts-3.0.23.tgz#c36e5e2cfe6f15069098e7462d098fe27713a587"
-  integrity sha512-zTMdcgcyZAo3pJPfdyz+3bdTcMXqbjRMeT65xSSQU/nf3ynCY0Gf/3RLVu2dZm7o/yYNGJYS61bYOB9moqS3uQ==
+af-db-ts@^3.0.24:
+  version "3.0.24"
+  resolved "https://registry.yarnpkg.com/af-db-ts/-/af-db-ts-3.0.24.tgz#50435a41d93626457cc69e9afb3562c8a345bdfc"
+  integrity sha512-246HH1j75/85qxeDOaYDjpTP7b9JjNIDu0URgG+1yDBfEhWsh9D02HI11YBX6xs9fBN7Ya9K/fnjnyQl79prCg==
   dependencies:
     "@types/pg" "^8.11.9"
     af-color "^0.0.8"
