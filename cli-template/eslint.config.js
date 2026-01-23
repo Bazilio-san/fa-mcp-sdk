@@ -37,12 +37,6 @@ export default [
       }],
       '@typescript-eslint/no-unsafe-function-type': 'off',
       'unused-imports/no-unused-imports': 'error',
-      'unused-imports/no-unused-vars': ['warn', {
-        'argsIgnorePattern': '^_',
-        'varsIgnorePattern': '^_',
-        'caughtErrorsIgnorePattern': '^_',
-        'ignoreRestSiblings': true,
-      }],
       '@typescript-eslint/no-explicit-any': 'off',
       '@typescript-eslint/no-unsafe-member-access': 'off',
       'import/no-default-export': 'error',

@@ -4,18 +4,20 @@ Output of startup diagnostics to the console
 import { configInfo, consulInfo, databasesInfo, infoBlock, nodeConfigEnvInfo, TInfoLine } from 'af-tools-ts';
 import { IAFConsulAPI, IMeta } from 'fa-consul';
 import { yellow } from 'af-color';
-import { AppConfig } from '../_types_/config.js';
 import { fileLogger, useFileLogger, logger as lgr } from '../logger.js';
 import { getConsulAPI } from '../consul/get-consul-api.js';
 import chalk from 'chalk';
-import { appConfig } from './init-config.js';
+import { appConfig as cfg } from './init-config.js';
 import { detectAuthConfiguration } from '../auth/multi-auth.js';
 
 const logger = lgr.getSubLogger({ name: chalk.cyan('config') });
 
 
-export const startupInfo = async (args: { dotEnvResult: any, cfg: AppConfig }) => {
-  const { cfg, dotEnvResult } = args;
+export const startupInfo = async (args: {
+  dotEnvResult: any,
+  customStartupInfo?: [string, string][] | undefined,
+}) => {
+  const { dotEnvResult } = args;
 
   let consulInfoItem: string | [string, string] = '';
   const s = cfg.consul.service;
@@ -35,7 +37,7 @@ export const startupInfo = async (args: { dotEnvResult: any, cfg: AppConfig }) =
 
   configInfo({ dotEnvResult, cfg: JSON.parse(JSON.stringify(cfg)) }); // To display you must set ENV DEBUG=config-info
 
-  const dbInfo = appConfig.isMainDBUsed ? [...databasesInfo(cfg, ['main'])] : [['DB', 'not used']];
+  const dbInfo = cfg.isMainDBUsed ? [...databasesInfo(cfg, ['main'])] : [['DB', 'not used']];
 
   // Authentication info
   const authConfig = cfg.webServer?.auth;
@@ -68,6 +70,7 @@ export const startupInfo = async (args: { dotEnvResult: any, cfg: AppConfig }) =
     ...dbInfo,
     ['MCP Auth', mcpAuthInfo],
     ['Admin Auth', adminAuthInfo],
+    ...(args.customStartupInfo || []),
     consulInfoItem,
   ].filter(Boolean) as TInfoLine[];
 

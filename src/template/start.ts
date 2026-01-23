@@ -52,6 +52,11 @@ const startProject = async (): Promise<void> => {
         : `https://${agent.dev.host}/ui/${agent.dev.dc}`
       }/services/${serviceId}/instances`;
     },
+
+    // Custom startup diagnostic info displayed in the console at server start
+    customStartupInfo: [
+      ['Custom param', 'any value'],
+    ],
   };
 
   // Start MCP server with assembled data

@@ -1,5 +1,24 @@
 # Configuration, Cache, and Database
 
+## Custom Startup Diagnostics
+
+You can add custom key-value pairs to the startup diagnostic output by passing `customStartupInfo` to `McpServerData`:
+
+```typescript
+const serverData: McpServerData = {
+  // ... other options
+
+  // Custom startup diagnostic info displayed in the console at server start
+  customStartupInfo: [
+    ['Custom param', 'any value'],
+    ['Environment', process.env.MY_ENV || 'default'],
+    ['Feature Flag', isFeatureEnabled ? 'enabled' : 'disabled'],
+  ],
+};
+```
+
+These values will appear in the startup info block alongside built-in diagnostics like `MCP Auth`, `Admin Auth`, etc.
+
 ## Configuration
 
 ### appConfig Access

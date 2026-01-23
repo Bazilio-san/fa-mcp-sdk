@@ -145,6 +145,11 @@ export interface McpServerData {
   // Function to get Consul UI address (if consul enabled: consul.service.enable = true)
   // for example: `https://consul.my.ui/ui/dc-${isProd ? 'prod' : 'dev'}/services/${serviceId}/instances`
   getConsulUIAddress?: (serviceId: string) => string,
+
+  // Custom startup diagnostic information displayed at server start
+  // Array of [key, value] pairs to be shown in the startup info block
+  // Example: [['Admin Auth', 'JWT'], ['Custom param', 'any value']]
+  customStartupInfo?: [string, string][],
 }
 
 

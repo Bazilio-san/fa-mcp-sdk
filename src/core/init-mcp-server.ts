@@ -97,7 +97,7 @@ export async function initMcpServer (data: McpServerData): Promise<void> {
       break;
 
     case 'http': {
-      await startupInfo({ dotEnvResult, cfg: appConfig });
+      await startupInfo({ dotEnvResult, customStartupInfo: data.customStartupInfo });
 
       // Check if port is available before proceeding
       await checkPortAvailability(appConfig.webServer.port, appConfig.webServer.host, true);
