@@ -83,8 +83,8 @@ const tools = await getTools();  // Get registered tools
 // Format based on appConfig.mcp.toolAnswerAs
 const result = formatToolResult({ message: 'Done', data: {} });
 
-// Extract original JSON from formatted result
-const original = getJsonFromResult<MyType>(result);
+// Returns structuredContent or JSON from text depending on appConfig.mcp.toolAnswerAs
+const original = getJsonFromResult<T>(result);
 
 // Direct formatting helpers (ignore toolAnswerAs config):
 asTextContent('Hello');           // { content: [{ type: 'text', text: 'Hello' }] }
