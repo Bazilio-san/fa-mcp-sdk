@@ -96,7 +96,7 @@ The CLI collects required and optional parameters through interactive prompts or
 ### Configuration File Examples
 
 
-**[YAML Example with detailed comments](https://github.com/Bazilio-san/fa-mcp-sdk/blob/master/cli-config.example.yaml)**
+Link: [YAML Example with detailed comments](https://github.com/Bazilio-san/fa-mcp-sdk/blob/master/cli-config.example.yaml)
 
 The utility supports both **JSON** and **YAML** configuration formats.
 Use either `.json`, `.yaml`, or `.yml` file extensions.
