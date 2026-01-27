@@ -768,8 +768,8 @@ certificate's public and private keys`,
   async handlePackageJson (content, config) {
     try {
       content = content
-        .replace('"project.name"', '"{{project.name}}"')
-        .replace('"node ../scripts', '"node ./scripts');
+        .replace(/"project\.name"/g, '"{{project.name}}"')
+        .replace(/"node \.\.\/scripts/g, '"node ./scripts');
       // First replace all template parameters in the content string
       let updatedContent = content;
       for (const [param, value] of Object.entries(config)) {
@@ -799,7 +799,13 @@ certificate's public and private keys`,
           delete packageJson.author;
         }
       }
+
       packageJson.dependencies['fa-mcp-sdk'] = `^${faMcpSdkVersion}`;
+
+      if (!config.keepPostinstall) {
+        delete packageJson.scripts.postinstall;
+      }
+
       return JSON.stringify(packageJson, null, 2);
     } catch (error) {
       throw new Error(`Error processing package.json: ${error.message}`);
