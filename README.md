@@ -13,6 +13,7 @@ This framework provides complete infrastructure for building enterprise-grade MC
 - **Database Integration**: PostgreSQL with pgvector for vector operations
 - **Service Discovery**: Consul integration for microservices
 - **Authentication**: Token-based security with configurable endpoints
+- **Agent Tester**: Built-in chat UI for testing MCP tools via AI agent
 - **Rate Limiting**: Configurable rate limiting for all endpoints
 - **API Documentation**: Automatic Swagger generation
 - **Production Logging**: Structured logging with data masking
@@ -226,6 +227,20 @@ Note: The `dist/` directory (compiled JavaScript) is created after running `npm 
 - Admin panel for generating access tokens at `/admin`
 - Swagger UI at `/docs`
 - Health check at `/health`
+
+## Agent Tester
+
+Built-in chat interface for testing MCP server tools using an AI agent (OpenAI-compatible LLM).
+The agent automatically discovers available tools and calls them in a conversational loop.
+
+To enable, set environment variables:
+```
+AGENT_TESTER_ENABLED=true
+AGENT_TESTER_OPENAI_API_KEY=sk-...
+```
+
+The tester UI is available at `http://localhost:<port>/agent-tester` and auto-connects to the local MCP server.
+Supports custom LLM endpoints, configurable system prompts, and dynamic HTTP headers.
 
 ## Directory Requirements
 

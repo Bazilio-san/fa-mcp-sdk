@@ -118,7 +118,7 @@ await fileLogger.asyncFinish();  // Flush before shutdown
 const myLogger: Logger = logger;
 ```
 
-**`Logger`** — тип логгера из `af-logger-ts`, используется для типизации переменных и параметров функций.
+**`Logger`** — The logger type from 'af-logger-ts' is used to type variables and function parameters.
 
 ## Event System
 
