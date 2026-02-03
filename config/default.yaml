@@ -33,7 +33,13 @@ ad:
   # Cache TTL for user/group DN lookups (default: 86400000 = 24 hours)
   # dnCacheTtlMs: 86400000
 
-# ... existing code ...
+agentTester:
+  enabled: true
+  useAuth: false
+  openAi:
+    apiKey: ''
+    # baseUrl: ''
+
 # --------------------------------------------------
 # CACHING Reduces API calls by caching responses
 # --------------------------------------------------

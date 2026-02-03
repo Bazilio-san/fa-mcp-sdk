@@ -57,6 +57,17 @@ interface ISwaggerConfig {
   }
 }
 
+interface IAgentTesterConfig {
+  agentTester?: {
+    enabled: boolean;
+    useAuth: boolean;
+    openAi?: {
+      apiKey: string;
+      baseUrl?: string;
+    };
+  }
+}
+
 interface ICacheConfig {
   cache: {
     ttlSeconds: 300, // Cache TTL in seconds
@@ -70,7 +81,8 @@ export interface AppConfig extends IADConfig,
   IAFDatabasesConfig,
   IWebServerConfig,
   IMCPConfig,
-  ISwaggerConfig {
+  ISwaggerConfig,
+  IAgentTesterConfig {
 
   isMainDBUsed: boolean, // = !!appConfig.db.postgres?.dbs.main?.host
   // Package metadata (enriched from package.json)

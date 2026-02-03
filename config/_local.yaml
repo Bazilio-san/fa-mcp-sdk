@@ -11,6 +11,14 @@ ad:
       username: '***'
       password: '***'
 
+
+agentTester:
+  enabled: true
+  useAuth: false
+  openAi:
+    apiKey: '***'
+    # baseUrl:
+
 # --------------------------------------------------
 # CACHING Reduces API calls by caching responses
 # --------------------------------------------------

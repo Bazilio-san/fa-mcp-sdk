@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MCP Agent Tester</title>
+    <link rel="stylesheet" href="/agent-tester/static/styles.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body>
+    <div class="app">
+        <!-- Sidebar for MCP Server Configuration -->
+        <div class="sidebar" id="sidebar">
+            <div class="sidebar-content">
+                <!-- MCP Server Connection Form -->
+                <div class="config-section">
+                    <form id="mcpConnectionForm" class="connection-form">
+
+                        <div class="form-group">
+                            <label for="serverUrl">Server URL</label>
+                            <div class="custom-select-container">
+                                <input type="url" id="serverUrl" name="serverUrl" placeholder="http://localhost:3000/mcp" required>
+                                <button type="button" id="serverUrlDropdown" class="dropdown-toggle" title="Select from saved URLs">
+                                    <i class="fas fa-chevron-down"></i>
+                                </button>
+                                <div id="serverUrlDropdownList" class="dropdown-list" style="display: none;">
+                                    <div class="dropdown-item add-new">
+                                        <span>Add new URL</span>
+                                    </div>
+                                    <div class="dropdown-separator"></div>
+                                    <div id="savedUrlsList"></div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="transport">Transport</label>
+                            <select id="transport" name="transport" required>
+                                <option value="http">HTTP</option>
+                                <option value="sse">SSE (Server-Sent Events)</option>
+                            </select>
+                        </div>
+
+                        <div class="form-actions">
+                            <button type="submit" class="btn btn-connect">
+                                <i class="fas fa-plug"></i> Connect
+                            </button>
+                        </div>
+                    </form>
+
+                    <!-- Dynamic Headers Section -->
+                    <div id="headersSection" class="config-section" style="display: none;">
+                        <h3>Required HTTP Headers</h3>
+                        <div id="dynamicHeaders" class="dynamic-headers">
+                            <!-- Headers will be dynamically added here -->
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Connected Servers -->
+                <div class="config-section">
+                    <h3>Connected Servers</h3>
+                    <div id="connectedServers" class="server-list">
+                        <div class="empty-state">No servers connected</div>
+                    </div>
+                </div>
+
+                <!-- Model Selection -->
+                <div class="config-section">
+                    <h3><label for="modelSelect">Model</label></h3>
+                    <div class="form-group">
+                        <select id="modelSelect" name="modelSelect" required>
+                            <option value="gpt-4o">gpt-4o</option>
+                            <option value="gpt-4o-mini">gpt-4o-mini</option>
+                            <option value="gpt-4.1">gpt-4.1</option>
+                            <option value="gpt-4.1-mini">gpt-4.1-mini</option>
+                            <option value="gpt-4.1-nano">gpt-4.1-nano</option>
+                            <option value="gpt-5">gpt-5</option>
+                            <option value="gpt-5-mini">gpt-5-mini</option>
+                            <option value="gpt-5-nano">gpt-5-nano</option>
+                            <option value="gpt-5.1">gpt-5.1</option>
+                            <option value="gpt-5.2">gpt-5.2</option>
+                            <option value="other">Other...</option>
+                        </select>
+                    </div>
+
+                    <!-- Custom Model Settings (shown when "Other..." is selected) -->
+                    <div id="customModelSettings" class="custom-model-settings" style="display: none;">
+                        <div class="form-group">
+                            <label for="customBaseUrl">Base URL</label>
+                            <input type="url" id="customBaseUrl" placeholder="https://api.example.com/v1/chat/completions">
+                        </div>
+                        <div class="form-group">
+                            <label for="customApiKey">API Key</label>
+                            <input type="password" id="customApiKey" placeholder="sk-...">
+                        </div>
+                        <div class="form-group">
+                            <label for="customModelName">Model Name</label>
+                            <input type="text" id="customModelName" placeholder="model-name">
+                        </div>
+                    </div>
+
+                    <!-- Model Parameters (always visible) -->
+                    <div id="modelParameters" class="model-parameters">
+                        <div class="form-group">
+                            <label for="modelTemperature">Temperature</label>
+                            <input type="number" id="modelTemperature" min="0" max="2" step="0.1" value="0.7" placeholder="0.7">
+                        </div>
+                        <div class="form-group">
+                            <label for="modelMaxTokens">Max Tokens</label>
+                            <input type="number" id="modelMaxTokens" min="1" max="128000" step="1" value="2048" placeholder="2048">
+                        </div>
+                        <div class="form-group">
+                            <label for="modelMaxTurns">Max Turns</label>
+                            <input type="number" id="modelMaxTurns" min="1" max="20" step="1" value="10" placeholder="10">
+                        </div>
+                        <div class="form-group">
+                            <label for="toolResultLimitChars">Tool Result Limit (chars)</label>
+                            <input type="number" id="toolResultLimitChars" min="100" max="100000" step="100" value="20000" placeholder="20000">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- System Prompt Configuration -->
+                <div class="config-section">
+                    <h3>System Prompt</h3>
+                    <div class="form-group">
+                        <textarea id="systemPrompt" placeholder="Enter system prompt for the AI agent..."
+                                  rows="6">You are a helpful AI assistant that can use MCP tools to help users. Be concise and accurate in your responses.</textarea>
+                    </div>
+                </div>
+
+                <!-- Custom Prompt Configuration -->
+                <div class="config-section">
+                    <h3>Custom Prompt</h3>
+                    <div class="form-group">
+                        <textarea id="customPrompt" placeholder="Enter additional custom prompt (will be appended to system prompt)..."
+                                  rows="4"></textarea>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Main Chat Area -->
+        <div class="main-content">
+            <!-- Chat Header -->
+            <div class="chat-header">
+                <button class="sidebar-toggle mobile-only" id="sidebarToggleMobile">
+                    <i class="fas fa-bars"></i>
+                </button>
+                <div class="chat-info">
+                    <div class="chat-title">
+                        <h1><i class="fas fa-robot"></i> MCP Agent Tester</h1>
+                    </div>
+                    <span class="status" id="connectionStatus">Not Connected</span>
+                </div>
+                <div class="chat-actions">
+                    <button id="clearChat" class="btn btn-ghost" title="Clear Chat">
+                        <i class="fas fa-trash"></i>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Chat Messages Container -->
+            <div class="chat-container">
+                <div id="chatMessages" class="chat-messages">
+                    <!-- Welcome message -->
+                    <div class="message assistant welcome">
+                        <div class="message-avatar">
+                            <i class="fas fa-robot"></i>
+                        </div>
+                        <div class="message-content">
+                            <div class="message-text">Welcome to MCP Agent Tester!
+This application allows you to test and interact with MCP servers through an AI agent.
+<strong>Getting Started:</strong>
+1. Configure an MCP server connection in the sidebar
+2. Correct or set a system prompt if needed
+2. Set custom prompt if needed
+3. Start chatting with the AI agent
+The agent will use the connected MCP server's tools!</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Chat Input -->
+            <div class="chat-input-container">
+                <div class="typing-indicator" id="typingIndicator">
+                    <span></span>
+                    <span></span>
+                    <span></span>
+                </div>
+                <div class="chat-input-wrapper">
+                    <textarea id="messageInput" placeholder="Type your message..." rows="1" maxlength="40000"></textarea>
+                    <div class="input-actions">
+                        <button id="sendButton" class="btn send-btn" disabled>
+                            <i class="fas fa-paper-plane"></i>
+                        </button>
+                    </div>
+                </div>
+                <div class="input-info">
+                    <span id="charCount">0/40000</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Loading Overlay -->
+    <div class="loading-overlay" id="loadingOverlay" style="display: none;">
+        <div class="spinner"></div>
+        <span>Connecting...</span>
+    </div>
+
+    <!-- Toast Notifications -->
+    <div id="toastContainer" class="toast-container"></div>
+
+    <script src="/agent-tester/static/script.js"></script>
+</body>
+</html>

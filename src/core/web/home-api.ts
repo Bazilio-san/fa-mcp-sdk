@@ -107,6 +107,7 @@ export async function handleHomeInfo (_req: Request, res: Response): Promise<voi
       mcpAuth,
       adminAuth,
       repo,
+      agentTester: appConfig.agentTester?.enabled ? '/agent-tester' : null,
       footer: footerParts.join(' • '),
     };
 

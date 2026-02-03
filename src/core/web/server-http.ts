@@ -32,6 +32,7 @@ import { getTools, normalizeHeaders } from '../utils/utils.js';
 import { createAdminRouter } from './admin-router.js';
 import { validateAdminAuthConfig } from '../auth/admin-auth.js';
 import { createSvgRouter } from './svg-icons.js';
+import { createAgentTesterRouter } from '../agent-tester/agent-tester-router.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -180,6 +181,19 @@ export async function startHttpServer (): Promise<void> {
     }
     const adminRouter = createAdminRouter();
     app.use('/admin', adminRouter);
+  }
+  const at = appConfig.agentTester;
+  // Agent Tester routes
+  if (at?.enabled) {
+    const agentTesterRouter = createAgentTesterRouter({
+      defaultMcpUrl: `http://localhost:${appConfig.webServer.port}/mcp`,
+      ...(at.openAi ? { openAi: at.openAi } : {}),
+    });
+    if (at.useAuth) {
+      app.use('/agent-tester', authMW, agentTesterRouter);
+    } else {
+      app.use('/agent-tester', agentTesterRouter);
+    }
   }
 
   // SSE endpoints for legacy MCP communication
@@ -508,6 +522,9 @@ export async function startHttpServer (): Promise<void> {
     if (isAdminEnabled) {
       availableEndpoints.admin = 'GET /admin';
     }
+    if (appConfig.agentTester?.enabled) {
+      availableEndpoints.agentTester = 'GET /agent-tester';
+    }
 
     res.status(404).json({
       error: 'Not Found',
@@ -532,6 +549,9 @@ export async function startHttpServer (): Promise<void> {
 Home page: http://localhost:${port}/`;
     if (isAdminEnabled) {
       msg += `\nAdmin panel: http://localhost:${port}/admin`;
+    }
+    if (appConfig.agentTester?.enabled) {
+      msg += `\nAgent Tester: http://localhost:${port}/agent-tester`;
     }
     console.log(msg);
   });

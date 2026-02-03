@@ -1,3 +1,10 @@
+agentTester:
+  enabled: AGENT_TESTER_ENABLED
+  useAuth: AGENT_TESTER_USE_AUTH
+  openAi:
+    apiKey: AGENT_TESTER_OPENAI_API_KEY
+    baseUrl: AGENT_TESTER_OPENAI_BASE_URL
+
 cache:
   ttlSeconds: CACHE_TTL_SECONDS
   maxItems: CACHE_MAX_ITEMS

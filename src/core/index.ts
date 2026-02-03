@@ -127,3 +127,5 @@ export {
 } from './web/openapi.js';
 
 export { Logger } from 'af-logger-ts';
+
+export { createAgentTesterRouter } from './agent-tester/agent-tester-router.js';
