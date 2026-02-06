@@ -1,3 +1,4 @@
+export type { Tool } from '@modelcontextprotocol/sdk/types.js';
 export type { AppConfig } from './_types_/config.js';
 export type { IADConfig, IDcConfig } from './_types_/active-directory-config.js';
 export type {

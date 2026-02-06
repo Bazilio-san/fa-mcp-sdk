@@ -51,6 +51,9 @@ export async function handleHomeInfo (_req: Request, res: Response): Promise<voi
     if (assets?.maintainerHtml) {
       footerParts.push(assets.maintainerHtml);
     }
+    if (appConfig.agentTester?.enabled) {
+      footerParts.push('<a href="/agent-tester">Agent Tester</a>');
+    }
 
     // Database info
     let db = null;
