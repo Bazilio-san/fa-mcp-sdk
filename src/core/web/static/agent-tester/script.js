@@ -581,40 +581,72 @@ class McpAgentTester {
 
     this.requiredHeaders.forEach(header => {
       const headerGroup = document.createElement('div');
-      headerGroup.className = 'header-input-group';
+      headerGroup.className = 'header-row';
 
       const savedValue = savedHeaders[header.name] || '';
-      const requiredMark = header.isOptional ? '' : '<span class="required-mark">*</span>';
+      const isRequired = !header.isOptional;
+      const hasDesc = header.description && header.description.trim();
+      const nameClass = hasDesc ? 'header-name has-tooltip' : 'header-name';
+      const tooltipAttr = hasDesc ? ` data-tooltip="${header.description.replace(/"/g, '&quot;')}"` : '';
+      const inputClass = isRequired ? 'header-value required-header' : 'header-value';
 
       headerGroup.innerHTML = `
-                <label>
-                    ${header.name}${requiredMark}
-                    <div class="tooltip">
-                        <span class="tooltip-icon">i</span>
-                        <span class="tooltip-text">${header.description}</span>
-                    </div>
-                </label>
+                <span class="${nameClass}"${tooltipAttr}>${header.name}</span>
                 <input
                     type="text"
+                    class="${inputClass}"
                     id="header_${header.name}"
-                    placeholder="Enter ${header.name} value"
+                    placeholder="${header.name}"
                     data-header-name="${header.name}"
+                    data-required="${isRequired}"
                     value="${savedValue.replace(/"/g, '&quot;')}"
                 >
             `;
 
       this.dynamicHeaders.appendChild(headerGroup);
 
+      const nameEl = headerGroup.querySelector('.header-name');
+      if (nameEl && hasDesc) {
+        nameEl.addEventListener('mouseenter', (e) => this.showHeaderTooltip(e, header.description));
+        nameEl.addEventListener('mouseleave', () => this.hideHeaderTooltip());
+      }
+
       const inputEl = headerGroup.querySelector(`#header_${header.name}`);
       if (inputEl) {
         inputEl.addEventListener('input', () => {
           this.saveHeaderValuesToStorage();
           this.scheduleHeadersUpdate();
+          this.updateHeaderBorder(inputEl);
         });
+        this.updateHeaderBorder(inputEl);
       }
     });
 
     this.mcpConfig.headers = this.getHeadersFromForm();
+  }
+
+  showHeaderTooltip (e, text) {
+    const tip = document.getElementById('headerTooltip');
+    tip.textContent = text;
+    const rect = e.target.getBoundingClientRect();
+    tip.style.left = rect.left + 'px';
+    tip.style.top = (rect.top - 4) + 'px';
+    tip.style.transform = 'translateY(-100%)';
+    tip.classList.add('visible');
+  }
+
+  hideHeaderTooltip () {
+    document.getElementById('headerTooltip').classList.remove('visible');
+  }
+
+  updateHeaderBorder (inputEl) {
+    if (inputEl.dataset.required === 'true') {
+      if (inputEl.value.trim()) {
+        inputEl.classList.remove('empty-required');
+      } else {
+        inputEl.classList.add('empty-required');
+      }
+    }
   }
 
   getHeaderStorageKey () {

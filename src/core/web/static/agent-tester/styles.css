@@ -491,117 +491,81 @@ body {
 .dynamic-headers {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 6px;
 }
 
-.header-input-group {
-  padding: 10px;
-  background: var(--bg-input);
-  border-radius: var(--radius);
-  border: 1px solid var(--border);
-  transition: border-color 0.2s;
-}
-
-.header-input-group:hover {
-  border-color: var(--primary-glow);
-}
-
-.required-mark {
-  color: var(--error);
-  font-weight: 700;
-  margin-left: 2px;
-}
-
-.header-input-group label {
-  font-size: 0.75rem;
-  color: var(--text-secondary);
-  font-weight: 500;
+.header-row {
   display: flex;
   align-items: center;
-  gap: 6px;
-  margin-bottom: 6px;
+  gap: 8px;
 }
 
-.header-input-group input {
-  width: 100%;
+.header-name {
+  width: 50%;
+  flex-shrink: 0;
+  font-size: 0.8rem;
+  font-weight: 500;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
+.header-name.has-tooltip {
+  text-decoration: underline;
+  text-decoration-style: dashed;
+  text-underline-offset: 3px;
+  text-decoration-color: var(--text-muted);
+  cursor: help;
+}
+
+.header-tooltip {
+  position: fixed;
+  background: var(--bg-toast);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 6px 10px;
+  font-size: 0.75rem;
+  font-weight: 400;
+  max-width: 260px;
+  box-shadow: var(--shadow-lg);
+  z-index: 9999;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+
+.header-tooltip.visible {
+  opacity: 1;
+}
+
+.header-value {
+  width: 50%;
   padding: 6px 8px;
   border: 1px solid var(--border-input);
   border-radius: 4px;
-  background: var(--bg-surface);
+  background: var(--bg-input);
   color: var(--text);
   font-size: 0.8rem;
   outline: none;
   transition: border-color 0.2s, box-shadow 0.2s;
 }
 
-.header-input-group input::placeholder {
+.header-value::placeholder {
   color: var(--text-muted);
 }
 
-.header-input-group input:focus {
+.header-value:focus {
   border-color: var(--primary);
   box-shadow: 0 0 0 2px var(--primary-glow);
 }
 
-/* --- Tooltip --- */
-.tooltip {
-  position: relative;
-  display: inline-flex;
+.header-value.empty-required {
+  border-color: var(--error);
 }
 
-.tooltip-icon {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 16px;
-  height: 16px;
-  background: var(--primary-subtle);
-  color: var(--primary);
-  border-radius: 50%;
-  font-size: 10px;
-  cursor: help;
-  transition: background-color 0.2s;
-}
-
-.tooltip-icon:hover {
-  background: var(--primary-glow);
-}
-
-.tooltip-text {
-  visibility: hidden;
-  width: 220px;
-  background-color: var(--bg-toast);
-  color: var(--text);
-  text-align: center;
-  border-radius: var(--radius);
-  padding: 8px 12px;
-  position: absolute;
-  z-index: 1000;
-  bottom: 125%;
-  left: 50%;
-  margin-left: -110px;
-  opacity: 0;
-  transition: opacity 0.2s;
-  font-size: 0.75rem;
-  font-weight: 400;
-  box-shadow: var(--shadow-lg);
-  border: 1px solid var(--border);
-}
-
-.tooltip-text::after {
-  content: "";
-  position: absolute;
-  top: 100%;
-  left: 50%;
-  margin-left: -5px;
-  border-width: 5px;
-  border-style: solid;
-  border-color: var(--bg-toast) transparent transparent transparent;
-}
-
-.tooltip:hover .tooltip-text {
-  visibility: visible;
-  opacity: 1;
+.header-value.empty-required:focus {
+  border-color: var(--error);
+  box-shadow: 0 0 0 2px rgba(239, 68, 68, 0.2);
 }
 
 /* --- Server List --- */
