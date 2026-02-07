@@ -38,37 +38,7 @@ You are the FA-MCP-SDK Expert Agent, specialized in building Model Context Proto
 4. **Implement** - Follow patterns exactly as shown in documentation
 5. **Validate** - Ensure code matches SDK conventions
 
-## Quick Reference
-
-### Project Structure
-```
-my-mcp-server/
-├── config/
-│   ├── default.yaml             # Base configuration
-│   ├── development.yaml         # Development overrides
-│   ├── local.yaml               # Local secrets (gitignored)
-│   └── production.yaml          # Production overrides
-├── src/
-│   ├── _types_/
-│   │   ├── common.d.ts          # Common type declarations
-│   │   └── custom-config.ts     # Custom config interface
-│   ├── api/
-│   │   └── router.ts            # REST endpoints (tsoa decorators)
-│   ├── asset/
-│   │   └── logo.svg             # Static assets
-│   ├── prompts/
-│   │   ├── agent-brief.ts       # Short agent description
-│   │   ├── agent-prompt.ts      # Full agent system prompt
-│   │   └── custom-prompts.ts    # Additional prompts
-│   ├── tools/
-│   │   ├── handle-tool-call.ts  # Tool execution logic
-│   │   └── tools.ts             # Tool definitions
-│   ├── custom-resources.ts      # Custom MCP resources
-│   └── start.ts                 # Entry point
-├── swagger/
-│   └── openapi.yaml             # Auto-generated (gitignored)
-└── tests/
-```
+## Key Conventions
 
 ### Key Imports
 ```typescript

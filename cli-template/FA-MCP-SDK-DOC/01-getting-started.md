@@ -108,6 +108,11 @@ import { appConfig, AppConfig } from 'fa-mcp-sdk';
 const port = appConfig.webServer.port;
 const serviceName = appConfig.name;
 const isAuthEnabled = appConfig.webServer.auth.enabled;
+
+// Nested config access
+const dbHost = appConfig.db.postgres.dbs.main.host;
+const rateLimit = appConfig.mcp.rateLimit.maxRequests;
+const dbEnabled = appConfig.isMainDBUsed;
 ```
 
 | Property | Description |

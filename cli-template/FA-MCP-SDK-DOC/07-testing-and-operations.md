@@ -74,6 +74,34 @@ await client.close();
 | HTTP | `mcp.transportType: "http"` | Web integrations, REST API |
 | SSE | HTTP transport | Long-running ops, streaming |
 
+## Running Tests
+
+```bash
+npm test                               # All tests (Jest)
+npx jest tests/path/file.test.ts       # Single file
+npx jest --testNamePattern="pattern"   # Filter by test name
+npm run test:mcp                       # STDIO transport tests
+npm run test:mcp-http                  # HTTP transport tests
+npm run test:mcp-sse                   # SSE transport tests
+```
+
+### Auth Headers for Tests
+
+```typescript
+import { getAuthHeadersForTests } from 'fa-mcp-sdk';
+
+const headers = getAuthHeadersForTests(); // Uses config auth settings
+const result = await client.callTool('my_tool', { query: 'test' }, headers);
+```
+
+### What to Test
+
+- **Happy path** — tool returns expected result for valid input
+- **Error cases** — invalid params, missing required fields, service errors
+- **Auth flows** — authenticated vs unauthenticated, different auth methods
+- **Transport parity** — same behavior across STDIO, HTTP, SSE
+- **Edge cases** — empty strings, large payloads, special characters
+
 ## Best Practices
 
 ### Project Organization

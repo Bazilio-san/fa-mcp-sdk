@@ -61,43 +61,35 @@ consul:
     timeout: '5s'
     deregistercriticalserviceafter: '3m'
   agent:
-    # Credentials for getting information about services in the DEV DC
-    dev:
+    dev:                                # DEV DC credentials
       dc: '{{consul.agent.dev.dc}}'
       host: '{{consul.agent.dev.host}}'
       port: 443
       secure: true
-      # Token for getting information about DEV services
       token: '***'
-    # Credentials for getting information about services in the PROD DC
-    prd:
+    prd:                                # PROD DC credentials
       dc: '{{consul.agent.prd.dc}}'
       host: '{{consul.agent.prd.host}}'
       port: 443
       secure: true
-      # Token for obtaining information about PROD services
       token: '***'
-    # Credentials for registering the service with Consul
-    reg:
-      # The host of the consul agent where the service will be registered. If not specified, the server on which the service is running is used
-      host: null
+    reg:                                # Service registration
+      host: null                        # null = use current server
       port: 8500
       secure: false
-      # Token for registering the service in the consul agent
       token: '***'
   service:
-    enable: {{consul.service.enable}} # true - Allows registration of the service with the consul
-    name: <name> # <name> will be replaced by <package.json>.name at initialization
-    instance: '{{SERVICE_INSTANCE}}' # This value will be specified as a suffix in the id of the service
-    version: <version> # <version> will be replaced by <package.json>.version at initialization
-    description: <description> # <description> will be replaced by <package.json>.description at initialization
-    tags: [] # If null or empty array - Will be pulled up from package.keywords at initialization
+    enable: {{consul.service.enable}}
+    name: <name>                        # from package.json
+    instance: '{{SERVICE_INSTANCE}}'
+    version: <version>                  # from package.json
+    description: <description>          # from package.json
+    tags: []                            # null/empty = from package.keywords
     meta:
-      # "Home" page link template
       who: 'http://{address}:{port}/'
-  envCode: # Used to generate the service ID
-    prod: {{consul.envCode.prod}} # Production environment code
-    dev: {{consul.envCode.dev}} # Development environment code
+  envCode:
+    prod: {{consul.envCode.prod}}
+    dev: {{consul.envCode.dev}}
 
 db:
   postgres:

@@ -91,6 +91,12 @@ asTextContent('Hello');           // { content: [{ type: 'text', text: 'Hello' }
 asJson({ status: 'ok' });         // { structuredContent: { status: 'ok' } }
 ```
 
+### When to Use Which
+
+- **`formatToolResult()`** — Primary choice in tool handlers. Respects `appConfig.mcp.toolAnswerAs` config.
+- **`asTextContent()` / `asJson()`** — Direct formatting, ignores `toolAnswerAs`. Use when specific format needed.
+- **`getJsonFromResult()`** — Inverse of `formatToolResult()`. Extracts JSON from either format. Use in tests.
+
 ## Network Utilities
 
 ```typescript
