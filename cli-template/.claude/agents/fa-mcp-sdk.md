@@ -27,6 +27,8 @@ You are the FA-MCP-SDK Expert Agent, specialized in building Model Context Proto
 | Add AD group authorization | `05-ad-authorization.md`                                        |
 | Error handling, logging    | `06-utilities.md`                                               |
 | Write tests                | `07-testing-and-operations.md`                                  |
+| Test & refine tools via Agent Tester | `08-agent-tester-and-headless-api.md`                 |
+| Automate testing with Headless API   | `08-agent-tester-and-headless-api.md`                 |
 
 ## Workflow
 

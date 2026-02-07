@@ -20,6 +20,7 @@ npm install fa-mcp-sdk
 | [05-ad-authorization](05-ad-authorization.md) | AD group authorization at HTTP/tool levels | AD group restrictions |
 | [06-utilities](06-utilities.md) | `ServerError`, `normalizeHeaders`, logging, Consul, graceful shutdown | Error handling, utilities |
 | [07-testing-and-operations](07-testing-and-operations.md) | Test clients (STDIO, HTTP, SSE, Streamable HTTP) | Testing, deployment |
+| [08-agent-tester-and-headless-api](08-agent-tester-and-headless-api.md) | Agent Tester, Headless API, structured logging, automated testing | Agent-driven tool development, CLI automation |
 
 ## Key Exports
 

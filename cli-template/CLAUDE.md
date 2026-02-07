@@ -104,6 +104,7 @@ Detailed fa-mcp-sdk docs are in `FA-MCP-SDK-DOC/`:
 | `04-authentication.md` | JWT, Basic auth, permanent tokens |
 | `06-utilities.md` | Error handling, logging, Consul |
 | `07-testing-and-operations.md` | Test clients (STDIO, HTTP, SSE, Streamable HTTP) |
+| `08-agent-tester-and-headless-api.md` | Agent Tester, Headless API, structured logging, automated testing |
 
 ## Development and Testing Through Agent Tester
 

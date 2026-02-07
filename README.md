@@ -7,17 +7,19 @@ CLI utility that creates ready-to-use MCP (Model Context Protocol) server projec
 
 ## Overview
 
-This framework provides complete infrastructure for building enterprise-grade MCP servers with support for:
+This framework provides complete infrastructure for building enterprise-grade MCP servers:
 
 - **Dual Transport**: STDIO (Claude Desktop) and HTTP/SSE (web clients)
+- **Agent-Driven Tool Development**: Built-in AI agent system (Agent Tester) for iterative refinement of MCP tools through automated testing cycles — the agent calls your tools, you observe behavior, adjust descriptions/parameters/prompts, and re-test
+- **Headless Test API**: Direct HTTP endpoint (`POST /agent-tester/api/chat/test`) returns structured trace of every tool call, argument, result, and LLM decision — enabling CLI-based automated testing without a browser
+- **Authentication**: JWT, Basic auth, permanent tokens, custom validators
 - **Database Integration**: PostgreSQL with pgvector for vector operations
 - **Service Discovery**: Consul integration for microservices
-- **Authentication**: Token-based security with configurable endpoints
-- **Agent Tester**: Built-in chat UI for testing MCP tools via AI agent
 - **Rate Limiting**: Configurable rate limiting for all endpoints
-- **API Documentation**: Automatic Swagger generation
+- **API Documentation**: Automatic Swagger/OpenAPI generation
 - **Production Logging**: Structured logging with data masking
 - **Configuration Management**: YAML-based with environment overrides
+- **Deployment Ready**: PM2 scripts, Nginx templates, ESLint, Jest testing
 
 The framework uses dependency injection to keep the core completely agnostic of project-specific implementations.
 
@@ -117,18 +119,6 @@ fa-mcp config.yaml
 fa-mcp --config=my-config.yml
 ```
 
-
-## Generated Project Features
-
-- TypeScript MCP server with HTTP/STDIO transport
-- Express.js web server with Swagger documentation
-- JWT authentication support (optional)
-- Admin panel for generating JWT access tokens (optional)
-- Consul service discovery integration (optional)
-- File and console logging
-- ESLint configuration and Jest testing
-- PM2 deployment scripts
-- Nginx configuration templates
 
 
 ## Project Structure
