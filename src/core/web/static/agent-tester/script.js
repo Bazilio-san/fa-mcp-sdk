@@ -875,7 +875,7 @@ class McpAgentTester {
     if (server.isConnected) {
       this.connectedServersContainer.innerHTML = `
         <div class="server-status-row">
-          <span class="server-status connected"><span class="material-icons-round">check_circle</span>${toolCount} tools connected</span>
+          <span class="server-status connected">${toolCount} tools <span class="material-icons-round">check_circle</span> connected</span>
           <button type="button" class="btn btn-danger disconnect-btn"><span class="material-icons-round">link_off</span>Disconnect</button>
         </div>`;
     } else {

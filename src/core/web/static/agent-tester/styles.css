@@ -501,7 +501,7 @@ body {
 }
 
 .header-name {
-  width: 50%;
+  width: 35%;
   flex-shrink: 0;
   font-size: 0.8rem;
   font-weight: 500;
@@ -539,7 +539,7 @@ body {
 }
 
 .header-value {
-  width: 50%;
+  width: 63%;
   padding: 6px 8px;
   border: 1px solid var(--border-input);
   border-radius: 4px;
@@ -880,7 +880,7 @@ body {
   counter-reset: steps;
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 0;
 }
 
 .getting-started ol li {
