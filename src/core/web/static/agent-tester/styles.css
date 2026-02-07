@@ -617,11 +617,27 @@ body {
 }
 
 /* --- Model Parameters --- */
+.model-select-group {
+  flex-direction: row !important;
+  align-items: center;
+  gap: 10px !important;
+}
+
+.model-select-group select {
+  flex: 1;
+}
+
 .model-parameters {
   margin-top: 12px;
   display: grid;
   grid-template-columns: repeat(2, 1fr);
   gap: 10px;
+}
+
+.model-parameters .form-group {
+  flex-direction: row !important;
+  align-items: center;
+  gap: 8px !important;
 }
 
 .model-select-group label,
@@ -631,10 +647,13 @@ body {
   font-weight: 600;
   color: var(--text-muted);
   letter-spacing: 0.04em;
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .model-parameters input[type="number"] {
   width: 100%;
+  min-width: 0;
   padding: 6px 8px;
   font-size: 0.8rem;
 }
@@ -1394,8 +1413,8 @@ body {
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
   width: 100%;
-  max-width: 640px;
-  max-height: 80vh;
+  max-width: 900px;
+  max-height: 85vh;
   display: flex;
   flex-direction: column;
   box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
