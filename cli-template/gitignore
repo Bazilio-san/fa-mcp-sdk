@@ -86,3 +86,4 @@ _logs/
 glm.ps1
 glm.sh
 /~last-cli-config.json
+/claudedocs/

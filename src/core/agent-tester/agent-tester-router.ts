@@ -22,7 +22,7 @@ export function createAgentTesterRouter (options: {
   const router = Router();
 
   const mcpClientService = new TesterMcpClientService();
-  const agentService = new TesterAgentService(mcpClientService, options.openAi);
+  const agentService = new TesterAgentService(mcpClientService, options.openAi, appConfig.agentTester?.logJson);
 
   // Serve static files (index.html, script.js, styles.css)
   const staticPath = join(__dirname, '..', 'web', 'static', 'agent-tester');
@@ -101,6 +101,25 @@ export function createAgentTesterRouter (options: {
     }
   });
 
+  // POST /api/chat/test — headless test endpoint with trace data
+  router.post('/api/chat/test', async (req, res): Promise<void> => {
+    try {
+      const chatRequest: TesterChatRequest = req.body;
+      if (!chatRequest.message?.trim()) {
+        res.status(400).json({ error: 'Message is required' });
+        return;
+      }
+      const verbose = req.query.verbose === 'true';
+      const maxTraceChars = parseInt(req.query.maxTraceChars as string) || 50000;
+      const maxResultChars = parseInt(req.query.maxResultChars as string) || 4000;
+      const response = await agentService.processMessageWithTrace(chatRequest, { verbose, maxTraceChars, maxResultChars });
+      res.json(response);
+    } catch (error: any) {
+      logger.error('Chat test error:', error);
+      res.status(500).json({ error: error.message || 'Internal server error' });
+    }
+  });
+
   // GET /api/chat/sessions
   router.get('/api/chat/sessions', (req, res) => {
     res.json(agentService.getAllSessions());
@@ -127,6 +146,23 @@ export function createAgentTesterRouter (options: {
   });
 
   // ===== MCP API =====
+
+  // GET /api/mcp/status — connection state and available tools
+  router.get('/api/mcp/status', (req, res) => {
+    const servers = mcpClientService.getAllServerConfigs();
+    const connected = servers.filter(s => s.isConnected);
+    res.json({
+      connected: connected.length > 0,
+      servers: connected.map(s => ({
+        name: s.name,
+        url: s.url,
+        transport: s.transport,
+        tools: (s.tools || []).map(t => ({ name: t.name, description: t.description, inputSchema: t.inputSchema })),
+        toolCount: s.tools?.length || 0,
+      })),
+      totalTools: connected.reduce((sum, s) => sum + (s.tools?.length || 0), 0),
+    });
+  });
 
   // POST /api/mcp/connect
   router.post('/api/mcp/connect', async (req, res): Promise<void> => {

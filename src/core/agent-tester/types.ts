@@ -102,3 +102,39 @@ export interface TesterMcpConnectionResponse {
   config?: TesterMcpServerConfig;
   error?: string;
 }
+
+// ===== Trace types for headless test API =====
+
+export interface TesterTraceTurn {
+  turn: number;
+  llm_request?: {
+    model: string;
+    messages_count: number;
+  };
+  llm_response?: {
+    finish_reason: string | null;
+    content: string | null;
+    usage?: { prompt_tokens: number; completion_tokens: number; total_tokens: number };
+  };
+  tool_calls: { name: string; arguments: Record<string, unknown> }[];
+  tool_results: { name: string; result: unknown; duration_ms?: number }[];
+}
+
+export interface TesterTraceData {
+  turns: TesterTraceTurn[];
+  total_turns: number;
+  total_duration_ms: number;
+  tools_used: string[];
+}
+
+export interface TesterTestResponse {
+  message: string;
+  sessionId: string;
+  trace: TesterTraceData;
+}
+
+export interface TesterTestOptions {
+  verbose?: boolean;
+  maxTraceChars?: number;
+  maxResultChars?: number;
+}

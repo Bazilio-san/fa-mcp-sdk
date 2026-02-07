@@ -66,6 +66,7 @@ interface IAgentTesterConfig {
       baseUrl?: string;
     };
     httpHeaders?: Record<string, string>;
+    logJson?: boolean;
   }
 }
 

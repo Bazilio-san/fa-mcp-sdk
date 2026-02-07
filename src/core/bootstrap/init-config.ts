@@ -46,6 +46,9 @@ function buildConfig (): AppConfig {
     s.tags = keywords;
   }
   cfg.mcp.transportType = process.argv[2] === 'stdio' ? 'stdio' : config.mcp.transportType;
+  if (process.argv.includes('--log-json') || process.env.AGENT_TESTER_LOG_JSON === 'true') {
+    cfg.agentTester = { ...cfg.agentTester, logJson: true } as any;
+  }
   cfg.isMainDBUsed = !!config.db?.postgres?.dbs?.main?.host;
   const urlRe = /\b(https?|ftp|file):\/\/[-A-Z0-9+&@#\/%?=~_|$!:,.;]*[A-Z0-9+&@#\/%=~_|$]/i;
   if (urlRe.test(trim(repository?.url))) {
