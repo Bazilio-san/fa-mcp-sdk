@@ -65,6 +65,7 @@ interface IAgentTesterConfig {
       apiKey: string;
       baseUrl?: string;
     };
+    httpHeaders?: Record<string, string>;
   }
 }
 

@@ -39,6 +39,9 @@ agentTester:
   openAi:
     apiKey: ''
     # baseUrl: ''
+  httpHeaders:
+    # Key-value pairs for HTTP requests that should be auto-populated in agentTester
+    # Example: X-User-Id: 12345
 
 # --------------------------------------------------
 # CACHING Reduces API calls by caching responses

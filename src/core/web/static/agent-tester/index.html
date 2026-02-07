@@ -111,11 +111,11 @@
                     </div>
                 </section>
 
-                <!-- System Prompt -->
+                <!-- Agent (System) Prompt -->
                 <section class="config-section">
                     <div class="form-group">
                         <div class="prompt-label-row">
-                            <label for="systemPrompt">System Prompt</label>
+                            <label for="systemPrompt">Agent Prompt</label>
                             <button type="button" class="btn-enlarge" data-target="systemPrompt" title="Enlarge">
                                 <span class="material-icons-round">open_in_full</span>
                             </button>
@@ -170,13 +170,14 @@
                         </div>
                         <div class="message-content">
                             <div class="welcome-card">
-                                <h2>Welcome to MCP Agent Tester!</h2>
                                 <p>This application allows you to test and interact with MCP servers through an AI agent.</p>
                                 <div class="getting-started">
                                     <h4>Getting Started</h4>
                                     <ol>
                                         <li>Configure an MCP server connection in the sidebar</li>
-                                        <li>Correct or set a system prompt if needed</li>
+                                        <li>Specify HTTP header values, if required</li>
+                                        <li>Select the model and specify the parameters</li>
+                                        <li>Correct or set an agent (system) prompt if needed</li>
                                         <li>Set custom prompt if needed</li>
                                         <li>Start chatting with the AI agent</li>
                                     </ol>
@@ -212,7 +213,7 @@
     <div class="prompt-modal-overlay" id="promptModal" style="display: none;">
         <div class="prompt-modal">
             <div class="prompt-modal-header">
-                <h3 id="promptModalTitle">System Prompt</h3>
+                <h3 id="promptModalTitle">Agent Prompt</h3>
                 <button type="button" class="btn-icon" id="promptModalClose" title="Close">
                     <span class="material-icons-round">close</span>
                 </button>

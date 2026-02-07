@@ -9,6 +9,11 @@ class McpAgentTester {
     this.requiredHeaders = [];
     this.pendingConnectionData = null;
     this._headersUpdateTimer = null;
+    this.defaultMcpUrl = null;
+    this.authEnabled = false;
+    this.configHttpHeaders = {};
+    this._authRefreshInterval = null;
+    this._currentAuthType = null;
     this.messageFormats = {};
     this.messageTexts = {};
 
@@ -306,7 +311,7 @@ class McpAgentTester {
     const modal = document.getElementById('promptModal');
     const textarea = document.getElementById('promptModalTextarea');
     const title = document.getElementById('promptModalTitle');
-    title.textContent = targetId === 'systemPrompt' ? 'System Prompt' : 'Custom Prompt';
+    title.textContent = targetId === 'systemPrompt' ? 'Agent Prompt' : 'Custom Prompt';
     textarea.value = this._promptModalTarget.value;
     modal.style.display = 'flex';
     textarea.focus();
@@ -428,6 +433,9 @@ class McpAgentTester {
     try {
       const response = await fetch(`${API_BASE}/api/config`);
       const config = await response.json();
+      this.defaultMcpUrl = config.defaultMcpUrl || null;
+      this.authEnabled = !!config.authEnabled;
+      this.configHttpHeaders = config.httpHeaders || {};
       if (config.defaultMcpUrl) {
         const serverUrlInput = document.getElementById('serverUrl');
         if (!this.mcpConfig.url && !serverUrlInput.value) {
@@ -550,6 +558,7 @@ class McpAgentTester {
         const headers = await response.json();
         this.requiredHeaders = Array.isArray(headers) ? headers : [];
         this.renderHeaderInputs();
+        await this.autoFillAuthHeader();
 
         if (this.requiredHeaders.length > 0) {
           const reqCount = this.requiredHeaders.filter(h => !h.isOptional).length;
@@ -583,7 +592,7 @@ class McpAgentTester {
       const headerGroup = document.createElement('div');
       headerGroup.className = 'header-row';
 
-      const savedValue = savedHeaders[header.name] || '';
+      const savedValue = savedHeaders[header.name] || this.configHttpHeaders[header.name] || '';
       const isRequired = !header.isOptional;
       const hasDesc = header.description && header.description.trim();
       const nameClass = hasDesc ? 'header-name has-tooltip' : 'header-name';
@@ -607,8 +616,11 @@ class McpAgentTester {
 
       const nameEl = headerGroup.querySelector('.header-name');
       if (nameEl && hasDesc) {
-        nameEl.addEventListener('mouseenter', (e) => this.showHeaderTooltip(e, header.description));
-        nameEl.addEventListener('mouseleave', () => this.hideHeaderTooltip());
+        nameEl.style.cursor = 'pointer';
+        nameEl.addEventListener('click', (e) => {
+          e.stopPropagation();
+          this.toggleHeaderTooltip(e, header.description);
+        });
       }
 
       const inputEl = headerGroup.querySelector(`#header_${header.name}`);
@@ -625,18 +637,33 @@ class McpAgentTester {
     this.mcpConfig.headers = this.getHeadersFromForm();
   }
 
-  showHeaderTooltip (e, text) {
+  toggleHeaderTooltip (e, text) {
     const tip = document.getElementById('headerTooltip');
+    if (tip.classList.contains('visible') && tip._sourceEl === e.target) {
+      this.hideHeaderTooltip();
+      return;
+    }
+    tip._sourceEl = e.target;
     tip.textContent = text;
     const rect = e.target.getBoundingClientRect();
     tip.style.left = rect.left + 'px';
     tip.style.top = (rect.top - 4) + 'px';
     tip.style.transform = 'translateY(-100%)';
     tip.classList.add('visible');
+
+    const dismissOnClick = (ev) => {
+      if (ev.target !== e.target && !tip.contains(ev.target)) {
+        this.hideHeaderTooltip();
+        document.removeEventListener('click', dismissOnClick);
+      }
+    };
+    setTimeout(() => document.addEventListener('click', dismissOnClick), 0);
   }
 
   hideHeaderTooltip () {
-    document.getElementById('headerTooltip').classList.remove('visible');
+    const tip = document.getElementById('headerTooltip');
+    tip.classList.remove('visible');
+    tip._sourceEl = null;
   }
 
   updateHeaderBorder (inputEl) {
@@ -729,7 +756,73 @@ class McpAgentTester {
     return headers;
   }
 
+  isOwnService () {
+    return this.defaultMcpUrl && this.serverUrlInput.value.trim() === this.defaultMcpUrl;
+  }
+
+  async autoFillAuthHeader () {
+    if (!this.authEnabled) {return;}
+
+    const hasAuthHeader = this.requiredHeaders.some(h => h.name === 'Authorization');
+    if (!hasAuthHeader) {return;}
+
+    // Skip if localStorage already has a saved value for this URL's Authorization header
+    const savedHeaders = this.loadHeaderValuesFromStorage();
+    if (savedHeaders['Authorization']) {return;}
+
+    try {
+      const response = await fetch(`${API_BASE}/api/auth-token`);
+      if (!response.ok) {return;}
+
+      const data = await response.json();
+      this._currentAuthType = data.authType;
+
+      const input = document.getElementById('header_Authorization');
+      if (input) {
+        input.value = data.token;
+        this.updateHeaderBorder(input);
+        this.saveHeaderValuesToStorage();
+        this.scheduleHeadersUpdate();
+      }
+
+      // Start JWT refresh interval if connecting to own service
+      if (data.authType === 'jwtToken' && this.isOwnService()) {
+        this.startAuthRefresh();
+      }
+    } catch (e) {
+      console.warn('Failed to auto-fill auth header:', e);
+    }
+  }
+
+  startAuthRefresh () {
+    this.stopAuthRefresh();
+    this._authRefreshInterval = setInterval(async () => {
+      try {
+        const response = await fetch(`${API_BASE}/api/auth-token/refresh`, { method: 'POST' });
+        if (!response.ok) {return;}
+
+        const data = await response.json();
+        const input = document.getElementById('header_Authorization');
+        if (input) {
+          input.value = data.token;
+          this.saveHeaderValuesToStorage();
+          this.scheduleHeadersUpdate();
+        }
+      } catch (e) {
+        console.warn('Failed to refresh auth token:', e);
+      }
+    }, 4 * 60 * 1000); // every 4 minutes
+  }
+
+  stopAuthRefresh () {
+    if (this._authRefreshInterval) {
+      clearInterval(this._authRefreshInterval);
+      this._authRefreshInterval = null;
+    }
+  }
+
   resetConnectionForm () {
+    this.stopAuthRefresh();
     this.mcpConnectionForm.reset();
     this.serverUrlInput.value = '';
     this.transportSelect.value = 'http';
@@ -806,6 +899,8 @@ class McpAgentTester {
     if (!this.currentServer) {
       return;
     }
+
+    this.stopAuthRefresh();
 
     try {
       const response = await fetch(`${API_BASE}/api/mcp/disconnect/${this.currentServer.name}`, {
@@ -1182,6 +1277,7 @@ class McpAgentTester {
   }
 
   handleServerUrlChange () {
+    this.stopAuthRefresh();
     let url = this.serverUrlInput.value.trim();
 
     if (url) {

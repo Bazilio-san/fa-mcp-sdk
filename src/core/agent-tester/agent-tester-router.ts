@@ -7,6 +7,8 @@ import { TesterChatRequest, TesterMcpConnectionRequest } from './types.js';
 import { dirname, join } from 'path';
 import { fileURLToPath } from 'url';
 import express from 'express';
+import { appConfig } from '../bootstrap/init-config.js';
+import { generateToken } from '../auth/jwt.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -35,7 +37,50 @@ export function createAgentTesterRouter (options: {
   router.get('/api/config', (req, res) => {
     res.json({
       defaultMcpUrl: options.defaultMcpUrl || null,
+      authEnabled: !!appConfig.webServer?.auth?.enabled,
+      httpHeaders: appConfig.agentTester?.httpHeaders || {},
     });
+  });
+
+  // API: Get auth token for auto-fill
+  router.get('/api/auth-token', (req, res): void => {
+    const auth = appConfig.webServer?.auth;
+    if (!auth?.enabled) {
+      res.status(404).json({ error: 'Auth is not enabled' });
+      return;
+    }
+
+    // Priority matches authOrder: permanentServerTokens → basic → jwtToken
+    if (auth.permanentServerTokens?.length) {
+      res.json({ authType: 'permanentServerTokens', token: `Bearer ${auth.permanentServerTokens[0]}` });
+      return;
+    }
+
+    if (auth.basic?.username && auth.basic?.password) {
+      const encoded = Buffer.from(`${auth.basic.username}:${auth.basic.password}`).toString('base64');
+      res.json({ authType: 'basic', token: `Basic ${encoded}` });
+      return;
+    }
+
+    if (auth.jwtToken?.encryptKey) {
+      const jwt = generateToken('agentTester', 300, { service: appConfig.name });
+      res.json({ authType: 'jwtToken', token: `Bearer ${jwt}` });
+      return;
+    }
+
+    res.status(404).json({ error: 'No auth method configured' });
+  });
+
+  // API: Refresh JWT auth token
+  router.post('/api/auth-token/refresh', (req, res): void => {
+    const auth = appConfig.webServer?.auth;
+    if (!auth?.enabled || !auth.jwtToken?.encryptKey) {
+      res.status(400).json({ error: 'JWT auth is not configured' });
+      return;
+    }
+
+    const jwt = generateToken('agentTester', 300, { service: appConfig.name });
+    res.json({ authType: 'jwtToken', token: `Bearer ${jwt}` });
   });
 
   // ===== Chat API =====
