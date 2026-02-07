@@ -6,8 +6,8 @@ import chalk from 'chalk';
 import { logger as lgr } from '../../logger.js';
 import {
   TesterMcpConfig,
-  TesterCachedMcpClient,
-  TesterMcpTool,
+  ITesterCachedMcpClient,
+  ITesterMcpTool,
   TesterMcpServerConfig,
   TesterMcpConnectionRequest,
   TesterMcpConnectionResponse,
@@ -20,7 +20,7 @@ export class TesterMcpClientService {
   private servers: Map<string, TesterMcpServerConfig> = new Map();
   private clients: Map<string, Client> = new Map();
 
-  private clientCache: Map<string, TesterCachedMcpClient> = new Map();
+  private clientCache: Map<string, ITesterCachedMcpClient> = new Map();
   private cleanupInterval: ReturnType<typeof setInterval> | null = null;
   private readonly CACHE_MAX_AGE_MS = 10 * 60 * 1000; // 10 minutes
 
@@ -68,7 +68,7 @@ export class TesterMcpClientService {
     }
   }
 
-  public async getOrCreateClient (mcpConfig: TesterMcpConfig): Promise<TesterCachedMcpClient> {
+  public async getOrCreateClient (mcpConfig: TesterMcpConfig): Promise<ITesterCachedMcpClient> {
     const connectionKey = this.getConnectionKey(mcpConfig);
 
     const cached = this.clientCache.get(connectionKey);
@@ -87,7 +87,7 @@ export class TesterMcpClientService {
     const client = await this.createMcpClientFromConfig(mcpConfig);
 
     const toolsList = await client.listTools();
-    const tools: TesterMcpTool[] = toolsList.tools.map(tool => ({
+    const tools: ITesterMcpTool[] = toolsList.tools.map(tool => ({
       name: tool.name,
       description: tool.description || '',
       inputSchema: tool.inputSchema,
@@ -112,7 +112,7 @@ export class TesterMcpClientService {
       logger.info('No agent_prompt available:', promptError);
     }
 
-    const cachedClient: TesterCachedMcpClient = {
+    const cachedClient: ITesterCachedMcpClient = {
       client,
       config: mcpConfig,
       tools,

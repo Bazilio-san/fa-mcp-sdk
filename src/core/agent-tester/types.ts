@@ -1,4 +1,4 @@
-export interface TesterChatMessage {
+export interface ITesterChatMessage {
   id: string;
   text: string;
   sender: 'user' | 'assistant';
@@ -10,9 +10,9 @@ export interface TesterChatMessage {
   };
 }
 
-export interface TesterChatSession {
+export interface ITesterChatSession {
   id: string;
-  messages: TesterChatMessage[];
+  messages: ITesterChatMessage[];
   systemPrompt?: string;
   mcpServerUrl?: string;
   createdAt: Date;
@@ -36,7 +36,7 @@ export interface TesterModelConfig {
   toolResultLimitChars?: number;
 }
 
-export interface TesterChatRequest {
+export interface ITesterChatRequest {
   message: string;
   sessionId?: string;
   systemPrompt?: string;
@@ -47,7 +47,7 @@ export interface TesterChatRequest {
   mcpServerUrl?: string;
 }
 
-export interface TesterChatResponse {
+export interface ITesterChatResponse {
   id: string;
   message: string;
   sessionId: string;
@@ -58,16 +58,16 @@ export interface TesterChatResponse {
   };
 }
 
-export interface TesterMcpTool {
+export interface ITesterMcpTool {
   name: string;
   description: string;
   inputSchema: any;
 }
 
-export interface TesterCachedMcpClient {
+export interface ITesterCachedMcpClient {
   client: any;
   config: TesterMcpConfig;
-  tools: TesterMcpTool[];
+  tools: ITesterMcpTool[];
   agentPrompt?: string;
   lastUsed: Date;
   connectionKey: string;
@@ -83,7 +83,7 @@ export interface TesterMcpServerConfig {
   url: string;
   transport: 'http' | 'sse' | 'stdio';
   isConnected: boolean;
-  tools?: TesterMcpTool[];
+  tools?: ITesterMcpTool[];
   agentPrompt?: string;
   lastConnected?: Date;
   connectionError?: string;
@@ -105,7 +105,7 @@ export interface TesterMcpConnectionResponse {
 
 // ===== Trace types for headless test API =====
 
-export interface TesterTraceTurn {
+export interface ITesterTraceTurn {
   turn: number;
   llm_request?: {
     model: string;
@@ -120,20 +120,20 @@ export interface TesterTraceTurn {
   tool_results: { name: string; result: unknown; duration_ms?: number }[];
 }
 
-export interface TesterTraceData {
-  turns: TesterTraceTurn[];
+export interface ITesterTraceData {
+  turns: ITesterTraceTurn[];
   total_turns: number;
   total_duration_ms: number;
   tools_used: string[];
 }
 
-export interface TesterTestResponse {
+export interface ITesterTestResponse {
   message: string;
   sessionId: string;
-  trace: TesterTraceData;
+  trace: ITesterTraceData;
 }
 
-export interface TesterTestOptions {
+export interface ITesterTestOptions {
   verbose?: boolean;
   maxTraceChars?: number;
   maxResultChars?: number;

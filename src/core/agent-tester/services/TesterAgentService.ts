@@ -3,16 +3,16 @@ import { v4 as uuidv4 } from 'uuid';
 import chalk from 'chalk';
 import { logger as lgr } from '../../logger.js';
 import {
-  TesterChatMessage,
-  TesterChatSession,
-  TesterMcpTool,
-  TesterChatRequest,
-  TesterChatResponse,
-  TesterCachedMcpClient,
-  TesterTestResponse,
-  TesterTestOptions,
-  TesterTraceData,
-  TesterTraceTurn,
+  ITesterChatMessage,
+  ITesterChatSession,
+  ITesterMcpTool,
+  ITesterChatRequest,
+  ITesterChatResponse,
+  ITesterCachedMcpClient,
+  ITesterTestResponse,
+  ITesterTestOptions,
+  ITesterTraceData,
+  ITesterTraceTurn,
 } from '../types.js';
 import { TesterMcpClientService } from './TesterMcpClientService.js';
 import { SummaryMemory, SummaryState } from './SummaryMemory.js';
@@ -26,12 +26,12 @@ interface AgentConfig {
   maxTokens: number;
   maxTurns: number;
   toolResultLimitChars: number;
-  tools: TesterMcpTool[];
+  tools: ITesterMcpTool[];
   mcpServerUrl?: string;
 }
 
 export class TesterAgentService {
-  private sessions: Map<string, TesterChatSession> = new Map();
+  private sessions: Map<string, ITesterChatSession> = new Map();
   private defaultConfig: AgentConfig;
   private openai: OpenAI | null = null;
 
@@ -123,7 +123,7 @@ Output only the new Summary Memory.`;
     this.summaryMemory.resetAfterCompression(state);
   }
 
-  public async processMessage (request: TesterChatRequest): Promise<TesterChatResponse> {
+  public async processMessage (request: ITesterChatRequest): Promise<ITesterChatResponse> {
     const startTime = Date.now();
     const sessionId = request.sessionId || uuidv4();
 
@@ -139,7 +139,7 @@ Output only the new Summary Memory.`;
       }
 
       // Add user message to session
-      const userMessage: TesterChatMessage = {
+      const userMessage: ITesterChatMessage = {
         id: uuidv4(),
         text: request.message,
         sender: 'user',
@@ -148,8 +148,8 @@ Output only the new Summary Memory.`;
       session.messages.push(userMessage);
 
       // Get tools and agentPrompt from cached client
-      let cachedClient: TesterCachedMcpClient | null = null;
-      let agentTools: TesterMcpTool[] = [];
+      let cachedClient: ITesterCachedMcpClient | null = null;
+      let agentTools: ITesterMcpTool[] = [];
 
       if (mcpConfig) {
         try {
@@ -332,7 +332,9 @@ Messages: ${serializeForLog(summarizedContext)}
         // Log response
         const toolCallsInResponse = choice.message.tool_calls ?? [];
         const toolCallNames = toolCallsInResponse
-          .filter((tc): tc is OpenAI.Chat.ChatCompletionMessageToolCall & { type: 'function' } => tc.type === 'function')
+          .filter((tc): tc is OpenAI.Chat.ChatCompletionMessageToolCall & {
+            type: 'function'
+          } => tc.type === 'function')
           .map(tc => tc.function.name);
         console.log(chalk.magenta(`${chalk.bgMagenta.bold(`🟣 LLM RESPONSE [Turn ${turn + 1}/${maxTurns}]:`)}
 Finish reason: ${choice.finish_reason}
@@ -438,7 +440,7 @@ Response Text: ${finalText}
 `));
 
       // Add assistant message to session
-      const assistantMessage: TesterChatMessage = {
+      const assistantMessage: ITesterChatMessage = {
         id: uuidv4(),
         text: finalText,
         sender: 'assistant',
@@ -469,9 +471,9 @@ Response Text: ${finalText}
   }
 
   public async processMessageWithTrace (
-    request: TesterChatRequest,
-    options: TesterTestOptions = {},
-  ): Promise<TesterTestResponse> {
+    request: ITesterChatRequest,
+    options: ITesterTestOptions = {},
+  ): Promise<ITesterTestResponse> {
     const { verbose = false, maxTraceChars = 50000, maxResultChars = 4000 } = options;
     const startTime = Date.now();
     const sessionId = request.sessionId || uuidv4();
@@ -496,8 +498,8 @@ Response Text: ${finalText}
       });
 
       // Get tools and agentPrompt from cached client
-      let cachedClient: TesterCachedMcpClient | null = null;
-      let agentTools: TesterMcpTool[] = [];
+      let cachedClient: ITesterCachedMcpClient | null = null;
+      let agentTools: ITesterMcpTool[] = [];
 
       if (mcpConfig) {
         try {
@@ -569,26 +571,38 @@ Response Text: ${finalText}
       const useTemperature = selectedModel.startsWith('gpt-5') ? null : temperature;
       let finalText = '';
       const toolsUsed: string[] = [];
-      const traceturns: TesterTraceTurn[] = [];
+      const traceturns: ITesterTraceTurn[] = [];
 
       const toolLimitChars = modelConfig?.toolResultLimitChars ?? this.defaultConfig.toolResultLimitChars ?? 20000;
 
       const truncateStr = (value: unknown, limit: number): string => {
         let str: string;
-        try { str = typeof value === 'string' ? value : JSON.stringify(value); } catch { str = String(value); }
-        if (str.length <= limit) {return str;}
+        try {
+          str = typeof value === 'string' ? value : JSON.stringify(value);
+        } catch {
+          str = String(value);
+        }
+        if (str.length <= limit) {
+          return str;
+        }
         return str.slice(0, limit) + `\n[TRUNCATED: original_length=${str.length}]`;
       };
 
       const safeJsonParse = (raw: string | undefined): unknown => {
-        if (!raw?.trim()) {return {};}
-        try { return JSON.parse(raw); } catch { return { __parse_error: true, raw }; }
+        if (!raw?.trim()) {
+          return {};
+        }
+        try {
+          return JSON.parse(raw);
+        } catch {
+          return { __parse_error: true, raw };
+        }
       };
 
       const maxTurns = modelConfig?.maxTurns ?? this.defaultConfig.maxTurns ?? 10;
 
       for (let turn = 0; turn < maxTurns; turn++) {
-        const traceTurn: TesterTraceTurn = {
+        const traceTurn: ITesterTraceTurn = {
           turn: turn + 1,
           tool_calls: [],
           tool_results: [],
@@ -612,12 +626,18 @@ Response Text: ${finalText}
 
         const response = await llmClient.chat.completions.create(completionParams);
         const choice = response.choices[0];
-        if (!choice) {throw new Error('No response choice returned from OpenAI');}
+        if (!choice) {
+          throw new Error('No response choice returned from OpenAI');
+        }
 
         // Verbose: record LLM response info
         if (verbose) {
           const usage = response.usage
-            ? { prompt_tokens: response.usage.prompt_tokens, completion_tokens: response.usage.completion_tokens, total_tokens: response.usage.total_tokens }
+            ? {
+              prompt_tokens: response.usage.prompt_tokens,
+              completion_tokens: response.usage.completion_tokens,
+              total_tokens: response.usage.total_tokens
+            }
             : undefined;
           traceTurn.llm_response = {
             finish_reason: choice.finish_reason,
@@ -662,9 +682,13 @@ Response Text: ${finalText}
 
         // Execute tool calls
         for (const tc of toolCalls) {
-          if (tc.type !== 'function') {continue;}
+          if (tc.type !== 'function') {
+            continue;
+          }
           const functionName = tc.function?.name;
-          if (!functionName) {continue;}
+          if (!functionName) {
+            continue;
+          }
 
           const functionArgs = safeJsonParse(tc.function.arguments) as Record<string, unknown>;
           toolsUsed.push(functionName);
@@ -711,7 +735,11 @@ Response Text: ${finalText}
           // Record tool result in trace (truncated for trace output)
           const truncatedResult = truncateStr(toolResult, maxResultChars);
           let parsedResult: unknown;
-          try { parsedResult = JSON.parse(truncatedResult); } catch { parsedResult = truncatedResult; }
+          try {
+            parsedResult = JSON.parse(truncatedResult);
+          } catch {
+            parsedResult = truncatedResult;
+          }
           traceTurn.tool_results.push({
             name: functionName,
             result: parsedResult,
@@ -768,7 +796,7 @@ Response Text: ${finalText}
       session.updatedAt = new Date();
 
       // Build trace
-      let trace: TesterTraceData = {
+      let trace: ITesterTraceData = {
         turns: traceturns,
         total_turns: traceturns.length,
         total_duration_ms: totalDuration,
@@ -786,9 +814,11 @@ Response Text: ${finalText}
     }
   }
 
-  private truncateTraceData (trace: TesterTraceData, maxChars: number): TesterTraceData {
+  private truncateTraceData (trace: ITesterTraceData, maxChars: number): ITesterTraceData {
     let serialized = JSON.stringify(trace);
-    if (serialized.length <= maxChars) {return trace;}
+    if (serialized.length <= maxChars) {
+      return trace;
+    }
 
     // Collapse older turns to summaries until we fit
     const turns = [...trace.turns];
@@ -811,11 +841,11 @@ Response Text: ${finalText}
     return { ...trace, turns };
   }
 
-  public getSession (sessionId: string): TesterChatSession | undefined {
+  public getSession (sessionId: string): ITesterChatSession | undefined {
     return this.sessions.get(sessionId);
   }
 
-  public getAllSessions (): TesterChatSession[] {
+  public getAllSessions (): ITesterChatSession[] {
     return Array.from(this.sessions.values());
   }
 
@@ -825,8 +855,8 @@ Response Text: ${finalText}
     return this.sessions.delete(sessionId);
   }
 
-  private createSession (sessionId: string, systemPrompt?: string, mcpServerUrl?: string): TesterChatSession {
-    const session: TesterChatSession = {
+  private createSession (sessionId: string, systemPrompt?: string, mcpServerUrl?: string): ITesterChatSession {
+    const session: ITesterChatSession = {
       id: sessionId,
       messages: [],
       createdAt: new Date(),

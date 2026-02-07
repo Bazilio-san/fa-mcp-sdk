@@ -3,7 +3,7 @@ import chalk from 'chalk';
 import { logger as lgr } from '../logger.js';
 import { TesterAgentService } from './services/TesterAgentService.js';
 import { TesterMcpClientService } from './services/TesterMcpClientService.js';
-import { TesterChatRequest, TesterMcpConnectionRequest } from './types.js';
+import { ITesterChatRequest, TesterMcpConnectionRequest } from './types.js';
 import { dirname, join } from 'path';
 import { fileURLToPath } from 'url';
 import express from 'express';
@@ -88,7 +88,7 @@ export function createAgentTesterRouter (options: {
   // POST /api/chat/message
   router.post('/api/chat/message', async (req, res): Promise<void> => {
     try {
-      const chatRequest: TesterChatRequest = req.body;
+      const chatRequest: ITesterChatRequest = req.body;
       if (!chatRequest.message?.trim()) {
         res.status(400).json({ error: 'Message is required' });
         return;
@@ -104,7 +104,7 @@ export function createAgentTesterRouter (options: {
   // POST /api/chat/test — headless test endpoint with trace data
   router.post('/api/chat/test', async (req, res): Promise<void> => {
     try {
-      const chatRequest: TesterChatRequest = req.body;
+      const chatRequest: ITesterChatRequest = req.body;
       if (!chatRequest.message?.trim()) {
         res.status(400).json({ error: 'Message is required' });
         return;
