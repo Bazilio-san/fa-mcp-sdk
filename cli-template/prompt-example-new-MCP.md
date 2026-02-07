@@ -37,7 +37,7 @@ accessPoints:
   currencyService:
     host: smart-trade-ml.com
     port: 5002
-    token: '***' 
+    token: '***'
 ```
 
 
@@ -50,6 +50,11 @@ Create a file config/local.yaml with the following content:
 accessPoints:
    currencyService:
       token: '88888888-4444-4444-4444-bbbbbbbbbbbb'
+
+agentTester:
+   enabled: true
+   openAi:
+      apiKey: '<ask the user for the key>'
 
 consul:
    service:
@@ -67,14 +72,6 @@ webServer:
       type: 'permanentServerTokens'
 ```
 
-
-### Code Style
-Write code concisely. Avoid unnecessary logging.
-Follow DRY and KISS principles.
-
-### Use the fa-mcp-sdk agent
-Follow the recommendations in the file `FA-MCP-SDK-DOC/00-FA-MCP-SDK-index.md`
-
 # Task
 
 1) Instead of the test tool 'example_tool', add a tool to get the current currency cross-rate.
@@ -82,7 +79,11 @@ Follow the recommendations in the file `FA-MCP-SDK-DOC/00-FA-MCP-SDK-index.md`
 - quoteCurrency - Currency code (ISO 4217 code Alpha-3) - required parameter
 - baseCurrency - Currency code (ISO 4217 code Alpha-3) - optional parameter, default is USD
 
-2) Replace file content `src/asset/logo.svg` with
+2) Instead of the test resource 'custom-resource://resource1', add a resource to get the list of available currencies
+
+3) Instead of the endpoint /api/example (/example) in the file `src/api/router.ts`, create the endpoint get-curr-rate as a proxy to http://<appConfig.accessPoints.currencyService.host>:<appConfig.accessPoints.currencyService.port>/currency-service/?rate=<QUOTE_CURRENCY><BASE_CURRENCY>
+
+4) Replace file content `src/asset/logo.svg` with
 ```
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
   <path fill="currentColor"
@@ -90,10 +91,6 @@ Follow the recommendations in the file `FA-MCP-SDK-DOC/00-FA-MCP-SDK-index.md`
 </svg>
 ```
 
-3) Instead of the test resource 'custom-resource://resource1', add a resource to get the list of available currencies
+5) Formulate the prompt AGENT_BRIEF in `src/prompts/agent-brief.ts` and AGENT_PROMPT in `src/prompts/agent-prompt.ts`
 
-4) Instead of the test examples in `tests/mcp/test-cases.js`, write tests for our case
-
-5) Formulate the prompt AGENT_BRIEF in `src/prompts/agent-brief.ts` and AGENT_PROMPT in src/prompts/agent-prompt.ts
-
-6) Instead of the endpoint /api/example (/example) in the file `src/api/router.ts`, create the endpoint get-curr-rate as a proxy to http://<appConfig.accessPoints.currencyService.host>:<appConfig.accessPoints.currencyService.port>/currency-service/?rate=<QUOTE_CURRENCY><BASE_CURRENCY>
+6) Instead of the test examples in `tests/mcp/test-cases.js`, write tests for our case

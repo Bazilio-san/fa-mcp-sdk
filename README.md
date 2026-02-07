@@ -223,14 +223,22 @@ Note: The `dist/` directory (compiled JavaScript) is created after running `npm 
 Built-in chat interface for testing MCP server tools using an AI agent (OpenAI-compatible LLM).
 The agent automatically discovers available tools and calls them in a conversational loop.
 
-To enable, set environment variables:
+To enable, set environment variables (`.env` or shell):
 ```
 AGENT_TESTER_ENABLED=true
 AGENT_TESTER_OPENAI_API_KEY=sk-...
 ```
 
+Or configure in `config/default.yaml` (or `local.yaml`):
+```yaml
+agentTester:
+  enabled: true
+  openAi:
+    apiKey: sk-...
+```
+
 The tester UI is available at `http://localhost:<port>/agent-tester` and auto-connects to the local MCP server.
-Supports custom LLM endpoints, configurable system prompts, and dynamic HTTP headers.
+Supports custom LLM endpoints, configurable system prompts, and dynamic HTTP headers. Recommended model for testing: **gpt-5.2**.
 
 ## Directory Requirements
 

@@ -112,6 +112,26 @@ Detailed fa-mcp-sdk docs are in `FA-MCP-SDK-DOC/`:
 
 The Agent Tester validates the full agent experience: how the LLM interprets tool descriptions, selects tools, passes arguments, and presents results. → See `08-agent-tester-and-headless-api.md` for complete API reference.
 
+### Prerequisites
+
+Agent Tester requires an OpenAI API key to call the LLM. Before using it, ensure the following configuration is in place:
+
+**Option A** — environment variables (`.env` file or shell):
+```
+AGENT_TESTER_ENABLED=true
+AGENT_TESTER_OPENAI_API_KEY=sk-...
+```
+
+**Option B** — `config/default.yaml` (or `local.yaml`):
+```yaml
+agentTester:
+  enabled: true
+  openAi:
+    apiKey: sk-...
+```
+
+**IMPORTANT for Claude Code**: Before running any Agent Tester tests (Headless API or Playwright), verify that the OpenAI API key is configured. Check `.env` for `AGENT_TESTER_OPENAI_API_KEY` or `config/default.yaml` / `config/local.yaml` for `agentTester.openAi.apiKey`. If the key is missing or empty, inform the user that Agent Tester cannot function without it and ask them to provide the key.
+
 ### What Gets Tested
 
 - **Tool architecture** — correct tool decomposition (split or merge?)
