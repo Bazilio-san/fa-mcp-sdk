@@ -20,6 +20,7 @@ class McpAgentTester {
     };
 
     this.initializeElements();
+    this.initTheme();
     this.bindEvents();
     this.loadInitialData();
 
@@ -204,6 +205,8 @@ class McpAgentTester {
 
     this.loadingOverlay = document.getElementById('loadingOverlay');
     this.toastContainer = document.getElementById('toastContainer');
+
+    this.themeToggle = document.getElementById('themeToggle');
   }
 
   bindEvents () {
@@ -212,6 +215,10 @@ class McpAgentTester {
     }
     if (this.sidebarToggleMobile) {
       this.sidebarToggleMobile.addEventListener('click', () => this.toggleSidebar());
+    }
+
+    if (this.themeToggle) {
+      this.themeToggle.addEventListener('click', () => this.toggleTheme());
     }
 
     this.mcpConnectionForm.addEventListener('submit', (e) => this.handleMcpConnection(e));
@@ -237,6 +244,15 @@ class McpAgentTester {
     this.modelMaxTurns.addEventListener('input', () => this.saveFormValuesToStorage());
     this.toolResultLimitChars.addEventListener('input', () => this.saveFormValuesToStorage());
 
+    document.querySelectorAll('.btn-enlarge').forEach(btn => {
+      btn.addEventListener('click', () => this.openPromptModal(btn.dataset.target));
+    });
+    document.getElementById('promptModalClose').addEventListener('click', () => this.closePromptModal());
+    document.getElementById('promptModalSave').addEventListener('click', () => this.savePromptModal());
+    document.getElementById('promptModal').addEventListener('click', (e) => {
+      if (e.target === e.currentTarget) {this.closePromptModal();}
+    });
+
     this.messageInput.addEventListener('input', () => this.handleInputChange());
     this.messageInput.addEventListener('keydown', (e) => this.handleKeyDown(e));
     this.sendButton.addEventListener('click', () => this.sendMessage());
@@ -256,6 +272,57 @@ class McpAgentTester {
         this.sidebar.classList.remove('open');
       }
     });
+  }
+
+  initTheme () {
+    const saved = localStorage.getItem('mcpAgentTheme');
+    let theme = saved;
+    if (!theme) {
+      theme = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches
+        ? 'dark' : 'light';
+    }
+    this.applyTheme(theme);
+  }
+
+  toggleTheme () {
+    const current = document.documentElement.getAttribute('data-theme') || 'light';
+    const next = current === 'dark' ? 'light' : 'dark';
+    this.applyTheme(next);
+    localStorage.setItem('mcpAgentTheme', next);
+  }
+
+  applyTheme (theme) {
+    document.documentElement.setAttribute('data-theme', theme);
+    if (this.themeToggle) {
+      const icon = this.themeToggle.querySelector('.material-icons-round');
+      if (icon) {
+        icon.textContent = theme === 'dark' ? 'light_mode' : 'dark_mode';
+      }
+    }
+  }
+
+  openPromptModal (targetId) {
+    this._promptModalTarget = document.getElementById(targetId);
+    const modal = document.getElementById('promptModal');
+    const textarea = document.getElementById('promptModalTextarea');
+    const title = document.getElementById('promptModalTitle');
+    title.textContent = targetId === 'systemPrompt' ? 'System Prompt' : 'Custom Prompt';
+    textarea.value = this._promptModalTarget.value;
+    modal.style.display = 'flex';
+    textarea.focus();
+  }
+
+  closePromptModal () {
+    document.getElementById('promptModal').style.display = 'none';
+    this._promptModalTarget = null;
+  }
+
+  savePromptModal () {
+    if (this._promptModalTarget) {
+      this._promptModalTarget.value = document.getElementById('promptModalTextarea').value;
+      this.saveFormValuesToStorage();
+    }
+    this.closePromptModal();
   }
 
   setupAutoResize () {
@@ -279,10 +346,13 @@ class McpAgentTester {
       await this.loadCurrentServer();
       this.currentSystemPrompt = this.systemPromptTextarea.value;
 
-      // Auto-connect if there's a URL but no connected server
       const serverUrl = this.serverUrlInput.value.trim();
       if (serverUrl && (!this.currentServer || !this.currentServer.isConnected)) {
-        this.autoConnect();
+        // Auto-connect if there's a URL but no connected server
+        await this.autoConnect();
+      } else if (serverUrl && this.currentServer && this.currentServer.isConnected) {
+        // Already connected — still need to load headers
+        await this.checkRequiredHeaders();
       }
     } catch (error) {
       console.error('Error loading initial data:', error);
@@ -482,7 +552,8 @@ class McpAgentTester {
         this.renderHeaderInputs();
 
         if (this.requiredHeaders.length > 0) {
-          this.showToast(`Found ${this.requiredHeaders.length} required headers`, 'success');
+          const reqCount = this.requiredHeaders.filter(h => !h.isOptional).length;
+          this.showToast(`Found ${this.requiredHeaders.length} headers (${reqCount} required)`, 'success');
           this.headersSection.style.display = 'block';
         } else {
           this.showToast('No additional headers required', 'info');
@@ -513,10 +584,11 @@ class McpAgentTester {
       headerGroup.className = 'header-input-group';
 
       const savedValue = savedHeaders[header.name] || '';
+      const requiredMark = header.isOptional ? '' : '<span class="required-mark">*</span>';
 
       headerGroup.innerHTML = `
                 <label>
-                    ${header.name}
+                    ${header.name}${requiredMark}
                     <div class="tooltip">
                         <span class="tooltip-icon">i</span>
                         <span class="tooltip-text">${header.description}</span>
@@ -668,11 +740,26 @@ class McpAgentTester {
 
   renderServerInfo () {
     if (!this.currentServer) {
-      this.connectedServersContainer.innerHTML = '<div class=\"empty-state\">No server connected</div>';
+      this.connectedServersContainer.innerHTML = '';
       return;
     }
 
-    this.connectedServersContainer.innerHTML = this.renderServerItem(this.currentServer);
+    const server = this.currentServer;
+    const toolCount = server.tools ? server.tools.length : 0;
+
+    if (server.isConnected) {
+      this.connectedServersContainer.innerHTML = `
+        <div class="server-status-row">
+          <span class="server-status connected"><span class="material-icons-round">check_circle</span>${toolCount} tools connected</span>
+          <button type="button" class="btn btn-danger disconnect-btn"><span class="material-icons-round">link_off</span>Disconnect</button>
+        </div>`;
+    } else {
+      this.connectedServersContainer.innerHTML = `
+        <div class="server-status-row">
+          <span class="server-status disconnected"><span class="material-icons-round">cancel</span>Disconnected</span>
+          <button type="button" class="btn btn-secondary reconnect-btn"><span class="material-icons-round">refresh</span>Reconnect</button>
+        </div>`;
+    }
 
     this.connectedServersContainer.querySelector('.disconnect-btn')?.addEventListener('click', () => {
       this.disconnectServer();
@@ -681,37 +768,6 @@ class McpAgentTester {
     this.connectedServersContainer.querySelector('.reconnect-btn')?.addEventListener('click', () => {
       this.handleReconnect();
     });
-  }
-
-  renderServerItem (server) {
-    const statusClass = server.isConnected ? 'connected' : 'disconnected';
-    const statusText = server.isConnected ? 'Connected' : 'Disconnected';
-    const statusIcon = server.isConnected ? 'fas fa-check-circle' : 'fas fa-times-circle';
-
-    return `
-            <div class=\"server-item\">
-                <div class=\"server-info\">
-                    <div>
-                        <div class=\"server-name\">${server.name}</div>
-                        <div class=\"server-url\">${server.url}</div>
-                        ${server.tools ? `<div class=\"server-tools\">${server.tools.length} tools available</div>` : ''}
-                        <div class="connection-state">
-                            <div class=\"server-status ${statusClass}\">
-                                <i class=\"${statusIcon}\"></i>
-                                ${statusText}
-                            </div>
-                                            <div class=\"server-actions\">
-                        ${server.isConnected ?
-      '<button class=\"btn btn-danger disconnect-btn\"><i class=\"fas fa-unlink\"></i> Disconnect</button>' :
-      '<button class=\"btn btn-secondary reconnect-btn\"><i class=\"fas fa-redo\"></i> Reconnect</button>'
-    }
-                           </div>
-                       </div>
-                    </div>
-                </div>
-
-            </div>
-        `;
   }
 
   async disconnectServer () {
@@ -792,6 +848,7 @@ class McpAgentTester {
   }
 
   updateConnectionStatus () {
+    if (!this.connectionStatus) {return;}
     if (this.currentServer && this.currentServer.isConnected) {
       this.connectionStatus.textContent = `Connected to ${this.currentServer.name}`;
       this.connectionStatus.classList.add('connected');
@@ -898,7 +955,7 @@ class McpAgentTester {
 
     const avatar = document.createElement('div');
     avatar.className = 'message-avatar';
-    avatar.innerHTML = sender === 'user' ? '<i class=\"fas fa-user\"></i>' : '<i class=\"fas fa-robot\"></i>';
+    avatar.innerHTML = sender === 'user' ? '<span class="material-icons-round">person</span>' : '<span class="material-icons-round">smart_toy</span>';
 
     const content = document.createElement('div');
     content.className = 'message-content';
@@ -1006,17 +1063,15 @@ class McpAgentTester {
     toast.className = `toast ${type}`;
 
     const icon = {
-      'success': 'fas fa-check-circle',
-      'error': 'fas fa-exclamation-circle',
-      'warning': 'fas fa-exclamation-triangle',
-      'info': 'fas fa-info-circle',
-    }[type] || 'fas fa-info-circle';
+      'success': 'check_circle',
+      'error': 'error',
+      'warning': 'warning',
+      'info': 'info',
+    }[type] || 'info';
 
     toast.innerHTML = `
-            <div style=\"display: flex; align-items: center; gap: 10px;\">
-                <i class=\"${icon}\"></i>
-                <span>${message}</span>
-            </div>
+            <span class="material-icons-round">${icon}</span>
+            <span>${message}</span>
         `;
 
     this.toastContainer.appendChild(toast);
@@ -1243,7 +1298,7 @@ class McpAgentTester {
         <div class="url-item">
           <span class="url-text" title="${url}">${url}</span>
           <button class="delete-btn" title="Delete URL">
-            <i class="fas fa-times"></i>
+            <span class="material-icons-round" style="font-size: 16px;">close</span>
           </button>
         </div>
       `;
