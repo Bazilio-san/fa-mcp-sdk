@@ -21,7 +21,7 @@ const logger = lgr.getSubLogger({ name: chalk.cyan('agent-tester:agent') });
 
 interface AgentConfig {
   model: string;
-  systemPrompt: string;
+  agentPrompt: string;
   temperature: number;
   maxTokens: number;
   maxTurns: number;
@@ -53,7 +53,7 @@ export class TesterAgentService {
     this.logJson = logJson || false;
     this.defaultConfig = {
       model: 'gpt-4o-mini',
-      systemPrompt: 'You are a helpful AI assistant that can use MCP tools to help users.',
+      agentPrompt: 'You are a helpful AI assistant that can use MCP tools to help users.',
       temperature: 0.3,
       maxTokens: 4096,
       maxTurns: 10,
@@ -134,7 +134,7 @@ Output only the new Summary Memory.`;
       // Get or create session
       let session = this.sessions.get(sessionId);
       if (!session) {
-        session = this.createSession(sessionId, request.systemPrompt, mcpServerUrl);
+        session = this.createSession(sessionId, request.agentPrompt, mcpServerUrl);
         this.sessions.set(sessionId, session);
       }
 
@@ -161,16 +161,9 @@ Output only the new Summary Memory.`;
         }
       }
 
-      // Prepare system prompt
-      let systemPrompt = request.systemPrompt || session.systemPrompt || this.defaultConfig.systemPrompt;
-      const { agentPrompt } = cachedClient || {};
-      if (agentPrompt && agentPrompt !== systemPrompt) {
-        systemPrompt = [
-          agentPrompt,
-          '',
-          systemPrompt,
-        ].filter(Boolean).join('\n\n');
-      }
+      // Prepare system prompt: request > session > MCP server > default
+      const { agentPrompt: mcpAgentPrompt } = cachedClient || {};
+      let systemPrompt = request.agentPrompt || session.agentPrompt || mcpAgentPrompt || this.defaultConfig.agentPrompt;
 
       if (request.customPrompt && request.customPrompt.trim()) {
         systemPrompt += '\n\n' + request.customPrompt.trim();
@@ -485,7 +478,7 @@ Response Text: ${finalText}
       // Get or create session
       let session = this.sessions.get(sessionId);
       if (!session) {
-        session = this.createSession(sessionId, request.systemPrompt, mcpServerUrl);
+        session = this.createSession(sessionId, request.agentPrompt, mcpServerUrl);
         this.sessions.set(sessionId, session);
       }
 
@@ -510,15 +503,14 @@ Response Text: ${finalText}
         }
       }
 
-      // Prepare system prompt
-      let systemPrompt = request.systemPrompt || session.systemPrompt || this.defaultConfig.systemPrompt;
-      const { agentPrompt } = cachedClient || {};
-      if (agentPrompt && agentPrompt !== systemPrompt) {
-        systemPrompt = [agentPrompt, '', systemPrompt].filter(Boolean).join('\n\n');
-      }
+      // Prepare system prompt: request > session > MCP server > default
+      const { agentPrompt: mcpAgentPrompt } = cachedClient || {};
+      let systemPrompt = request.agentPrompt || session.agentPrompt || mcpAgentPrompt || this.defaultConfig.agentPrompt;
+
       if (request.customPrompt?.trim()) {
         systemPrompt += '\n\n' + request.customPrompt.trim();
       }
+      const systemPromptSent = systemPrompt;
 
       // Get model configuration
       const modelConfig = request.modelConfig;
@@ -797,6 +789,7 @@ Response Text: ${finalText}
 
       // Build trace
       let trace: ITesterTraceData = {
+        system_prompt_sent: systemPromptSent,
         turns: traceturns,
         total_turns: traceturns.length,
         total_duration_ms: totalDuration,
@@ -855,15 +848,15 @@ Response Text: ${finalText}
     return this.sessions.delete(sessionId);
   }
 
-  private createSession (sessionId: string, systemPrompt?: string, mcpServerUrl?: string): ITesterChatSession {
+  private createSession (sessionId: string, agentPrompt?: string, mcpServerUrl?: string): ITesterChatSession {
     const session: ITesterChatSession = {
       id: sessionId,
       messages: [],
       createdAt: new Date(),
       updatedAt: new Date(),
     };
-    if (systemPrompt) {
-      session.systemPrompt = systemPrompt;
+    if (agentPrompt) {
+      session.agentPrompt = agentPrompt;
     }
     if (mcpServerUrl) {
       session.mcpServerUrl = mcpServerUrl;

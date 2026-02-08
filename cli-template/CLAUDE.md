@@ -242,11 +242,14 @@ Direct HTTP calls — no browser needed. Provides structured trace data.
 2. GET  /agent-tester/api/mcp/status         → verify tools loaded
 3. POST /agent-tester/api/chat/test           → send message, get response + trace
 4. Analyze trace: correct tool? correct args? expected result?
-5. If unclear → retry with ?verbose=true
-6. If issue found → fix code → rebuild → re-test
+5. Check trace.system_prompt_sent             → verify exact prompt sent to LLM
+6. If unclear → retry with ?verbose=true
+7. If issue found → fix code → rebuild → re-test
 ```
 
 Query params: `?verbose=true` (LLM details per turn), `?maxResultChars=8000`, `?maxTraceChars=100000`.
+
+**Prompt control in headless requests.** The `agentPrompt` field sets the system prompt sent to the LLM — when provided, it **replaces** the MCP server's built-in `agent_prompt`. Use it to iterate on prompt variations: read the current `AGENT_PROMPT` from `src/prompts/agent-prompt.ts`, send modified versions via `agentPrompt`, evaluate responses, and write the best variant back. The `customPrompt` field appends additional instructions. The trace response includes `system_prompt_sent` — the exact prompt the LLM received. → See `08-agent-tester-and-headless-api.md` for full prompt assembly logic and examples.
 
 Structured JSON logging: `npm start -- --log-json` or `AGENT_TESTER_LOG_JSON=true npm start` — emits per-event JSON on stdout.
 

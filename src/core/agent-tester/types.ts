@@ -13,7 +13,7 @@ export interface ITesterChatMessage {
 export interface ITesterChatSession {
   id: string;
   messages: ITesterChatMessage[];
-  systemPrompt?: string;
+  agentPrompt?: string;
   mcpServerUrl?: string;
   createdAt: Date;
   updatedAt: Date;
@@ -39,7 +39,7 @@ export interface TesterModelConfig {
 export interface ITesterChatRequest {
   message: string;
   sessionId?: string;
-  systemPrompt?: string;
+  agentPrompt?: string;
   customPrompt?: string;
   mcpConfig?: TesterMcpConfig;
   modelConfig?: TesterModelConfig;
@@ -121,6 +121,7 @@ export interface ITesterTraceTurn {
 }
 
 export interface ITesterTraceData {
+  system_prompt_sent?: string;
   turns: ITesterTraceTurn[];
   total_turns: number;
   total_duration_ms: number;

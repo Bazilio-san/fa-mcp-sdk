@@ -1030,7 +1030,7 @@ class McpAgentTester {
       const requestData = {
         message: message,
         sessionId: this.currentSessionId,
-        systemPrompt: trim(this.systemPromptTextarea.value) || undefined,
+        agentPrompt: trim(this.systemPromptTextarea.value) || undefined,
         customPrompt: trim(this.customPromptTextarea.value) || undefined,
         model: modelConfig.model,
         useStreaming: false,
@@ -1309,7 +1309,7 @@ class McpAgentTester {
       serverUrl: this.serverUrlInput.value,
       transport: this.transportSelect.value,
       model: this.modelSelect.value,
-      systemPrompt: trim(this.systemPromptTextarea.value),
+      agentPrompt: trim(this.systemPromptTextarea.value),
       customPrompt: trim(this.customPromptTextarea.value),
       customBaseUrl: trim(this.customBaseUrl.value),
       customApiKey: trim(this.customApiKey.value),
@@ -1347,7 +1347,7 @@ class McpAgentTester {
         if (formData.serverUrl) {this.serverUrlInput.value = formData.serverUrl;}
         if (formData.transport) {this.transportSelect.value = formData.transport;}
         if (formData.model) {this.modelSelect.value = formData.model;}
-        if (formData.systemPrompt) {this.systemPromptTextarea.value = trim(formData.systemPrompt);}
+        if (formData.agentPrompt) {this.systemPromptTextarea.value = trim(formData.agentPrompt);}
         if (formData.customPrompt) {this.customPromptTextarea.value = trim(formData.customPrompt);}
         if (formData.customBaseUrl) {this.customBaseUrl.value = formData.customBaseUrl;}
         if (formData.customApiKey) {this.customApiKey.value = formData.customApiKey;}

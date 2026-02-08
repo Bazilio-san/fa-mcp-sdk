@@ -96,7 +96,8 @@ Same request body as `POST /api/chat/message`, but returns a **structured trace*
     "headers": { "Authorization": "Bearer <token>" }
   },
   "sessionId": "optional-session-id",
-  "systemPrompt": "optional system prompt override",
+  "agentPrompt": "optional agent prompt override",
+  "customPrompt": "optional additional instructions appended after agentPrompt",
   "modelConfig": {
     "model": "gpt-4o",
     "temperature": 0.3,
@@ -108,6 +109,15 @@ Same request body as `POST /api/chat/message`, but returns a **structured trace*
 
 Only `message` is required. `mcpConfig` is required for tool calls.
 
+| Field | Required | Description |
+|-------|----------|-------------|
+| `message` | yes | User message to send to the agent |
+| `mcpConfig` | no | MCP server connection config (required for tool calls) |
+| `sessionId` | no | Session ID for multi-turn conversations; omit to start fresh |
+| `agentPrompt` | no | Agent prompt to send to the LLM as the system prompt. When provided, **replaces** the MCP server's `agent_prompt`. When omitted, the MCP server's `agent_prompt` is used (if available), otherwise a built-in default |
+| `customPrompt` | no | Additional instructions appended after `agentPrompt`. Use for per-request modifiers without replacing the main prompt |
+| `modelConfig` | no | LLM model settings (model name, temperature, maxTokens, maxTurns) |
+
 #### Brief Response (default)
 
 ```json
@@ -115,6 +125,7 @@ Only `message` is required. `mcpConfig` is required for tool calls.
   "message": "The EUR/USD rate is 1.0847",
   "sessionId": "abc-123",
   "trace": {
+    "system_prompt_sent": "You are a currency assistant...\n\nBe concise.",
     "turns": [
       {
         "turn": 1,
@@ -132,6 +143,8 @@ Only `message` is required. `mcpConfig` is required for tool calls.
   }
 }
 ```
+
+The `system_prompt_sent` field contains the **final system prompt** that was sent to the LLM. Use it to verify exactly what the LLM received — especially when iterating on agent prompt variations.
 
 Brief mode shows the tool interaction chain: which tools were called, with what arguments, and what they returned. No LLM internals.
 
@@ -177,6 +190,40 @@ POST /agent-tester/api/chat/test?maxResultChars=8000&maxTraceChars=100000
 |-----------|---------|-------------|
 | `maxResultChars` | 4000 | Max characters per tool result in trace |
 | `maxTraceChars` | 50000 | Max total trace size; older turns are collapsed to summaries when exceeded |
+
+### Prompt Assembly
+
+The system prompt sent to the LLM is resolved by priority — the first available value wins:
+
+```
+request.agentPrompt  →  session.agentPrompt  →  MCP server's agent_prompt  →  built-in default
+```
+
+If `customPrompt` is provided, it is appended after the resolved prompt.
+
+The final result is sent as `{ role: "system" }` to the LLM and returned in the trace as `system_prompt_sent`.
+
+**Key principle:** when `agentPrompt` is passed in the request, it **replaces** the MCP server's `agent_prompt` entirely. This enables the iterative prompt refinement workflow:
+
+1. Read the current `AGENT_PROMPT` from `src/prompts/agent-prompt.ts`
+2. Send it as `agentPrompt` in the headless request
+3. Evaluate the agent's response and trace
+4. Modify the prompt, send again
+5. When satisfied, write the best variant back to `src/prompts/agent-prompt.ts`
+
+```bash
+# Test current prompt
+curl -X POST http://localhost:9876/agent-tester/api/chat/test \
+  -H "Content-Type: application/json" \
+  -d '{"message":"Get EUR/USD rate","agentPrompt":"You are a concise currency assistant. Use tools, reply in one sentence.","mcpConfig":{"url":"http://localhost:9876/mcp","transport":"http"}}'
+
+# Try a different variation
+curl -X POST http://localhost:9876/agent-tester/api/chat/test \
+  -H "Content-Type: application/json" \
+  -d '{"message":"Get EUR/USD rate","agentPrompt":"You are a financial analyst. Explain rates with market context and trends.","mcpConfig":{"url":"http://localhost:9876/mcp","transport":"http"}}'
+```
+
+Compare `system_prompt_sent` and agent responses between variations to find the optimal prompt. When omitting `agentPrompt`, the MCP server's own `agent_prompt` is used automatically — this tests the currently deployed prompt as-is.
 
 ### Sessions
 
