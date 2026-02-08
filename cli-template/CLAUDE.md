@@ -211,7 +211,8 @@ npm run test:mcp-sse       # SSE transport tests
 
 #### Step 6: Iterative Refinement via Agent Tester
 
-Once the server starts cleanly, move to agent-level testing. Use `gpt-5.2` as the model in Agent Tester — it provides the best balance of tool-calling accuracy and reasoning for MCP testing. Send real messages through the Headless API, observe how the LLM uses your tools, and refine:
+Once the server starts cleanly, move to agent-level testing. 
+Use `gpt-5.2` as the model in Agent Tester — it provides the best balance of tool-calling accuracy and reasoning for MCP testing. Send real messages through the Headless API, observe how the LLM uses your tools, and refine:
 
 - **Tool descriptions** — if the LLM picks the wrong tool or misunderstands its purpose
 - **Parameter schemas** — if the LLM sends wrong types or misses required params
