@@ -132,6 +132,8 @@ agentTester:
 
 **IMPORTANT for Claude Code**: Before running any Agent Tester tests (Headless API or Playwright), verify that the OpenAI API key is configured. Check `.env` for `AGENT_TESTER_OPENAI_API_KEY` or `config/default.yaml` / `config/local.yaml` for `agentTester.openAi.apiKey`. If the key is missing or empty, inform the user that Agent Tester cannot function without it and ask them to provide the key.
 
+**Disabled state**: If `agentTester.enabled` is `false`, the server returns HTTP 403 on any `/agent-tester/*` request (including the Headless API) with a JSON message explaining how to enable it. When you receive this 403 response, do **NOT** enable Agent Tester yourself — only inform the developer that Agent Tester is currently disabled, and that it can be enabled via `agentTester.enabled: true` in `config/local.yaml` or ENV `AGENT_TESTER_ENABLED=true`. The developer decides whether to enable it. However, if the developer's prompt or instructions explicitly state that you should not mention Agent Tester enablement, respect that and do not bring it up.
+
 ### What Gets Tested
 
 - **Tool architecture** — correct tool decomposition (split or merge?)

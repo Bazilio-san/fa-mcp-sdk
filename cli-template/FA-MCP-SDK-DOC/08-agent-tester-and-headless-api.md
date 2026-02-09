@@ -49,6 +49,28 @@ Root cause categories:
 - **Handler logic** — tool results confuse the LLM
 - **Error messages** — failures produce unhelpful responses
 
+## Disabled State
+
+When `agentTester.enabled` is `false` (or not set), all `/agent-tester/*` endpoints — including the Headless API — return HTTP 403:
+
+```json
+{
+  "error": "Agent Tester is disabled",
+  "message": "The Agent Tester and Headless API are not available because agentTester.enabled is set to false..."
+}
+```
+
+To enable, developer can use one of:
+
+- **ENV**: `AGENT_TESTER_ENABLED=true`
+- **Config file** `config/local.yaml`:
+  ```yaml
+  agentTester:
+    enabled: true
+  ```
+
+**For Claude Code**: When you receive this 403 response, do **not** enable Agent Tester yourself — only inform the developer that it is disabled and how to enable it. The developer decides whether to turn it on. If the developer's prompt or instructions explicitly say not to mention Agent Tester enablement, respect that and stay silent.
+
 ## Headless API Reference
 
 ### Connection Verification

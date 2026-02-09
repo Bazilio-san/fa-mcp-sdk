@@ -425,6 +425,7 @@ Result: ${toolResultStr}
       if (!finalText) {
         finalText = 'Failed to get a text response from the agent.';
       }
+      finalText = this.sanitizeResponseText(finalText);
 
       console.log(chalk.yellow(`${chalk.bgBlack.bold('🟡 LLM RESPONSE:')}
 Response Time: ${Date.now() - startTime}ms
@@ -766,6 +767,7 @@ Response Text: ${finalText}
       if (!finalText) {
         finalText = 'Failed to get a text response from the agent.';
       }
+      finalText = this.sanitizeResponseText(finalText);
 
       const totalDuration = Date.now() - startTime;
 
@@ -805,6 +807,10 @@ Response Text: ${finalText}
       logger.error('Error processing message with trace:', error);
       throw new Error(`Failed to process message: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
+  }
+
+  private sanitizeResponseText (text: string): string {
+    return text.replace(/\n{6,}/g, '\n').trim();
   }
 
   private truncateTraceData (trace: ITesterTraceData, maxChars: number): ITesterTraceData {
