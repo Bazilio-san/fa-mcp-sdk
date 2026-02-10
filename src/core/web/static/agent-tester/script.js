@@ -16,6 +16,7 @@ class McpAgentTester {
     this._currentAuthType = null;
     this.messageFormats = {};
     this.messageTexts = {};
+    this.defaultDisplayFormat = localStorage.getItem('agentTesterDefaultFormat') || 'HTML';
 
     this.mcpConfig = {
       url: null,
@@ -110,12 +111,6 @@ class McpAgentTester {
     return finalDiv.innerHTML.trim();
   }
 
-  isHtmlContent (text) {
-    const openingTagPattern = /<[a-zA-Z][^/>]*>/g;
-    const matches = text.trim().match(openingTagPattern);
-    return matches && matches.length >= 3;
-  }
-
   createFormatToggle (messageId) {
     const toggleContainer = document.createElement('div');
     toggleContainer.className = 'format-toggle-container';
@@ -151,6 +146,15 @@ class McpAgentTester {
     const messageText = document.querySelector(`.message-text[data-message-id="${messageId}"]`);
     if (messageText && originalText) {
       this.renderMessageContent(messageText, originalText, format);
+    }
+  }
+
+  handleDefaultFormatChange () {
+    const value = this.defaultFormatSelect.value;
+    this.defaultDisplayFormat = value;
+    localStorage.setItem('agentTesterDefaultFormat', value);
+    if (value === 'HTML') {
+      this.showToast('Tip: add "Format your response in HTML" to Custom Prompt for best results', 'info');
     }
   }
 
@@ -212,6 +216,7 @@ class McpAgentTester {
     this.toastContainer = document.getElementById('toastContainer');
 
     this.themeToggle = document.getElementById('themeToggle');
+    this.defaultFormatSelect = document.getElementById('defaultDisplayFormat');
   }
 
   bindEvents () {
@@ -224,6 +229,11 @@ class McpAgentTester {
 
     if (this.themeToggle) {
       this.themeToggle.addEventListener('click', () => this.toggleTheme());
+    }
+
+    if (this.defaultFormatSelect) {
+      this.defaultFormatSelect.value = this.defaultDisplayFormat;
+      this.defaultFormatSelect.addEventListener('change', () => this.handleDefaultFormatChange());
     }
 
     this.mcpConnectionForm.addEventListener('submit', (e) => this.handleMcpConnection(e));
@@ -1088,9 +1098,7 @@ class McpAgentTester {
     content.className = 'message-content';
 
     if (sender === 'assistant' && !metadata.error) {
-      const isHtml = this.isHtmlContent(text);
-      const defaultFormat = isHtml ? 'HTML' : 'MD';
-      this.messageFormats[messageId] = defaultFormat;
+      this.messageFormats[messageId] = this.defaultDisplayFormat;
       this.messageTexts[messageId] = text;
 
       const formatToggle = this.createFormatToggle(messageId);
