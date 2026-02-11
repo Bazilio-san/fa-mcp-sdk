@@ -1258,7 +1258,7 @@ class McpAgentTester {
   getModelConfig () {
     const isOther = this.modelSelect.value === 'other';
     const t = parseFloat(this.modelTemperature.value);
-    const temperature = Number.isNaN(t) ? 0.7 : t;
+    const temperature = Number.isNaN(t) ? 0.1 : t;
     const maxTokens = parseInt(this.modelMaxTokens.value, 10) || 2048;
     const maxTurns = parseInt(this.modelMaxTurns.value, 10) || 10;
     const toolResultLimitChars = parseInt(this.toolResultLimitChars.value, 10) || 20000;

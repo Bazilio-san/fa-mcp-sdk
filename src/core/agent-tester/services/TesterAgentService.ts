@@ -19,6 +19,13 @@ import { SummaryMemory, SummaryState } from './SummaryMemory.js';
 
 const logger = lgr.getSubLogger({ name: chalk.cyan('agent-tester:agent') });
 
+const REASONING_EFFORT_MIN: Record<string, string> = {
+  'gpt-5.2': 'low',
+  'gpt-5.1': 'none',
+  'gpt-5-nano': 'low',
+  'gpt-5-mini': 'low',
+};
+
 interface AgentConfig {
   model: string;
   agentPrompt: string;
@@ -109,15 +116,20 @@ Output only the new Summary Memory.`;
     const summaryPrompt = this.buildSummaryPrompt();
     const payload = JSON.stringify(state.tail);
 
-    const response = await llmClient.chat.completions.create({
+    const summaryParams: any = {
       model,
       messages: [
         { role: 'system', content: summaryPrompt },
         { role: 'user', content: `OLD SUMMARY:\n${state.summary || '(empty)'}\n\nNEW MESSAGES(JSON):\n${payload}` },
       ],
       temperature: 0.2,
-      max_completion_tokens: 800,
-    });
+      max_completion_tokens: 1000,
+    };
+    if (REASONING_EFFORT_MIN[model]) {
+      summaryParams.reasoning_effort = REASONING_EFFORT_MIN[model];
+    }
+
+    const response = await llmClient.chat.completions.create(summaryParams);
 
     state.summary = response.choices[0]?.message?.content?.trim() || state.summary;
     this.summaryMemory.resetAfterCompression(state);
@@ -307,6 +319,9 @@ Messages: ${serializeForLog(summarizedContext)}
           temperature: useTemperature,
           max_completion_tokens: maxTokens,
         };
+        if (REASONING_EFFORT_MIN[selectedModel]) {
+          completionParams.reasoning_effort = REASONING_EFFORT_MIN[selectedModel];
+        }
         if (functions.length > 0) {
           completionParams.tools = functions.map((fn) => ({
             type: 'function' as const,
@@ -612,6 +627,9 @@ Response Text: ${finalText}
           temperature: useTemperature,
           max_completion_tokens: maxTokens,
         };
+        if (REASONING_EFFORT_MIN[selectedModel]) {
+          completionParams.reasoning_effort = REASONING_EFFORT_MIN[selectedModel];
+        }
         if (functions.length > 0) {
           completionParams.tools = functions.map((fn) => ({ type: 'function' as const, function: fn }));
           completionParams.tool_choice = 'auto';
