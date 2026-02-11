@@ -54,7 +54,7 @@ export class TesterAgentService {
 
   constructor (
     private mcpClientService: TesterMcpClientService,
-    private openAiConfig?: { apiKey?: string; baseUrl?: string },
+    private openAiConfig?: { apiKey?: string; baseURL?: string },
     logJson?: boolean,
   ) {
     this.logJson = logJson || false;
@@ -71,7 +71,7 @@ export class TesterAgentService {
     if (openAiConfig?.apiKey) {
       this.openai = new OpenAI({
         apiKey: openAiConfig.apiKey,
-        ...(openAiConfig.baseUrl ? { baseURL: openAiConfig.baseUrl } : {}),
+        ...(openAiConfig.baseURL ? { baseURL: openAiConfig.baseURL } : {}),
       });
     }
   }
@@ -187,16 +187,16 @@ Output only the new Summary Memory.`;
       const temperature = modelConfig?.temperature ?? this.defaultConfig.temperature;
       const maxTokens = modelConfig?.maxTokens ?? this.defaultConfig.maxTokens;
 
-      // Create OpenAI client - use custom baseUrl/apiKey if provided
+      // Create OpenAI client - use custom baseURL/apiKey if provided
       let llmClient: OpenAI;
       let isCustomLlm = false;
-      if (modelConfig?.baseUrl && modelConfig?.apiKey) {
+      if (modelConfig?.baseURL && modelConfig?.apiKey) {
         llmClient = new OpenAI({
-          baseURL: modelConfig.baseUrl,
+          baseURL: modelConfig.baseURL,
           apiKey: modelConfig.apiKey,
         });
         isCustomLlm = true;
-        logger.info(`Using custom LLM: ${modelConfig.baseUrl}`);
+        logger.info(`Using custom LLM: ${modelConfig.baseURL}`);
       } else if (this.openai) {
         llmClient = this.openai;
       } else {
@@ -295,7 +295,7 @@ Output only the new Summary Memory.`;
       // Log request
       console.log(chalk.blue(`${chalk.bgWhite.bold('🔵 LLM REQUEST:')}
 Model: ${selectedModel}${isCustomLlm ? ' (custom)' : ''}
-Base URL: ${modelConfig?.baseUrl || 'OpenAI default'}
+Base URL: ${modelConfig?.baseURL || 'OpenAI default'}
 Temperature: ${temperature}
 Max Tokens: ${maxTokens}
 Session ID: ${sessionId}
@@ -536,8 +536,8 @@ Response Text: ${finalText}
 
       // Create OpenAI client
       let llmClient: OpenAI;
-      if (modelConfig?.baseUrl && modelConfig?.apiKey) {
-        llmClient = new OpenAI({ baseURL: modelConfig.baseUrl, apiKey: modelConfig.apiKey });
+      if (modelConfig?.baseURL && modelConfig?.apiKey) {
+        llmClient = new OpenAI({ baseURL: modelConfig.baseURL, apiKey: modelConfig.apiKey });
       } else if (this.openai) {
         llmClient = this.openai;
       } else {

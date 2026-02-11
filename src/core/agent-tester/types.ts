@@ -27,7 +27,7 @@ export interface TesterMcpConfig {
 }
 
 export interface TesterModelConfig {
-  baseUrl?: string;
+  baseURL?: string;
   apiKey?: string;
   model: string;
   temperature?: number;

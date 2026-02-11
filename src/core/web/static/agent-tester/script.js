@@ -1234,14 +1234,14 @@ class McpAgentTester {
       return true;
     }
 
-    const baseUrl = trim(this.customBaseUrl.value);
+    const baseURL = trim(this.customBaseUrl.value);
     const apiKey = trim(this.customApiKey.value);
     const modelName = trim(this.customModelName.value);
     const temperature = this.modelTemperature.value;
     const maxTokens = this.modelMaxTokens.value;
 
     const missingFields = [];
-    if (!baseUrl) {missingFields.push('Base URL');}
+    if (!baseURL) {missingFields.push('Base URL');}
     if (!apiKey) {missingFields.push('API Key');}
     if (!modelName) {missingFields.push('Model Name');}
     if (!temperature) {missingFields.push('Temperature');}
@@ -1265,7 +1265,7 @@ class McpAgentTester {
 
     if (isOther) {
       return {
-        baseUrl: trim(this.customBaseUrl.value),
+        baseURL: trim(this.customBaseUrl.value),
         apiKey: trim(this.customApiKey.value),
         model: trim(this.customModelName.value),
         temperature: temperature,

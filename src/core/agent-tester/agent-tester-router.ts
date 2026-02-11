@@ -17,7 +17,7 @@ const logger = lgr.getSubLogger({ name: chalk.cyan('agent-tester') });
 
 export function createAgentTesterRouter (options: {
   defaultMcpUrl?: string;
-  openAi?: { apiKey?: string; baseUrl?: string };
+  openAi?: { apiKey?: string; baseURL?: string };
 } = {}): Router {
   const router = Router();
 

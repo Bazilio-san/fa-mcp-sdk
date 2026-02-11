@@ -63,7 +63,7 @@ interface IAgentTesterConfig {
     useAuth: boolean;
     openAi?: {
       apiKey: string;
-      baseUrl?: string;
+      baseURL?: string;
     };
     httpHeaders?: Record<string, string>;
     logJson?: boolean;

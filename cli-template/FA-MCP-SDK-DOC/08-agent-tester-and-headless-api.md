@@ -71,6 +71,24 @@ To enable, developer can use one of:
 
 **For Claude Code**: When you receive this 403 response, do **not** enable Agent Tester yourself — only inform the developer that it is disabled and how to enable it. The developer decides whether to turn it on. If the developer's prompt or instructions explicitly say not to mention Agent Tester enablement, respect that and stay silent.
 
+## LLM Availability Check
+
+Before using the Agent Tester or Headless API, verify that the OpenAI API key is configured and works:
+
+```bash
+npm run check-llm
+```
+
+The script checks that `agentTester.openAi.apiKey` is set and makes a minimal `chat.completions.create` request (max_tokens: 1) to verify the key works. Prints `OK` on success, `FAIL: <reason>` on failure. Exit code `0` = success, `1` = failure.
+
+For custom OpenAI-compatible endpoints where `gpt-4o-mini` doesn't exist, pass the model name:
+
+```bash
+npm run check-llm -- my-custom-model
+```
+
+**For Claude Code**: When the development prompt or instructions mention testing with the Headless API or Agent Tester, run `npm run check-llm` before starting any Agent Tester work. If the script exits with a non-zero code, inform the developer about the issue and ask them to fix the configuration before proceeding.
+
 ## Headless API Reference
 
 ### Connection Verification
@@ -276,6 +294,7 @@ Each agent event is emitted as a single-line JSON object on stdout:
 
 The Headless API is designed for CLI automation tools like Claude Code. The typical automated testing workflow:
 
+0. Verify LLM availability: `npm run check-llm` (exit 0 = ready, non-zero = fix config first)
 1. Build and start the server: `npm run cb && npm start`
 2. Verify tools: `GET /agent-tester/api/mcp/status`
 3. Send test messages: `POST /agent-tester/api/chat/test`

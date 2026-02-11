@@ -130,3 +130,4 @@ export {
 export { Logger } from 'af-logger-ts';
 
 export { createAgentTesterRouter } from './agent-tester/agent-tester-router.js';
+export { checkLlm } from './agent-tester/check-llm.js';

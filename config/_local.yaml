@@ -17,7 +17,7 @@ agentTester:
   useAuth: false
   openAi:
     apiKey: '***'
-    # baseUrl:
+    # baseURL:
 
 # --------------------------------------------------
 # CACHING Reduces API calls by caching responses

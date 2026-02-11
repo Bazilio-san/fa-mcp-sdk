@@ -24,6 +24,7 @@
     "dead:files": "knip",
     "update-sdk-docs": "node ../scripts/update-doc.js",
     "postinstall": "node ../scripts/npm/patch_node_modules.js",
+    "check-llm": "node node_modules/fa-mcp-sdk/dist/core/agent-tester/check-llm.js",
     "consul:unreg": "node node_modules/fa-mcp-sdk/dist/core/consul/deregister.js",
     "test": "jest",
     "test:mcp": "node scripts/test-mcp-tools.js",
@@ -49,7 +50,7 @@
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.25.2",
     "dotenv": "^17.2.3",
-    "fa-mcp-sdk": "^0.3.11"
+    "fa-mcp-sdk": "^0.3.12"
   },
   "devDependencies": {
     "@types/express": "^5.0.6",

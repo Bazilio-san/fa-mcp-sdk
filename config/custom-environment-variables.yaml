@@ -3,7 +3,7 @@ agentTester:
   useAuth: AGENT_TESTER_USE_AUTH
   openAi:
     apiKey: AGENT_TESTER_OPENAI_API_KEY
-    baseUrl: AGENT_TESTER_OPENAI_BASE_URL
+    baseURL: AGENT_TESTER_OPENAI_BASE_URL
 
 cache:
   ttlSeconds: CACHE_TTL_SECONDS

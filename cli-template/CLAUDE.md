@@ -28,6 +28,7 @@ npm run test:mcp-sse       # SSE transport tests
 npx jest tests/path/to/file.test.ts   # single test file
 
 # Utilities
+npm run check-llm          # Validate OpenAI API key for Agent Tester
 npm run generate-token     # JWT token generator UI
 npm run consul:unreg       # deregister from Consul
 ```
@@ -130,7 +131,7 @@ agentTester:
     apiKey: sk-...
 ```
 
-**IMPORTANT for Claude Code**: Before running any Agent Tester tests (Headless API or Playwright), verify that the OpenAI API key is configured. Check `.env` for `AGENT_TESTER_OPENAI_API_KEY` or `config/default.yaml` / `config/local.yaml` for `agentTester.openAi.apiKey`. If the key is missing or empty, inform the user that Agent Tester cannot function without it and ask them to provide the key.
+**IMPORTANT for Claude Code**: When the development prompt or instructions mention testing with Headless API or Agent Tester, run `npm run check-llm` before starting any Agent Tester work. This script validates that the OpenAI API key is configured and functional. If it fails (exit code 1 = key missing, exit code 2 = key invalid or API error), inform the user about the issue and ask them to fix the configuration before proceeding with Agent Tester tests. See `08-agent-tester-and-headless-api.md` → "LLM Availability Check" for details.
 
 **Disabled state**: If `agentTester.enabled` is `false`, the server returns HTTP 403 on any `/agent-tester/*` request (including the Headless API) with a JSON message explaining how to enable it. When you receive this 403 response, do **NOT** enable Agent Tester yourself — only inform the developer that Agent Tester is currently disabled, and that it can be enabled via `agentTester.enabled: true` in `config/local.yaml` or ENV `AGENT_TESTER_ENABLED=true`. The developer decides whether to enable it. However, if the developer's prompt or instructions explicitly state that you should not mention Agent Tester enablement, respect that and do not bring it up.
 

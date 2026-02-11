@@ -38,7 +38,7 @@ agentTester:
   useAuth: false
   openAi:
     apiKey: ''
-    # baseUrl: ''
+    # baseURL: ''
   httpHeaders:
     # Key-value pairs for HTTP requests that should be auto-populated in agentTester
     # Example: X-User-Id: 12345
