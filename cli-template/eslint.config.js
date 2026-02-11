@@ -76,6 +76,7 @@ export default [
     },
     plugins: {
       'import': importPlugin,
+      'unused-imports': unusedImports,
     },
     rules: {
       'import/no-default-export': 'off',
