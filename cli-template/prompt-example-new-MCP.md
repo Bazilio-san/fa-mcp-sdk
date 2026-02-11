@@ -94,3 +94,6 @@ webServer:
 5) Formulate the prompt AGENT_BRIEF in `src/prompts/agent-brief.ts` and AGENT_PROMPT in `src/prompts/agent-prompt.ts`
 
 6) Instead of the test examples in `tests/mcp/test-cases.js`, write tests for our case
+
+7) Update the README.md to reflect the new project. This README.md will be used when searching for this MCP in the RAG system.
+   Therefore, describe the essence of the tool, its features, how to install, a list of tools, resources, prompts. Briefly and to the point.
