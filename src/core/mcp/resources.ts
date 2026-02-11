@@ -64,18 +64,17 @@ This information is used by searching for this MCP server and its information in
     },
   ];
   const usedHttpHeaders = (usedHttpHeadersRaw || []) as IUsedHttpHeader[];
-  if (usedHttpHeaders.length) {
-    resources.push(
-      {
-        uri: 'use://http-headers',
-        name: 'Required http headers',
-        description: 'Required http headers',
-        mimeType: 'application/json',
-        content: usedHttpHeaders,
-        requireAuth: false,
-      },
-    );
-  }
+
+  resources.push(
+    {
+      uri: 'use://http-headers',
+      name: 'Used http headers',
+      description: 'Used http headers',
+      mimeType: 'application/json',
+      content: usedHttpHeaders,
+      requireAuth: false,
+    },
+  );
   return [...resources, ...resolvedCustomResources];
 };
 

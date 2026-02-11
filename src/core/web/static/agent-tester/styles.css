@@ -757,6 +757,16 @@ body {
   gap: 4px;
 }
 
+.header-format-select {
+  font-size: 12px;
+  padding: 4px 6px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--bg-surface);
+  color: var(--text-primary);
+  cursor: pointer;
+}
+
 /* --- Chat Messages --- */
 .chat-container {
   flex: 1;

@@ -115,7 +115,7 @@ export const customPrompts = async (ctx: ITransportContext): Promise<IPromptData
 | `project://id` | Service identifier (`appConfig.name`) |
 | `project://name` | Display name (`appConfig.productName`) |
 | `doc://readme` | README.md content |
-| `use://http-headers` | Required HTTP headers (from `usedHttpHeaders`) |
+| `use://http-headers` | Used HTTP headers (from `usedHttpHeaders`) |
 
 ### Custom Resources
 
