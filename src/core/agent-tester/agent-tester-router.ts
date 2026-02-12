@@ -213,8 +213,8 @@ export function createAgentTesterRouter (options: {
     res.json(mcpClientService.getAllServerConfigs());
   });
 
-  // GET /api/mcp/required-headers
-  router.get('/api/mcp/required-headers', async (req, res): Promise<void> => {
+  // GET /api/mcp/used-headers
+  router.get('/api/mcp/used-headers', async (req, res): Promise<void> => {
     try {
       const url = req.query.url as string;
       if (!url) {

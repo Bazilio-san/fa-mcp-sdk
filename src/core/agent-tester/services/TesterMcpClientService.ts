@@ -210,7 +210,7 @@ export class TesterMcpClientService {
     }
 
     const transport = /(\/mcp)$/i.test(serverUrl) ? 'http' : (/(\/sse)$/i.test(serverUrl) ? 'sse' : 'http');
-    const tempName = `required-headers-${Math.random().toString(36).slice(2, 8)}`;
+    const tempName = `used-headers-${Math.random().toString(36).slice(2, 8)}`;
 
     const resp = await this.connectToServer({
       name: tempName,
@@ -247,10 +247,11 @@ export class TesterMcpClientService {
       const response = await fetch(headersUrl, { method: 'GET', headers: { 'Accept': 'application/json' } });
       if (response.ok) {
         const headers = await response.json();
-        const list = Array.isArray(headers) ? headers : [];
-        if (list.length > 0) {
-          logger.info(`Found ${list.length} required headers from ${baseUrl}`);
-          return list;
+        if (Array.isArray(headers)) {
+          if (headers.length > 0) {
+            logger.info(`Found ${headers.length} used headers from ${baseUrl}`);
+          }
+          return headers;
         }
       }
     } catch (e) {
@@ -295,7 +296,7 @@ export class TesterMcpClientService {
 
       const headerRequirements: TesterHeaderRequirement[] = Array.isArray(parsed) ? parsed : [];
       if (headerRequirements.length > 0) {
-        logger.info(`Found ${headerRequirements.length} required headers via MCP resource use://http-headers`);
+        logger.info(`Found ${headerRequirements.length} used headers via MCP resource use://http-headers`);
         return headerRequirements;
       }
     } catch (e: Error | any) {

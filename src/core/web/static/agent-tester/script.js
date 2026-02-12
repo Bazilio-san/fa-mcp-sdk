@@ -6,7 +6,7 @@ class McpAgentTester {
     this.currentSessionId = null;
     this.currentServer = null;
     this.currentSystemPrompt = '';
-    this.requiredHeaders = [];
+    this.usedHeaders = [];
     this.pendingConnectionData = null;
     this._headersUpdateTimer = null;
     this.defaultMcpUrl = null;
@@ -422,7 +422,7 @@ class McpAgentTester {
         this.addUrlToSaved(serverUrl);
         this.headersSection.style.display = 'none';
         this.dynamicHeaders.innerHTML = '';
-        this.requiredHeaders = [];
+        this.usedHeaders = [];
         this.updateConnectionStatus();
         this.renderServerInfo();
 
@@ -511,7 +511,7 @@ class McpAgentTester {
 
         this.headersSection.style.display = 'none';
         this.dynamicHeaders.innerHTML = '';
-        this.requiredHeaders = [];
+        this.usedHeaders = [];
 
         this.updateConnectionStatus();
         this.renderServerInfo();
@@ -554,10 +554,10 @@ class McpAgentTester {
       return;
     }
 
-    this.showLoading('Checking required headers...');
+    this.showLoading('Checking used headers...');
 
     try {
-      const response = await fetch(`${API_BASE}/api/mcp/required-headers?url=${encodeURIComponent(url)}`, {
+      const response = await fetch(`${API_BASE}/api/mcp/used-headers?url=${encodeURIComponent(url)}`, {
         method: 'GET',
         headers: {
           'Accept': 'application/json',
@@ -566,29 +566,29 @@ class McpAgentTester {
 
       if (response.ok) {
         const headers = await response.json();
-        this.requiredHeaders = Array.isArray(headers) ? headers : [];
+        this.usedHeaders = Array.isArray(headers) ? headers : [];
         this.renderHeaderInputs();
         await this.autoFillAuthHeader();
 
-        if (this.requiredHeaders.length > 0) {
-          const reqCount = this.requiredHeaders.filter(h => !h.isOptional).length;
-          this.showToast(`Found ${this.requiredHeaders.length} headers (${reqCount} required)`, 'success');
+        if (this.usedHeaders.length > 0) {
+          const reqCount = this.usedHeaders.filter(h => !h.isOptional).length;
+          this.showToast(`Found ${this.usedHeaders.length} headers (${reqCount} used)`, 'success');
           this.headersSection.style.display = 'block';
         } else {
-          this.showToast('No additional headers required', 'info');
+          this.showToast('No additional headers used', 'info');
           this.headersSection.style.display = 'none';
         }
       } else {
         this.showToast('Headers endpoint not available - proceeding without additional headers', 'info');
         this.headersSection.style.display = 'none';
-        this.requiredHeaders = [];
+        this.usedHeaders = [];
       }
 
     } catch (error) {
       console.log('Headers check failed:', error);
       this.showToast('Headers endpoint not available - proceeding without additional headers', 'info');
       this.headersSection.style.display = 'none';
-      this.requiredHeaders = [];
+      this.usedHeaders = [];
     } finally {
       this.hideLoading();
     }
@@ -598,7 +598,7 @@ class McpAgentTester {
     this.dynamicHeaders.innerHTML = '';
     const savedHeaders = this.loadHeaderValuesFromStorage();
 
-    this.requiredHeaders.forEach(header => {
+    this.usedHeaders.forEach(header => {
       const headerGroup = document.createElement('div');
       headerGroup.className = 'header-row';
 
@@ -607,7 +607,7 @@ class McpAgentTester {
       const hasDesc = header.description && header.description.trim();
       const nameClass = hasDesc ? 'header-name has-tooltip' : 'header-name';
       const tooltipAttr = hasDesc ? ` data-tooltip="${header.description.replace(/"/g, '&quot;')}"` : '';
-      const inputClass = isRequired ? 'header-value required-header' : 'header-value';
+      const inputClass = isRequired ? 'header-value used-header' : 'header-value';
 
       headerGroup.innerHTML = `
                 <span class="${nameClass}"${tooltipAttr}>${header.name}</span>
@@ -752,11 +752,11 @@ class McpAgentTester {
   getHeadersFromForm () {
     const headers = {};
 
-    if (this.requiredHeaders.length === 0) {
+    if (this.usedHeaders.length === 0) {
       return headers;
     }
 
-    this.requiredHeaders.forEach(header => {
+    this.usedHeaders.forEach(header => {
       const input = document.getElementById(`header_${header.name}`);
       if (input && input.value.trim()) {
         headers[header.name] = input.value.trim();
@@ -773,7 +773,7 @@ class McpAgentTester {
   async autoFillAuthHeader () {
     if (!this.authEnabled) {return;}
 
-    const hasAuthHeader = this.requiredHeaders.some(h => h.name === 'Authorization');
+    const hasAuthHeader = this.usedHeaders.some(h => h.name === 'Authorization');
     if (!hasAuthHeader) {return;}
 
     // Skip if localStorage already has a saved value for this URL's Authorization header
@@ -838,7 +838,7 @@ class McpAgentTester {
     this.transportSelect.value = 'http';
     this.headersSection.style.display = 'none';
     this.dynamicHeaders.innerHTML = '';
-    this.requiredHeaders = [];
+    this.usedHeaders = [];
     this.pendingConnectionData = null;
     this.mcpConfig = {
       url: null,
