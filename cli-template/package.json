@@ -50,7 +50,7 @@
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.26.0",
     "dotenv": "^17.2.4",
-    "fa-mcp-sdk": "^0.3.15"
+    "fa-mcp-sdk": "^0.3.16"
   },
   "devDependencies": {
     "@types/express": "^5.0.6",
