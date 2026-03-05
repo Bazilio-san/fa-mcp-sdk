@@ -18,6 +18,7 @@ interface IWebServerConfig {
       jwtToken: {
         encryptKey: string,
         checkMCPName: boolean,
+        isCheckIP: boolean,
       }
       permanentServerTokens: string[],
     },

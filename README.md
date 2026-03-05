@@ -12,7 +12,7 @@ This framework provides complete infrastructure for building enterprise-grade MC
 - **Dual Transport**: STDIO (Claude Desktop) and HTTP/SSE (web clients)
 - **Agent-Driven Tool Development**: Built-in AI agent system (Agent Tester) for iterative refinement of MCP tools through automated testing cycles — the agent calls your tools, you observe behavior, adjust descriptions/parameters/prompts, and re-test
 - **Headless Test API**: Direct HTTP endpoint (`POST /agent-tester/api/chat/test`) returns structured trace of every tool call, argument, result, and LLM decision — enabling CLI-based automated testing without a browser
-- **Authentication**: JWT, Basic auth, permanent tokens, custom validators
+- **Authentication**: JWT (with optional IP restriction), Basic auth, permanent tokens, custom validators
 - **Database Integration**: PostgreSQL with pgvector for vector operations
 - **Service Discovery**: Consul integration for microservices
 - **Rate Limiting**: Configurable rate limiting for all endpoints

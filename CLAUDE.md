@@ -66,7 +66,7 @@ Authentication is detected from the `Authorization` header format, not tried seq
 
 1. `permanentServerTokens` — O(1) set lookup
 2. `basic` — base64 decode
-3. `jwtToken` — AES-256-CTR decrypt + JSON.parse
+3. `jwtToken` — AES-256-CTR decrypt + JSON.parse (optional IP restriction via `isCheckIP`)
 4. `custom` — user-defined validator (fallback after any failure)
 
 See `src/core/auth/multi-auth.ts`.

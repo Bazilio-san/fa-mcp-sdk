@@ -176,6 +176,9 @@ webServer:
       encryptKey: '***'
       # If webServer.auth.enabled and the parameter true, the service name and the service specified in the token will be checked
       checkMCPName: true
+      # If true and JWT token contains non-empty 'ip' field,
+      # the client IP will be checked against the allowed list in the token
+      isCheckIP: false
 
     # ========================================================================
     # Basic Authentication - Base64 encoded username:password

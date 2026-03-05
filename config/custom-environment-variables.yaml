@@ -44,6 +44,7 @@ webServer:
     jwtToken:
       encryptKey: WS_TOKEN_ENCRYPT_KEY
       checkMCPName: WS_CHECK_MC_NAME
+      isCheckIP: WS_JWT_CHECK_IP
     basic:
       username: WS_AUTH_BASIC_USERNAME
       password: WS_AUTH_BASIC_PASSWORD

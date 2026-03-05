@@ -4,12 +4,14 @@ import { appConfig } from '../bootstrap/init-config.js';
 import { ICheckTokenResult, ITokenPayload } from './types.js';
 import { logger as lgr } from '../logger.js';
 import { isObject, trim } from '../utils/utils.js';
+import { parseIpList, isIpAllowed } from './ip-check.js';
 import chalk from 'chalk';
 
 const logger = lgr.getSubLogger({ name: chalk.cyan('token-auth') });
 
 const { jwtToken } = appConfig.webServer?.auth || {};
 const checkMCPName = jwtToken?.checkMCPName || false;
+const isCheckIP = jwtToken?.isCheckIP || false;
 
 export const MIN_ENCRYPT_KEY_LENGTH = 8;
 
@@ -81,8 +83,9 @@ export const checkJwtToken = (arg: {
   token: string,
   expectedUser?: string,
   expectedService?: string,
+  clientIp?: string,
 }): ICheckTokenResult => {
-  let { token, expectedUser, expectedService = appConfig.name } = arg;
+  let { token, expectedUser, expectedService = appConfig.name, clientIp } = arg;
   token = (token || '').trim();
   if (!token) {
     return {
@@ -148,6 +151,20 @@ export const checkJwtToken = (arg: {
       errorReason: `JWT Token expired :: on ${expiredOn} mc`,
     };
   }
+
+  // IP check (after all other validations pass)
+  if (isCheckIP && payload.ip) {
+    if (clientIp) {
+      const allowedIps = parseIpList(payload.ip);
+      if (allowedIps.length > 0 && !isIpAllowed(clientIp, allowedIps)) {
+        return {
+          isTokenDecrypted: true,
+          errorReason: `JWT Token: client IP ${clientIp} is not in the allowed list`,
+        };
+      }
+    }
+  }
+
   // OK!
   return { payload };
 };

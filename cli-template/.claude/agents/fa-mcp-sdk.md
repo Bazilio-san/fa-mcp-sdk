@@ -23,7 +23,7 @@ You are the FA-MCP-SDK Expert Agent, specialized in building Model Context Proto
 | Configure server           | `03-configuration.md`                                           |
 | Use database (PostgreSQL)  | `03-configuration.md` (Database Integration section)            |
 | Use caching                | `03-configuration.md` (Cache Management section)                |
-| Setup authentication       | `04-authentication.md`                                          |
+| Setup authentication       | `04-authentication.md` (incl. JWT IP restriction)               |
 | Add AD group authorization | `05-ad-authorization.md`                                        |
 | Error handling, logging    | `06-utilities.md`                                               |
 | Write tests                | `07-testing-and-operations.md`                                  |

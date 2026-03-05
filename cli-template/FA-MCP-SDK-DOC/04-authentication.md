@@ -144,6 +144,47 @@ const isAdmin = await isUserInGroup('john.doe', 'Admins');
 groupChecker.clearCache();  // Clear if needed
 ```
 
+## JWT IP Restriction
+
+When `webServer.auth.jwtToken.isCheckIP` is `true`, JWT tokens can include an `ip` field in their payload to restrict which client IPs may use the token.
+
+### Configuration
+
+```yaml
+# config/default.yaml
+webServer:
+  auth:
+    jwtToken:
+      isCheckIP: true  # Enable IP checking
+```
+
+### Token Generation
+
+When generating a token (via admin UI or `generateToken()`), include the `ip` field in the payload:
+
+```typescript
+const token = generateToken('john_doe', 3600, {
+  service: 'my-mcp-server',
+  ip: '192.168.1.100, 10.0.0.0/24',
+});
+```
+
+The `ip` field is a string of IP addresses and/or CIDR masks, separated by commas, semicolons, or spaces.
+
+In the admin UI (`/admin`), there is a dedicated "Allowed IP addresses" field for entering these values.
+
+### Behavior
+
+| `isCheckIP` | `payload.ip` | Client IP | Result |
+|-------------|-------------|-----------|--------|
+| `false` | any | any | IP not checked |
+| `true` | empty/missing | any | IP not checked (pass-through) |
+| `true` | `10.0.0.0/24` | `10.0.0.5` | Allowed |
+| `true` | `10.0.0.0/24` | `192.168.1.1` | Denied |
+| `true` | `192.168.1.1, 10.0.0.0/8` | `10.5.5.5` | Allowed (covered by /8) |
+
+Supported formats: IPv4, IPv6, CIDR notation (e.g., `10.0.0.0/24`, `fe80::/10`), IPv4-mapped IPv6 (`::ffff:192.168.1.1`).
+
 ## Client Examples
 
 ```bash

@@ -367,6 +367,11 @@ document.getElementById('generateForm').addEventListener('submit', async (e) => 
     }
   }
 
+  const ipValue = document.getElementById('tokenIp').value.trim();
+  if (ipValue) {
+    payload.ip = ipValue;
+  }
+
   const requestData = {
     user: formData.get('user'),
     timeValue: parseInt(formData.get('timeValue')),
@@ -435,7 +440,7 @@ document.getElementById('validateForm').addEventListener('submit', async (e) => 
 
     if (result.success) {
       const remainingTime = result.payload.expire - Date.now();
-      const payloadKeys = Object.keys(result.payload).filter((k) => !/^(user|expire|iat|service)$/.test(k));
+      const payloadKeys = Object.keys(result.payload).filter((k) => !/^(user|expire|iat|service|ip)$/.test(k));
 
       let payloadHtml = '';
       if (payloadKeys.length > 0) {
@@ -455,6 +460,7 @@ document.getElementById('validateForm').addEventListener('submit', async (e) => 
 <h4>Token Information:</h4>
 <p><strong>User:</strong> ${result.payload.user}</p>
 ${result.payload.service ? `<p><strong>Service:</strong> ${result.payload.service}</p>` : ''}
+${result.payload.ip ? `<p><strong>Allowed IPs:</strong> ${result.payload.ip}</p>` : ''}
 <p><strong>Issued at:</strong> ${issuedAtTime}</p>
 <p><strong>Time remaining:</strong> ${formatTime(remainingTime)}</p>
 <p><strong>Expires:</strong> ${new Date(result.payload.expire).toLocaleString('ru-RU')}</p>

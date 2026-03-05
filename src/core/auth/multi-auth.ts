@@ -164,7 +164,10 @@ export async function checkMultiAuth (req: Request): Promise<AuthResult> {
       }
 
       case 'jwtToken': {
-        const { errorReason, payload, isTokenDecrypted } = checkJwtToken({ token: credentials });
+        const xff = req.headers['x-forwarded-for'];
+        const xffStr = (Array.isArray(xff) ? (xff[0] ?? '') : (xff ?? '')).split(',').shift() ?? '';
+        const clientIp = req.ip ?? (xffStr.trim() || (req.socket?.remoteAddress ?? ''));
+        const { errorReason, payload, isTokenDecrypted } = checkJwtToken({ token: credentials, clientIp });
         if (!errorReason) {
           return { success: true, authType, payload };
         }

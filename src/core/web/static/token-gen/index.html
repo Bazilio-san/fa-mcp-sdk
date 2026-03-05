@@ -76,6 +76,15 @@
             </div>
           </div>
           <div class="form-group">
+            <label for="tokenIp">Allowed IP addresses (optional):</label>
+            <input type="text" id="tokenIp" name="ip"
+                   placeholder="e.g. 192.168.1.100, 10.0.0.0/24; 172.16.0.0/12">
+            <small style="color: #6b778c; margin-top: 4px; display: block;">
+              Comma, semicolon or space separated. Supports CIDR notation.
+              Leave empty to allow any IP.
+            </small>
+          </div>
+          <div class="form-group">
             <label>Additional data (key-value):</label>
             <div id="keyValuePairs"></div>
             <button type="button" class="add-btn" onclick="addKeyValuePair()">+</button>

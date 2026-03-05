@@ -18,7 +18,7 @@ Authorization: Bearer <appConfig.accessPoints.currencyService.token>
 Example:
 
 ```http request
-GET http://smart-trade-ml.com:5002/currency-service/?rate=THBRUB
+GET http://smart-trade-ml.com:5001/currency-service/?rate=THBRUB
 Authorization: Bearer <appConfig.accessPoints.currencyService.token>
 ```
 
@@ -66,6 +66,7 @@ webServer:
       jwtToken:
          encryptKey: 'dbbe87db-90d0-4732-aae3-4089763ec392'
          checkMCPName: true
+         isCheckIP: false
       permanentServerTokens: ['psToken1']
 
    adminAuth:
