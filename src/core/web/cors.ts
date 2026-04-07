@@ -1,5 +1,6 @@
 import cors from 'cors';
 import { Express } from 'express';
+
 import { config } from '../bootstrap/init-config.js';
 
 const { originHosts } = config.webServer;

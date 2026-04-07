@@ -1,3 +1,4 @@
+ 
 // noinspection UnnecessaryLocalVariableJS
 
 import './dotenv.js';  // Load environment variables first
@@ -70,14 +71,14 @@ export const appConfig: AppConfig = buildConfig();
  * Returns configuration with sensitive data masked for safe display
  */
 export function getSafeAppConfig (): any {
-  const config = JSON.parse(JSON.stringify(appConfig)); // Deep clone
+  const cfg = JSON.parse(JSON.stringify(appConfig)); // Deep clone
 
   // Mask database password
-  if (config.db?.postgres?.dbs?.main?.password) {
-    config.db.postgres.dbs.main.password = '[MASKED]';
+  if (cfg.db?.postgres?.dbs?.main?.password) {
+    cfg.db.postgres.dbs.main.password = '[MASKED]';
   }
 
-  return config;
+  return cfg;
 }
 
 export function getProjectData (): McpServerData {

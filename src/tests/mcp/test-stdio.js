@@ -6,10 +6,12 @@
  */
 
 import { spawn } from 'child_process';
-import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
-import TEMPLATE_TESTS from './test-cases.js';
+import { fileURLToPath } from 'url';
+
 import { McpStdioClient } from '../../../dist/core/index.js';
+
+import TEMPLATE_TESTS from './test-cases.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);

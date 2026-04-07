@@ -1,14 +1,19 @@
-import { appConfig } from '../../bootstrap/init-config.js';
-import express, { Request, Response } from 'express';
-import chalk from 'chalk';
-import { checkJwtToken, generateToken } from '../jwt.js';
-import { isMainModule } from '../../utils/utils.js';
-import { setupNTLMAuthentication } from './ntlm/ntlm-integration.js';
-import { isNTLMEnabled } from './ntlm/ntlm-domain-config.js';
 import { dirname, join } from 'path';
 import { fileURLToPath } from 'url';
-import { createSvgRouter } from '../../web/svg-icons.js';
+
+import chalk from 'chalk';
+import express, { Request, Response } from 'express';
+
+import { appConfig } from '../../bootstrap/init-config.js';
+import { isMainModule } from '../../utils/utils.js';
 import { faviconSvg } from '../../web/favicon-svg.js';
+import { createSvgRouter } from '../../web/svg-icons.js';
+import { checkJwtToken, generateToken } from '../jwt.js';
+
+import { isNTLMEnabled } from './ntlm/ntlm-domain-config.js';
+import { setupNTLMAuthentication } from './ntlm/ntlm-integration.js';
+
+
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);

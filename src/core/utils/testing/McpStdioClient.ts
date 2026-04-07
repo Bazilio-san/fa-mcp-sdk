@@ -1,6 +1,9 @@
 import '../../bootstrap/dotenv.js';
-import chalk from 'chalk';
 import { ChildProcess } from 'child_process';
+
+import chalk from 'chalk';
+
+
 import { BaseMcpClient } from './BaseMcpClient.js';
 
 const SHOW_IN = process.env.TEST_SHOW_IN === 'true';

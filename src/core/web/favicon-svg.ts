@@ -1,8 +1,10 @@
-import { NextFunction, Request, Response, RequestHandler } from 'express';
 import crypto from 'crypto';
 import { readFileSync } from 'fs';
 import { dirname, join } from 'path';
 import { fileURLToPath } from 'url';
+
+import { NextFunction, Request, Response, RequestHandler } from 'express';
+
 import { config, getProjectData } from '../bootstrap/init-config.js';
 
 const __filename = fileURLToPath(import.meta.url);

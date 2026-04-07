@@ -1,12 +1,13 @@
+import { red } from 'af-color';
 import { IAuthNtlmOptions, EAuthStrategy, IRsn } from 'ya-express-ntlm';
 import { debugNtlmAuthFlow } from 'ya-express-ntlm';
-import { red } from 'af-color';
+
 import { tokenGenDomainConfig, getDomainConfig } from './ntlm-domain-config.js';
-import { getNotAuthenticatedPageHTML, getNotAuthorizedPageHTML } from './ntlm-templates.js';
 import {
   getTokenGenSessionData,
   setTokenGenSessionData,
 } from './ntlm-session-storage.js';
+import { getNotAuthenticatedPageHTML, getNotAuthorizedPageHTML } from './ntlm-templates.js';
 
 // Authorization logic - initially allow all authenticated users
 export const authorize = (ntlm: any): boolean => {

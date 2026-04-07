@@ -1,14 +1,17 @@
 /*
 Output of startup diagnostics to the console
 */
-import { configInfo, consulInfo, databasesInfo, infoBlock, nodeConfigEnvInfo, TInfoLine } from 'af-tools-ts';
-import { IAFConsulAPI, IMeta } from 'fa-consul';
 import { yellow } from 'af-color';
-import { fileLogger, useFileLogger, logger as lgr } from '../logger.js';
-import { getConsulAPI } from '../consul/get-consul-api.js';
+import { configInfo, consulInfo, databasesInfo, infoBlock, nodeConfigEnvInfo, TInfoLine } from 'af-tools-ts';
 import chalk from 'chalk';
-import { appConfig as cfg } from './init-config.js';
+import { IAFConsulAPI, IMeta } from 'fa-consul';
+
 import { detectAuthConfiguration } from '../auth/multi-auth.js';
+import { getConsulAPI } from '../consul/get-consul-api.js';
+import { fileLogger, useFileLogger, logger as lgr } from '../logger.js';
+
+import { appConfig as cfg } from './init-config.js';
+
 
 const logger = lgr.getSubLogger({ name: chalk.cyan('config') });
 

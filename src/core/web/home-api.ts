@@ -5,12 +5,15 @@
 
 import { Tool } from '@modelcontextprotocol/sdk/types.js';
 import { Request, Response } from 'express';
-import { getResourcesList } from '../mcp/resources.js';
-import { getPromptsList } from '../mcp/prompts.js';
-import { getMainDBConnectionStatus } from '../db/pg-db.js';
-import { getLogoSvg } from './favicon-svg.js';
-import { appConfig, getProjectData } from '../bootstrap/init-config.js';
+
 import { detectAuthConfiguration } from '../auth/multi-auth.js';
+import { appConfig, getProjectData } from '../bootstrap/init-config.js';
+import { getMainDBConnectionStatus } from '../db/pg-db.js';
+import { getPromptsList } from '../mcp/prompts.js';
+import { getResourcesList } from '../mcp/resources.js';
+
+import { getLogoSvg } from './favicon-svg.js';
+
 
 const startTime = new Date();
 

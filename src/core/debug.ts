@@ -1,5 +1,5 @@
-import { Debug } from 'af-tools-ts';
 import { bold, reset, yellow } from 'af-color';
+import { Debug } from 'af-tools-ts';
 
 
 export const debugTokenAuth = Debug('token:auth', {

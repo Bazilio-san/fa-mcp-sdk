@@ -1,4 +1,5 @@
 import { appConfig } from '../bootstrap/init-config.js';
+
 import { isObject, ppj } from './utils.js';
 
 const cleanUndefinedDeep = (value: any): void => {
@@ -53,9 +54,7 @@ export function asJson<T = any> (json: T): { structuredContent: T } {
   if (isObject(json)) {
     cleanUndefinedDeep(json);
   }
-  return {
-    structuredContent: json,
-  };
+  return { structuredContent: json };
 }
 
 /**

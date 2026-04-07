@@ -1,4 +1,5 @@
 import { getJsonFromResult } from '../../index.js';
+
 import { BaseMcpClient } from './BaseMcpClient.js';
 
 // Global unhandled rejection handler setup for npm package usage

@@ -56,33 +56,46 @@ groupAccess:
 
 ## Example 1: HTTP Level Restriction
 
-Block unauthorized users at HTTP level (403 before MCP processing):
+Block unauthorized users at HTTP level (403 before MCP processing).
+
+> **Important:** `customAuthValidator` runs **before** standard auth and before `authInfo` is set on
+> the request. It cannot read `(req as any).authInfo` — that value is populated by the middleware
+> only after successful authentication. Use `httpComponents.apiRouter` to add a post-auth middleware
+> if you need to check group membership after the user has been authenticated.
 
 ```typescript
 // src/start.ts
-import { appConfig, initMcpServer, CustomAuthValidator, initADGroupChecker } from 'fa-mcp-sdk';
+import { Router } from 'express';
+import { appConfig, initMcpServer, getMultiAuthError, initADGroupChecker } from 'fa-mcp-sdk';
 import { CustomAppConfig } from './_types_/custom-config.js';
 
 const config = appConfig as CustomAppConfig;
 const { isUserInGroup } = initADGroupChecker();
 
-const customAuthValidator: CustomAuthValidator = async (req) => {
+// Post-auth AD group check: runs after standard auth has verified the token
+// and set authInfo on the request.
+const groupCheckRouter = Router();
+groupCheckRouter.use(async (req, res, next) => {
+  // Verify standard auth first (sets authInfo on req)
+  const authError = await getMultiAuthError(req);
+  if (authError) return res.status(authError.code).send(authError.message);
+
+  if (config.groupAccess.bypassGroupCheck) return next();
+
   const authInfo = (req as any).authInfo;
-  if (!authInfo?.username) return { success: false, error: 'User info unavailable' };
+  const username = authInfo?.username || authInfo?.payload?.user;
+  if (!username) return res.status(403).send('Forbidden: User info unavailable');
 
-  if (config.groupAccess.bypassGroupCheck) {
-    return { success: true, authType: authInfo.authType, username: authInfo.username };
-  }
+  const isInGroup = await isUserInGroup(username, config.groupAccess.requiredGroup);
+  if (!isInGroup) return res.status(403).send(`Forbidden: Not in group '${config.groupAccess.requiredGroup}'`);
 
-  const isInGroup = await isUserInGroup(authInfo.username, config.groupAccess.requiredGroup);
-  if (!isInGroup) {
-    return { success: false, error: `Forbidden: Not in group '${config.groupAccess.requiredGroup}'` };
-  }
+  next();
+});
 
-  return { success: true, authType: authInfo.authType, username: authInfo.username };
-};
-
-await initMcpServer({ ..., customAuthValidator });
+await initMcpServer({
+  ...,
+  httpComponents: { apiRouter: groupCheckRouter },
+});
 ```
 
 ## Example 2: All Tools Restriction
@@ -172,6 +185,12 @@ export const handleToolCall = async (params: IToolHandlerParams) => {
 
 | Level | Location | Error Type | Use Case |
 |-------|----------|------------|----------|
-| HTTP Server | `customAuthValidator` | HTTP 403 | Block completely |
+| Pre-auth bypass | `customAuthValidator` | HTTP 401 | Allow alternative credentials (no `Authorization` header) |
+| HTTP Server (post-auth) | `httpComponents.apiRouter` + `getMultiAuthError` | HTTP 403 | Block completely after identity is known |
 | All Tools | `toolHandler` (global) | MCP Error | Allow HTTP, restrict tools |
 | Per Tool | `toolHandler` (per-tool) | MCP Error | Fine-grained permissions |
+
+> `customAuthValidator` is a **pre-auth** hook — it runs before standard auth and before `authInfo`
+> is available. Use it to allow alternative credentials, not to check group membership.
+> For group checks that require a verified username, use `httpComponents.apiRouter` (post-auth)
+> or `toolHandler` (per-call).

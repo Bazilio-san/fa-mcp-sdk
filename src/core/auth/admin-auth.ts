@@ -3,16 +3,18 @@
  * Supports 4 authentication types: permanentServerTokens, basic, jwtToken, ntlm
  */
 
-import { Request, Response, NextFunction, RequestHandler } from 'express';
 import chalk from 'chalk';
+import { Request, Response, NextFunction, RequestHandler } from 'express';
+
 import { appConfig } from '../bootstrap/init-config.js';
 import { logger as lgr } from '../logger.js';
-import { checkPermanentToken } from './permanent.js';
+
+import { checkBasicAuth } from './basic.js';
 import { checkJwtToken } from './jwt.js';
 import { getTokenFromHttpHeader } from './multi-auth.js';
-import { setupNTLMAuthentication } from './token-generator/ntlm/ntlm-integration.js';
+import { checkPermanentToken } from './permanent.js';
 import { isNTLMEnabled } from './token-generator/ntlm/ntlm-domain-config.js';
-import { checkBasicAuth } from './basic.js';
+import { setupNTLMAuthentication } from './token-generator/ntlm/ntlm-integration.js';
 
 const logger = lgr.getSubLogger({ name: chalk.yellow('admin-auth') });
 

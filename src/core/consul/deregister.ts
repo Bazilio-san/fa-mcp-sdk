@@ -1,6 +1,8 @@
 import '../bootstrap/dotenv.js';
-import { getConsulAPI } from './get-consul-api.js';
 import { isMainModule, isNonEmptyObject } from '../utils/utils.js';
+
+import { getConsulAPI } from './get-consul-api.js';
+
 
 export const deregisterServiceFromConsul = async () => {
   const [, , svcId, agentHost, agentPort] = process.argv;

@@ -3,11 +3,13 @@
  * Serves SVG files from static folder with currentColor replaced by primary color
  */
 
-import { Request, Response, Router } from 'express';
 import crypto from 'crypto';
 import { readFileSync, existsSync } from 'fs';
 import { dirname, join } from 'path';
 import { fileURLToPath } from 'url';
+
+import { Request, Response, Router } from 'express';
+
 import { config } from '../bootstrap/init-config.js';
 
 const __filename = fileURLToPath(import.meta.url);

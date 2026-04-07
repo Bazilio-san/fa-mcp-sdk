@@ -2,8 +2,10 @@
  * Tests for ip-check — IP parsing and CIDR matching.
  * Run after build: node tests/ip-check.test.mjs
  */
-import { parseIpList, isIpAllowed } from '../dist/core/auth/ip-check.js';
 import assert from 'node:assert';
+
+import { parseIpList, isIpAllowed } from '../dist/core/auth/ip-check.js';
+
 
 // ===== parseIpList =====
 

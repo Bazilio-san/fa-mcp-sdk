@@ -1,6 +1,7 @@
-import fsp from 'fs/promises';
 import fss from 'fs';
+import fsp from 'fs/promises';
 import path from 'path';
+
 import chalk from 'chalk';
 import * as dotenv from 'dotenv';
 

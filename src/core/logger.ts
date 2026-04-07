@@ -2,8 +2,9 @@
 // noinspection JSUnusedGlobalSymbols
 
 import { red, reset } from 'af-color';
-import { appConfig } from './bootstrap/init-config.js';
 import { getAFLogger, Logger, FileLogger, ILogObj, ILoggerSettings } from 'af-logger-ts';
+
+import { appConfig } from './bootstrap/init-config.js';
 
 const { level, useFileLogger, dir: logDir } = appConfig.logger;
 
@@ -15,9 +16,9 @@ let fileLogger: FileLogger | undefined;
 
 if (appConfig.mcp.transportType === 'stdio') {
   logger = {} as Logger<ILogObj>;
-  ['log', 'error', 'fatal', 'warn', 'info', 'debug', 'silly', 'trace'].forEach((level: string) => {
+  ['log', 'error', 'fatal', 'warn', 'info', 'debug', 'silly', 'trace'].forEach((level_: string) => {
     // @ts-ignore
-    logger![level] = (...args: unknown[]) => {
+    logger![level_] = (...args: unknown[]) => {
       process.stderr.write(`[MY LOG] ${args.map(String).join(' ')}\n`);
       return undefined;
     };

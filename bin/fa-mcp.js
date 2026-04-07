@@ -1,13 +1,14 @@
 #!/usr/bin/env node
 
-import fs from 'fs/promises';
 import fss from 'fs';
+import fs from 'fs/promises';
 import path from 'path';
-import { fileURLToPath } from 'url';
 import readline from 'readline';
-import { v4 as uuidv4 } from 'uuid';
+import { fileURLToPath } from 'url';
+
 import chalk from 'chalk';
 import yaml from 'js-yaml';
+import { v4 as uuidv4 } from 'uuid';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -332,7 +333,7 @@ certificate's public and private keys`,
   }
 
   createConfigProxy (config) {
-    const lastConfigPath = this.lastConfigPath; // Capture this in closure
+    const { lastConfigPath } = this; // Capture this in closure
 
     return new Proxy(config, {
       set (target, prop, value, receiver) {

@@ -14,7 +14,6 @@ src/
 test/
 tests/
 __tests__/
-*.test.ts
 *.test.js
 *.spec.ts
 *.spec.js

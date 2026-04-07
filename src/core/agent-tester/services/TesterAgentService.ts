@@ -1,6 +1,7 @@
+import chalk from 'chalk';
 import OpenAI from 'openai';
 import { v4 as uuidv4 } from 'uuid';
-import chalk from 'chalk';
+
 import { logger as lgr } from '../../logger.js';
 import {
   ITesterChatMessage,
@@ -14,8 +15,9 @@ import {
   ITesterTraceData,
   ITesterTraceTurn,
 } from '../types.js';
-import { TesterMcpClientService } from './TesterMcpClientService.js';
+
 import { SummaryMemory, SummaryState } from './SummaryMemory.js';
+import { TesterMcpClientService } from './TesterMcpClientService.js';
 
 const logger = lgr.getSubLogger({ name: chalk.cyan('agent-tester:agent') });
 
@@ -140,7 +142,7 @@ Output only the new Summary Memory.`;
     const sessionId = request.sessionId || uuidv4();
 
     try {
-      const mcpConfig = request.mcpConfig;
+      const { mcpConfig } = request;
       const mcpServerUrl = mcpConfig?.url || request.mcpServerUrl;
 
       // Get or create session
@@ -182,7 +184,7 @@ Output only the new Summary Memory.`;
       }
 
       // Get model configuration
-      const modelConfig = request.modelConfig;
+      const { modelConfig } = request;
       const selectedModel = modelConfig?.model || request.model || this.defaultConfig.model;
       const temperature = modelConfig?.temperature ?? this.defaultConfig.temperature;
       const maxTokens = modelConfig?.maxTokens ?? this.defaultConfig.maxTokens;
@@ -488,7 +490,7 @@ Response Text: ${finalText}
     const sessionId = request.sessionId || uuidv4();
 
     try {
-      const mcpConfig = request.mcpConfig;
+      const { mcpConfig } = request;
       const mcpServerUrl = mcpConfig?.url || request.mcpServerUrl;
 
       // Get or create session
@@ -529,7 +531,7 @@ Response Text: ${finalText}
       const systemPromptSent = systemPrompt;
 
       // Get model configuration
-      const modelConfig = request.modelConfig;
+      const { modelConfig } = request;
       const selectedModel = modelConfig?.model || request.model || this.defaultConfig.model;
       const temperature = modelConfig?.temperature ?? this.defaultConfig.temperature;
       const maxTokens = modelConfig?.maxTokens ?? this.defaultConfig.maxTokens;
@@ -647,7 +649,7 @@ Response Text: ${finalText}
             ? {
               prompt_tokens: response.usage.prompt_tokens,
               completion_tokens: response.usage.completion_tokens,
-              total_tokens: response.usage.total_tokens
+              total_tokens: response.usage.total_tokens,
             }
             : undefined;
           traceTurn.llm_response = {

@@ -7,11 +7,13 @@ import {
   ListResourcesRequestSchema,
   ReadResourceRequestSchema,
 } from '@modelcontextprotocol/sdk/types.js';
+
+import { IGetPromptRequest, IReadResourceRequest } from '../_types_/types.js';
 import { appConfig, getProjectData } from '../bootstrap/init-config.js';
+import { getTools } from '../utils/utils.js';
+
 import { getPrompt, getPromptsList } from './prompts.js';
 import { getResource, getResourcesList } from './resources.js';
-import { IGetPromptRequest, IReadResourceRequest } from '../_types_/types.js';
-import { getTools } from '../utils/utils.js';
 
 /**
  * Create MCP Server instance with registered tool and prompt handlers

@@ -1,6 +1,8 @@
 import { createServer } from 'net';
-import { logger as lgr } from '../logger.js';
+
 import chalk from 'chalk';
+
+import { logger as lgr } from '../logger.js';
 
 const logger = lgr.getSubLogger({ name: chalk.bgCyan('port-checker') });
 

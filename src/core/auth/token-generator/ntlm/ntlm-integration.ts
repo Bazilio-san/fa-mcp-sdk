@@ -1,9 +1,10 @@
-import { authNTLM } from 'ya-express-ntlm';
 import { Request, Response, NextFunction } from 'express';
+import { authNTLM } from 'ya-express-ntlm';
+
 import { tokenGenNtlmOptions } from './ntlm-auth-options.js';
+import { isNTLMEnabled } from './ntlm-domain-config.js';
 import { checkTokenGenSession, getSessionStats } from './ntlm-session-storage.js';
 import { getLoginPageHTML } from './ntlm-templates.js';
-import { isNTLMEnabled } from './ntlm-domain-config.js';
 
 // Create NTLM middleware instance (only if NTLM is enabled)
 const ntlmMiddleware = isNTLMEnabled ? authNTLM(tokenGenNtlmOptions) : null;

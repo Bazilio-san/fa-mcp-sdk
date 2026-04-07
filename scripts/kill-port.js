@@ -26,7 +26,7 @@ async function killProcessOnPort (portNumber) {
       let stdout;
       try {
         const result = await execAsync(`netstat -ano | findstr :${portNumber}`);
-        stdout = result.stdout;
+        ({ stdout } = result);
       } catch {
         // findstr returns error when no matches found
         console.log(`No process found on port ${portNumber}`);

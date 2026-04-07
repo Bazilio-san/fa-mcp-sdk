@@ -3,19 +3,21 @@
  * Endpoints for JWT token generation and validation
  */
 
-import { Router, Request, Response } from 'express';
-import chalk from 'chalk';
 import { dirname, join } from 'path';
 import { fileURLToPath } from 'url';
-import { appConfig, getProjectData } from '../bootstrap/init-config.js';
+
+import chalk from 'chalk';
+import { Router, Request, Response } from 'express';
+
+import { TokenGenAuthInput } from '../_types_/types.js';
+import { AdminAuthType, createAdminAuthMW } from '../auth/admin-auth.js';
 import { checkJwtToken, generateToken } from '../auth/jwt.js';
 import { isNTLMEnabled } from '../auth/token-generator/ntlm/ntlm-domain-config.js';
 import { getSessionStats } from '../auth/token-generator/ntlm/ntlm-session-storage.js';
 import { getLoginPageHTML } from '../auth/token-generator/ntlm/ntlm-templates.js';
-import { AdminAuthType, createAdminAuthMW } from '../auth/admin-auth.js';
-import { logger as lgr } from '../logger.js';
-import { TokenGenAuthInput } from '../_types_/types.js';
 import { AuthResult } from '../auth/types.js';
+import { appConfig, getProjectData } from '../bootstrap/init-config.js';
+import { logger as lgr } from '../logger.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);

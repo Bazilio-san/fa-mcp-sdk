@@ -51,9 +51,7 @@ async function getPrompts (args: ITransportContext): Promise<IPromptData[]> {
 
 export async function getPromptsList (args: ITransportContext) {
   const prompts = await getPrompts(args);
-  return {
-    prompts: prompts.map(({ content, ...rest }) => ({ ...rest })),
-  };
+  return { prompts: prompts.map(({ content, ...rest }) => ({ ...rest })) };
 }
 
 export const getPrompt = async (request: IGetPromptRequest, args: ITransportContext): Promise<any> => {

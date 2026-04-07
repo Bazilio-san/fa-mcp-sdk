@@ -1,11 +1,12 @@
 // noinspection UnnecessaryLocalVariableJS
 
-import pgvector from 'pgvector/pg';
-import { QueryResult, QueryResultRow } from 'pg';
 import { getInsertSqlPg, getMergeSqlPg, IQueryPgArgs, queryPg, getPoolPg, TDBRecord, TRecordSet } from 'af-db-ts';
-import { logger } from '../logger.js';
 import { IPoolClientPg } from 'af-db-ts/src/@types/i-pg.js';
+import { QueryResult, QueryResultRow } from 'pg';
+import pgvector from 'pgvector/pg';
+
 import { appConfig } from '../bootstrap/init-config.js';
+import { logger } from '../logger.js';
 
 export interface IQueryPgArgsCOptional extends Omit<IQueryPgArgs, 'connectionId'> {
   connectionId?: string

@@ -1,5 +1,6 @@
-import { AuthResult } from './types.js';
 import { appConfig } from '../bootstrap/init-config.js';
+
+import { AuthResult } from './types.js';
 
 /**
  * Basic Authentication validation

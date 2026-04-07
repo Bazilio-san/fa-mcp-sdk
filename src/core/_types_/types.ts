@@ -1,5 +1,6 @@
 import { Tool } from '@modelcontextprotocol/sdk/types.js';
 import { Router } from 'express';
+
 import { AuthResult } from '../auth/types.js';
 
 /**

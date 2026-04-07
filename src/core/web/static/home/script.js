@@ -214,7 +214,7 @@ function generateToolsTableRows (tools) {
 <pre class="json-content" style="display: none;"></pre>
 </div>
 </td>
-</tr>`
+</tr>`,
   ).join('');
 }
 
@@ -242,7 +242,7 @@ function generateResourcesTableRows (resources) {
 <div class="resource-content" style="display: none;"></div>
 </div>
 </td>
-</tr>`
+</tr>`,
   ).join('');
 }
 
@@ -267,7 +267,7 @@ function generatePromptsTableRows (prompts) {
 <div class="prompt-content" style="display: none;"></div>
 </div>
 </td>
-</tr>`
+</tr>`,
   ).join('');
 }
 
@@ -295,7 +295,7 @@ function toggleDetails (sectionName, index) {
             name: toolsData[index].name,
             description: toolsData[index].description,
             inputSchema: toolsData[index].inputSchema,
-            annotations: toolsData[index].annotations
+            annotations: toolsData[index].annotations,
           };
           textContent = JSON.stringify(data, null, 2);
           break;
@@ -365,8 +365,8 @@ async function togglePromptDetails (sectionName, index, displayType) {
             jsonrpc: '2.0',
             id: Date.now(),
             method: 'prompts/get',
-            params: { name: promptName }
-          })
+            params: { name: promptName },
+          }),
         });
 
         if (!response.ok) {
@@ -458,8 +458,8 @@ async function toggleResourceDetails (sectionName, index, displayType) {
             jsonrpc: '2.0',
             id: Date.now(),
             method: 'resources/read',
-            params: { uri: resourceUri }
-          })
+            params: { uri: resourceUri },
+          }),
         });
 
         if (!response.ok) {

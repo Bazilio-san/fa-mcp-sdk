@@ -4,16 +4,19 @@
  * Multi-authentication system core
  */
 
-import { Request } from 'express';
-import { checkJwtToken, generateToken, jwtTokenRE, MIN_ENCRYPT_KEY_LENGTH } from './jwt.js';
-import { logger as lgr } from '../logger.js';
-import { AuthDetectionResult, AuthResult, AuthType } from './types.js';
-import { CustomAuthValidator } from '../_types_/types.js';
-import { normalizeHeaders, trim } from '../utils/utils.js';
 import chalk from 'chalk';
+import { Request } from 'express';
+
+
+import { CustomAuthValidator } from '../_types_/types.js';
 import { appConfig } from '../bootstrap/init-config.js';
-import { checkPermanentToken } from './permanent.js';
+import { logger as lgr } from '../logger.js';
+import { normalizeHeaders, trim } from '../utils/utils.js';
+
 import { checkBasicAuth } from './basic.js';
+import { checkJwtToken, generateToken, jwtTokenRE, MIN_ENCRYPT_KEY_LENGTH } from './jwt.js';
+import { checkPermanentToken } from './permanent.js';
+import { AuthDetectionResult, AuthResult, AuthType } from './types.js';
 
 const logger = lgr.getSubLogger({ name: chalk.magenta('multi-auth') });
 
@@ -128,6 +131,22 @@ export async function checkMultiAuth (req: Request): Promise<AuthResult> {
   if (!configured.length) {
     return { success: false, error: `${E_PFX}No authentication methods configured` };
   }
+
+  // Custom validator runs FIRST — can bypass standard auth (e.g. via x-jira-token headers)
+  if (CUSTOM_AUTH_VALIDATOR) {
+    const requestWithNormalizedHeaders = { ...req, headers: normalizeHeaders(req.headers || {}) };
+    try {
+      const customResult = await CUSTOM_AUTH_VALIDATOR(requestWithNormalizedHeaders);
+      if (customResult.success) {
+        return customResult;
+      }
+      // success: false → fall through to standard auth
+    } catch (error: Error | any) {
+      logger.error('Custom auth validator failed:', error);
+      // fall through to standard auth
+    }
+  }
+
   const { scheme: authType, credentials } = getTokenFromHttpHeader(req);
   if (!credentials) {
     return { success: false, error: `${E_PFX}credentials not provided` };
@@ -175,24 +194,11 @@ export async function checkMultiAuth (req: Request): Promise<AuthResult> {
         break;
       }
 
-      case 'custom':
-        break;
-
       default:
         errorResult = { success: false, error: `${E_PFX}Unknown auth type: ${authType}` };
     }
   } catch (error: Error | any) {
     logger.warn(`Auth type ${authType} failed with exception:`, error instanceof Error ? E_PFX + error.message : 'Unknown error');
-  }
-  if (CUSTOM_AUTH_VALIDATOR) {
-    const requestWithNormalizedHeaders = { ...req, headers: normalizeHeaders(req.headers || {}) };
-    try {
-      const customResult = await CUSTOM_AUTH_VALIDATOR(requestWithNormalizedHeaders);
-      return customResult;
-    } catch (error: Error | any) {
-      logger.error('Custom auth validator failed:', error);
-      return { success: false, error: `${E_PFX}Custom authentication validation failed${error instanceof Error ? `: ${error.message}` : ''}` };
-    }
   }
 
   return errorResult || { success: false, error: `${E_PFX}Authentication failed for all configured methods: ${configuredTypes}` };
@@ -210,8 +216,8 @@ export function logAuthConfiguration (): void {
 
   if (Object.keys(errors).length) {
     logger.warn('Auth configuration errors:');
-    Object.entries(errors).forEach(([type, errors]) => {
-      logger.warn(`- ${type}: ${errors.join(', ')}`);
+    Object.entries(errors).forEach(([type, errors_]) => {
+      logger.warn(`- ${type}: ${errors_.join(', ')}`);
     });
   }
 }
@@ -244,7 +250,7 @@ export function getAuthHeadersForTests (): object {
   }
 
   // 2. Check basic auth (username AND password must both be set)
-  const basic = auth.basic;
+  const { basic } = auth;
   if (basic?.username && basic?.password) {
     const credentials = Buffer.from(`${basic.username}:${basic.password}`).toString('base64');
     console.log('  Using Basic authentication');

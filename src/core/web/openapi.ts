@@ -1,8 +1,10 @@
-import { Router, Request, Response } from 'express';
 import { existsSync, readFileSync, mkdirSync } from 'fs';
 import * as path from 'path';
+
+import { Router, Request, Response } from 'express';
 import * as yaml from 'js-yaml';
 import swaggerUiExpress from 'swagger-ui-express';
+
 import { appConfig, ROOT_PROJECT_DIR } from '../index.js';
 
 /**

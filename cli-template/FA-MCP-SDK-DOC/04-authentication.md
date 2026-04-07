@@ -104,19 +104,51 @@ if (authError) {
 
 ### Custom Authentication
 
+`customAuthValidator` runs **before** standard auth (`Authorization` header check).
+
+**Execution order:**
+1. `customAuthValidator` is called first
+2. If `success: true` → request is allowed, standard auth is **skipped**
+3. If `success: false` → falls through to standard auth (`permanentServerTokens` / `basic` / `jwtToken`)
+4. If standard auth also fails → 401
+
+This allows using service-specific credentials (e.g. `x-api-key`, `x-service-token`) as an alternative
+to the MCP `Authorization` header, without disabling standard auth entirely.
+
 ```typescript
 import { CustomAuthValidator, AuthResult } from 'fa-mcp-sdk';
 
+// Example: bypass MCP auth if service-specific header is present
 const customValidator: CustomAuthValidator = async (req): Promise<AuthResult> => {
   const apiKey = req.headers['x-api-key'];
-  const valid = await validateApiKey(apiKey);
-
-  if (valid) return { success: true, authType: 'custom', username: 'api-user' };
-  return { success: false, error: 'Invalid API key' };
+  if (apiKey && await validateApiKey(apiKey)) {
+    return { success: true, authType: 'custom', username: 'api-user' };
+  }
+  // Return false → falls through to standard Authorization header check
+  return { success: false, error: 'No valid API key' };
 };
 
 const serverData: McpServerData = { ..., customAuthValidator: customValidator };
 ```
+
+**Example: allow requests with upstream service headers to bypass MCP auth**
+
+```typescript
+// Clients that pass x-service-token OR x-username+x-password are allowed in
+// without an MCP Authorization token. Clients without these headers still
+// need a valid Authorization header (permanentToken / basic / JWT).
+const serviceHeadersValidator: CustomAuthValidator = (req) => {
+  const h = req.headers as Record<string, string>;
+  if (h['x-service-token'] || (h['x-username'] && h['x-password'])) {
+    return { success: true, authType: 'custom' };
+  }
+  return { success: false, error: 'No service credentials and no MCP Authorization token' };
+};
+```
+
+> **Note:** `customAuthValidator` receives a request with **normalized** (lowercased) header names.
+> `authInfo` is **not** set on `req` when the validator runs — it is set by the middleware only after
+> successful authentication completes.
 
 ## AD Group Checking
 

@@ -1,8 +1,9 @@
-import { getAPI } from 'fa-consul';
-import { logger as lgr } from '../logger.js';
-import { eventEmitter } from '../ee.js';
-import { appConfig, getProjectData } from '../bootstrap/init-config.js';
 import chalk from 'chalk';
+import { getAPI } from 'fa-consul';
+
+import { appConfig, getProjectData } from '../bootstrap/init-config.js';
+import { eventEmitter } from '../ee.js';
+import { logger as lgr } from '../logger.js';
 
 const isProd = (process.env.NODE_CONSUL_ENV || process.env.NODE_ENV) === 'production';
 const logger = lgr.getSubLogger({ name: chalk.bgBlue('consul') });

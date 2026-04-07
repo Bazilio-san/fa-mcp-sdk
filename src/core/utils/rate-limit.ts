@@ -26,13 +26,13 @@ function formatNextAvailableTime (milliseconds: number): string {
   const timeString = nextTime.toLocaleTimeString('ru-RU', {
     hour: '2-digit',
     minute: '2-digit',
-    timeZone: 'Europe/Moscow'
+    timeZone: 'Europe/Moscow',
   });
   const dateString = nextTime.toLocaleDateString('ru-RU', {
     year: 'numeric',
     month: '2-digit',
     day: '2-digit',
-    timeZone: 'Europe/Moscow'
+    timeZone: 'Europe/Moscow',
   });
   return `${timeString} ${dateString}`;
 }

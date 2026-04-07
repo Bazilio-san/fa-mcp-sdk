@@ -1,6 +1,7 @@
 import { GroupChecker, IGroupCheckerConfig } from 'af-ad-ts';
-import { appConfig } from '../bootstrap/init-config.js';
+
 import { IDcConfig } from '../_types_/active-directory-config.js';
+import { appConfig } from '../bootstrap/init-config.js';
 import { logger } from '../logger.js';
 
 export interface IGroupCheckerInitResult {

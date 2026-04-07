@@ -1,5 +1,6 @@
 import { Router, Request, Response } from 'express';
 import { Route, Get, Tags } from 'tsoa';
+
 import { logger, createAuthMW } from '../../core/index.js';
 
 export const apiRouter: Router | null = Router();
@@ -35,9 +36,7 @@ export class ExampleController {
       return {
         success: true,
         message: 'This is a template endpoint',
-        data: {
-          timestamp: new Date().toISOString(),
-        },
+        data: { timestamp: new Date().toISOString() },
       };
     } catch (error) {
       logger.error('Error in example endpoint:', error);
@@ -75,9 +74,7 @@ apiRouter.get('/example', authMW, async (req: Request, res: Response) => {
     res.json({
       success: true,
       message: 'This is a template endpoint',
-      data: {
-        timestamp: new Date().toISOString(),
-      },
+      data: { timestamp: new Date().toISOString() },
     });
   } catch (error) {
     logger.error('Error in example endpoint:', error);

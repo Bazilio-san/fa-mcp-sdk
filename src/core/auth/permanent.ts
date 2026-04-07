@@ -1,6 +1,7 @@
-import { ICheckTokenResult } from './types.js';
-import { trim } from '../utils/utils.js';
 import { appConfig } from '../bootstrap/init-config.js';
+import { trim } from '../utils/utils.js';
+
+import { ICheckTokenResult } from './types.js';
 
 const pt = appConfig.webServer?.auth?.permanentServerTokens || [];
 const permanentServerTokensSet: Set<string> = new Set(Array.isArray(pt) ? pt : [pt]);

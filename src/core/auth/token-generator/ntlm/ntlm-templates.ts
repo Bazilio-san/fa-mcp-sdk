@@ -1,3 +1,4 @@
+/* eslint-disable max-len */
 /**
  * NTLM Authentication HTML Templates
  * Converted from pug templates in src/core/_ntlm_example/ntlm/views/

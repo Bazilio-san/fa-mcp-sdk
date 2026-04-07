@@ -1,11 +1,14 @@
 // noinspection UnnecessaryLocalVariableJS
 import crypto from 'crypto';
+
+import chalk from 'chalk';
+
 import { appConfig } from '../bootstrap/init-config.js';
-import { ICheckTokenResult, ITokenPayload } from './types.js';
 import { logger as lgr } from '../logger.js';
 import { isObject, trim } from '../utils/utils.js';
+
 import { parseIpList, isIpAllowed } from './ip-check.js';
-import chalk from 'chalk';
+import { ICheckTokenResult, ITokenPayload } from './types.js';
 
 const logger = lgr.getSubLogger({ name: chalk.cyan('token-auth') });
 
@@ -88,41 +91,31 @@ export const checkJwtToken = (arg: {
   let { token, expectedUser, expectedService = appConfig.name, clientIp } = arg;
   token = (token || '').trim();
   if (!token) {
-    return {
-      errorReason: 'Token not passed',
-    };
+    return { errorReason: 'Token not passed' };
   }
 
   const [, expirePartStr, encryptedPayload] = jwtTokenRE.exec(token) || [];
 
   if (!expirePartStr || !encryptedPayload) {
-    return {
-      errorReason: 'The token is not a JWT',
-    };
+    return { errorReason: 'The token is not a JWT' };
   }
 
   let payloadStr: string = '';
   try {
     payloadStr = decrypt(encryptedPayload);
     if (!payloadStr.startsWith('{')) {
-      return {
-        errorReason: 'Error decrypting JWT token :: the transcribed text is not JSON',
-      };
+      return { errorReason: 'Error decrypting JWT token :: the transcribed text is not JSON' };
     }
   } catch (err: Error | any) {
     logger.error(err);
-    return {
-      errorReason: `Error decrypting JWT token :: ${err.message}`,
-    };
+    return { errorReason: `Error decrypting JWT token :: ${err.message}` };
   }
   let payload: ITokenPayload;
   try {
     payload = JSON.parse(payloadStr);
   } catch (err: Error | any) {
     logger.error(err);
-    return {
-      errorReason: `Error deserializing payload of JWT token :: ${err.message}`,
-    };
+    return { errorReason: `Error deserializing payload of JWT token :: ${err.message}` };
   }
 
   expectedUser = trim(expectedUser).toLowerCase();

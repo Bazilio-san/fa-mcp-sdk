@@ -1,20 +1,22 @@
+import { closeAllPgConnectionsPg } from 'af-db-ts';
+import chalk from 'chalk';
+import { AccessPoints, IAccessPoints, IRegisterCyclic, IAccessPoint } from 'fa-consul';
+
 import { McpServerData } from './_types_/types.js';
+import { dotEnvResult } from './bootstrap/dotenv.js';
 import { appConfig } from './bootstrap/init-config.js';
 import { startupInfo } from './bootstrap/startup-info.js';
-import { dotEnvResult } from './bootstrap/dotenv.js';
+import { accessPointUpdater } from './consul/access-points-updater.js';
+import { registerCyclic } from './consul/register.js';
+import { checkMainDB } from './db/pg-db.js';
 import { fileLogger, logger as lgr } from './logger.js';
 
 // Imports to modify _core functions
 import { startStdioServer } from './mcp/server-stdio.js';
-import { startHttpServer } from './web/server-http.js';
-import { checkMainDB } from './db/pg-db.js';
-import { closeAllPgConnectionsPg } from 'af-db-ts';
-import { registerCyclic } from './consul/register.js';
-import { AccessPoints, IAccessPoints, IRegisterCyclic, IAccessPoint } from 'fa-consul';
-import { isNonEmptyObject } from './utils/utils.js';
-import { accessPointUpdater } from './consul/access-points-updater.js';
 import { checkPortAvailability } from './utils/port-checker.js';
-import chalk from 'chalk';
+import { isNonEmptyObject } from './utils/utils.js';
+import { startHttpServer } from './web/server-http.js';
+
 
 let cyclicRegisterServiceInConsul: IRegisterCyclic;
 const initCyclicRegisterServiceInConsul = async () => {

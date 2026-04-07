@@ -1,3 +1,6 @@
+import { dirname, join } from 'path';
+import { fileURLToPath } from 'url';
+
 import { SSEServerTransport } from '@modelcontextprotocol/sdk/server/sse.js';
 import {
   CallToolRequestSchema,
@@ -6,33 +9,33 @@ import {
   ListResourcesRequestSchema,
   ReadResourceRequestSchema,
 } from '@modelcontextprotocol/sdk/types.js';
+import chalk from 'chalk';
 import express from 'express';
 import helmet from 'helmet';
 import { RateLimiterMemory } from 'rate-limiter-flexible';
-import { dirname, join } from 'path';
-import { fileURLToPath } from 'url';
-import { appConfig, getProjectData } from '../bootstrap/init-config.js';
-import { getResource, getResourcesList } from '../mcp/resources.js';
-import { IGetPromptRequest } from '../_types_/types.js';
-import { configureOpenAPI, createSwaggerUIAssetsMiddleware } from './openapi.js';
 
+import { IGetPromptRequest } from '../_types_/types.js';
+import { createAgentTesterRouter } from '../agent-tester/agent-tester-router.js';
+import { validateAdminAuthConfig } from '../auth/admin-auth.js';
 import { createAuthMW } from '../auth/middleware.js';
-import { createMcpServer } from '../mcp/create-mcp-server.js';
-import { logger as lgr } from '../logger.js';
-import { createJsonRpcErrorResponse, ServerError, toError, toStr } from '../errors/errors.js';
+import { appConfig, getProjectData } from '../bootstrap/init-config.js';
+import { getMainDBConnectionStatus } from '../db/pg-db.js';
 import { BaseMcpError } from '../errors/BaseMcpError.js';
+import { createJsonRpcErrorResponse, ServerError, toError, toStr } from '../errors/errors.js';
+import { logger as lgr } from '../logger.js';
+import { createMcpServer } from '../mcp/create-mcp-server.js';
+import { getPrompt, getPromptsList } from '../mcp/prompts.js';
+import { getResource, getResourcesList } from '../mcp/resources.js';
 import { formatRateLimitError, isRateLimitError } from '../utils/rate-limit.js';
+import { getTools, normalizeHeaders } from '../utils/utils.js';
+
+import { createAdminRouter } from './admin-router.js';
 import { applyCors } from './cors.js';
 import { faviconSvg } from './favicon-svg.js';
-import chalk from 'chalk';
-import { getPrompt, getPromptsList } from '../mcp/prompts.js';
 import { handleHomeInfo } from './home-api.js';
-import { getMainDBConnectionStatus } from '../db/pg-db.js';
-import { getTools, normalizeHeaders } from '../utils/utils.js';
-import { createAdminRouter } from './admin-router.js';
-import { validateAdminAuthConfig } from '../auth/admin-auth.js';
+import { configureOpenAPI, createSwaggerUIAssetsMiddleware } from './openapi.js';
 import { createSvgRouter } from './svg-icons.js';
-import { createAgentTesterRouter } from '../agent-tester/agent-tester-router.js';
+
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -254,9 +257,7 @@ To enable, set agentTester.enabled in config/local.yaml or ENV AGENT_TESTER_ENAB
         payload: mcpAuthPayload, // Use auth payload from when SSE connection was established
         transport: 'sse',
       });
-      return {
-        content: result.content,
-      };
+      return { content: result.content };
     });
 
     return sseServer;
@@ -276,7 +277,7 @@ To enable, set agentTester.enabled in config/local.yaml or ENV AGENT_TESTER_ENAB
       logger.debug('SSE connection headers preserved:', Object.keys(preservedHeaders));
 
       // Extract auth payload from middleware (set by authMW)
-      const authInfo = (req as any).authInfo;
+      const { authInfo } = (req as any);
       const authPayload = authInfo?.payload;
 
       // Create SSE transport that will use the same endpoint for POST requests
@@ -551,7 +552,7 @@ To enable, set agentTester.enabled in config/local.yaml or ENV AGENT_TESTER_ENAB
   });
 
   // Start HTTP server
-  const port = appConfig.webServer.port;
+  const { port } = appConfig.webServer;
   app.listen(port, '0.0.0.0', () => {
     let msg = `${chalk.magenta(appConfig.productName)} started with ${chalk.blue('HTTP')} transport on port ${chalk.blue(port)}
 Home page: http://localhost:${port}/`;

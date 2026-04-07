@@ -1,4 +1,5 @@
 import { ConnectionOptions } from 'node:tls';
+
 import { EAuthStrategy } from 'ya-express-ntlm';
 
 export interface IDcConfig {

@@ -4,9 +4,10 @@
 
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import { ROOT_PROJECT_DIR } from '../constants.js';
-import { appConfig, getProjectData } from '../bootstrap/init-config.js';
+
 import { IUsedHttpHeader, IResource, IResourceData, IResourceInfo, ITransportContext } from '../_types_/types.js';
+import { appConfig, getProjectData } from '../bootstrap/init-config.js';
+import { ROOT_PROJECT_DIR } from '../constants.js';
 
 let readme = fs.readFileSync(path.join(ROOT_PROJECT_DIR, './README.md'), 'utf-8');
 let packageJson: any;
@@ -80,9 +81,7 @@ This information is used by searching for this MCP server and its information in
 
 export const getResourcesList = async (args: ITransportContext): Promise<{ resources: IResourceInfo[] }> => {
   const resources: IResourceData[] = await createResources(args);
-  return {
-    resources: resources.map(({ content, ...rest }) => ({ ...rest })),
-  };
+  return { resources: resources.map(({ content, ...rest }) => ({ ...rest })) };
 };
 
 export const getResource = async (uri: string, args: ITransportContext): Promise<IResource> => {

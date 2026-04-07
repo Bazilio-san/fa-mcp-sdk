@@ -33,7 +33,7 @@ interface McpServerData {
   customPrompts?: IPromptData[];                      // Additional prompts
   usedHttpHeaders?: IUsedHttpHeader[] | null;         // HTTP headers for auth
   customResources?: IResourceData[] | null;           // Custom resources
-  customAuthValidator?: CustomAuthValidator;          // Custom auth function
+  customAuthValidator?: CustomAuthValidator;          // Runs FIRST: bypass or fallback to standard auth
   tokenGenAuthHandler?: TokenGenAuthHandler;          // Token Generator auth
   httpComponents?: { apiRouter?: Router | null };     // Express router
   assets?: { logoSvg?: string; maintainerHtml?: string };

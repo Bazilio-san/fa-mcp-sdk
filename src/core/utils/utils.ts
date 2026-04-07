@@ -1,8 +1,10 @@
 import fs from 'fs';
 import path from 'path';
+
 import { Tool } from '@modelcontextprotocol/sdk/types.js';
-import { ROOT_PROJECT_DIR } from '../constants.js';
+
 import { ITransportContext } from '../_types_/types.js';
+import { ROOT_PROJECT_DIR } from '../constants.js';
 
 export const trim = (s: any): string => String(s || '').trim();
 

@@ -1,14 +1,20 @@
-import { Router } from 'express';
+import { dirname, join } from 'path';
+import { fileURLToPath } from 'url';
+
 import chalk from 'chalk';
+import { Router } from 'express';
+import express from 'express';
+
+import { generateToken } from '../auth/jwt.js';
+import { appConfig } from '../bootstrap/init-config.js';
 import { logger as lgr } from '../logger.js';
+
 import { TesterAgentService } from './services/TesterAgentService.js';
 import { TesterMcpClientService } from './services/TesterMcpClientService.js';
 import { ITesterChatRequest, TesterMcpConnectionRequest } from './types.js';
-import { dirname, join } from 'path';
-import { fileURLToPath } from 'url';
-import express from 'express';
-import { appConfig } from '../bootstrap/init-config.js';
-import { generateToken } from '../auth/jwt.js';
+
+
+
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -235,10 +241,10 @@ export function createAgentTesterRouter (options: {
 function generateServerName (url: string): string {
   try {
     const urlObj = new URL(url);
-    let hostname = urlObj.hostname;
+    let { hostname } = urlObj;
     if (hostname.startsWith('www.')) {hostname = hostname.substring(4);}
     const firstSegment = hostname.split('.')[0] || hostname;
-    const port = urlObj.port;
+    const { port } = urlObj;
     return port ? `${firstSegment}${port}` : firstSegment;
   } catch {
     return `server_${Date.now()}`;

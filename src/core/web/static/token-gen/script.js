@@ -488,7 +488,7 @@ async function initializeForm () {
     // Getting information about the service
     const response = await authFetch('/admin/api/service-info');
     const data = await response.json();
-    const serviceName = data.serviceName;
+    const { serviceName } = data;
 
     // Set theme color
     setPrimaryColor(data.primaryColor);

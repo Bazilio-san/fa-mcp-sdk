@@ -1,7 +1,8 @@
-import { NTLMAuthError } from 'ya-express-ntlm';
 import { isObject } from 'af-tools-ts';
-import { appConfig } from '../../../bootstrap/init-config.js';
+import { NTLMAuthError } from 'ya-express-ntlm';
+
 import { IDcConfig } from '../../../_types_/active-directory-config.js';
+import { appConfig } from '../../../bootstrap/init-config.js';
 
 // Check if AD configuration is available
 export const isNTLMEnabled: boolean = !!(appConfig.ad && isObject(appConfig.ad.domains) && Object.keys(appConfig.ad.domains).length);

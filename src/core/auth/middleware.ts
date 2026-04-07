@@ -1,10 +1,12 @@
 // noinspection UnnecessaryLocalVariableJS
-import { NextFunction, Request, Response } from 'express';
 import { cyan, lBlue, magenta, red, reset } from 'af-color';
-import { debugTokenAuth } from '../debug.js';
+import { NextFunction, Request, Response } from 'express';
+
 import { appConfig } from '../bootstrap/init-config.js';
-import { getResourcesList } from '../mcp/resources.js';
+import { debugTokenAuth } from '../debug.js';
 import { getPromptsList } from '../mcp/prompts.js';
+import { getResourcesList } from '../mcp/resources.js';
+
 import { checkMultiAuth, logAuthConfiguration } from './multi-auth.js';
 import { AuthResult } from './types.js';
 

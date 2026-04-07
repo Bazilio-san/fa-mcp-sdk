@@ -1,5 +1,6 @@
-import { logger as lgr, formatToolResult, ToolExecutionError } from '../../core/index.js';
 import chalk from 'chalk';
+
+import { logger as lgr, formatToolResult, ToolExecutionError } from '../../core/index.js';
 
 const logger = lgr.getSubLogger({ name: chalk.bgGrey('tools') });
 

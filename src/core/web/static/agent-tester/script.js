@@ -150,7 +150,7 @@ class McpAgentTester {
   }
 
   handleDefaultFormatChange () {
-    const value = this.defaultFormatSelect.value;
+    const { value } = this.defaultFormatSelect;
     this.defaultDisplayFormat = value;
     localStorage.setItem('agentTesterDefaultFormat', value);
     if (value === 'HTML') {
@@ -477,9 +477,7 @@ class McpAgentTester {
     try {
       const response = await fetch(`${API_BASE}/api/mcp/connect`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(connectionData),
       });
 
@@ -559,9 +557,7 @@ class McpAgentTester {
     try {
       const response = await fetch(`${API_BASE}/api/mcp/used-headers?url=${encodeURIComponent(url)}`, {
         method: 'GET',
-        headers: {
-          'Accept': 'application/json',
-        },
+        headers: { 'Accept': 'application/json' },
       });
 
       if (response.ok) {
@@ -913,9 +909,7 @@ class McpAgentTester {
     this.stopAuthRefresh();
 
     try {
-      const response = await fetch(`${API_BASE}/api/mcp/disconnect/${this.currentServer.name}`, {
-        method: 'POST',
-      });
+      const response = await fetch(`${API_BASE}/api/mcp/disconnect/${this.currentServer.name}`, { method: 'POST' });
 
       if (response.ok) {
         this.showToast(`Disconnected from ${this.currentServer.name}`, 'success');
@@ -955,9 +949,7 @@ class McpAgentTester {
     try {
       const response = await fetch(`${API_BASE}/api/mcp/connect`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(connectionData),
       });
 
@@ -996,7 +988,7 @@ class McpAgentTester {
   }
 
   handleInputChange () {
-    const length = this.messageInput.value.length;
+    const { length } = this.messageInput.value;
     this.charCount.textContent = `${length}/40000`;
 
     const isEmpty = this.messageInput.value.trim() === '';
@@ -1055,9 +1047,7 @@ class McpAgentTester {
 
       const response = await fetch(`${API_BASE}/api/chat/message`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(requestData),
       });
 

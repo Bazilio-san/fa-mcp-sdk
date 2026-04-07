@@ -7,5 +7,5 @@ export const customResources: IResourceData[] = [
     description: 'Custom resource description',
     mimeType: 'text/plain',
     content: 'Custom resource content',
-  }
+  },
 ];
