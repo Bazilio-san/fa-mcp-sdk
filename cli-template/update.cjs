@@ -179,7 +179,7 @@ function loadNVMEnvironment () {
       }
       setupScript = 'source .envrc';
     }
-  } catch (error) {
+  } catch {
     logError('Error loading .envrc file');
   }
 }
@@ -336,7 +336,7 @@ function getServiceName () {
  */
 function systemctlServiceExists (serviceName) {
   try {
-    const res = execCommand(`systemctl list-unit-files "${serviceName}.service"`);
+    execCommand(`systemctl list-unit-files "${serviceName}.service"`);
     return true;
   } catch {
     return false;
@@ -397,7 +397,9 @@ const colorizeHTML = (text) => text
   .replace(/\[ERROR]/g, '<span style="color:#ffffff; background-color: #ff0000">[ERROR]</span>');
 
 async function sendBuildNotification (emails, status, body, serviceName) {
-  if (!emails) { return; }
+  if (!emails) {
+    return;
+  }
   let s = '';
   if (status === 'FAIL') {
     s = `<r>FAIL</r> `;
@@ -528,7 +530,7 @@ async function main () {
   if (nodeVersion) {
     from = ' .envrc';
   } else if (config.nodeVersion) {
-    nodeVersion = config.nodeVersion;
+    ({ nodeVersion } = config);
     from = ' deploy/config.yaml';
   }
 
@@ -562,9 +564,7 @@ async function main () {
       execCommand(`git reset --hard ${expectedUpstream}`);
       execCommand(`git clean -fd`);
       const i = printCurrenBranch();
-      branch = i.branch;
-      headHash = i.headHash;
-      upstreamHash = i.upstreamHash;
+      ({ branch, headHash, upstreamHash } = i);
       if (branch !== expectedBranch) {
         throw new Error(`Failed to switch to branch ${expectedBranch}`);
       }
