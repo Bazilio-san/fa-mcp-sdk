@@ -137,27 +137,27 @@ export class TesterMcpClientService {
       version: '1.0.0',
     });
 
-    const baseUrl = new URL(mcpConfig.url);
+    const baseURL = new URL(mcpConfig.url);
 
     if (mcpConfig.transport === 'http') {
-      logger.info(`Connecting via StreamableHTTPClientTransport to ${baseUrl}`);
+      logger.info(`Connecting via StreamableHTTPClientTransport to ${baseURL}`);
       const safeHeaders = this.buildSafeHeaders(mcpConfig.headers);
       const transportOpts: any = {};
       if (safeHeaders) {
         transportOpts.requestInit = { headers: safeHeaders };
       }
-      const transport = new StreamableHTTPClientTransport(baseUrl, transportOpts);
+      const transport = new StreamableHTTPClientTransport(baseURL, transportOpts);
       await client.connect(transport as any);
       logger.info('Connected using Streamable HTTP transport');
     } else if (mcpConfig.transport === 'sse') {
-      logger.info(`Connecting via SSEClientTransport to ${baseUrl}`);
+      logger.info(`Connecting via SSEClientTransport to ${baseURL}`);
       const safeHeaders = this.buildSafeHeaders(mcpConfig.headers);
       const transportOpts: any = {};
       if (safeHeaders) {
         transportOpts.eventSourceInit = { headers: safeHeaders };
         transportOpts.requestInit = { headers: safeHeaders };
       }
-      const transport = new SSEClientTransport(baseUrl, transportOpts);
+      const transport = new SSEClientTransport(baseURL, transportOpts);
       await client.connect(transport as any);
       logger.info('Connected using SSE transport');
     } else {
@@ -243,15 +243,15 @@ export class TesterMcpClientService {
   private async fetchRequiredHeadersUsing (client: Client, serverUrl: string): Promise<TesterHeaderRequirement[]> {
     // 1) Try HTTP endpoint /used-http-headers
     try {
-      const baseUrl = serverUrl.replace(/\/(mcp|sse)$/, '');
-      const headersUrl = baseUrl + '/used-http-headers';
+      const baseURL = serverUrl.replace(/\/(mcp|sse)$/, '');
+      const headersUrl = baseURL + '/used-http-headers';
       logger.info(`Fetching used headers from: ${headersUrl}`);
       const response = await fetch(headersUrl, { method: 'GET', headers: { 'Accept': 'application/json' } });
       if (response.ok) {
         const headers = await response.json();
         if (Array.isArray(headers)) {
           if (headers.length > 0) {
-            logger.info(`Found ${headers.length} used headers from ${baseUrl}`);
+            logger.info(`Found ${headers.length} used headers from ${baseURL}`);
           }
           return headers;
         }
@@ -428,7 +428,7 @@ export class TesterMcpClientService {
       version: '1.0.0',
     });
 
-    const baseUrl = new URL(request.url);
+    const baseURL = new URL(request.url);
 
     if (request.transport === 'http') {
       const safeHeaders = this.buildSafeHeaders(request.headers);
@@ -436,7 +436,7 @@ export class TesterMcpClientService {
       if (safeHeaders) {
         transportOpts.requestInit = { headers: safeHeaders };
       }
-      const transport = new StreamableHTTPClientTransport(baseUrl, transportOpts);
+      const transport = new StreamableHTTPClientTransport(baseURL, transportOpts);
       await client.connect(transport as any);
     } else if (request.transport === 'sse') {
       const safeHeaders = this.buildSafeHeaders(request.headers);
@@ -445,7 +445,7 @@ export class TesterMcpClientService {
         transportOpts.eventSourceInit = { headers: safeHeaders };
         transportOpts.requestInit = { headers: safeHeaders };
       }
-      const transport = new SSEClientTransport(baseUrl, transportOpts);
+      const transport = new SSEClientTransport(baseURL, transportOpts);
       await client.connect(transport as any);
     } else {
       throw new Error(`Unsupported transport: ${request.transport}`);

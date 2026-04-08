@@ -76,7 +76,7 @@ async function safeReadText (res: Response): Promise<string | undefined> {
  * Supports routing by id and per-operation timeouts.
  */
 export class McpSseClient extends BaseMcpClient {
-  private readonly baseUrl: string;
+  private readonly baseURL: string;
   private requestId: number;
 
   // SSE connection state
@@ -92,9 +92,9 @@ export class McpSseClient extends BaseMcpClient {
     method: string,
   }>();
 
-  constructor (baseUrl: string, customHeaders: Record<string, string> = {}) {
+  constructor (baseURL: string, customHeaders: Record<string, string> = {}) {
     super(customHeaders);
-    this.baseUrl = baseUrl.replace(/\/$/, '');
+    this.baseURL = baseURL.replace(/\/$/, '');
     this.requestId = 1;
   }
 
@@ -136,7 +136,7 @@ export class McpSseClient extends BaseMcpClient {
     };
 
     this.sseAbort = new AbortController();
-    const url = `${this.baseUrl}/sse`;
+    const url = `${this.baseURL}/sse`;
 
     const res = await fetch(url, {
       method: 'GET',
@@ -295,7 +295,7 @@ export class McpSseClient extends BaseMcpClient {
       ...this.customHeaders,
     };
     try {
-      const res = await fetch(`${this.baseUrl}/sse`, {
+      const res = await fetch(`${this.baseURL}/sse`, {
         method: 'POST',
         headers,
         body: JSON.stringify(request),
@@ -334,7 +334,7 @@ export class McpSseClient extends BaseMcpClient {
   }
 
   async health () {
-    const response = await fetch(`${this.baseUrl}/health`);
+    const response = await fetch(`${this.baseURL}/health`);
     return response.json();
   }
 }

@@ -9,7 +9,7 @@ import { appConfig, McpHttpClient, getAuthHeadersForTests } from '../../../dist/
 
 import TEMPLATE_TESTS from './test-cases.js';
 
-const baseUrl = (process.env.TEST_MCP_SERVER_URL || `http://localhost:${appConfig.webServer.port}`).replace(/\/+$/, '');
+const baseURL = (process.env.TEST_MCP_SERVER_URL || `http://localhost:${appConfig.webServer.port}`).replace(/\/+$/, '');
 
 async function runTestGroup (title, tests, client) {
   console.log(`\n${title}:`);
@@ -46,7 +46,7 @@ async function main () {
     console.log('⚠️  Warning: Auth is enabled but no valid credentials found');
   }
 
-  const client = new McpHttpClient(baseUrl, { headers });
+  const client = new McpHttpClient(baseURL, { headers });
   try {
     await client.initialize({
       protocolVersion: '2024-11-05',

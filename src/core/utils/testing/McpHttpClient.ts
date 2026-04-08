@@ -40,20 +40,20 @@ type JsonRpcMessage = JsonRpcSuccess | JsonRpcErrorRes | JsonRpcRequest;
  * with the current server implementation
  */
 export class McpHttpClient extends BaseMcpClient {
-  private readonly baseUrl: string;
+  private readonly baseURL: string;
   private readonly endpointPath: string;
 
   public serverInfo?: { name: string; version: string };
   public capabilities?: any;
   public protocolVersion?: string;
 
-  constructor (baseUrl: string, options?: {
+  constructor (baseURL: string, options?: {
     endpointPath?: string; // e.g.: '/mcp'
     headers?: Record<string, string>;
     requestTimeoutMs?: number;
   }) {
     super(options?.headers ?? {});
-    this.baseUrl = baseUrl.replace(/\/$/, '');
+    this.baseURL = baseURL.replace(/\/$/, '');
     this.endpointPath = options?.endpointPath ?? '/mcp';
   }
 
@@ -83,7 +83,7 @@ export class McpHttpClient extends BaseMcpClient {
       ...this.customHeaders,
     } as Record<string, string>;
 
-    const response = await fetch(`${this.baseUrl}${this.endpointPath}`, {
+    const response = await fetch(`${this.baseURL}${this.endpointPath}`, {
       method: 'POST',
       headers,
       body: JSON.stringify(request),

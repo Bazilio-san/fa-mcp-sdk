@@ -51,10 +51,10 @@ If you were using `McpSseClient.createWithErrorHandler()`, you can now use the c
 
 ```javascript
 // Old way (still works for backward compatibility)
-const client = McpSseClient.createWithErrorHandler(baseUrl);
+const client = McpSseClient.createWithErrorHandler(baseURL);
 
 // New way (recommended)
-const client = new McpSseClient(baseUrl);
+const client = new McpSseClient(baseURL);
 ```
 
 Both approaches work the same way now since the global handler is automatic.
