@@ -119,6 +119,11 @@ swagger:
     - url: https://{{mcp.domain}}
       description: "PROD server"
 
+homePage:
+  helpLink:
+    url: ''          # If empty — help link is not shown in footer
+    label: 'Help'    # Link text (default: "Help")
+
 uiColor:
   # Font color of the header and a number of interface elements on the HOME page
   primary: '#0f65dc'

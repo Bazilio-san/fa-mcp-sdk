@@ -35,6 +35,7 @@ ad:
 
 agentTester:
   enabled: true
+  showFooterLink: true  # true (default) — show Agent Tester link in home page footer; false — hide link without disabling tester
   useAuth: false
   openAi:
     apiKey: ''
@@ -137,6 +138,11 @@ swagger:
     #   description: "PROD server"
     - url: https://{{mcp.domain}}
       description: "PROD server"
+
+homePage:
+  helpLink:
+    url: ''     # If empty — help link is not shown in footer
+    label: 'Help'  # Link text (default: "Help")
 
 uiColor:
   # Font color of the header and a number of interface elements on the HOME page

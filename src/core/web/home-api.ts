@@ -54,8 +54,14 @@ export async function handleHomeInfo (_req: Request, res: Response): Promise<voi
     if (assets?.maintainerHtml) {
       footerParts.push(assets.maintainerHtml);
     }
-    if (appConfig.agentTester?.enabled) {
+    const at = appConfig.agentTester;
+    if (at?.enabled && at.showFooterLink !== false) {
       footerParts.push('<a href="/agent-tester">Agent Tester</a>');
+    }
+    const helpLink = appConfig.homePage?.helpLink;
+    if (helpLink?.url) {
+      const label = helpLink.label || 'Help';
+      footerParts.push(`<a href="${helpLink.url}" target="_blank" rel="noopener">${label}</a>`);
     }
 
     // Database info

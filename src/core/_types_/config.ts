@@ -62,6 +62,7 @@ interface ISwaggerConfig {
 interface IAgentTesterConfig {
   agentTester?: {
     enabled: boolean;
+    showFooterLink?: boolean; // default: true; false — hides footer link without disabling tester
     useAuth: boolean;
     openAi?: {
       apiKey: string;
@@ -70,6 +71,15 @@ interface IAgentTesterConfig {
     httpHeaders?: Record<string, string>;
     logJson?: boolean;
   }
+}
+
+interface IHomePageConfig {
+  homePage?: {
+    helpLink?: {
+      url: string;
+      label?: string; // default: "Help"
+    };
+  };
 }
 
 interface ICacheConfig {
@@ -86,7 +96,8 @@ export interface AppConfig extends IADConfig,
   IWebServerConfig,
   IMCPConfig,
   ISwaggerConfig,
-  IAgentTesterConfig {
+  IAgentTesterConfig,
+  IHomePageConfig {
 
   isMainDBUsed: boolean, // = !!appConfig.db.postgres?.dbs.main?.host
   // Package metadata (enriched from package.json)

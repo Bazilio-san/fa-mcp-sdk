@@ -125,6 +125,7 @@ const dbEnabled = appConfig.isMainDBUsed;
 | `logger` | Logging config |
 | `ad` | Active Directory config |
 | `consul` | Service discovery settings |
+| `homePage` | Home page footer settings (help link) |
 
 ### getProjectData(): McpServerData
 

@@ -14,10 +14,15 @@ ad:
 
 agentTester:
   enabled: true
+  showFooterLink: true  # true (default) — show Agent Tester link in home page footer; false — hide link without disabling tester
   useAuth: false
   openAi:
-    apiKey: '***'
-    # baseURL:
+    apiKey: ''
+    # baseURL: ''
+  httpHeaders:
+  # Key-value pairs for HTTP requests that should be auto-populated in agentTester
+  # Example: X-User-Id: 12345
+
 
 # --------------------------------------------------
 # CACHING Reduces API calls by caching responses
@@ -60,6 +65,11 @@ db:
         password: your_password
 #        usedExtensions:
 #          - pgvector
+
+homePage:
+  helpLink:
+    url: ''          # If empty — help link is not shown in footer
+    label: 'Help'    # Link text (default: "Help")
 
 logger:
   level: info

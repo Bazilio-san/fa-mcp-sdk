@@ -199,11 +199,7 @@ export async function startHttpServer (): Promise<void> {
     }
   } else {
     app.use('/agent-tester', (_req: express.Request, res: express.Response) => {
-      res.status(403).json({
-        error: 'Agent Tester is disabled',
-        message: `The Agent Tester and Headless API are not available because agentTester.enabled is set to false. 
-To enable, set agentTester.enabled in config/local.yaml or ENV AGENT_TESTER_ENABLED=true`,
-      });
+      res.status(404).json({ error: 'Not found' });
     });
   }
 

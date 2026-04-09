@@ -51,14 +51,15 @@ Root cause categories:
 
 ## Disabled State
 
-When `agentTester.enabled` is `false` (or not set), all `/agent-tester/*` endpoints — including the Headless API — return HTTP 403:
+When `agentTester.enabled` is `false` (or not set), all `/agent-tester/*` endpoints — including the Headless API — return HTTP 404:
 
 ```json
 {
-  "error": "Agent Tester is disabled",
-  "message": "The Agent Tester and Headless API are not available because agentTester.enabled is set to false..."
+  "error": "Not found"
 }
 ```
+
+This prevents disclosing the existence of the Agent Tester to external users.
 
 To enable, developer can use one of:
 
@@ -69,7 +70,19 @@ To enable, developer can use one of:
     enabled: true
   ```
 
-**For Claude Code**: When you receive this 403 response, do **not** enable Agent Tester yourself — only inform the developer that it is disabled and how to enable it. The developer decides whether to turn it on. If the developer's prompt or instructions explicitly say not to mention Agent Tester enablement, respect that and stay silent.
+### Hiding Footer Link Without Disabling Tester
+
+To keep the Agent Tester functional (accessible directly by URL) but hide the link from the home page footer, use `showFooterLink: false`:
+
+```yaml
+agentTester:
+  enabled: true
+  showFooterLink: false   # Tester works, but footer link is hidden
+```
+
+When `showFooterLink` is omitted or `true` (default), the footer link is shown as usual.
+
+**For Claude Code**: When you receive a 404 response on `/agent-tester/*`, the Agent Tester may be disabled. Inform the developer and suggest enabling it via `agentTester.enabled: true` in `config/local.yaml` or ENV `AGENT_TESTER_ENABLED=true`. The developer decides whether to turn it on. If the developer's prompt or instructions explicitly say not to mention Agent Tester enablement, respect that and stay silent.
 
 ## LLM Availability Check
 

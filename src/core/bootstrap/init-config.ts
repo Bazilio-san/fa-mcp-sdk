@@ -1,4 +1,3 @@
- 
 // noinspection UnnecessaryLocalVariableJS
 
 import './dotenv.js';  // Load environment variables first
@@ -62,6 +61,9 @@ function buildConfig (): AppConfig {
     cfg.webServer.auth.permanentServerTokens = pst.split(',').map(trim);
   }
 
+  if (cfg.ad?.domains?.MYDOMAIN) {
+    delete cfg.ad.domains.MYDOMAIN;
+  }
   return cfg;
 }
 
