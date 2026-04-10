@@ -66,10 +66,10 @@ node deploy/srv.cjs <command> [options]
 ./deploy/srv.cjs delete -n custom-service
 
 # With a specific port
-./deploy/srv.cjs delete -p 8080
+./deploy/srv.cjs delete -p 1234
 
 # Combined params
-./deploy/srv.cjs d -n custom-service -p 8080
+./deploy/srv.cjs d -n custom-service -p 1234
 ```
 
 **What happens:**
@@ -88,7 +88,7 @@ node deploy/srv.cjs <command> [options]
 ./deploy/srv.cjs r
 
 # With params
-./deploy/srv.cjs r -n custom-service -v 22.17.1 -p 8080
+./deploy/srv.cjs r -n custom-service -v 22.17.1 -p 1234
 ```
 
 **What happens:**
@@ -206,5 +206,20 @@ journalctl -u <serviceName> --since "1 hour ago"
 ### Manual control
 
 ```bash
-sudo systemctl start|stop|restart|disable|status <serviceName>
+systemctl start|stop|restart|disable|status <serviceName>
 ```
+
+```bash
+# Show all loaded service units
+systemctl list-units --type=service
+
+# Show only running services
+systemctl list-units --type=service --state=running
+
+# Show all loaded service units and their status
+systemctl list-units --type=service --state=active,inactive,failed
+
+# Show all services, including inactive and disabled
+systemctl list-unit-files --type=service
+```
+
