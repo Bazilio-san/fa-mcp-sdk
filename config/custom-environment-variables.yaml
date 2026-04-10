@@ -1,6 +1,9 @@
 agentTester:
   enabled: AGENT_TESTER_ENABLED
   useAuth: AGENT_TESTER_USE_AUTH
+  sessionTtlMs:
+    __name: AGENT_TESTER_SESSION_TTL_MS
+    __format: number
   openAi:
     apiKey: AGENT_TESTER_OPENAI_API_KEY
     baseURL: AGENT_TESTER_OPENAI_BASE_URL

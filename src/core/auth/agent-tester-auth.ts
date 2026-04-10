@@ -28,8 +28,17 @@ const logger = lgr.getSubLogger({ name: chalk.yellow('agent-tester-auth') });
 // In-memory session store
 // ---------------------------------------------------------------------------
 
-const SESSION_TTL_MS = 8 * 60 * 60 * 1000; // 8 hours
+const DEFAULT_SESSION_TTL_MS = 8 * 60 * 60 * 1000; // 8 hours
 export const COOKIE_NAME = '__at_sid';
+
+/**
+ * Session TTL in ms. Sourced from `agentTester.sessionTtlMs` with an 8h fallback.
+ * Read via a function so runtime config changes and tests don't observe a stale value.
+ */
+export function getSessionTtlMs (): number {
+  const v = appConfig.agentTester?.sessionTtlMs;
+  return Number.isFinite(v) && (v as number) > 0 ? (v as number) : DEFAULT_SESSION_TTL_MS;
+}
 
 interface SessionEntry {
   createdAt: number;
@@ -46,7 +55,7 @@ export function hasValidSession (req: Request): boolean {
 setInterval(() => {
   const now = Date.now();
   for (const [sid, entry] of sessions) {
-    if (now - entry.createdAt > SESSION_TTL_MS) {
+    if (now - entry.createdAt > getSessionTtlMs()) {
       sessions.delete(sid);
     }
   }
@@ -73,7 +82,7 @@ function getValidSession (req: Request): SessionEntry | undefined {
   if (!entry) {
     return undefined;
   }
-  if (Date.now() - entry.createdAt > SESSION_TTL_MS) {
+  if (Date.now() - entry.createdAt > getSessionTtlMs()) {
     sessions.delete(sid);
     return undefined;
   }

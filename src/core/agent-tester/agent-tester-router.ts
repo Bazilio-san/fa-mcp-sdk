@@ -11,6 +11,7 @@ import {
   createSession,
   deleteSession,
   getAvailableAuthMethods,
+  getSessionTtlMs,
   hasValidSession,
   validateLoginCredentials,
 } from '../auth/agent-tester-auth.js';
@@ -28,8 +29,6 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
 const logger = lgr.getSubLogger({ name: chalk.cyan('agent-tester') });
-
-const SESSION_TTL_MS = 8 * 60 * 60 * 1000;
 
 export function createAgentTesterRouter (options: {
   defaultMcpUrl?: string;
@@ -80,7 +79,7 @@ export function createAgentTesterRouter (options: {
       httpOnly: true,
       sameSite: 'strict',
       path: '/agent-tester',
-      maxAge: SESSION_TTL_MS,
+      maxAge: getSessionTtlMs(),
     });
 
     res.json({ success: true, authType: authResult.authType });

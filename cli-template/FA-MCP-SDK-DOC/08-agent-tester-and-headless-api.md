@@ -61,7 +61,7 @@ When `agentTester.useAuth` is `true`, the Agent Tester is protected by the full 
 - If `basic` auth is configured — shows "Username" + "Password" inputs
 - If both are configured — shows tabs to switch between methods
 
-After successful login via `POST /api/auth/login`, the server issues an httpOnly session cookie (`__at_sid`). All subsequent API requests from the browser include this cookie automatically. The session is valid for 8 hours. A logout button appears in the header.
+After successful login via `POST /api/auth/login`, the server issues an httpOnly session cookie (`__at_sid`). All subsequent API requests from the browser include this cookie automatically. The session is valid for the configured TTL (default: 8 hours — see [Session Lifetime](#session-lifetime) below). A logout button appears in the header.
 
 **Headless / CLI access:** Headless API consumers (curl, scripts, Claude Code) bypass the login dialog entirely. They pass an `Authorization` header with each request, which is validated by the standard `authMW`. No session cookie is needed.
 
@@ -69,7 +69,8 @@ After successful login via `POST /api/auth/login`, the server issues an httpOnly
 
 ```yaml
 agentTester:
-  useAuth: true   # Show login screen for browser, require auth for API
+  useAuth: true              # Show login screen for browser, require auth for API
+  sessionTtlMs: 28800000     # Browser session lifetime in ms (default: 8h)
 
 webServer:
   auth:
@@ -78,9 +79,40 @@ webServer:
     # and/or basic, jwtToken — any configured method will be available
 ```
 
-Or via environment variable: `AGENT_TESTER_USE_AUTH=true`
+Environment variables:
 
-When `useAuth` is `false` (default), the Agent Tester is accessible without any authentication.
+- `AGENT_TESTER_USE_AUTH=true`
+- `AGENT_TESTER_SESSION_TTL_MS=28800000`
+
+When `useAuth` is `false` (default), the Agent Tester is accessible without any authentication and `sessionTtlMs` has no effect.
+
+### Session Lifetime
+
+When `useAuth` is `true`, a successful browser login creates a server-side session and sets an httpOnly cookie (`__at_sid`) scoped to `/agent-tester`. Both the in-memory entry and the cookie's `Max-Age` use the same TTL from `agentTester.sessionTtlMs`.
+
+**Where sessions live**: an in-memory `Map` inside the server process (`src/core/auth/agent-tester-auth.ts`). There is no disk or Redis persistence — this is intentional because Agent Tester is a development tool, not a production auth system.
+
+**Default TTL**: 8 hours (`28_800_000` ms). Override by setting `agentTester.sessionTtlMs` in `config/default.yaml` (or any environment-specific override file), or via `AGENT_TESTER_SESSION_TTL_MS`. Values are in milliseconds; any non-positive or non-finite value falls back to the 8h default.
+
+**Cleanup**: a background sweep runs every 30 minutes and drops expired entries from the map. Expired entries are also evicted lazily on access.
+
+**Impact of closing the browser or restarting the server**:
+
+| Scenario | Re-login required? |
+|---|---|
+| Close tab, reopen within TTL | No — cookie is persistent, server session still live |
+| Close entire browser, reopen within TTL | No — cookie is persistent, server session still live |
+| TTL elapsed since last login | Yes — server drops the entry, responds 401 |
+| Server restart (Ctrl+C, deploy, crash) | Yes — in-memory map is cleared; browser presents an unknown `__at_sid` and the login overlay reappears |
+| User clicks the Logout button | Yes — `POST /api/auth/logout` deletes the entry and clears the cookie |
+
+**Tuning guidance**:
+
+- **Shorter TTL (e.g. 1 hour = `3600000`)**: more frequent logins, smaller exposure if a workstation is left unlocked.
+- **Longer TTL (e.g. 24 hours = `86400000`)**: fewer interruptions during long development sessions.
+- **Do not set TTL to 0 or a negative value** — the server will silently fall back to the 8h default.
+
+> **Note**: the TTL only affects the browser login flow. Headless API access via `Authorization` header is stateless and completely bypasses sessions; it is unaffected by `sessionTtlMs`.
 
 ### Auth API Endpoints
 

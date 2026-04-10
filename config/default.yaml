@@ -37,6 +37,7 @@ agentTester:
   enabled: true
   showFooterLink: true  # true (default) — show Agent Tester link in home page footer; false — hide link without disabling tester
   useAuth: false  # true — protect Agent Tester with full multi-auth (permanentTokens/basic/JWT/custom); browser users see a login dialog, headless clients pass Authorization header
+  sessionTtlMs: 28800000  # Browser login session lifetime in milliseconds. Default: 28800000 (8 hours). Applies only when useAuth is true. Sessions are in-memory on the server — lost on restart.
   logJson: false  # true — emit structured JSON events (tool_call, tool_result, llm_response, response) to stdout during agent execution
   openAi:
     apiKey: ''
