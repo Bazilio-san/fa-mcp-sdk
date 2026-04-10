@@ -103,56 +103,15 @@
                 </section>
 
                 <section class="config-section" data-testid="at-model-section">
-                    <div class="form-group model-select-group">
-                        <label for="modelSelect">Model</label>
-                        <select id="modelSelect" name="modelSelect" required data-testid="at-model-select">
-                            <option value="gpt-5.4">gpt-5.4</option>
-                            <option value="gpt-5.3-codex">gpt-5.3-codex</option>
-                            <option value="gpt-5.2">gpt-5.2</option>
-                            <option value="gpt-5.1">gpt-5.1</option>
-                            <option value="gpt-5-nano">gpt-5-nano</option>
-                            <option value="gpt-5-mini">gpt-5-mini</option>
-                            <option value="gpt-4.1">gpt-4.1</option>
-                            <option value="gpt-4.1-mini">gpt-4.1-mini</option>
-                            <option value="gpt-4.1-nano">gpt-4.1-nano</option>
-                            <option value="gpt-4o">gpt-4o</option>
-                            <option value="gpt-4o-mini">gpt-4o-mini</option>
-                           <option value="other">Other...</option>
-                        </select>
-                    </div>
-
-                    <div id="customModelSettings" class="custom-model-settings" style="display: none;" data-testid="at-custom-model-settings">
-                        <div class="form-group">
-                            <label for="customBaseUrl">Base URL</label>
-                            <input type="url" id="customBaseUrl" placeholder="https://api.example.com/v1/chat/completions" data-testid="at-custom-base-url">
+                    <div class="form-group model-display-group">
+                        <label>Model</label>
+                        <div class="model-display-row">
+                            <span id="modelDisplay" class="model-display" data-testid="at-model-display">—</span>
+                            <button type="button" id="llmSettingsBtn" class="btn-icon" title="LLM Settings" data-testid="at-llm-settings-btn">
+                                <span class="material-icons-round">settings</span>
+                            </button>
                         </div>
-                        <div class="form-group">
-                            <label for="customApiKey">API Key</label>
-                            <input type="password" id="customApiKey" placeholder="sk-..." data-testid="at-custom-api-key">
-                        </div>
-                        <div class="form-group">
-                            <label for="customModelName">Model Name</label>
-                            <input type="text" id="customModelName" placeholder="model-name" data-testid="at-custom-model-name">
-                        </div>
-                    </div>
-
-                    <div id="modelParameters" class="model-parameters">
-                        <div class="form-group">
-                            <label for="modelTemperature" style="width: 87px">Temperature</label>
-                            <input type="number" id="modelTemperature" min="0" max="2" step="0.1" value="0.2"  style="width: 55px" data-testid="at-model-temperature">
-                        </div>
-                        <div class="form-group">
-                            <label for="modelMaxTokens" style="width: 84px">Max Tokens</label>
-                            <input type="number" id="modelMaxTokens" min="1" max="128000" step="1" value="2048"  style="width: 75px" data-testid="at-model-max-tokens">
-                        </div>
-                        <div class="form-group">
-                            <label for="modelMaxTurns" style="width: 87px">Max Turns</label>
-                            <input type="number" id="modelMaxTurns" min="1" max="20" step="1" value="10" style="width: 55px" data-testid="at-model-max-turns">
-                        </div>
-                        <div class="form-group">
-                            <label for="toolResultLimitChars" style="width: 84px">Limit (chars)</label>
-                            <input type="number" id="toolResultLimitChars" min="100" max="100000" step="100" value="20000" style="width: 75px" data-testid="at-tool-result-limit">
-                        </div>
+                        <div id="apiKeyWarning" class="api-key-warning" style="display: none;" data-testid="at-api-key-warning">API Key is not set</div>
                     </div>
                 </section>
 
@@ -274,6 +233,67 @@
             <textarea id="promptModalTextarea" rows="20" data-testid="at-prompt-modal-textarea"></textarea>
             <div class="prompt-modal-footer">
                 <button type="button" class="btn btn-primary" id="promptModalSave" data-testid="at-prompt-modal-save">Apply</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- LLM Settings Modal -->
+    <div class="llm-modal-overlay" id="llmModal" style="display: none;" data-testid="at-llm-modal">
+        <div class="llm-modal">
+            <div class="llm-modal-header">
+                <h3>LLM Settings</h3>
+                <button type="button" class="btn-icon" id="llmModalClose" title="Close" data-testid="at-llm-modal-close">
+                    <span class="material-icons-round">close</span>
+                </button>
+            </div>
+            <form id="llmSettingsForm" class="llm-modal-body" autocomplete="off">
+                <div class="form-group">
+                    <label for="llmBaseUrl">Base URL</label>
+                    <input type="url" id="llmBaseUrl" placeholder="https://api.openai.com/v1" data-testid="at-llm-base-url">
+                </div>
+                <div class="form-group">
+                    <label for="llmApiKey">API Key</label>
+                    <div class="input-with-toggle">
+                        <input type="password" id="llmApiKey" placeholder="sk-..." autocomplete="off" data-testid="at-llm-api-key">
+                        <button type="button" class="btn-icon" id="llmApiKeyToggle" title="Show/hide" data-testid="at-llm-api-key-toggle">
+                            <span class="material-icons-round">visibility</span>
+                        </button>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label for="llmModelName">Model Name</label>
+                    <div class="custom-select-container">
+                        <input type="text" id="llmModelName" placeholder="gpt-5.4-nano" autocomplete="off" data-testid="at-llm-model-name">
+                        <button type="button" id="llmModelDropdownToggle" class="dropdown-toggle" title="Choose model" data-testid="at-llm-model-dropdown-toggle">
+                            <span class="material-icons-round">expand_more</span>
+                        </button>
+                        <div id="llmModelDropdownList" class="dropdown-list" style="display: none;" data-testid="at-llm-model-dropdown-list"></div>
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="llmTemperature">Temperature</label>
+                        <input type="number" id="llmTemperature" min="0" max="2" step="0.1" value="0.2" data-testid="at-llm-temperature">
+                    </div>
+                    <div class="form-group">
+                        <label for="llmMaxTokens">Max Tokens</label>
+                        <input type="number" id="llmMaxTokens" min="1" max="128000" step="1" value="2048" data-testid="at-llm-max-tokens">
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="llmMaxTurns">Max Turns</label>
+                        <input type="number" id="llmMaxTurns" min="1" max="20" step="1" value="10" data-testid="at-llm-max-turns">
+                    </div>
+                    <div class="form-group">
+                        <label for="llmLimitChars">Limit (chars)</label>
+                        <input type="number" id="llmLimitChars" min="100" max="100000" step="100" value="20000" data-testid="at-llm-limit-chars">
+                    </div>
+                </div>
+            </form>
+            <div class="llm-modal-footer">
+                <button type="button" class="btn" id="llmModalCancel" data-testid="at-llm-modal-cancel">Cancel</button>
+                <button type="button" class="btn btn-primary" id="llmModalSave" data-testid="at-llm-modal-save">Save</button>
             </div>
         </div>
     </div>

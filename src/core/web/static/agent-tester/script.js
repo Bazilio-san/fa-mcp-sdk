@@ -1,6 +1,32 @@
 const API_BASE = '/agent-tester';
 const trim = (s) => String(s || '').trim();
 
+const LLM_LS_KEY = 'mcpAgentLlmSettings';
+const LLM_PRESET_MODELS = [
+  'gpt-5.4',
+  'gpt-5.4-mini',
+  'gpt-5.4-nano',
+  'gpt-5.3-codex',
+  'gpt-5.2',
+  'gpt-5.1',
+  'gpt-5-nano',
+  'gpt-5-mini',
+  'gpt-4.1',
+  'gpt-4.1-mini',
+  'gpt-4.1-nano',
+  'gpt-4o',
+  'gpt-4o-mini',
+];
+const LLM_DEFAULTS = {
+  baseURL: '',
+  apiKey: '',
+  model: 'gpt-5.4-nano',
+  temperature: 0.2,
+  maxTokens: 2048,
+  maxTurns: 10,
+  toolResultLimitChars: 20000,
+};
+
 /**
  * Wrapper around fetch that always includes credentials (session cookie).
  */
@@ -348,16 +374,26 @@ class McpAgentTester {
     this.headersSection = document.getElementById('headersSection');
     this.dynamicHeaders = document.getElementById('dynamicHeaders');
 
-    this.modelSelect = document.getElementById('modelSelect');
+    // LLM settings — collapsed view + modal
+    this.modelDisplay = document.getElementById('modelDisplay');
+    this.llmSettingsBtn = document.getElementById('llmSettingsBtn');
+    this.apiKeyWarning = document.getElementById('apiKeyWarning');
+    this.llmModal = document.getElementById('llmModal');
+    this.llmModalClose = document.getElementById('llmModalClose');
+    this.llmModalCancel = document.getElementById('llmModalCancel');
+    this.llmModalSave = document.getElementById('llmModalSave');
+    this.llmApiKeyToggle = document.getElementById('llmApiKeyToggle');
+    this.llmBaseUrl = document.getElementById('llmBaseUrl');
+    this.llmApiKey = document.getElementById('llmApiKey');
+    this.llmModelName = document.getElementById('llmModelName');
+    this.llmModelDropdownToggle = document.getElementById('llmModelDropdownToggle');
+    this.llmModelDropdownList = document.getElementById('llmModelDropdownList');
+    this.llmTemperature = document.getElementById('llmTemperature');
+    this.llmMaxTokens = document.getElementById('llmMaxTokens');
+    this.llmMaxTurns = document.getElementById('llmMaxTurns');
+    this.llmLimitChars = document.getElementById('llmLimitChars');
 
-    this.customModelSettings = document.getElementById('customModelSettings');
-    this.customBaseUrl = document.getElementById('customBaseUrl');
-    this.customApiKey = document.getElementById('customApiKey');
-    this.customModelName = document.getElementById('customModelName');
-    this.modelTemperature = document.getElementById('modelTemperature');
-    this.modelMaxTokens = document.getElementById('modelMaxTokens');
-    this.modelMaxTurns = document.getElementById('modelMaxTurns');
-    this.toolResultLimitChars = document.getElementById('toolResultLimitChars');
+    this.llmSettings = { ...LLM_DEFAULTS };
 
     this.systemPromptTextarea = document.getElementById('systemPrompt');
     this.customPromptTextarea = document.getElementById('customPrompt');
@@ -404,20 +440,25 @@ class McpAgentTester {
     this.serverUrlDropdown.addEventListener('click', (e) => this.toggleUrlDropdown(e));
     document.addEventListener('click', (e) => this.handleClickOutside(e));
 
-    this.modelSelect.addEventListener('change', () => {
-      this.handleModelSelectChange();
-      this.saveFormValuesToStorage();
-    });
     this.systemPromptTextarea.addEventListener('input', () => this.saveFormValuesToStorage());
     this.customPromptTextarea.addEventListener('input', () => this.saveFormValuesToStorage());
 
-    this.customBaseUrl.addEventListener('input', () => this.saveFormValuesToStorage());
-    this.customApiKey.addEventListener('input', () => this.saveFormValuesToStorage());
-    this.customModelName.addEventListener('input', () => this.saveFormValuesToStorage());
-    this.modelTemperature.addEventListener('input', () => this.saveFormValuesToStorage());
-    this.modelMaxTokens.addEventListener('input', () => this.saveFormValuesToStorage());
-    this.modelMaxTurns.addEventListener('input', () => this.saveFormValuesToStorage());
-    this.toolResultLimitChars.addEventListener('input', () => this.saveFormValuesToStorage());
+    // LLM settings modal
+    this.llmSettingsBtn.addEventListener('click', () => this.openLlmModal());
+    this.llmModalClose.addEventListener('click', () => this.closeLlmModal());
+    this.llmModalCancel.addEventListener('click', () => this.closeLlmModal());
+    this.llmModalSave.addEventListener('click', () => this.saveLlmModal());
+    this.llmApiKeyToggle.addEventListener('click', () => this.toggleApiKeyVisibility());
+    this.llmModelDropdownToggle.addEventListener('click', (e) => this.toggleLlmModelDropdown(e));
+    this.renderLlmModelDropdown();
+    this.llmModal.addEventListener('click', (e) => {
+      if (e.target === this.llmModal) { this.closeLlmModal(); }
+    });
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && this.llmModal.style.display === 'flex') {
+        this.closeLlmModal();
+      }
+    });
 
     document.querySelectorAll('.btn-enlarge').forEach(btn => {
       btn.addEventListener('click', () => this.openPromptModal(btn.dataset.target));
@@ -518,6 +559,7 @@ class McpAgentTester {
       this.handleServerUrlChange();
       this.renderSavedUrls();
       await this.loadDefaultConfig();
+      this.initLlmSettings();
       await this.loadCurrentServer();
       this.currentSystemPrompt = this.systemPromptTextarea.value;
 
@@ -606,6 +648,7 @@ class McpAgentTester {
       this.defaultMcpUrl = config.defaultMcpUrl || null;
       this.authEnabled = !!config.authEnabled;
       this.configHttpHeaders = config.httpHeaders || {};
+      this.llmDefaults = config.llmDefaults || {};
       if (config.defaultMcpUrl) {
         const serverUrlInput = document.getElementById('serverUrl');
         if (!this.mcpConfig.url && !serverUrlInput.value) {
@@ -1176,7 +1219,7 @@ class McpAgentTester {
     const message = this.messageInput.value.trim();
     if (!message) {return;}
 
-    if (!this.validateCustomModelSettings()) {
+    if (!this.validateLlmSettings()) {
       return;
     }
 
@@ -1379,63 +1422,209 @@ class McpAgentTester {
     });
   }
 
-  handleModelSelectChange () {
-    const isOther = this.modelSelect.value === 'other';
-    this.customModelSettings.style.display = isOther ? 'block' : 'none';
+  initLlmSettings () {
+    let stored = {};
+    try {
+      stored = JSON.parse(localStorage.getItem(LLM_LS_KEY) || '{}');
+    } catch { stored = {}; }
+
+    const merged = { ...LLM_DEFAULTS, ...stored };
+    const cfg = this.llmDefaults || {};
+    let touched = false;
+
+    if (!merged.baseURL && cfg.baseURL) { merged.baseURL = cfg.baseURL; touched = true; }
+    if (!merged.apiKey && cfg.apiKey) { merged.apiKey = cfg.apiKey; touched = true; }
+
+    this.llmSettings = merged;
+
+    if (touched) { this.saveLlmSettings(); }
+
+    this.migrateLegacyLlmSettings();
+    this.renderModelDisplay();
   }
 
-  validateCustomModelSettings () {
-    if (this.modelSelect.value !== 'other') {
-      return true;
+  migrateLegacyLlmSettings () {
+    try {
+      const legacy = JSON.parse(localStorage.getItem('mcpAgentFormValues') || '{}');
+      let dirty = false;
+      const numericFields = new Set(['temperature', 'maxTokens', 'maxTurns', 'toolResultLimitChars']);
+      const map = {
+        customBaseUrl: 'baseURL',
+        customApiKey: 'apiKey',
+        customModelName: 'model',
+        modelTemperature: 'temperature',
+        modelMaxTokens: 'maxTokens',
+        modelMaxTurns: 'maxTurns',
+        toolResultLimitChars: 'toolResultLimitChars',
+      };
+      for (const [from, to] of Object.entries(map)) {
+        const raw = legacy[from];
+        if (raw == null || raw === '') { continue; }
+        const current = this.llmSettings[to];
+        const isEmpty = current == null || current === '' || current === LLM_DEFAULTS[to];
+        if (!isEmpty) { continue; }
+        const v = numericFields.has(to) ? Number(raw) : raw;
+        if (numericFields.has(to) && Number.isNaN(v)) { continue; }
+        this.llmSettings[to] = v;
+        dirty = true;
+      }
+      // Legacy preset model (not 'other'): reuse if current model is still a default
+      if (legacy.model && legacy.model !== 'other' && (this.llmSettings.model === LLM_DEFAULTS.model || !this.llmSettings.model)) {
+        this.llmSettings.model = legacy.model;
+        dirty = true;
+      }
+      if (dirty) { this.saveLlmSettings(); this.renderModelDisplay(); }
+    } catch { /* ignore */ }
+  }
+
+  saveLlmSettings () {
+    try {
+      localStorage.setItem(LLM_LS_KEY, JSON.stringify(this.llmSettings));
+    } catch (e) {
+      console.error('Failed to save LLM settings:', e);
+    }
+  }
+
+  renderModelDisplay () {
+    const name = trim(this.llmSettings.model) || '—';
+    this.modelDisplay.textContent = name;
+    this.apiKeyWarning.style.display = this.llmSettings.apiKey ? 'none' : 'block';
+  }
+
+  openLlmModal () {
+    const s = this.llmSettings;
+    this.llmBaseUrl.value = s.baseURL || '';
+    this.llmApiKey.value = s.apiKey || '';
+    this.llmModelName.value = s.model || '';
+    this.llmTemperature.value = s.temperature ?? LLM_DEFAULTS.temperature;
+    this.llmMaxTokens.value = s.maxTokens ?? LLM_DEFAULTS.maxTokens;
+    this.llmMaxTurns.value = s.maxTurns ?? LLM_DEFAULTS.maxTurns;
+    this.llmLimitChars.value = s.toolResultLimitChars ?? LLM_DEFAULTS.toolResultLimitChars;
+
+    // Reset API key visibility to hidden on open
+    this.llmApiKey.type = 'password';
+    const icon = this.llmApiKeyToggle.querySelector('.material-icons-round');
+    if (icon) { icon.textContent = 'visibility'; }
+
+    this.llmModal.style.display = 'flex';
+  }
+
+  closeLlmModal () {
+    this.closeLlmModelDropdown();
+    this.llmModal.style.display = 'none';
+  }
+
+  saveLlmModal () {
+    const baseURL = trim(this.llmBaseUrl.value);
+    const apiKey = trim(this.llmApiKey.value);
+    const model = trim(this.llmModelName.value);
+    const temperature = parseFloat(this.llmTemperature.value);
+    const maxTokens = parseInt(this.llmMaxTokens.value, 10);
+    const maxTurns = parseInt(this.llmMaxTurns.value, 10);
+    const toolResultLimitChars = parseInt(this.llmLimitChars.value, 10);
+
+    const missing = [];
+    if (!model) { missing.push('Model Name'); }
+    // baseURL is optional (OpenAI default) — empty means use provider default
+    // apiKey intentionally not required here — its absence triggers the red warning instead
+    if (Number.isNaN(temperature)) { missing.push('Temperature'); }
+    if (!maxTokens) { missing.push('Max Tokens'); }
+    if (!maxTurns) { missing.push('Max Turns'); }
+    if (!toolResultLimitChars) { missing.push('Limit (chars)'); }
+
+    if (missing.length) {
+      this.showToast(`Missing required fields: ${missing.join(', ')}`, 'error');
+      return;
     }
 
-    const baseURL = trim(this.customBaseUrl.value);
-    const apiKey = trim(this.customApiKey.value);
-    const modelName = trim(this.customModelName.value);
-    const temperature = this.modelTemperature.value;
-    const maxTokens = this.modelMaxTokens.value;
+    this.llmSettings = { baseURL, apiKey, model, temperature, maxTokens, maxTurns, toolResultLimitChars };
+    this.saveLlmSettings();
+    this.renderModelDisplay();
+    this.closeLlmModal();
+    this.showToast('LLM settings saved', 'success');
+  }
 
-    const missingFields = [];
-    if (!baseURL) {missingFields.push('Base URL');}
-    if (!apiKey) {missingFields.push('API Key');}
-    if (!modelName) {missingFields.push('Model Name');}
-    if (!temperature) {missingFields.push('Temperature');}
-    if (!maxTokens) {missingFields.push('Max Tokens');}
+  toggleApiKeyVisibility () {
+    const icon = this.llmApiKeyToggle.querySelector('.material-icons-round');
+    if (this.llmApiKey.type === 'password') {
+      this.llmApiKey.type = 'text';
+      if (icon) { icon.textContent = 'visibility_off'; }
+    } else {
+      this.llmApiKey.type = 'password';
+      if (icon) { icon.textContent = 'visibility'; }
+    }
+  }
 
-    if (missingFields.length > 0) {
-      this.showToast(`Missing required fields: ${missingFields.join(', ')}`, 'error');
+  renderLlmModelDropdown () {
+    this.llmModelDropdownList.innerHTML = '';
+    LLM_PRESET_MODELS.forEach((name) => {
+      const item = document.createElement('div');
+      item.className = 'dropdown-item';
+      item.setAttribute('data-testid', `at-llm-model-option-${name}`);
+      item.textContent = name;
+      item.addEventListener('click', (e) => {
+        e.stopPropagation();
+        this.llmModelName.value = name;
+        this.closeLlmModelDropdown();
+      });
+      this.llmModelDropdownList.appendChild(item);
+    });
+  }
+
+  toggleLlmModelDropdown (e) {
+    e.preventDefault();
+    e.stopPropagation();
+    const visible = this.llmModelDropdownList.style.display !== 'none';
+    if (visible) {
+      this.closeLlmModelDropdown();
+    } else {
+      this.openLlmModelDropdown();
+    }
+  }
+
+  openLlmModelDropdown () {
+    this.llmModelDropdownList.style.display = 'block';
+    this.llmModelDropdownToggle.classList.add('active');
+    // Close on outside click (one-shot)
+    setTimeout(() => {
+      const onDocClick = (ev) => {
+        if (!this.llmModelDropdownList.contains(ev.target) && ev.target !== this.llmModelDropdownToggle) {
+          this.closeLlmModelDropdown();
+          document.removeEventListener('click', onDocClick);
+        }
+      };
+      document.addEventListener('click', onDocClick);
+    }, 0);
+  }
+
+  closeLlmModelDropdown () {
+    this.llmModelDropdownList.style.display = 'none';
+    this.llmModelDropdownToggle.classList.remove('active');
+  }
+
+  validateLlmSettings () {
+    const s = this.llmSettings;
+    const missing = [];
+    // baseURL is optional — empty means use provider default (OpenAI)
+    if (!s.apiKey) { missing.push('API Key'); }
+    if (!s.model) { missing.push('Model Name'); }
+    if (missing.length) {
+      this.showToast(`Cannot send message — missing: ${missing.join(', ')}. Open LLM Settings.`, 'error');
       return false;
     }
-
     return true;
   }
 
   getModelConfig () {
-    const isOther = this.modelSelect.value === 'other';
-    const t = parseFloat(this.modelTemperature.value);
-    const temperature = Number.isNaN(t) ? 0.1 : t;
-    const maxTokens = parseInt(this.modelMaxTokens.value, 10) || 2048;
-    const maxTurns = parseInt(this.modelMaxTurns.value, 10) || 10;
-    const toolResultLimitChars = parseInt(this.toolResultLimitChars.value, 10) || 20000;
-
-    if (isOther) {
-      return {
-        baseURL: trim(this.customBaseUrl.value),
-        apiKey: trim(this.customApiKey.value),
-        model: trim(this.customModelName.value),
-        temperature: temperature,
-        maxTokens: maxTokens,
-        maxTurns: maxTurns,
-        toolResultLimitChars: toolResultLimitChars,
-      };
-    }
-
+    const s = this.llmSettings;
     return {
-      model: this.modelSelect.value,
-      temperature: temperature,
-      maxTokens: maxTokens,
-      maxTurns: maxTurns,
-      toolResultLimitChars: toolResultLimitChars,
+      baseURL: s.baseURL,
+      apiKey: s.apiKey,
+      model: s.model,
+      temperature: s.temperature,
+      maxTokens: s.maxTokens,
+      maxTurns: s.maxTurns,
+      toolResultLimitChars: s.toolResultLimitChars,
     };
   }
 
@@ -1471,16 +1660,8 @@ class McpAgentTester {
     const formData = {
       serverUrl: this.serverUrlInput.value,
       transport: this.transportSelect.value,
-      model: this.modelSelect.value,
       agentPrompt: trim(this.systemPromptTextarea.value),
       customPrompt: trim(this.customPromptTextarea.value),
-      customBaseUrl: trim(this.customBaseUrl.value),
-      customApiKey: trim(this.customApiKey.value),
-      customModelName: trim(this.customModelName.value),
-      modelTemperature: this.modelTemperature.value,
-      modelMaxTokens: this.modelMaxTokens.value,
-      modelMaxTurns: this.modelMaxTurns.value,
-      toolResultLimitChars: this.toolResultLimitChars.value,
     };
     localStorage.setItem('mcpAgentFormValues', JSON.stringify(formData));
   }
@@ -1509,17 +1690,8 @@ class McpAgentTester {
         const formData = JSON.parse(stored);
         if (formData.serverUrl) {this.serverUrlInput.value = formData.serverUrl;}
         if (formData.transport) {this.transportSelect.value = formData.transport;}
-        if (formData.model) {this.modelSelect.value = formData.model;}
         if (formData.agentPrompt) {this.systemPromptTextarea.value = trim(formData.agentPrompt);}
         if (formData.customPrompt) {this.customPromptTextarea.value = trim(formData.customPrompt);}
-        if (formData.customBaseUrl) {this.customBaseUrl.value = formData.customBaseUrl;}
-        if (formData.customApiKey) {this.customApiKey.value = formData.customApiKey;}
-        if (formData.customModelName) {this.customModelName.value = formData.customModelName;}
-        if (formData.modelTemperature) {this.modelTemperature.value = formData.modelTemperature;}
-        if (formData.modelMaxTokens) {this.modelMaxTokens.value = formData.modelMaxTokens;}
-        if (formData.modelMaxTurns) {this.modelMaxTurns.value = formData.modelMaxTurns;}
-        if (formData.toolResultLimitChars) {this.toolResultLimitChars.value = formData.toolResultLimitChars;}
-        this.handleModelSelectChange();
       }
     } catch (error) {
       console.error('Error loading form values from storage:', error);

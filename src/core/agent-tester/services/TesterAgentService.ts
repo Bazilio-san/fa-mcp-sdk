@@ -189,16 +189,19 @@ Output only the new Summary Memory.`;
       const temperature = modelConfig?.temperature ?? this.defaultConfig.temperature;
       const maxTokens = modelConfig?.maxTokens ?? this.defaultConfig.maxTokens;
 
-      // Create OpenAI client - use custom baseURL/apiKey if provided
+      // Create OpenAI client — use client-provided apiKey (required) and optional baseURL.
+      // Empty baseURL means OpenAI default. If client didn't send apiKey, fall back to server config.
       let llmClient: OpenAI;
       let isCustomLlm = false;
-      if (modelConfig?.baseURL && modelConfig?.apiKey) {
+      if (modelConfig?.apiKey) {
         llmClient = new OpenAI({
-          baseURL: modelConfig.baseURL,
           apiKey: modelConfig.apiKey,
+          ...(modelConfig.baseURL ? { baseURL: modelConfig.baseURL } : {}),
         });
-        isCustomLlm = true;
-        logger.info(`Using custom LLM: ${modelConfig.baseURL}`);
+        isCustomLlm = !!modelConfig.baseURL;
+        if (isCustomLlm) {
+          logger.info(`Using custom LLM: ${modelConfig.baseURL}`);
+        }
       } else if (this.openai) {
         llmClient = this.openai;
       } else {
@@ -536,10 +539,13 @@ Response Text: ${finalText}
       const temperature = modelConfig?.temperature ?? this.defaultConfig.temperature;
       const maxTokens = modelConfig?.maxTokens ?? this.defaultConfig.maxTokens;
 
-      // Create OpenAI client
+      // Create OpenAI client — baseURL optional (empty = OpenAI default)
       let llmClient: OpenAI;
-      if (modelConfig?.baseURL && modelConfig?.apiKey) {
-        llmClient = new OpenAI({ baseURL: modelConfig.baseURL, apiKey: modelConfig.apiKey });
+      if (modelConfig?.apiKey) {
+        llmClient = new OpenAI({
+          apiKey: modelConfig.apiKey,
+          ...(modelConfig.baseURL ? { baseURL: modelConfig.baseURL } : {}),
+        });
       } else if (this.openai) {
         llmClient = this.openai;
       } else {

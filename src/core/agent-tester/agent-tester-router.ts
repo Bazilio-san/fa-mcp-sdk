@@ -96,10 +96,16 @@ export function createAgentTesterRouter (options: {
 
   // API: Get default config (port, MCP URL)
   router.get('/api/config', (req, res) => {
+    const openAi = appConfig.agentTester?.openAi;
+    const expose = !!openAi?.exposeToClient;
     res.json({
       defaultMcpUrl: options.defaultMcpUrl || null,
       authEnabled: !!appConfig.webServer?.auth?.enabled,
       httpHeaders: appConfig.agentTester?.httpHeaders || {},
+      llmDefaults: {
+        baseURL: expose ? (openAi?.baseURL || '') : '',
+        apiKey: expose ? (openAi?.apiKey || '') : '',
+      },
     });
   });
 

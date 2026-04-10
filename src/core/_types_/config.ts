@@ -69,6 +69,7 @@ interface IAgentTesterConfig {
     openAi?: {
       apiKey: string;
       baseURL?: string;
+      exposeToClient?: boolean; // default false; when true — apiKey/baseURL sent to Agent Tester UI as defaults
     };
     httpHeaders?: Record<string, string>;
   }

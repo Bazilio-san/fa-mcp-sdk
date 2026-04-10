@@ -1490,6 +1490,140 @@ body {
 }
 
 /* ============================================
+   Model Display (collapsed LLM block)
+   ============================================ */
+
+.model-display-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.model-display {
+  flex: 1;
+  padding: 8px 12px;
+  background: var(--bg-input);
+  border: 1px solid var(--border-input);
+  border-radius: var(--radius);
+  font-family: 'Fira Code', monospace;
+  font-size: 0.85rem;
+  color: var(--text);
+  user-select: text;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.api-key-warning {
+  margin-top: 6px;
+  color: #d93025;
+  font-size: 0.75rem;
+  font-weight: 500;
+}
+
+[data-theme="dark"] .api-key-warning {
+  color: #f28b82;
+}
+
+/* ============================================
+   LLM Settings Modal
+   ============================================ */
+
+.llm-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(4px);
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+
+.llm-modal {
+  background: var(--bg-sidebar);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  width: 100%;
+  max-width: 520px;
+  max-height: 95vh;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+}
+
+/* Compact dropdown items inside LLM modal so all preset models fit without scroll */
+.llm-modal .dropdown-list {
+  max-height: 420px;
+}
+
+.llm-modal .dropdown-item {
+  padding: 4px 12px;
+  font-size: 0.8rem;
+}
+
+.llm-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--border);
+}
+
+.llm-modal-header h3 {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--text);
+  margin: 0;
+}
+
+.llm-modal-body {
+  padding: 16px 20px;
+  overflow: visible;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.llm-modal-body .form-row {
+  display: flex;
+  gap: 12px;
+}
+
+.llm-modal-body .form-row .form-group {
+  flex: 1;
+}
+
+.llm-modal-body .input-with-toggle {
+  display: flex;
+  gap: 4px;
+  align-items: stretch;
+}
+
+.llm-modal-body .input-with-toggle input {
+  flex: 1;
+}
+
+.llm-modal-body .input-with-toggle .btn-icon {
+  flex-shrink: 0;
+}
+
+.llm-modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 12px 20px;
+  border-top: 1px solid var(--border);
+}
+
+.llm-modal-footer .btn {
+  padding: 8px 20px;
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+/* ============================================
    Auth Overlay (Login Screen)
    ============================================ */
 

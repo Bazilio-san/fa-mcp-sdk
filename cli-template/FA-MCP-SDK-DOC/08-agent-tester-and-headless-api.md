@@ -522,20 +522,31 @@ at-toast-<type>                e.g. at-toast-success, at-toast-error
 | `at-header-row-<name>` | Row for a specific header (e.g. `at-header-row-Authorization`) |
 | `at-header-input-<name>` | Input for a specific header value |
 
-**Sidebar — model settings**
+**Sidebar — LLM settings**
+
+The sidebar shows only the current model name (read-only) and a gear button. All LLM parameters (Base URL, API Key, Model Name, Temperature, Max Tokens, Max Turns, Limit (chars)) are edited in the LLM Settings modal opened via that button. Settings are persisted in `localStorage['mcpAgentLlmSettings']`. If `agentTester.openAi.exposeToClient` is `true` in config, the server sends `baseURL` and `apiKey` via `GET /agent-tester/api/config` → `llmDefaults` and the UI pre-fills them into localStorage on first open (security note: only enable `exposeToClient` when the tester is protected by `useAuth: true` or deployed in a trusted network). When the effective `apiKey` is empty, a red "API Key is not set" warning is shown below the model name.
 
 | testid | Element |
 |---|---|
 | `at-model-section` | Model section container |
-| `at-model-select` | Model `<select>` |
-| `at-custom-model-settings` | "Other..." custom model panel |
-| `at-custom-base-url` | Custom base URL input |
-| `at-custom-api-key` | Custom API key input |
-| `at-custom-model-name` | Custom model name input |
-| `at-model-temperature` | Temperature input |
-| `at-model-max-tokens` | Max tokens input |
-| `at-model-max-turns` | Max turns input |
-| `at-tool-result-limit` | Tool result char limit input |
+| `at-model-display` | Read-only current model name |
+| `at-llm-settings-btn` | Gear button that opens the LLM Settings modal |
+| `at-api-key-warning` | "API Key is not set" warning (visible only when `apiKey` is empty) |
+| `at-llm-modal` | LLM Settings modal overlay |
+| `at-llm-modal-close` | Modal close (×) button |
+| `at-llm-modal-cancel` | Modal Cancel button |
+| `at-llm-modal-save` | Modal Save button |
+| `at-llm-base-url` | Base URL input (optional — empty means OpenAI default) |
+| `at-llm-api-key` | API Key input (password field) |
+| `at-llm-api-key-toggle` | Show/hide API key visibility toggle |
+| `at-llm-model-name` | Model Name input (editable combobox) |
+| `at-llm-model-dropdown-toggle` | Model dropdown arrow button |
+| `at-llm-model-dropdown-list` | Model dropdown list (preset models) |
+| `at-llm-model-option-<name>` | Individual model option inside the list |
+| `at-llm-temperature` | Temperature input |
+| `at-llm-max-tokens` | Max tokens input |
+| `at-llm-max-turns` | Max turns input |
+| `at-llm-limit-chars` | Tool result char limit input |
 
 **Sidebar — prompts**
 
