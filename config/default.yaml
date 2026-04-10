@@ -1,137 +1,213 @@
 ---
 
-#accessPoints:
-#  myService:
-#    title: 'My remote service'
-#    host: <host>
-#    port: 9999
-#    token: '***'
-#    noConsul: true # Use if the service developers do not provide registration in consul
-#    consulServiceName: <consulServiceName>
+#> ========================================================================
+#> Outbound access points — connection settings for remote services this MCP talks to.
+#> Each entry under accessPoints is keyed by a logical alias used in code to look up host/port/token.
+#> By default, hosts/ports are resolved via Consul; the fields below let you override that or
+#> describe a service that is not registered in Consul at all.
+#> ========================================================================
+# accessPoints:
+#   myService:
+#     #> Human-readable title shown in diagnostics and admin pages
+#     title: 'My remote service'
+#     #> Remote service host (used when noConsul=true or as a fallback)
+#     host: <host>
+#     #> Remote service TCP port
+#     port: 9999
+#     #> Auth token sent to the remote service
+#     token: '***'
+#     #> Use if the service developers do not provide registration in consul —
+#     #> disables Consul lookup and forces use of the host/port above
+#     noConsul: true
+#     #> Override the Consul service name to look up (defaults to the alias key)
+#     consulServiceName: <consulServiceName>
 
+#> Active Directory / LDAP settings.
+#> Used for authentication/authorization (e.g., NTLM in admin panel) and checking user membership in AD groups.
 ad:
-  # Active Directory / LDAP settings.
-  # Used for authentication/authorization (e.g., NTLM in admin panel) and checking user membership in AD groups.
+  #> Map of domains. Key is a domain name
   domains:
-    # Map of domains. Key is a domain name
     MYDOMAIN:
-      # Marks this domain as default one
+      #> Marks this domain as default one
       default: true
-      # List of LDAP controllers (can be multiple for failover).
-      # Use ldap:// for plain LDAP or ldaps:// for LDAP over TLS.
+      #> List of LDAP controllers (can be multiple for failover).
+      #> Use ldap:// for plain LDAP or ldaps:// for LDAP over TLS.
       controllers:
         - 'ldap://c1.corp.com'
         - 'ldap://c2.corp.com'
-      # Service account (bind DN or username) used to connect to LDAP.
+      #> Service account (bind DN or username) used to connect to LDAP.
       username: '***'
-      # Service account password.
+      #> Service account password.
       password: '***'
-      # Base DN for LDAP searches. Auto-derived from controller URL if not set.
+      #> Base DN for LDAP searches. Auto-derived from controller URL if not set.
       # baseDn: 'DC=corp,DC=com'
-  # Cache TTL for group membership checks (default: 600000 = 10 min)
+  #> Cache TTL for group membership checks (default: 600000 = 10 min)
   # groupCacheTtlMs: 600000
-  # Cache TTL for user/group DN lookups (default: 86400000 = 24 hours)
+  #> Cache TTL for user/group DN lookups (default: 86400000 = 24 hours)
   # dnCacheTtlMs: 86400000
 
+#> Built-in chat UI for testing MCP tools with an LLM.
 agentTester:
+  #> Enables the Agent Tester UI at /agent-tester
   enabled: true
-  showFooterLink: true  # true (default) — show Agent Tester link in home page footer; false — hide link without disabling tester
-  useAuth: false  # true — protect Agent Tester with full multi-auth (permanentTokens/basic/JWT/custom); browser users see a login dialog, headless clients pass Authorization header
-  sessionTtlMs: 28800000  # Browser login session lifetime in milliseconds. Default: 28800000 (8 hours). Applies only when useAuth is true. Sessions are in-memory on the server — lost on restart.
-  logJson: false  # true — emit structured JSON events (tool_call, tool_result, llm_response, response) to stdout during agent execution
+  #> true (default) — show Agent Tester link in home page footer; false — hide link without disabling tester
+  showFooterLink: true
+  #> true — protect Agent Tester with full multi-auth (permanentTokens/basic/JWT/custom);
+  #> browser users see a login dialog, headless clients pass Authorization header
+  useAuth: false
+  #> Browser login session lifetime in milliseconds. Default: 28800000 (8 hours).
+  #> Applies only when useAuth is true. Sessions are in-memory on the server — lost on restart.
+  sessionTtlMs: 28800000
+  #> true — emit structured JSON events (tool_call, tool_result, llm_response, response) to stdout during agent execution
+  logJson: false
+  #> OpenAI-compatible LLM credentials used by Agent Tester to drive tool calls
   openAi:
-    apiKey: ''
+    #> API key for LLM provider (OpenAI and compatible)
+    apiKey: '***'
+    #> Key name (for logging and debugging)
+    apiKeyName: '***'
+    #> Override base URL for OpenAI-compatible providers (Azure, local LLMs, proxies)
     # baseURL: ''
+  #> Key-value pairs for HTTP requests that should be auto-populated in agentTester
+  #> Example: X-User-Id: 12345
   httpHeaders:
-    # Key-value pairs for HTTP requests that should be auto-populated in agentTester
-    # Example: X-User-Id: 12345
 
-# --------------------------------------------------
-# CACHING Reduces API calls by caching responses
-# --------------------------------------------------
+#> --------------------------------------------------
+#> CACHING Reduces API calls by caching responses
+#> --------------------------------------------------
 cache:
-  # time in seconds to check all data and delete expired keys
+  #> Time in seconds to check all data and delete expired keys
   checkPeriod: 1200
-  # Default maximum number of cached items
+  #> Default maximum number of cached items
   maxItems: 1000
-  # Default Cache TTL in seconds
+  #> Default Cache TTL in seconds
   ttlSeconds: 300
 
 
+#> Consul service discovery and registration settings
 consul:
+  #> Health check parameters reported to Consul for this service
   check:
+    #> How often Consul invokes the health check
     interval: '10s'
+    #> Per-attempt timeout for the health check
     timeout: '5s'
+    #> Auto-deregister the service after it has been critical for this duration
     deregistercriticalserviceafter: '3m'
   agent:
-    # Credentials for getting information about services in the DEV DC
+    #> Credentials for getting information about services in the DEV DC
     dev:
+      #> DEV datacenter name
       dc: '{{consul.agent.dev.dc}}'
+      #> DEV consul agent host
       host: '{{consul.agent.dev.host}}'
+      #> DEV consul agent port
       port: 443
+      #> Use HTTPS for the DEV consul agent
       secure: true
-      # Token for getting information about DEV services
+      #> Token for getting information about DEV services
       token: '***'
-    # Credentials for getting information about services in the PROD DC
+    #> Credentials for getting information about services in the PROD DC
     prd:
+      #> PROD datacenter name
       dc: '{{consul.agent.prd.dc}}'
+      #> PROD consul agent host
       host: '{{consul.agent.prd.host}}'
+      #> PROD consul agent port
       port: 443
+      #> Use HTTPS for the PROD consul agent
       secure: true
-      # Token for obtaining information about PROD services
+      #> Token for obtaining information about PROD services
       token: '***'
-    # Credentials for registering the service with Consul
+    #> Credentials for registering the service with Consul
     reg:
-      # The host of the consul agent where the service will be registered. If not specified, the server on which the service is running is used
+      #> The host of the consul agent where the service will be registered.
+      #> If not specified, the server on which the service is running is used
       host: null
+      #> Consul agent port for registration
       port: 8500
+      #> Use HTTPS when calling the registration agent
       secure: false
-      # Token for registering the service in the consul agent
+      #> Token for registering the service in the consul agent
       token: '***'
   service:
-    enable: {{consul.service.enable}} # true - Allows registration of the service with the consul
-    name: <name> # Here you can specify an alternative name for the service. String "<name>" will be replaced by env SERVICE_NAME | <package.json>.name at initialization
-    instance: '{{SERVICE_INSTANCE}}' # This value will be specified as a suffix in the id of the service
-    version: <version> # String "<version>" will be replaced by <package.json>.version at initialization
-    description: <description> # Here you can specify an alternative name description. String "<description>" will be replaced by <package.json>.description at initialization
-    tags: [ ] # If null or empty array - Will be pulled up from package.keywords at initialization
+    #> true — Allows registration of the service with the consul
+    enable: {{consul.service.enable}}
+    #> Here you can specify an alternative name for the service.
+    #> String "<name>" will be replaced by env SERVICE_NAME | <package.json>.name at initialization
+    name: <name>
+    #> This value will be specified as a suffix in the id of the service
+    instance: '{{SERVICE_INSTANCE}}'
+    #> String "<version>" will be replaced by <package.json>.version at initialization
+    version: <version>
+    #> Here you can specify an alternative name description.
+    #> String "<description>" will be replaced by <package.json>.description at initialization
+    description: <description>
+    #> If null or empty array — Will be pulled up from package.keywords at initialization
+    tags: [ ]
+    #> Arbitrary metadata published with the service registration
     meta:
-      # "Home" page link template
+      #> "Home" page link template
       who: 'http://{address}:{port}/'
-  envCode: # Used to generate the service ID
-    prod: '{{consul.envCode.prod}}' # Production environment code
-    dev: '{{consul.envCode.dev}}' # Development environment code
+  #> Used to generate the service ID
+  envCode:
+    #> Production environment code
+    prod: '{{consul.envCode.prod}}'
+    #> Development environment code
+    dev: '{{consul.envCode.dev}}'
 
+#> Database connections used by the service
 db:
+  #> PostgreSQL connection pool definitions
   postgres:
+    #> Map of named PostgreSQL databases (key is a logical alias used in code)
     dbs:
       main:
+        #> Human-readable label shown in diagnostics and admin pages
         label: 'My Database'
-        host: ''  # To exclude the use of the database, you need to set host = ''
+        #> To exclude the use of the database, you need to set host = ''
+        host: ''
+        #> PostgreSQL server port
         port: 5432
+        #> Database name
         database: <database>
+        #> Database user
         user: <user>
+        #> Database password
         password: <password>
-        usedExtensions: [ ]
+        #> List of PostgreSQL extensions required by the service (e.g., 'pgvector', 'uuid-ossp')
+        usedExtensions: []
+        #  - pgvector
 
+
+#> Logging configuration (tslog-based)
 logger:
+  #> Minimum log level: silly | trace | debug | info | warn | error | fatal
   level: info
-  useFileLogger: {{logger.useFileLogger}} # To use or not to use logging to a file
-  # Absolute path to the folder where logs will be written. Default <proj_root>/../logs
+  #> To use or not to use logging to a file
+  useFileLogger: {{logger.useFileLogger}}
+  #> Absolute path to the folder where logs will be written. Default <proj_root>/../logs
   dir: '{{logger.dir}}'
 
+#> MCP (Model Context Protocol) server settings
 mcp:
-  transportType: http # stdio | http
-  # Response format configuration.
-  # - structuredContent - default - the response in result.structuredContent returns JSON
-  # - text - in the response, serialized JSON is returned in result.content[0].text
-  toolAnswerAs: text # text | structuredContent
+  #> Transport for the MCP server: stdio | http
+  transportType: http
+  #> Response format configuration.
+  #> - structuredContent — default — the response in result.structuredContent returns JSON
+  #> - text — in the response, serialized JSON is returned in result.content[0].text
+  toolAnswerAs: text
+  #> Per-client request rate limiting for the MCP endpoint
   rateLimit:
+    #> Maximum number of requests allowed within windowMs
     maxRequests: 100
-    windowMs: 60000  # 1 minute
+    #> Rate limit window length in milliseconds (1 minute)
+    windowMs: 60000
 
+#> Swagger / OpenAPI documentation settings
 swagger:
-  servers: # An array of servers that will be added to swagger docs
+  #> An array of servers that will be added to swagger docs
+  servers:
     # - url: http://localhost:{{port}}
     #   description: "Development server (localhost)"
     # - url: http://0.0.0.0:{{port}}
@@ -141,72 +217,86 @@ swagger:
     - url: https://{{mcp.domain}}
       description: "PROD server"
 
+#> Service home page (`/`) customization
 homePage:
+  #> Optional help link rendered in the home page footer
   helpLink:
-    url: ''     # If empty — help link is not shown in footer
-    label: 'Help'  # Link text (default: "Help")
+    #> If empty — help link is not shown in footer
+    url: ''
+    #> Link text (default: "Help")
+    label: 'Help'
 
+#> UI theme overrides for built-in pages (home, admin, agent-tester)
 uiColor:
-  # Font color of the header and a number of interface elements on the HOME page
+  #> Font color of the header and a number of interface elements on the HOME page
   primary: '#0f65dc'
 
+#> HTTP server hosting MCP, admin panel, agent tester, swagger and health endpoints
 webServer:
+  #> Bind address for the HTTP server
   host: '0.0.0.0'
+  #> TCP port for the HTTP server
   port: {{port}}
-  # array of hosts that CORS skips
+  #> Array of hosts that CORS skips
   originHosts: [ 'localhost', '0.0.0.0' ]
-  # Authentication is configured here only when accessing the MCP server
-  # Authentication in services that enable tools, resources, and prompts
-  # is implemented more deeply. To do this, you need to use the information passed in HTTP headers
-  # You can also use a custom authorization function
+  #> ========================================================================
+  #> Authentication is configured here only when accessing the MCP server.
+  #> Authentication in services that enable tools, resources, and prompts
+  #> is implemented more deeply. To do this, you need to use the information passed in HTTP headers.
+  #> You can also use a custom authorization function.
+  #> ========================================================================
   auth:
-    enabled: false # Enables/disables authorization
-    # ========================================================================
-    # PERMANENT SERVER TOKENS
-    # Static tokens for server-to-server communication
-    # CPU cost: O(1) - fastest authentication method
-    #
-    # To enable this authentication, you need to set auth.enabled = true
-    # and set one token of at least 20 characters in length
-    # ========================================================================
-    permanentServerTokens: [ ] # Add your server tokens here: ['token1', 'token2']
+    #> Enables/disables authorization
+    enabled: false
+    #> ========================================================================
+    #> PERMANENT SERVER TOKENS
+    #> Static tokens for server-to-server communication
+    #> CPU cost: O(1) — fastest authentication method
+    #>
+    #> To enable this authentication, you need to set auth.enabled = true
+    #> and set one token of at least 20 characters in length
+    #> ========================================================================
+    #> Add your server tokens here: ['token1', 'token2']
+    permanentServerTokens: [ ]
 
-    # ========================================================================
-    # JWT TOKEN WITH SYMMETRIC ENCRYPTION
-    # Custom JWT tokens with AES-256 encryption
-    # CPU cost: Medium - decryption + JSON parsing
-    #
-    # To enable this authentication, you need to set auth.enabled = true and set
-    # encryptKey to at least 20 characters
-    # ========================================================================
+    #> ========================================================================
+    #> JWT TOKEN WITH SYMMETRIC ENCRYPTION
+    #> Custom JWT tokens with AES-256 encryption
+    #> CPU cost: Medium — decryption + JSON parsing
+    #>
+    #> To enable this authentication, you need to set auth.enabled = true and set
+    #> encryptKey to at least 20 characters
+    #> ========================================================================
     jwtToken:
-      # Symmetric encryption key to generate a token for this MCP (minimum 8 chars)
+      #> Symmetric encryption key to generate a token for this MCP (minimum 8 chars)
       encryptKey: '***'
-      # If webServer.auth.enabled and the parameter true, the service name and the service specified in the token will be checked
+      #> If webServer.auth.enabled and the parameter true, the service name and the service specified in the token will be checked
       checkMCPName: true
-      # If true and JWT token contains non-empty 'ip' field,
-      # the client IP will be checked against the allowed list in the token
+      #> If true and JWT token contains non-empty 'ip' field,
+      #> the client IP will be checked against the allowed list in the token
       isCheckIP: false
 
-    # ========================================================================
-    # Basic Authentication - Base64 encoded username:password
-    # CPU cost: Medium - Base64 decoding + string comparison
-    # To enable this authentication, you need to set auth.enabled = true
-    # and set username and password to valid values
-    # ========================================================================
+    #> ========================================================================
+    #> Basic Authentication — Base64 encoded username:password
+    #> CPU cost: Medium — Base64 decoding + string comparison
+    #> To enable this authentication, you need to set auth.enabled = true
+    #> and set username and password to valid values
+    #> ========================================================================
     basic:
+      #> Username for HTTP Basic auth
       username: ''
+      #> Password for HTTP Basic auth
       password: '***'
 
-  # ========================================================================
-  # ADMIN PANEL AUTHENTICATION
-  # Token generation page available at /admin endpoint
-  # Supports 4 authentication methods: permanentServerTokens, basic, jwtToken, ntlm
-  # ========================================================================
+  #> ========================================================================
+  #> ADMIN PANEL AUTHENTICATION
+  #> Token generation page available at /admin endpoint
+  #> Supports 4 authentication methods: permanentServerTokens, basic, jwtToken, ntlm
+  #> ========================================================================
   adminAuth:
-    enabled: true  # Enable/disable admin panel
-    # Authentication type for admin panel: 'permanentServerTokens' | 'basic' | 'jwtToken' | 'ntlm'
-    # For permanentServerTokens, basic, jwtToken - uses credentials from webServer.auth section
-    # For ntlm - uses AD configuration from ad.domains section (no additional credentials needed)
+    #> Enable/disable admin panel
+    enabled: true
+    #> Authentication type for admin panel: 'permanentServerTokens' | 'basic' | 'jwtToken' | 'ntlm'
+    #> For permanentServerTokens, basic, jwtToken — uses credentials from webServer.auth section
+    #> For ntlm — uses AD configuration from ad.domains section (no additional credentials needed)
     type: 'basic'
-
