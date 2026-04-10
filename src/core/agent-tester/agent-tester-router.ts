@@ -6,6 +6,14 @@ import { Router } from 'express';
 import express from 'express';
 
 import { generateToken } from '../auth/jwt.js';
+import {
+  COOKIE_NAME,
+  createSession,
+  deleteSession,
+  getAvailableAuthMethods,
+  hasValidSession,
+  validateLoginCredentials,
+} from '../auth/agent-tester-auth.js';
 import { appConfig } from '../bootstrap/init-config.js';
 import { logger as lgr } from '../logger.js';
 
@@ -20,6 +28,8 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
 const logger = lgr.getSubLogger({ name: chalk.cyan('agent-tester') });
+
+const SESSION_TTL_MS = 8 * 60 * 60 * 1000;
 
 export function createAgentTesterRouter (options: {
   defaultMcpUrl?: string;
@@ -39,6 +49,52 @@ export function createAgentTesterRouter (options: {
     res.sendFile(join(staticPath, 'index.html'));
   });
 
+  // ===== Auth API (session-based) =====
+
+  // GET /api/auth/status — frontend checks whether login is required
+  router.get('/api/auth/status', (req, res) => {
+    const useAuth = !!appConfig.agentTester?.useAuth;
+    if (!useAuth) {
+      res.json({ authRequired: false });
+      return;
+    }
+
+    res.json({
+      authRequired: true,
+      authenticated: hasValidSession(req),
+      methods: getAvailableAuthMethods(),
+    });
+  });
+
+  // POST /api/auth/login — validate credentials, create session, set cookie
+  router.post('/api/auth/login', (req, res): void => {
+    const authResult = validateLoginCredentials(req.body || {});
+    if (!authResult.success) {
+      res.status(401).json({ error: authResult.error || 'Authentication failed' });
+      return;
+    }
+
+    const sid = createSession(authResult);
+
+    res.cookie(COOKIE_NAME, sid, {
+      httpOnly: true,
+      sameSite: 'strict',
+      path: '/agent-tester',
+      maxAge: SESSION_TTL_MS,
+    });
+
+    res.json({ success: true, authType: authResult.authType });
+  });
+
+  // POST /api/auth/logout — destroy session, clear cookie
+  router.post('/api/auth/logout', (req, res) => {
+    deleteSession(req);
+    res.clearCookie(COOKIE_NAME, { path: '/agent-tester' });
+    res.json({ success: true });
+  });
+
+  // ===== Config API =====
+
   // API: Get default config (port, MCP URL)
   router.get('/api/config', (req, res) => {
     res.json({
@@ -48,7 +104,7 @@ export function createAgentTesterRouter (options: {
     });
   });
 
-  // API: Get auth token for auto-fill
+  // API: Get auth token for auto-fill (MCP server Authorization header)
   router.get('/api/auth-token', (req, res): void => {
     const auth = appConfig.webServer?.auth;
     if (!auth?.enabled) {

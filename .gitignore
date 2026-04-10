@@ -91,3 +91,4 @@ glm.sh
 /package-lock.json
 /.serena/.gitignore
 /.serena/project.yml
+/.playwright-mcp/

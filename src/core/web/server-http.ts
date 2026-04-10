@@ -17,6 +17,7 @@ import { RateLimiterMemory } from 'rate-limiter-flexible';
 import { IGetPromptRequest } from '../_types_/types.js';
 import { createAgentTesterRouter } from '../agent-tester/agent-tester-router.js';
 import { validateAdminAuthConfig } from '../auth/admin-auth.js';
+import { createAgentTesterSessionMW } from '../auth/agent-tester-auth.js';
 import { createAuthMW } from '../auth/middleware.js';
 import { appConfig, getProjectData } from '../bootstrap/init-config.js';
 import { getMainDBConnectionStatus } from '../db/pg-db.js';
@@ -188,12 +189,15 @@ export async function startHttpServer (): Promise<void> {
   const at = appConfig.agentTester;
   // Agent Tester routes
   if (at?.enabled) {
+    const sessionMWs = createAgentTesterSessionMW();
     const agentTesterRouter = createAgentTesterRouter({
       defaultMcpUrl: `http://localhost:${appConfig.webServer.port}/mcp`,
       ...(at.openAi ? { openAi: at.openAi } : {}),
     });
     if (at.useAuth) {
-      app.use('/agent-tester', authMW, agentTesterRouter);
+      // sessionMWs handles: public paths → pass; valid session → set authInfo;
+      // otherwise delegates internally to authMW (Authorization header / headless).
+      app.use('/agent-tester', ...sessionMWs, agentTesterRouter);
     } else {
       app.use('/agent-tester', agentTesterRouter);
     }

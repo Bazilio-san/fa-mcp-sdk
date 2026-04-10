@@ -1,6 +1,165 @@
 const API_BASE = '/agent-tester';
 const trim = (s) => String(s || '').trim();
 
+/**
+ * Wrapper around fetch that always includes credentials (session cookie).
+ */
+function apiFetch (url, options = {}) {
+  return fetch(url, { ...options, credentials: 'include' });
+}
+
+/**
+ * Auth manager — handles login overlay when agentTester.useAuth is enabled.
+ */
+class AuthManager {
+  constructor () {
+    this._authenticated = false;
+    this._authRequired = false;
+  }
+
+  /** Check auth status and show login if needed. Returns true if app can proceed. */
+  async init () {
+    try {
+      const resp = await apiFetch(`${API_BASE}/api/auth/status`);
+      const status = await resp.json();
+
+      if (!status.authRequired) {
+        return true;
+      }
+
+      this._authRequired = true;
+
+      if (status.authenticated) {
+        this._authenticated = true;
+        this._showLogoutButton();
+        return true;
+      }
+
+      this._showLoginOverlay(status.methods || []);
+      return false; // block app init until authenticated
+    } catch (e) {
+      console.warn('Auth status check failed, proceeding without auth:', e);
+      return true;
+    }
+  }
+
+  _showLoginOverlay (methods) {
+    const overlay = document.getElementById('authOverlay');
+    const appEl = document.querySelector('.app');
+    overlay.style.display = 'flex';
+    appEl.style.display = 'none';
+
+    const hasToken = methods.includes('token');
+    const hasBasic = methods.includes('basic');
+
+    const tokenForm = document.getElementById('authTokenForm');
+    const basicForm = document.getElementById('authBasicForm');
+    const tabs = document.getElementById('authTabs');
+
+    if (hasToken && hasBasic) {
+      tabs.style.display = 'flex';
+      tokenForm.style.display = 'flex';
+      basicForm.style.display = 'none';
+      this._bindTabs();
+    } else if (hasBasic) {
+      tokenForm.style.display = 'none';
+      basicForm.style.display = 'flex';
+    } else {
+      tokenForm.style.display = 'flex';
+      basicForm.style.display = 'none';
+    }
+
+    tokenForm.addEventListener('submit', (e) => {
+      e.preventDefault();
+      const token = document.getElementById('authToken').value.trim();
+      if (token) { this._login({ token }); }
+    });
+
+    basicForm.addEventListener('submit', (e) => {
+      e.preventDefault();
+      const username = document.getElementById('authUsername').value.trim();
+      const password = document.getElementById('authPassword').value;
+      if (username && password) { this._login({ username, password }); }
+    });
+  }
+
+  _bindTabs () {
+    const tabs = document.querySelectorAll('.auth-tab');
+    const tokenForm = document.getElementById('authTokenForm');
+    const basicForm = document.getElementById('authBasicForm');
+
+    tabs.forEach((tab) => {
+      tab.addEventListener('click', () => {
+        tabs.forEach((t) => t.classList.remove('active'));
+        tab.classList.add('active');
+        if (tab.dataset.tab === 'token') {
+          tokenForm.style.display = 'flex';
+          basicForm.style.display = 'none';
+        } else {
+          tokenForm.style.display = 'none';
+          basicForm.style.display = 'flex';
+        }
+        this._hideError();
+      });
+    });
+  }
+
+  async _login (credentials) {
+    this._hideError();
+    try {
+      const resp = await apiFetch(`${API_BASE}/api/auth/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(credentials),
+      });
+
+      if (!resp.ok) {
+        const err = await resp.json();
+        this._showError(err.error || 'Authentication failed');
+        return;
+      }
+
+      this._authenticated = true;
+
+      // Hide overlay, show app
+      document.getElementById('authOverlay').style.display = 'none';
+      document.querySelector('.app').style.display = 'flex';
+      this._showLogoutButton();
+
+      // Initialize the main app after successful login
+      window.mcpAgentTester = new McpAgentTester();
+    } catch (_e) {
+      this._showError('Connection error');
+    }
+  }
+
+  _showLogoutButton () {
+    const btn = document.getElementById('logoutBtn');
+    if (btn) {
+      btn.style.display = '';
+      btn.addEventListener('click', () => this._logout());
+    }
+  }
+
+  async _logout () {
+    try {
+      await apiFetch(`${API_BASE}/api/auth/logout`, { method: 'POST' });
+    } catch { /* ignore */ }
+    location.reload();
+  }
+
+  _showError (msg) {
+    const el = document.getElementById('authError');
+    el.textContent = msg;
+    el.style.display = 'block';
+  }
+
+  _hideError () {
+    const el = document.getElementById('authError');
+    el.style.display = 'none';
+  }
+}
+
 class McpAgentTester {
   constructor () {
     this.currentSessionId = null;
@@ -118,6 +277,7 @@ class McpAgentTester {
     const select = document.createElement('select');
     select.className = 'format-toggle';
     select.dataset.messageId = messageId;
+    select.setAttribute('data-testid', 'at-message-format-toggle');
 
     const options = ['MD', 'HTML'];
     const currentFormat = this.messageFormats[messageId] || 'MD';
@@ -391,7 +551,7 @@ class McpAgentTester {
     this.showLoading('Auto-connecting to MCP server...');
 
     try {
-      const response = await fetch(`${API_BASE}/api/mcp/connect`, {
+      const response = await apiFetch(`${API_BASE}/api/mcp/connect`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(connectionData),
@@ -441,7 +601,7 @@ class McpAgentTester {
 
   async loadDefaultConfig () {
     try {
-      const response = await fetch(`${API_BASE}/api/config`);
+      const response = await apiFetch(`${API_BASE}/api/config`);
       const config = await response.json();
       this.defaultMcpUrl = config.defaultMcpUrl || null;
       this.authEnabled = !!config.authEnabled;
@@ -475,7 +635,7 @@ class McpAgentTester {
     this.showLoading('Connecting to MCP server...');
 
     try {
-      const response = await fetch(`${API_BASE}/api/mcp/connect`, {
+      const response = await apiFetch(`${API_BASE}/api/mcp/connect`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(connectionData),
@@ -555,7 +715,7 @@ class McpAgentTester {
     this.showLoading('Checking used headers...');
 
     try {
-      const response = await fetch(`${API_BASE}/api/mcp/used-headers?url=${encodeURIComponent(url)}`, {
+      const response = await apiFetch(`${API_BASE}/api/mcp/used-headers?url=${encodeURIComponent(url)}`, {
         method: 'GET',
         headers: { 'Accept': 'application/json' },
       });
@@ -605,6 +765,7 @@ class McpAgentTester {
       const tooltipAttr = hasDesc ? ` data-tooltip="${header.description.replace(/"/g, '&quot;')}"` : '';
       const inputClass = isRequired ? 'header-value used-header' : 'header-value';
 
+      headerGroup.setAttribute('data-testid', `at-header-row-${header.name}`);
       headerGroup.innerHTML = `
                 <span class="${nameClass}"${tooltipAttr}>${header.name}</span>
                 <input
@@ -614,6 +775,7 @@ class McpAgentTester {
                     placeholder="${header.name}"
                     data-header-name="${header.name}"
                     data-required="${isRequired}"
+                    data-testid="at-header-input-${header.name}"
                     value="${savedValue.replace(/"/g, '&quot;')}"
                 >
             `;
@@ -725,7 +887,7 @@ class McpAgentTester {
     }
     const headers = this.getHeadersFromForm();
     try {
-      const resp = await fetch(`${API_BASE}/api/mcp/headers`, {
+      const resp = await apiFetch(`${API_BASE}/api/mcp/headers`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ serverName: this.currentServer.name, headers }),
@@ -777,7 +939,7 @@ class McpAgentTester {
     if (savedHeaders['Authorization']) {return;}
 
     try {
-      const response = await fetch(`${API_BASE}/api/auth-token`);
+      const response = await apiFetch(`${API_BASE}/api/auth-token`);
       if (!response.ok) {return;}
 
       const data = await response.json();
@@ -804,7 +966,7 @@ class McpAgentTester {
     this.stopAuthRefresh();
     this._authRefreshInterval = setInterval(async () => {
       try {
-        const response = await fetch(`${API_BASE}/api/auth-token/refresh`, { method: 'POST' });
+        const response = await apiFetch(`${API_BASE}/api/auth-token/refresh`, { method: 'POST' });
         if (!response.ok) {return;}
 
         const data = await response.json();
@@ -848,7 +1010,7 @@ class McpAgentTester {
 
   async loadCurrentServer () {
     try {
-      const response = await fetch(`${API_BASE}/api/mcp/servers`);
+      const response = await apiFetch(`${API_BASE}/api/mcp/servers`);
       const servers = await response.json();
 
       if (servers && servers.length > 0) {
@@ -880,15 +1042,15 @@ class McpAgentTester {
 
     if (server.isConnected) {
       this.connectedServersContainer.innerHTML = `
-        <div class="server-status-row">
-          <span class="server-status connected">${toolCount} tools <span class="material-icons-round">check_circle</span> connected</span>
-          <button type="button" class="btn btn-danger disconnect-btn"><span class="material-icons-round">link_off</span>Disconnect</button>
+        <div class="server-status-row" data-testid="at-server-status-row">
+          <span class="server-status connected" data-testid="at-server-status-connected">${toolCount} tools <span class="material-icons-round">check_circle</span> connected</span>
+          <button type="button" class="btn btn-danger disconnect-btn" data-testid="at-disconnect-btn"><span class="material-icons-round">link_off</span>Disconnect</button>
         </div>`;
     } else {
       this.connectedServersContainer.innerHTML = `
-        <div class="server-status-row">
-          <span class="server-status disconnected"><span class="material-icons-round">cancel</span>Disconnected</span>
-          <button type="button" class="btn btn-secondary reconnect-btn"><span class="material-icons-round">refresh</span>Reconnect</button>
+        <div class="server-status-row" data-testid="at-server-status-row">
+          <span class="server-status disconnected" data-testid="at-server-status-disconnected"><span class="material-icons-round">cancel</span>Disconnected</span>
+          <button type="button" class="btn btn-secondary reconnect-btn" data-testid="at-reconnect-btn"><span class="material-icons-round">refresh</span>Reconnect</button>
         </div>`;
     }
 
@@ -909,7 +1071,7 @@ class McpAgentTester {
     this.stopAuthRefresh();
 
     try {
-      const response = await fetch(`${API_BASE}/api/mcp/disconnect/${this.currentServer.name}`, { method: 'POST' });
+      const response = await apiFetch(`${API_BASE}/api/mcp/disconnect/${this.currentServer.name}`, { method: 'POST' });
 
       if (response.ok) {
         this.showToast(`Disconnected from ${this.currentServer.name}`, 'success');
@@ -947,7 +1109,7 @@ class McpAgentTester {
     this.showLoading('Reconnecting to MCP server...');
 
     try {
-      const response = await fetch(`${API_BASE}/api/mcp/connect`, {
+      const response = await apiFetch(`${API_BASE}/api/mcp/connect`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(connectionData),
@@ -1045,7 +1207,7 @@ class McpAgentTester {
         modelConfig: modelConfig,
       };
 
-      const response = await fetch(`${API_BASE}/api/chat/message`, {
+      const response = await apiFetch(`${API_BASE}/api/chat/message`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(requestData),
@@ -1075,6 +1237,7 @@ class McpAgentTester {
     const messageDiv = document.createElement('div');
     messageDiv.className = `message ${sender}`;
     messageDiv.dataset.messageId = messageId;
+    messageDiv.setAttribute('data-testid', `at-message-${sender}`);
 
     if (metadata.error) {
       messageDiv.classList.add('error');
@@ -1098,6 +1261,7 @@ class McpAgentTester {
     const messageText = document.createElement('div');
     messageText.className = 'message-text';
     messageText.dataset.messageId = messageId;
+    messageText.setAttribute('data-testid', `at-message-text-${sender}`);
 
     if (sender === 'assistant' && !metadata.error) {
       const format = this.messageFormats[messageId];
@@ -1186,6 +1350,7 @@ class McpAgentTester {
   showToast (message, type = 'info') {
     const toast = document.createElement('div');
     toast.className = `toast ${type}`;
+    toast.setAttribute('data-testid', `at-toast-${type}`);
 
     const icon = {
       'success': 'check_circle',
@@ -1419,11 +1584,12 @@ class McpAgentTester {
     savedUrls.forEach(url => {
       const item = document.createElement('div');
       item.className = 'dropdown-item';
+      item.setAttribute('data-testid', 'at-saved-url-item');
 
       item.innerHTML = `
         <div class="url-item">
-          <span class="url-text" title="${url}">${url}</span>
-          <button class="delete-btn" title="Delete URL">
+          <span class="url-text" title="${url}" data-testid="at-saved-url-text">${url}</span>
+          <button class="delete-btn" title="Delete URL" data-testid="at-saved-url-delete">
             <span class="material-icons-round" style="font-size: 16px;">close</span>
           </button>
         </div>
@@ -1498,6 +1664,11 @@ class McpAgentTester {
 }
 
 // Initialize the app when DOM is loaded
-document.addEventListener('DOMContentLoaded', () => {
-  window.mcpAgentTester = new McpAgentTester();
+document.addEventListener('DOMContentLoaded', async () => {
+  const authManager = new AuthManager();
+  const canProceed = await authManager.init();
+  if (canProceed) {
+    window.mcpAgentTester = new McpAgentTester();
+  }
+  // If !canProceed, AuthManager shows login overlay and creates McpAgentTester after successful login
 });

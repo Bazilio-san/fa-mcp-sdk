@@ -136,6 +136,11 @@ export function createAuthMW (options: AuthMiddlewareOptions = {}) {
   } = options;
 
   return async (req: Request, res: Response, next: NextFunction) => {
+    // If authInfo is already set by an upstream middleware (e.g. Agent Tester session), skip
+    if ((req as any).authInfo?.success) {
+      return next();
+    }
+
     // Log configuration on first request
     if (logConfig && !(createAuthMW as any)._logged) {
       logAuthConfiguration();

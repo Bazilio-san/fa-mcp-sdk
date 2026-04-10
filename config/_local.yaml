@@ -15,7 +15,8 @@ ad:
 agentTester:
   enabled: true
   showFooterLink: true  # true (default) — show Agent Tester link in home page footer; false — hide link without disabling tester
-  useAuth: false
+  useAuth: false  # true — apply full multi-auth middleware (permanentTokens/basic/JWT/custom) to /agent-tester routes, same as MCP endpoints
+  logJson: false  # true — emit structured JSON events (tool_call, tool_result, llm_response, response) to stdout during agent execution
   openAi:
     apiKey: ''
     # baseURL: ''

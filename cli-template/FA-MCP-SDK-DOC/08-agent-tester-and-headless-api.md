@@ -49,6 +49,70 @@ Root cause categories:
 - **Handler logic** — tool results confuse the LLM
 - **Error messages** — failures produce unhelpful responses
 
+## Authentication (`agentTester.useAuth`)
+
+When `agentTester.useAuth` is `true`, the Agent Tester is protected by the full multi-auth middleware — the same authentication chain used for MCP endpoints (`permanentServerTokens` / `basic` / `jwtToken` / `custom`).
+
+### How It Works
+
+**Browser access:** When a user opens `/agent-tester` in a browser, the page loads normally (static assets are served without auth). The frontend checks `GET /api/auth/status` and displays a **login dialog** if the user is not authenticated. The dialog adapts to configured auth methods:
+
+- If `permanentServerTokens` or `jwtToken` is configured — shows a "Token" input
+- If `basic` auth is configured — shows "Username" + "Password" inputs
+- If both are configured — shows tabs to switch between methods
+
+After successful login via `POST /api/auth/login`, the server issues an httpOnly session cookie (`__at_sid`). All subsequent API requests from the browser include this cookie automatically. The session is valid for 8 hours. A logout button appears in the header.
+
+**Headless / CLI access:** Headless API consumers (curl, scripts, Claude Code) bypass the login dialog entirely. They pass an `Authorization` header with each request, which is validated by the standard `authMW`. No session cookie is needed.
+
+### Configuration
+
+```yaml
+agentTester:
+  useAuth: true   # Show login screen for browser, require auth for API
+
+webServer:
+  auth:
+    enabled: true
+    permanentServerTokens: ['my-secret-token']
+    # and/or basic, jwtToken — any configured method will be available
+```
+
+Or via environment variable: `AGENT_TESTER_USE_AUTH=true`
+
+When `useAuth` is `false` (default), the Agent Tester is accessible without any authentication.
+
+### Auth API Endpoints
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/api/auth/status` | GET | Returns `{ authRequired, authenticated, methods }` |
+| `/api/auth/login` | POST | Validates credentials, sets session cookie |
+| `/api/auth/logout` | POST | Destroys session, clears cookie |
+
+**Login request body:**
+
+```json
+// Token-based (permanent token or JWT)
+{ "token": "my-secret-token" }
+
+// Basic auth
+{ "username": "admin", "password": "secret" }
+```
+
+### Headless Client Example
+
+```bash
+# Access Agent Tester API with token (no login needed)
+curl -H "Authorization: Bearer my-secret-token" http://localhost:9876/agent-tester/api/mcp/status
+
+# Headless test with token
+curl -X POST http://localhost:9876/agent-tester/api/chat/test \
+  -H "Authorization: Bearer my-secret-token" \
+  -H "Content-Type: application/json" \
+  -d '{"message":"Hello","mcpConfig":{"url":"http://localhost:9876/mcp","transport":"http"}}'
+```
+
 ## Disabled State
 
 When `agentTester.enabled` is `false` (or not set), all `/agent-tester/*` endpoints — including the Headless API — return HTTP 404:
@@ -282,17 +346,25 @@ Compare `system_prompt_sent` and agent responses between variations to find the 
 
 The headless API shares sessions with the chat UI. To start a fresh conversation, omit `sessionId`. To continue an existing conversation, pass `sessionId` from a previous response.
 
-## Structured JSON Logging
+## Structured JSON Logging (`agentTester.logJson`)
 
-For real-time monitoring of agent events during testing, start the server with the `--log-json` flag:
+When `agentTester.logJson` is `true`, each agent event is emitted as a single-line JSON object on stdout — useful for real-time monitoring, debugging, and log aggregation.
+
+Enable via config, CLI flag, or environment variable:
+
+```yaml
+# config/local.yaml
+agentTester:
+  logJson: true
+```
 
 ```bash
 npm start -- --log-json
-# or via environment variable:
+# or
 AGENT_TESTER_LOG_JSON=true npm start
 ```
 
-Each agent event is emitted as a single-line JSON object on stdout:
+Event types emitted:
 
 ```
 {"event":"tool_call","name":"get_currency_rate","arguments":{"quoteCurrency":"EUR"},"timestamp":"2025-08-15T14:32:00.000Z"}
@@ -335,3 +407,189 @@ The Headless API is designed for CLI automation tools like Claude Code. The typi
 The Agent Tester also provides a web UI at `/agent-tester` for interactive testing. The UI auto-connects to the local MCP server and auto-fills auth headers if configured.
 
 The chat UI uses `POST /api/chat/message` (which returns only the final response). The headless API uses `POST /api/chat/test` (which returns the response plus full trace data). Both share the same underlying agent logic and session storage.
+
+## UI Test Selectors (`data-testid`)
+
+For UI automation (Playwright, Cypress, Selenium) the Agent Tester page is annotated with stable `data-testid` attributes. Prefer these over CSS classes, DOM IDs, or label text — they are the documented contract and won't change with styling or copy edits.
+
+### Naming Convention
+
+All selectors use the `at-` prefix (short for "agent tester") in kebab-case:
+
+```
+at-<area>-<element>[-<modifier>]
+```
+
+Example: `at-auth-token-input`, `at-server-url`, `at-message-user`, `at-toast-success`.
+
+Dynamic elements that map 1:1 to runtime data append the runtime key:
+
+```
+at-header-row-<headerName>     e.g. at-header-row-Authorization
+at-header-input-<headerName>   e.g. at-header-input-X-Session-Id
+at-message-<sender>            e.g. at-message-user, at-message-assistant
+at-toast-<type>                e.g. at-toast-success, at-toast-error
+```
+
+### Selector Reference
+
+**Auth overlay (shown when `agentTester.useAuth: true`)**
+
+| testid | Element |
+|---|---|
+| `at-auth-overlay` | Root login overlay container |
+| `at-auth-tabs` | Tab switcher (only rendered when multiple methods configured) |
+| `at-auth-tab-token` | "Token" tab button |
+| `at-auth-tab-basic` | "Login" tab button |
+| `at-auth-token-form` | Token login form |
+| `at-auth-token-input` | Token input field |
+| `at-auth-token-submit` | Token submit button |
+| `at-auth-basic-form` | Basic auth form |
+| `at-auth-username` | Username input |
+| `at-auth-password` | Password input |
+| `at-auth-basic-submit` | Basic submit button |
+| `at-auth-error` | Error message container |
+
+**App shell**
+
+| testid | Element |
+|---|---|
+| `at-app` | Root app container (hidden until authenticated) |
+| `at-sidebar` | Sidebar (configuration panel) |
+| `at-main` | Main chat area |
+| `at-chat-header` | Chat header bar |
+
+**Sidebar — connection form**
+
+| testid | Element |
+|---|---|
+| `at-connection-form` | MCP connection form |
+| `at-server-url` | MCP server URL input |
+| `at-server-url-dropdown` | Saved URLs dropdown toggle |
+| `at-server-url-dropdown-list` | Saved URLs dropdown panel |
+| `at-server-url-add-new` | "Add new URL" menu item |
+| `at-saved-urls-list` | Container for saved URL items |
+| `at-saved-url-item` | Each saved URL row (dynamic) |
+| `at-saved-url-text` | Clickable URL text within a row |
+| `at-saved-url-delete` | Delete button for a saved URL |
+| `at-transport` | Transport `<select>` (http / sse) |
+| `at-connect-btn` | Connect button |
+| `at-connected-servers` | Connection status bar container |
+| `at-server-status-row` | Status row (dynamic, rendered after connect attempt) |
+| `at-server-status-connected` | "X tools connected" badge |
+| `at-server-status-disconnected` | "Disconnected" badge |
+| `at-disconnect-btn` | Disconnect button |
+| `at-reconnect-btn` | Reconnect button |
+
+**Sidebar — HTTP headers section**
+
+| testid | Element |
+|---|---|
+| `at-headers-section` | Headers section container |
+| `at-dynamic-headers` | Headers list container |
+| `at-header-row-<name>` | Row for a specific header (e.g. `at-header-row-Authorization`) |
+| `at-header-input-<name>` | Input for a specific header value |
+
+**Sidebar — model settings**
+
+| testid | Element |
+|---|---|
+| `at-model-section` | Model section container |
+| `at-model-select` | Model `<select>` |
+| `at-custom-model-settings` | "Other..." custom model panel |
+| `at-custom-base-url` | Custom base URL input |
+| `at-custom-api-key` | Custom API key input |
+| `at-custom-model-name` | Custom model name input |
+| `at-model-temperature` | Temperature input |
+| `at-model-max-tokens` | Max tokens input |
+| `at-model-max-turns` | Max turns input |
+| `at-tool-result-limit` | Tool result char limit input |
+
+**Sidebar — prompts**
+
+| testid | Element |
+|---|---|
+| `at-system-prompt` | Agent (system) prompt `<textarea>` |
+| `at-system-prompt-enlarge` | Enlarge button for agent prompt |
+| `at-custom-prompt` | Custom prompt `<textarea>` |
+| `at-custom-prompt-enlarge` | Enlarge button for custom prompt |
+
+**Chat header**
+
+| testid | Element |
+|---|---|
+| `at-sidebar-toggle-mobile` | Mobile sidebar toggle |
+| `at-default-format` | Default display format `<select>` (HTML / MD) |
+| `at-theme-toggle` | Light/dark theme toggle |
+| `at-clear-chat` | Clear chat button |
+| `at-logout-btn` | Logout button (visible only when `useAuth` is true) |
+
+**Chat area**
+
+| testid | Element |
+|---|---|
+| `at-chat-messages` | Messages scroll container |
+| `at-welcome-message` | Initial welcome card |
+| `at-message-user` | User message bubble (one per message) |
+| `at-message-assistant` | Assistant message bubble |
+| `at-message-text-user` | Inner text element of a user message |
+| `at-message-text-assistant` | Inner text element of an assistant message |
+| `at-message-format-toggle` | HTML/MD format toggle on an assistant message |
+| `at-typing-indicator` | Typing indicator (shown during LLM response) |
+| `at-message-input` | Chat input `<textarea>` |
+| `at-char-count` | Character counter span |
+| `at-send-btn` | Send button |
+
+**Modals and overlays**
+
+| testid | Element |
+|---|---|
+| `at-prompt-modal` | Prompt enlarge modal overlay |
+| `at-prompt-modal-title` | Modal title |
+| `at-prompt-modal-textarea` | Modal text area |
+| `at-prompt-modal-save` | Apply button |
+| `at-prompt-modal-close` | Close button |
+| `at-loading-overlay` | Global loading overlay |
+| `at-header-tooltip` | Floating header description tooltip |
+| `at-toast-container` | Toast notifications container |
+| `at-toast-success` / `at-toast-error` / `at-toast-warning` / `at-toast-info` | Individual toast (dynamic) |
+
+### Usage Examples
+
+**Playwright**
+
+```js
+await page.goto('http://localhost:9876/agent-tester');
+
+// Login when useAuth is enabled
+await page.getByTestId('at-auth-token-input').fill(process.env.MCP_TOKEN);
+await page.getByTestId('at-auth-token-submit').click();
+
+// Wait for main app
+await page.getByTestId('at-app').waitFor();
+
+// Send a chat message
+await page.getByTestId('at-message-input').fill('List all tools');
+await page.getByTestId('at-send-btn').click();
+
+// Assert an assistant reply appeared
+await page.getByTestId('at-message-assistant').first().waitFor();
+```
+
+**Cypress**
+
+```js
+cy.visit('/agent-tester');
+cy.get('[data-testid=at-auth-token-input]').type(Cypress.env('MCP_TOKEN'));
+cy.get('[data-testid=at-auth-token-submit]').click();
+cy.get('[data-testid=at-server-status-connected]').should('be.visible');
+```
+
+### Stability Guarantee
+
+These test-ids are part of the public contract of the Agent Tester UI. Once added, a given id is not renamed or removed without a changelog entry. New elements are added with new ids as the UI grows. When authoring tests, prefer `data-testid` over:
+
+- DOM `id` (may be shared with form `<label for>` pairs and collide across scopes)
+- CSS class names (used for styling — may be renamed or removed during refactors)
+- Visible text (localized / editable copy — changes break tests)
+- XPath or positional selectors (brittle to layout changes)

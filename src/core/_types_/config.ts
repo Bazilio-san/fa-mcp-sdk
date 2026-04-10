@@ -63,13 +63,13 @@ interface IAgentTesterConfig {
   agentTester?: {
     enabled: boolean;
     showFooterLink?: boolean; // default: true; false — hides footer link without disabling tester
-    useAuth: boolean;
+    useAuth: boolean; // true — protect Agent Tester with full multi-auth (permanentTokens/basic/JWT/custom); browser users see a login dialog, headless clients pass Authorization header
+    logJson?: boolean; // true — emit structured JSON events (tool_call, tool_result, llm_response, response) to stdout during agent execution
     openAi?: {
       apiKey: string;
       baseURL?: string;
     };
     httpHeaders?: Record<string, string>;
-    logJson?: boolean;
   }
 }
 

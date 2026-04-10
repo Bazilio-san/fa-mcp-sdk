@@ -36,7 +36,8 @@ ad:
 agentTester:
   enabled: true
   showFooterLink: true  # true (default) — show Agent Tester link in home page footer; false — hide link without disabling tester
-  useAuth: false
+  useAuth: false  # true — protect Agent Tester with full multi-auth (permanentTokens/basic/JWT/custom); browser users see a login dialog, headless clients pass Authorization header
+  logJson: false  # true — emit structured JSON events (tool_call, tool_result, llm_response, response) to stdout during agent execution
   openAi:
     apiKey: ''
     # baseURL: ''
@@ -207,3 +208,4 @@ webServer:
     # For permanentServerTokens, basic, jwtToken - uses credentials from webServer.auth section
     # For ntlm - uses AD configuration from ad.domains section (no additional credentials needed)
     type: 'basic'
+

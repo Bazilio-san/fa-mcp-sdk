@@ -150,6 +150,25 @@ const serviceHeadersValidator: CustomAuthValidator = (req) => {
 > `authInfo` is **not** set on `req` when the validator runs — it is set by the middleware only after
 > successful authentication completes.
 
+## Agent Tester Authentication
+
+Protect the Agent Tester (`/agent-tester/*`) with `agentTester.useAuth`:
+
+```yaml
+agentTester:
+  useAuth: true   # Require authentication for Agent Tester
+webServer:
+  auth:
+    enabled: true
+    permanentServerTokens: ['my-secret-token']
+```
+
+Or via ENV: `AGENT_TESTER_USE_AUTH=true`
+
+When `useAuth` is `true`, the full multi-auth middleware is applied to Agent Tester routes — the same authentication used for MCP endpoints (`permanentServerTokens` / `basic` / `jwtToken` / `custom`). Browser users see a login dialog; headless clients pass `Authorization` header directly.
+
+See [Agent Tester docs](08-agent-tester-and-headless-api.md#authentication-agenttesteruseauth) for details on the login flow, session management, and API endpoints.
+
 ## AD Group Checking
 
 ### Configuration
