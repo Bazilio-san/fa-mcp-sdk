@@ -159,10 +159,12 @@ logger.useFileLogger: "false"
 
 # Maintainer/support URL for help and issue reporting
 # Displayed in UI and documentation as clickable support link
-maintainerUrl: "https://support.company.com/dept/1234"
+maintainerHref: "https://support.company.com/dept/1234"
+maintainerText: "Support"
 
-# HTML link generated from maintainerUrl (auto-generated)
-# maintainerHtml: '<a href="https://support.company.com/dept/1234" target="_blank" rel="noopener" class="clickable">Support</a>'
+# Help page URL
+helpHref: "https://wiki.company.com/display/SD/MCP"
+helpText: "Help"
 
 # =============================================================================
 # ADDITIONAL NOTES

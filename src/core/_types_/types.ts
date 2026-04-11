@@ -140,8 +140,6 @@ export interface McpServerData {
 
   assets?: {
     logoSvg?: string; // SVG content for logo/favicon
-    // An HTML snippet that appears in the footer of the HOME page and gives information about who to contact for support
-    maintainerHtml?: string;
   };
   // Function to get Consul UI address (if consul enabled: consul.service.enable = true)
   // for example: `https://consul.my.ui/ui/dc-${isProd ? 'prod' : 'dev'}/services/${serviceId}/instances`

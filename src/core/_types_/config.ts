@@ -78,8 +78,12 @@ interface IAgentTesterConfig {
 interface IHomePageConfig {
   homePage?: {
     helpLink?: {
-      url: string;
-      label?: string; // default: "Help"
+      href: string;
+      text?: string; // default: "Help"
+    };
+    maintainer?: {
+      href: string;
+      text?: string; // default: "Support"
     };
   };
 }

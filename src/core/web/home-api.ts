@@ -44,24 +44,26 @@ export async function handleHomeInfo (_req: Request, res: Response): Promise<voi
     const { httpComponents } = global.__MCP_PROJECT_DATA__;
     const toolsOrFn = global.__MCP_PROJECT_DATA__.tools;
     let tools: Tool[] = typeof toolsOrFn === 'function' ? await toolsOrFn(httpArgs) : toolsOrFn;
-    const { getConsulUIAddress = (_s: string) => '', assets } = getProjectData();
+    const { getConsulUIAddress = (_s: string) => '' } = getProjectData();
 
     // Build footer HTML
     const footerParts: string[] = [];
     if (repo) {
       footerParts.push(`<a href="${repo}" target="_blank" rel="noopener">GitHub Repository</a>`);
     }
-    if (assets?.maintainerHtml) {
-      footerParts.push(assets.maintainerHtml);
-    }
     const at = appConfig.agentTester;
     if (at?.enabled && at.showFooterLink !== false) {
       footerParts.push('<a href="/agent-tester">Agent Tester</a>');
     }
     const helpLink = appConfig.homePage?.helpLink;
-    if (helpLink?.url) {
-      const label = helpLink.label || 'Help';
-      footerParts.push(`<a href="${helpLink.url}" target="_blank" rel="noopener">${label}</a>`);
+    if (helpLink?.href) {
+      const text = helpLink.text || 'Help';
+      footerParts.push(`<a href="${helpLink.href}" target="_blank" rel="noopener">${text}</a>`);
+    }
+    const supportLink = appConfig.homePage?.maintainer;
+    if (supportLink?.href) {
+      const text = supportLink.text || 'Support';
+      footerParts.push(`<a href="${supportLink.href}" target="_blank" rel="noopener">${text}</a>`);
     }
 
     // Database info

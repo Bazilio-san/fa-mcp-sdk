@@ -62,10 +62,10 @@ agentTester:
   logJson: false
   #> OpenAI-compatible LLM credentials used by Agent Tester to drive tool calls
   openAi:
-    #> API key for LLM provider (OpenAI and compatible)
-    apiKey: '***'
     #> Key name (for logging and debugging)
     apiKeyName: '***'
+    #> API key for LLM provider (OpenAI and compatible)
+    apiKey: '***'
     #> Override base URL for OpenAI-compatible providers (Azure, local LLMs, proxies)
     baseURL: ''
     #> -------------------------------------------------------------------------
@@ -77,9 +77,7 @@ agentTester:
     #> -------------------------------------------------------------------------
     exposeToClient: false
 
-
-  #> Key-value pairs for HTTP requests that should be auto-populated in agentTester
-  #> Example: X-User-Id: 12345
+  #> Key-value pairs for HTTP requests that should be auto-populated in agentTester. Example: X-User-Id: 12345
   httpHeaders:
 
 #> --------------------------------------------------
@@ -174,7 +172,7 @@ db:
     dbs:
       main:
         #> Human-readable label shown in diagnostics and admin pages
-        label: 'My Database'
+        label: 'Your Database Label'
         #> To exclude the use of the database, you need to set host = ''
         host: ''
         #> PostgreSQL server port
@@ -189,6 +187,20 @@ db:
         usedExtensions: []
         #  - pgvector
 
+#> Service home page (`/`) customization
+homePage:
+  #> Optional help link rendered in the home page footer
+  helpLink:
+    #> If empty — help link is not shown in footer
+    href: '{{helpHref}}'
+    #> Link text (default: "Help")
+    text: '{{helpText}}'
+  #> Optional Support link rendered in the home page footer
+  maintainer:
+    #> If empty — help link is not shown in footer
+    href: '{{maintainerHref}}'
+    #> Link text (default: "Support")
+    text: '{{maintainerText}}'
 
 #> Logging configuration (tslog-based)
 logger:
@@ -226,15 +238,6 @@ swagger:
     #   description: "PROD server"
     - url: https://{{mcp.domain}}
       description: "PROD server"
-
-#> Service home page (`/`) customization
-homePage:
-  #> Optional help link rendered in the home page footer
-  helpLink:
-    #> If empty — help link is not shown in footer
-    url: ''
-    #> Link text (default: "Help")
-    label: 'Help'
 
 #> UI theme overrides for built-in pages (home, admin, agent-tester)
 uiColor:

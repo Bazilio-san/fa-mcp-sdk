@@ -36,7 +36,7 @@ interface McpServerData {
   customAuthValidator?: CustomAuthValidator;          // Runs FIRST: bypass or fallback to standard auth
   tokenGenAuthHandler?: TokenGenAuthHandler;          // Token Generator auth
   httpComponents?: { apiRouter?: Router | null };     // Express router
-  assets?: { logoSvg?: string; maintainerHtml?: string };
+  assets?: { logoSvg?: string };
   getConsulUIAddress?: (serviceId: string) => string;
 }
 

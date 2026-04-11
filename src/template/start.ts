@@ -39,10 +39,7 @@ const startProject = async (): Promise<void> => {
     httpComponents: { apiRouter },
 
     // Assets
-    assets: {
-      logoSvg: logoSvg,
-      maintainerHtml: '<a href="https://support.com/page/2805" target="_blank" rel="noopener" class="clickable">Support</a>',
-    },
+    assets: { logoSvg: logoSvg },
     // Function to get Consul UI address (if consul enabled: consul.service.enable = true)
     getConsulUIAddress: (serviceId: string) => {
       const { agent } = appConfig.consul || {};

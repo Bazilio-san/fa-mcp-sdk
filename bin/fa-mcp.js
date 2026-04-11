@@ -309,9 +309,24 @@ certificate's public and private keys`,
         name: 'PM2_NAMESPACE',
       },
       {
-        name: 'maintainerUrl',
+        name: 'maintainerHref',
         defaultValue: '',
-        title: 'Maintainer url',
+        title: 'Maintainer link href',
+      },
+      {
+        name: 'maintainerText',
+        defaultValue: 'Support',
+        title: 'Maintainer link text',
+      },
+      {
+        name: 'helpHref',
+        defaultValue: '',
+        title: 'Hepl link href',
+      },
+      {
+        name: 'helpText',
+        defaultValue: 'Help',
+        title: 'Hepl link text',
       },
       {
         name: 'logger.useFileLogger',
@@ -550,12 +565,26 @@ certificate's public and private keys`,
           }
           continue;
 
-        case 'maintainerUrl':
-          value = await ask.optional(title, name, defaultValue);
-          if (value) {
-            config.maintainerHtml = `<a href="${value}" target="_blank" rel="noopener" class="clickable">Support</a>`;
+        case 'maintainerHref': {
+          const href = await ask.optional(title, name, defaultValue);
+          if (href) {
+            config.maintainerHref = href;
+            const textParam = this.optionalParams.find((p) => p.name === 'maintainerText');
+            config.maintainerText = await ask.optional(textParam.title, 'maintainerText', textParam.defaultValue);
           }
           continue;
+        }
+
+        case 'helpHref': {
+          const href = await ask.optional(title, name, defaultValue);
+          if (href) {
+            config.helpHref = href;
+            const textParam = this.optionalParams.find((p) => p.name === 'helpText');
+            config.helpText = await ask.optional(textParam.title, 'helpText', textParam.defaultValue);
+          }
+          continue;
+        }
+
         case 'logger.useFileLogger': {
           const enabled = await ask.yn(title, name, defaultValue);
           config[name] = String(enabled);

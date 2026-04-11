@@ -121,8 +121,11 @@ swagger:
 
 homePage:
   helpLink:
-    url: ''          # If empty — help link is not shown in footer
-    label: 'Help'    # Link text (default: "Help")
+    href: ''        # If empty — help link is not shown in footer
+    text: 'Help'    # Link text (default: "Help")
+  maintainer:
+    href: ''        # If empty — Support link is not shown in footer
+    text: 'Support' # Link text (default: "Help")
 
 uiColor:
   # Font color of the header and a number of interface elements on the HOME page
