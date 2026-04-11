@@ -79,6 +79,9 @@ consul.agent.prd.token: "21345678-90ab-cdef-cdef-90ab12345678"  # Prod access to
 # Token used to register this service with Consul agent
 consul.agent.reg.token: "12345678-90ab-cdef-cdef-90ab12345678"
 
+# The host of the consul agent where the service will be registered
+consul.agent.reg.host: "consul-agent-server.company.com"
+
 # Environment codes for service ID generation
 consul.envCode.dev: "envCode-dev"                # Development environment identifier
 consul.envCode.prod: "envCode-prod"              # Production environment identifier
