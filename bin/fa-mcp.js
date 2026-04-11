@@ -154,7 +154,7 @@ const removeIfExists = async (targetPath, relPath, options = {}) => {
 
 class MCPGenerator {
   constructor () {
-    this.lastConfigPath = path.join(process.cwd(), '~last-cli-config.json');
+    this.lastConfigPath = null;
     this.requiredParams = [
       {
         name: 'project.name',
@@ -348,7 +348,7 @@ certificate's public and private keys`,
   }
 
   createConfigProxy (config) {
-    const { lastConfigPath } = this; // Capture this in closure
+    const self = this; // Capture this in closure
 
     return new Proxy(config, {
       set (target, prop, value, receiver) {
@@ -359,12 +359,33 @@ certificate's public and private keys`,
         }
         // Regular assignment behavior first
         const result = Reflect.set(target, prop, value, receiver);
-        // Save to file asynchronously without blocking
-        fs.writeFile(lastConfigPath, JSON.stringify(target, null, 2), 'utf8')
-          .catch(error => console.warn(`⚠️  Warning: Could not save config to file ${lastConfigPath}:`, error.message));
+        // Save to file asynchronously without blocking — only if project path is known
+        const lastConfigPath = self.lastConfigPath;
+        if (lastConfigPath) {
+          fs.writeFile(lastConfigPath, JSON.stringify(target, null, 2), 'utf8')
+            .catch(error => console.warn(`⚠️  Warning: Could not save config to file ${lastConfigPath}:`, error.message));
+        }
         return result;
       },
     });
+  }
+
+  async setLastConfigPath (projectAbsPath, config) {
+    const tp = path.resolve(projectAbsPath);
+    try {
+      await fs.mkdir(tp, { recursive: true });
+    } catch (error) {
+      console.warn(`⚠️  Warning: Could not create project directory ${tp}: ${error.message}`);
+      return;
+    }
+    this.lastConfigPath = path.join(tp, '~last-cli-config.json');
+    if (config) {
+      try {
+        await fs.writeFile(this.lastConfigPath, JSON.stringify(config, null, 2), 'utf8');
+      } catch (error) {
+        console.warn(`⚠️  Warning: Could not save config to file ${this.lastConfigPath}: ${error.message}`);
+      }
+    }
   }
 
   async collectConfigData (config, isRetry = false) {
@@ -682,13 +703,10 @@ certificate's public and private keys`,
     // Create proxy for automatic saving before starting data collection
     const configProxy = this.createConfigProxy(config);
 
-    // Save initial state if there's any pre-loaded config
-    if (Object.keys(config).length > 0) {
-      try {
-        await fs.writeFile(this.lastConfigPath, JSON.stringify(config, null, 2), 'utf8');
-      } catch (error) {
-        console.warn('⚠️  Warning: Could not save initial config to file:', error.message);
-      }
+    // If project path is already known from preloaded config, set save target now
+    // so that subsequent proxy writes land in the new project folder.
+    if (config.projectAbsPath) {
+      await this.setLastConfigPath(config.projectAbsPath, config);
     }
 
     if (configProxy.NODE_ENV === 'development') {
@@ -746,6 +764,10 @@ certificate's public and private keys`,
     } catch {
       console.log('Creating directory recursively...');
       await fs.mkdir(tp, { recursive: true });
+    }
+    // Make sure ~last-cli-config.json is saved into the new project folder
+    if (this.lastConfigPath !== path.join(tp, '~last-cli-config.json')) {
+      await this.setLastConfigPath(tp, config);
     }
 
     const errMsg = `❌  Directory ${hl(tp)} not empty - cannot create project here. Use an empty directory or specify a different path.`;
