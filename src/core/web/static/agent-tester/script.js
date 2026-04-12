@@ -833,11 +833,25 @@ class McpAgentTester {
       this.dynamicHeaders.appendChild(headerGroup);
 
       const nameEl = headerGroup.querySelector('.header-name');
-      if (nameEl && hasDesc) {
+      if (nameEl) {
         nameEl.style.cursor = 'pointer';
+        let hoverTimer = null;
+        if (hasDesc) {
+          nameEl.addEventListener('mouseenter', (e) => {
+            hoverTimer = setTimeout(() => this.showHeaderTooltip(e, header.description), 1000);
+          });
+          nameEl.addEventListener('mouseleave', () => {
+            clearTimeout(hoverTimer);
+            this.hideHeaderTooltip();
+          });
+        }
         nameEl.addEventListener('click', (e) => {
           e.stopPropagation();
-          this.toggleHeaderTooltip(e, header.description);
+          clearTimeout(hoverTimer);
+          this.hideHeaderTooltip();
+          this.copyToClipboard(header.name).then(() => {
+            this.showToast(`Copied: ${header.name}`, 'success');
+          });
         });
       }
 
@@ -855,12 +869,8 @@ class McpAgentTester {
     this.mcpConfig.headers = this.getHeadersFromForm();
   }
 
-  toggleHeaderTooltip (e, text) {
+  showHeaderTooltip (e, text) {
     const tip = document.getElementById('headerTooltip');
-    if (tip.classList.contains('visible') && tip._sourceEl === e.target) {
-      this.hideHeaderTooltip();
-      return;
-    }
     tip._sourceEl = e.target;
     tip.textContent = text;
     const rect = e.target.getBoundingClientRect();
@@ -868,20 +878,31 @@ class McpAgentTester {
     tip.style.top = (rect.top - 4) + 'px';
     tip.style.transform = 'translateY(-100%)';
     tip.classList.add('visible');
-
-    const dismissOnClick = (ev) => {
-      if (ev.target !== e.target && !tip.contains(ev.target)) {
-        this.hideHeaderTooltip();
-        document.removeEventListener('click', dismissOnClick);
-      }
-    };
-    setTimeout(() => document.addEventListener('click', dismissOnClick), 0);
   }
 
   hideHeaderTooltip () {
     const tip = document.getElementById('headerTooltip');
     tip.classList.remove('visible');
     tip._sourceEl = null;
+  }
+
+  copyToClipboard (text) {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      return navigator.clipboard.writeText(text).catch(() => this._fallbackCopy(text));
+    }
+    return this._fallbackCopy(text);
+  }
+
+  _fallbackCopy (text) {
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    ta.style.position = 'fixed';
+    ta.style.opacity = '0';
+    document.body.appendChild(ta);
+    ta.select();
+    document.execCommand('copy');
+    document.body.removeChild(ta);
+    return Promise.resolve();
   }
 
   updateHeaderBorder (inputEl) {

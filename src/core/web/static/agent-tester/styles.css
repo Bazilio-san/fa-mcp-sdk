@@ -514,7 +514,7 @@ body {
   text-decoration-style: dashed;
   text-underline-offset: 3px;
   text-decoration-color: var(--text-muted);
-  cursor: help;
+  cursor: pointer;
 }
 
 .header-tooltip {
