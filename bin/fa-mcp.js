@@ -360,7 +360,7 @@ certificate's public and private keys`,
         // Regular assignment behavior first
         const result = Reflect.set(target, prop, value, receiver);
         // Save to file asynchronously without blocking — only if project path is known
-        const lastConfigPath = self.lastConfigPath;
+        const { lastConfigPath } = self;
         if (lastConfigPath) {
           fs.writeFile(lastConfigPath, JSON.stringify(target, null, 2), 'utf8')
             .catch(error => console.warn(`⚠️  Warning: Could not save config to file ${lastConfigPath}:`, error.message));

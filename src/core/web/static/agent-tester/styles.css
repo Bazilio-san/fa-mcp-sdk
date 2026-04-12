@@ -1385,6 +1385,32 @@ body {
   justify-content: space-between;
 }
 
+.prompt-actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.btn-reset-prompt {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 2px;
+  border-radius: var(--radius-sm);
+  display: flex;
+  align-items: center;
+  transition: color 0.15s;
+}
+
+.btn-reset-prompt:hover {
+  color: var(--primary);
+}
+
+.btn-reset-prompt .material-icons-round {
+  font-size: 16px;
+}
+
 .btn-enlarge {
   background: none;
   border: none;

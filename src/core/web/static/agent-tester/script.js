@@ -397,6 +397,8 @@ class McpAgentTester {
 
     this.systemPromptTextarea = document.getElementById('systemPrompt');
     this.customPromptTextarea = document.getElementById('customPrompt');
+    this.btnResetAgentPrompt = document.getElementById('btnResetAgentPrompt');
+    this.originalAgentPrompt = null;
 
     this.connectedServersContainer = document.getElementById('connectedServers');
 
@@ -442,6 +444,7 @@ class McpAgentTester {
 
     this.systemPromptTextarea.addEventListener('input', () => this.saveFormValuesToStorage());
     this.customPromptTextarea.addEventListener('input', () => this.saveFormValuesToStorage());
+    this.btnResetAgentPrompt.addEventListener('click', () => this.resetAgentPrompt());
 
     // LLM settings modal
     this.llmSettingsBtn.addEventListener('click', () => this.openLlmModal());
@@ -619,6 +622,8 @@ class McpAgentTester {
         if (result.config && result.config.agentPrompt) {
           this.systemPromptTextarea.value = result.config.agentPrompt;
           this.currentSystemPrompt = result.config.agentPrompt;
+          this.originalAgentPrompt = result.config.agentPrompt;
+          this.updateResetPromptButton();
         }
 
         this.addUrlToSaved(serverUrl);
@@ -704,6 +709,8 @@ class McpAgentTester {
         if (result.config && result.config.agentPrompt) {
           this.systemPromptTextarea.value = result.config.agentPrompt;
           this.currentSystemPrompt = result.config.agentPrompt;
+          this.originalAgentPrompt = result.config.agentPrompt;
+          this.updateResetPromptButton();
         }
 
         this.showToast('Successfully connected to ' + serverName, 'success');
@@ -1047,6 +1054,8 @@ class McpAgentTester {
       headers: {},
       name: null,
     };
+    this.originalAgentPrompt = null;
+    this.updateResetPromptButton();
     window.history.replaceState({}, document.title, window.location.pathname);
     localStorage.removeItem('mcpAgentFormValues');
   }
@@ -1125,6 +1134,8 @@ class McpAgentTester {
           headers: {},
           name: null,
         };
+        this.originalAgentPrompt = null;
+        this.updateResetPromptButton();
         await this.loadCurrentServer();
         this.updateConnectionStatus();
       } else {
@@ -1654,6 +1665,18 @@ class McpAgentTester {
     }
 
     this.saveFormValuesToStorage();
+  }
+
+  resetAgentPrompt () {
+    if (this.originalAgentPrompt) {
+      this.systemPromptTextarea.value = this.originalAgentPrompt;
+      this.currentSystemPrompt = this.originalAgentPrompt;
+      this.saveFormValuesToStorage();
+    }
+  }
+
+  updateResetPromptButton () {
+    this.btnResetAgentPrompt.style.display = this.originalAgentPrompt ? '' : 'none';
   }
 
   saveFormValuesToStorage () {

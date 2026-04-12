@@ -120,9 +120,14 @@
                     <div class="form-group">
                         <div class="prompt-label-row">
                             <label for="systemPrompt">Agent Prompt</label>
-                            <button type="button" class="btn-enlarge" data-target="systemPrompt" title="Enlarge" data-testid="at-system-prompt-enlarge">
-                                <span class="material-icons-round">open_in_full</span>
-                            </button>
+                            <div class="prompt-actions">
+                                <button type="button" class="btn-reset-prompt" id="btnResetAgentPrompt" title="Reset to original agent prompt" data-testid="at-system-prompt-reset" style="display:none">
+                                    <span class="material-icons-round">restart_alt</span>
+                                </button>
+                                <button type="button" class="btn-enlarge" data-target="systemPrompt" title="Enlarge" data-testid="at-system-prompt-enlarge">
+                                    <span class="material-icons-round">open_in_full</span>
+                                </button>
+                            </div>
                         </div>
                         <textarea id="systemPrompt" placeholder="Enter system prompt..." rows="3" data-testid="at-system-prompt">You are a helpful AI assistant that can use MCP tools to help users. Be concise and accurate in your responses.</textarea>
                     </div>
