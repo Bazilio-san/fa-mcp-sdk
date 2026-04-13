@@ -304,6 +304,13 @@ webServer:
       password: '***'
 
   #> ========================================================================
+  #> JWT TOKEN GENERATION API
+  #> POST /gen-jwt — generates a JWT token programmatically.
+  #> Requires valid Authorization header (any method configured in webServer.auth).
+  #> ========================================================================
+  genJwtApiEnable: false
+
+  #> ========================================================================
   #> ADMIN PANEL AUTHENTICATION
   #> Token generation page available at /admin endpoint
   #> Supports 4 authentication methods: permanentServerTokens, basic, jwtToken, ntlm

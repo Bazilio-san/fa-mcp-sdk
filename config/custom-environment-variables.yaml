@@ -51,6 +51,7 @@ webServer:
     basic:
       username: WS_AUTH_BASIC_USERNAME
       password: WS_AUTH_BASIC_PASSWORD
+  genJwtApiEnable: WS_GEN_JWT_API_ENABLE
   adminAuth:
     enabled: WS_ADMIN_AUTH_ENABLED
     type: WS_ADMIN_AUTH_TYPE  # permanentServerTokens | basic | jwtToken | ntlm

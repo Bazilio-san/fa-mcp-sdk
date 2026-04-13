@@ -34,10 +34,18 @@ node scripts/generate-jwt.js -u <username> -ttl <duration> [-s <service>] [-p <p
 # duration: <N>s | <N>m | <N>d | <N>y
 # example: node scripts/generate-jwt.js -u admin -ttl 30d -s my-mcp -p "role=admin;team=ops"
 
+# JWT generation API (HTTP endpoint, requires webServer.genJwtApiEnable: true)
+# POST /gen-jwt  {"username":"user","ttl":"30d","service":"svc","params":"key=val"}
+
 # Tests
 npx jest               # run all tests
 npx jest tests/path/to/file.test.ts   # single test file
 ```
+
+## JWT Token Generation (Skill /gen-jwt)
+
+Generate JWT tokens for MCP server authentication using the `/gen-jwt` skill.
+Triggers: user asks to generate/create a JWT token, mentions "jwt", "token for user", "токен для", "сгенерируй токен для".
 
 **To start/stop the dev server**: build first (`npm run build`), then `npm start`. Stop with Ctrl+C. 
 The server port is configured in `config/default.yaml` under `webServer.port`. Default port is 9876.

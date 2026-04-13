@@ -18,6 +18,7 @@ import { IGetPromptRequest } from '../_types_/types.js';
 import { createAgentTesterRouter } from '../agent-tester/agent-tester-router.js';
 import { validateAdminAuthConfig } from '../auth/admin-auth.js';
 import { createAgentTesterSessionMW } from '../auth/agent-tester-auth.js';
+import { generateToken, MIN_ENCRYPT_KEY_LENGTH } from '../auth/jwt.js';
 import { createAuthMW } from '../auth/middleware.js';
 import { appConfig, getProjectData } from '../bootstrap/init-config.js';
 import { getMainDBConnectionStatus } from '../db/pg-db.js';
@@ -186,6 +187,87 @@ export async function startHttpServer (): Promise<void> {
     const adminRouter = createAdminRouter();
     app.use('/admin', adminRouter);
   }
+
+  // JWT generation API endpoint
+  if (appConfig.webServer.genJwtApiEnable) {
+    const encryptKey = appConfig.webServer.auth?.jwtToken?.encryptKey;
+    if (!encryptKey || encryptKey.length < MIN_ENCRYPT_KEY_LENGTH || encryptKey === '***') {
+      logger.error('genJwtApiEnable is true but webServer.auth.jwtToken.encryptKey is not configured');
+    } else {
+      const TTL_MULTIPLIERS: Record<string, number> = { s: 1, m: 60, d: 86400, y: 31536000 };
+
+      app.post('/gen-jwt', authMW, (req: express.Request, res: express.Response) => {
+        try {
+          const { username, ttl, service, params } = req.body as {
+            username?: string;
+            ttl?: string;
+            service?: string;
+            params?: string | Record<string, string>;
+          };
+
+          if (!username || !username.trim()) {
+            return res.status(400).json({ success: false, error: 'username is required' });
+          }
+
+          if (!ttl || !ttl.trim()) {
+            return res.status(400).json({ success: false, error: 'ttl is required. Format: <N>s | <N>m | <N>d | <N>y' });
+          }
+
+          const ttlMatch = /^(\d+)([smdy])$/.exec(ttl.trim());
+          if (!ttlMatch) {
+            return res.status(400).json({ success: false, error: `Invalid ttl format "${ttl}". Expected: <N>s | <N>m | <N>d | <N>y` });
+          }
+
+          const ttlValue = parseInt(ttlMatch[1]!, 10);
+          const ttlUnit = ttlMatch[2]!;
+          if (ttlValue <= 0) {
+            return res.status(400).json({ success: false, error: 'ttl value must be greater than 0' });
+          }
+
+          const liveTimeSec = ttlValue * TTL_MULTIPLIERS[ttlUnit]!;
+
+          // Build payload
+          const payload: Record<string, any> = {};
+          if (service && service.trim()) {
+            payload.service = service.trim();
+          }
+
+          // Parse params — string "key=value;key=value" or object
+          if (params) {
+            if (typeof params === 'string') {
+              for (const pair of params.split(';')) {
+                const eqIdx = pair.indexOf('=');
+                if (eqIdx > 0) {
+                  const key = pair.substring(0, eqIdx).trim();
+                  const value = pair.substring(eqIdx + 1).trim();
+                  if (key) {
+                    payload[key] = value;
+                  }
+                }
+              }
+            } else if (typeof params === 'object') {
+              Object.assign(payload, params);
+            }
+          }
+
+          const token = generateToken(username.trim(), liveTimeSec, payload);
+          const expire = Date.now() + (liveTimeSec * 1000);
+
+          return res.json({
+            success: true,
+            token,
+            user: username.trim().toLowerCase(),
+            expire: new Date(expire).toISOString(),
+            ttlSeconds: liveTimeSec,
+          });
+        } catch (error: any) {
+          logger.error('Error generating JWT token:', error);
+          return res.status(500).json({ success: false, error: error.message });
+        }
+      });
+    }
+  }
+
   const at = appConfig.agentTester;
   // Agent Tester routes
   if (at?.enabled) {
@@ -527,6 +609,9 @@ export async function startHttpServer (): Promise<void> {
       availableEndpoints.swagger = 'GET /docs';
       availableEndpoints.openapi = 'GET /api/openapi.json';
       availableEndpoints.openapiYaml = 'GET /api/openapi.yaml';
+    }
+    if (appConfig.webServer.genJwtApiEnable) {
+      availableEndpoints.genJwt = 'POST /gen-jwt';
     }
     if (isAdminEnabled) {
       availableEndpoints.admin = 'GET /admin';

@@ -306,6 +306,75 @@ node scripts/generate-jwt.js -u svc-account -ttl 1y -p "role=admin;team=backend"
 JWT_PAYLOAD_USERNAME=admin JWT_TTL=8d node scripts/generate-jwt.js
 ```
 
+## Claude Code Skill: `/gen-jwt`
+
+Interactive JWT token generation via Claude Code. Invoke with `/gen-jwt` or natural language (e.g. "сгенерируй токен для vpupkin на 1 год").
+
+The skill parses your request for `username`, `ttl`, `service`, `request` (ticket ID), `ip`, and extra key=value params. If required params (`username`, `ttl`) are missing, it asks interactively. Optional params (`request`, `ip`) are prompted once with an option to skip.
+
+Runs `node scripts/generate-jwt.js` under the hood.
+
+**Example:**
+```
+/gen-jwt для vpupkin, по заявке REQ-12345, на 1 год, role=admin, IP 10.0.0.0/24
+```
+
+Skill location: `.claude/skills/gen-jwt/SKILL.md`
+
+## JWT Generation API
+
+HTTP endpoint for programmatic JWT token generation. Disabled by default.
+
+### Configuration
+
+```yaml
+# config/default.yaml
+webServer:
+  genJwtApiEnable: true   # Enable POST /gen-jwt endpoint
+  auth:
+    enabled: true          # Auth must be enabled — endpoint requires valid credentials
+    jwtToken:
+      encryptKey: 'your-secret-key-here'
+```
+
+Or via ENV: `WS_GEN_JWT_API_ENABLE=true`
+
+### Usage
+
+```bash
+# POST /gen-jwt with any configured auth method
+curl -X POST http://localhost:3000/gen-jwt \
+  -H "Content-Type: application/json" \
+  -u "admin:password" \
+  -d '{
+    "username": "testuser",
+    "ttl": "30d",
+    "service": "my-mcp-server",
+    "params": "role=admin;team=backend"
+  }'
+```
+
+### Request Body
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `username` | string | yes | Username for the token |
+| `ttl` | string | yes | Token lifetime: `<N>s` \| `<N>m` \| `<N>d` \| `<N>y` |
+| `service` | string | no | Service name |
+| `params` | string \| object | no | Extra payload. String: `"key=value;key=value"`. Object: `{"key": "value"}` |
+
+### Response
+
+```json
+{
+  "success": true,
+  "token": "1718000000000.a1b2c3...",
+  "user": "testuser",
+  "expire": "2025-07-10T12:00:00.000Z",
+  "ttlSeconds": 2592000
+}
+```
+
 ## Token Generator App
 
 ```typescript

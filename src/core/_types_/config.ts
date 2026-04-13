@@ -28,6 +28,7 @@ interface IWebServerConfig {
       enabled: boolean,
       type: AdminAuthType | AdminAuthType[],
     },
+    genJwtApiEnable: boolean,
   }
 }
 

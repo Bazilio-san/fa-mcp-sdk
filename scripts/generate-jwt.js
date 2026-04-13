@@ -15,6 +15,9 @@
  */
 
 import crypto from 'crypto';
+import { readFileSync } from 'fs';
+import { fileURLToPath } from 'url';
+import { dirname, resolve } from 'path';
 import configModule from 'config';
 
 // ── CLI argument parsing ────────────────────────────────────────────
@@ -95,13 +98,45 @@ function encrypt (text) {
   return encryptedBuf.toString('hex');
 }
 
+// ── Auto-detect service name if checkMCPName is enabled ─────────────
+
+let effectiveService = service;
+
+if ((!effectiveService || !effectiveService.trim())) {
+  let checkMCPName = false;
+  try {
+    checkMCPName = configModule.get('webServer.auth.jwtToken.checkMCPName');
+  } catch {
+    // config key not found
+  }
+  if (checkMCPName) {
+    // 1) Try SERVICE_NAME from .env
+    if (process.env.SERVICE_NAME && process.env.SERVICE_NAME.trim()) {
+      effectiveService = process.env.SERVICE_NAME.trim();
+    } else {
+      // 2) Fallback to package.json name
+      try {
+        const __filename = fileURLToPath(import.meta.url);
+        const __dirname = dirname(__filename);
+        const pkgPath = resolve(__dirname, '..', 'package.json');
+        const pkg = JSON.parse(readFileSync(pkgPath, 'utf-8'));
+        if (pkg.name) {
+          effectiveService = pkg.name;
+        }
+      } catch {
+        // package.json not found or unreadable
+      }
+    }
+  }
+}
+
 // ── Build payload ───────────────────────────────────────────────────
 
 const payload = {};
 payload.user = username.trim().toLowerCase();
 
-if (service && service.trim()) {
-  payload.service = service.trim();
+if (effectiveService && effectiveService.trim()) {
+  payload.service = effectiveService.trim();
 }
 
 // Parse extra params: "key1=value1;key2=value2"
@@ -151,3 +186,6 @@ console.log('─'.repeat(50));
 console.log('');
 console.log(token);
 console.log('');
+console.log('__PAYLOAD_JSON__');
+console.log(JSON.stringify({ ...payload, ttl: ttlRaw, expire_iso: new Date(expire).toISOString() }));
+console.log('__END_PAYLOAD_JSON__');

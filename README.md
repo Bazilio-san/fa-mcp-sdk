@@ -210,6 +210,7 @@ Note: The `dist/` directory (compiled JavaScript) is created after running `npm 
 | `npm run test:mcp-stdio` | Test STDIO transport |
 | `npm run generate-token` | Generate JWT tokens (Web UI) |
 | `node scripts/generate-jwt.js` | Generate JWT token (CLI) |
+| `/gen-jwt` | Generate JWT token (Claude Code skill) |
 | `npm run consul:unreg` | Deregister from Consul |
 
 
@@ -217,6 +218,7 @@ Note: The `dist/` directory (compiled JavaScript) is created after running `npm 
 `http://localhost:3000` with:
 - MCP endpoints at `/mcp/*`
 - Admin panel for generating access tokens at `/admin`
+- JWT generation API at `/gen-jwt` (when `webServer.genJwtApiEnable: true`)
 - Swagger UI at `/docs`
 - Health check at `/health`
 

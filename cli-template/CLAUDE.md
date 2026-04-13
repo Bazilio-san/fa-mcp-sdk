@@ -35,8 +35,17 @@ npm run generate-token     # JWT token generator UI
 node scripts/generate-jwt.js -u <username> -ttl <duration> [-s <service>] [-p <params>]
 # duration: <N>s | <N>m | <N>d | <N>y
 # example: node scripts/generate-jwt.js -u admin -ttl 30d -s my-mcp -p "role=admin;team=ops"
+
+# JWT generation API (HTTP endpoint, requires webServer.genJwtApiEnable: true)
+# POST /gen-jwt  {"username":"user","ttl":"30d","service":"svc","params":"key=val"}
+
 npm run consul:unreg       # deregister from Consul
 ```
+
+## JWT Token Generation (Skill /gen-jwt)
+
+Generate JWT tokens for MCP server authentication using the `/gen-jwt` skill. 
+Triggers: user asks to generate/create a JWT token, mentions "jwt", "token for user", "токен для", "сгенерируй токен для". 
 
 **Start/stop the server**: `npm run build && npm start`. Stop with Ctrl+C. Port is in `config/default.yaml` → `webServer.port`. Force stop: `node scripts/kill-port.js <port>`.
 

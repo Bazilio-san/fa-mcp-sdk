@@ -73,6 +73,7 @@ export const startupInfo = async (args: {
     ...dbInfo,
     ['MCP Auth', mcpAuthInfo],
     ['Admin Auth', adminAuthInfo],
+    ['Gen JWT API', cfg.webServer?.genJwtApiEnable ? 'POST /gen-jwt' : 'disabled'],
     ...(args.customStartupInfo || []),
     consulInfoItem,
   ].filter(Boolean) as TInfoLine[];
