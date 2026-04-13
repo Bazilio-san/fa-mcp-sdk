@@ -5,7 +5,8 @@ let keyValuePairCount = 0;
 // ===========================
 
 const AUTH_TOKEN_KEY = 'adminAuthToken';
-let requiresBearerToken = false;
+let requiresFrontendAuth = false;
+let authMethods = []; // ['token', 'basic']
 
 // Get stored auth token from sessionStorage
 function getStoredToken () {
@@ -22,53 +23,114 @@ function clearStoredToken () {
   sessionStorage.removeItem(AUTH_TOKEN_KEY);
 }
 
-// Show token authentication modal
-function showTokenModal (errorMessage = null) {
+// Show authentication modal
+function showAuthModal (errorMessage = null) {
   const modal = document.getElementById('tokenModal');
-  const errorDiv = document.getElementById('tokenAuthError');
+
+  // Clear errors on both forms
+  const tokenError = document.getElementById('tokenAuthError');
+  const basicError = document.getElementById('basicAuthError');
+  tokenError.style.display = 'none';
+  basicError.style.display = 'none';
 
   if (errorMessage) {
-    errorDiv.innerHTML = `<strong>Error:</strong> ${errorMessage}`;
-    errorDiv.style.display = 'block';
-  } else {
-    errorDiv.style.display = 'none';
+    // Show error in the active form
+    const activeError = document.getElementById('basicAuthForm').style.display !== 'none'
+      ? basicError : tokenError;
+    activeError.innerHTML = `<strong>Error:</strong> ${errorMessage}`;
+    activeError.style.display = 'block';
   }
 
   modal.style.display = 'flex';
 }
 
-// Hide token authentication modal
-function hideTokenModal () {
+// Hide authentication modal
+function hideAuthModal () {
   const modal = document.getElementById('tokenModal');
   modal.style.display = 'none';
 }
 
-// Authenticated fetch wrapper - adds Authorization header if token auth is required
+// Setup auth tabs and forms based on available methods
+function setupAuthForms (methods) {
+  const hasToken = methods.includes('token');
+  const hasBasic = methods.includes('basic');
+
+  const tabs = document.getElementById('adminAuthTabs');
+  const tokenForm = document.getElementById('tokenAuthForm');
+  const basicForm = document.getElementById('basicAuthForm');
+
+  if (hasToken && hasBasic) {
+    // Show tabs, default to token
+    tabs.style.display = 'flex';
+    tokenForm.style.display = 'block';
+    basicForm.style.display = 'none';
+    bindAuthTabs();
+  } else if (hasBasic) {
+    // Basic only
+    tabs.style.display = 'none';
+    tokenForm.style.display = 'none';
+    basicForm.style.display = 'block';
+  } else {
+    // Token only (default)
+    tabs.style.display = 'none';
+    tokenForm.style.display = 'block';
+    basicForm.style.display = 'none';
+  }
+}
+
+// Bind tab click handlers
+function bindAuthTabs () {
+  const tabButtons = document.querySelectorAll('.admin-auth-tab');
+  const tokenForm = document.getElementById('tokenAuthForm');
+  const basicForm = document.getElementById('basicAuthForm');
+
+  tabButtons.forEach((btn) => {
+    btn.addEventListener('click', () => {
+      // Update active tab
+      tabButtons.forEach((b) => b.classList.remove('active'));
+      btn.classList.add('active');
+
+      // Hide errors
+      document.getElementById('tokenAuthError').style.display = 'none';
+      document.getElementById('basicAuthError').style.display = 'none';
+
+      // Toggle forms
+      const tab = btn.getAttribute('data-tab');
+      if (tab === 'basic') {
+        tokenForm.style.display = 'none';
+        basicForm.style.display = 'block';
+      } else {
+        tokenForm.style.display = 'block';
+        basicForm.style.display = 'none';
+      }
+    });
+  });
+}
+
+// Authenticated fetch wrapper - adds Authorization header
 async function authFetch (url, options = {}) {
   const token = getStoredToken();
 
-  if (requiresBearerToken && token) {
+  if (requiresFrontendAuth && token) {
     options.headers = {
       ...options.headers,
-      'Authorization': `Bearer ${token}`,
+      'Authorization': token,
     };
   }
 
   const response = await fetch(url, options);
 
-  // Handle 401 Unauthorized - show token modal if available
-  if (response.status === 401 && requiresBearerToken) {
+  // Handle 401 Unauthorized
+  if (response.status === 401 && requiresFrontendAuth) {
     clearStoredToken();
     const errorData = await response.json().catch(() => ({}));
     const errorMessage = errorData.error || 'Authentication failed';
 
-    // Try to show modal, but if it's not available, throw with descriptive error
     const modal = document.getElementById('tokenModal');
     if (modal) {
-      showTokenModal(errorMessage + '. Please enter a valid token.');
+      showAuthModal(errorMessage + '. Please authenticate again.');
     }
 
-    // Throw error with status code for form error handling
     const error = new Error(`401 Unauthorized: ${errorMessage}`);
     error.status = 401;
     throw error;
@@ -84,13 +146,15 @@ async function initializeAuth () {
     const response = await fetch('/admin/api/auth-config');
     const config = await response.json();
 
-    if (config.success && config.requiresBearerToken) {
-      requiresBearerToken = true;
+    if (config.success && config.requiresFrontendAuth) {
+      requiresFrontendAuth = true;
+      authMethods = config.methods || [];
+      setupAuthForms(authMethods);
 
       // Check if we have a stored token
       const storedToken = getStoredToken();
       if (!storedToken) {
-        showTokenModal();
+        showAuthModal();
         return false;
       }
 
@@ -101,11 +165,34 @@ async function initializeAuth () {
 
         if (!verifyData.success || !verifyData.isAuthenticated) {
           clearStoredToken();
-          showTokenModal('Token is invalid or expired.');
+          showAuthModal('Token is invalid or expired.');
           return false;
         }
       } catch {
         // authFetch already handles 401 and shows modal
+        return false;
+      }
+    } else if (config.success && config.requiresBearerToken) {
+      // Backward compat: old-style bearer-only
+      requiresFrontendAuth = true;
+      authMethods = ['token'];
+      setupAuthForms(authMethods);
+
+      const storedToken = getStoredToken();
+      if (!storedToken) {
+        showAuthModal();
+        return false;
+      }
+
+      try {
+        const verifyResponse = await authFetch('/admin/api/auth-status');
+        const verifyData = await verifyResponse.json();
+        if (!verifyData.success || !verifyData.isAuthenticated) {
+          clearStoredToken();
+          showAuthModal('Token is invalid or expired.');
+          return false;
+        }
+      } catch {
         return false;
       }
     }
@@ -129,32 +216,81 @@ function setupTokenAuthForm () {
     const token = tokenInput.value.trim();
 
     if (!token) {
-      showTokenModal('Please enter a token.');
+      showAuthModal('Please enter a token.');
       return;
     }
 
-    // Store token and try to authenticate
-    storeToken(token);
+    // Store as Bearer token
+    storeToken(`Bearer ${token}`);
 
     try {
       const response = await authFetch('/admin/api/auth-status');
       const data = await response.json();
 
       if (data.success && data.isAuthenticated) {
-        hideTokenModal();
+        hideAuthModal();
         tokenInput.value = '';
-        // Reload auth status and initialize form
         loadAuthStatus();
         initializeForm();
       } else {
         clearStoredToken();
-        showTokenModal(data.error || 'Invalid token.');
+        showAuthModal(data.error || 'Invalid token.');
       }
     } catch (error) {
-      // Error already handled in authFetch
       if (error.message !== 'Unauthorized') {
         clearStoredToken();
-        showTokenModal('Authentication failed: ' + error.message);
+        showAuthModal('Authentication failed: ' + error.message);
+      }
+    }
+  });
+}
+
+// Handle basic authentication form submission
+function setupBasicAuthForm () {
+  const form = document.getElementById('basicAuthForm');
+  if (!form) {return;}
+
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+
+    const usernameInput = document.getElementById('authUsername');
+    const passwordInput = document.getElementById('authPassword');
+    const username = usernameInput.value.trim();
+    const password = passwordInput.value;
+
+    if (!username || !password) {
+      const errorDiv = document.getElementById('basicAuthError');
+      errorDiv.innerHTML = '<strong>Error:</strong> Please enter username and password.';
+      errorDiv.style.display = 'block';
+      return;
+    }
+
+    // Store as Basic auth header
+    const encoded = btoa(`${username}:${password}`);
+    storeToken(`Basic ${encoded}`);
+
+    try {
+      const response = await authFetch('/admin/api/auth-status');
+      const data = await response.json();
+
+      if (data.success && data.isAuthenticated) {
+        hideAuthModal();
+        usernameInput.value = '';
+        passwordInput.value = '';
+        loadAuthStatus();
+        initializeForm();
+      } else {
+        clearStoredToken();
+        const errorDiv = document.getElementById('basicAuthError');
+        errorDiv.innerHTML = `<strong>Error:</strong> ${data.error || 'Invalid credentials.'}`;
+        errorDiv.style.display = 'block';
+      }
+    } catch (error) {
+      if (error.status !== 401) {
+        clearStoredToken();
+        const errorDiv = document.getElementById('basicAuthError');
+        errorDiv.innerHTML = `<strong>Error:</strong> Authentication failed: ${error.message}`;
+        errorDiv.style.display = 'block';
       }
     }
   });
@@ -514,10 +650,10 @@ async function initializeForm () {
 // eslint-disable-next-line unused-imports/no-unused-vars
 async function logout () {
   try {
-    // For token-based auth, just clear the stored token
-    if (requiresBearerToken) {
+    // For frontend auth, clear the stored credentials
+    if (requiresFrontendAuth) {
       clearStoredToken();
-      showTokenModal();
+      showAuthModal();
       // Clear auth status display
       const container = document.getElementById('authStatusContainer');
       if (container) {
@@ -547,8 +683,9 @@ async function logout () {
 
 // Initialization on page load
 document.addEventListener('DOMContentLoaded', async () => {
-  // Setup token auth form handler
+  // Setup auth form handlers
   setupTokenAuthForm();
+  setupBasicAuthForm();
 
   // Initialize authentication (check if token is needed and valid)
   const authOk = await initializeAuth();

@@ -4,6 +4,7 @@ import { IAFConsulConfig, IAccessPoints } from 'fa-consul';
 
 import { IADConfig } from './active-directory-config.js';
 
+export type AdminAuthType = 'permanentServerTokens' | 'basic' | 'jwtToken' | 'ntlm';
 
 interface IWebServerConfig {
   webServer: {
@@ -25,7 +26,7 @@ interface IWebServerConfig {
     },
     adminAuth: {
       enabled: boolean,
-      type: 'permanentServerTokens' | 'basic' | 'jwtToken' | 'ntlm',
+      type: AdminAuthType | AdminAuthType[],
     },
   }
 }

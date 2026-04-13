@@ -44,6 +44,30 @@ const client = new McpHttpClient('http://localhost:3000');
 const result = await client.callTool('tool', args, getAuthHeadersForTests());
 ```
 
+## Admin Panel Authentication
+
+The admin panel (`/admin`) supports 4 authentication types and can be configured with a single type or multiple types:
+
+```yaml
+# config/default.yaml
+webServer:
+  adminAuth:
+    enabled: true
+    # Single type (string)
+    type: 'basic'
+    # Or multiple types (array) — login page shows tabs to choose
+    type: ['jwtToken', 'basic']
+```
+
+**Supported types:** `permanentServerTokens`, `basic`, `jwtToken`, `ntlm`
+
+When multiple types are configured (e.g. `['jwtToken', 'basic']`), the login page shows tabs:
+- **Token** tab — for `permanentServerTokens` and `jwtToken` authentication
+- **Login** tab — for `basic` (username/password) authentication
+
+For `permanentServerTokens`, `basic`, `jwtToken` — credentials are taken from `webServer.auth` section.
+For `ntlm` — uses AD configuration from `ad.domains` section.
+
 ## Token Generator Authorization
 
 Protect `/admin/` page with custom authorization:

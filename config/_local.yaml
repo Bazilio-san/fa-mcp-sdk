@@ -312,6 +312,11 @@ webServer:
     #> Enable/disable admin panel
     enabled: true
     #> Authentication type for admin panel: 'permanentServerTokens' | 'basic' | 'jwtToken' | 'ntlm'
+    #> Accepts a single type (string) or multiple types (array):
+    #>   type: 'basic'
+    #>   type: ['jwtToken', 'basic']
     #> For permanentServerTokens, basic, jwtToken — uses credentials from webServer.auth section
     #> For ntlm — uses AD configuration from ad.domains section (no additional credentials needed)
+    #> When multiple types are set (e.g. ['jwtToken', 'basic']), the login page shows tabs
+    #> to choose between Token and Login (username/password) authentication.
     type: 'basic'

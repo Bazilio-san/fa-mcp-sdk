@@ -505,6 +505,36 @@ input::placeholder, textarea::placeholder {
   flex: 1;
 }
 
+/* Admin auth tabs (token-gen login modal) */
+.admin-auth-tabs {
+  display: flex;
+  gap: 0;
+  margin-bottom: 16px;
+  border-bottom: 1px solid #dfe1e6;
+}
+
+.admin-auth-tab {
+  flex: 1;
+  padding: 10px 0;
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+  color: #6b778c;
+  transition: color 0.15s, border-color 0.15s;
+}
+
+.admin-auth-tab:hover {
+  color: #172b4d;
+}
+
+.admin-auth-tab.active {
+  color: var(--primary-color, #0f65dc);
+  border-bottom-color: var(--primary-color, #0f65dc);
+}
+
 /* Tables */
 .table-container {
   overflow-x: auto;
