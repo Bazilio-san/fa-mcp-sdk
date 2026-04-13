@@ -27,7 +27,7 @@
     "check-llm": "node node_modules/fa-mcp-sdk/dist/core/agent-tester/check-llm.js",
     "consul:unreg": "node node_modules/fa-mcp-sdk/dist/core/consul/deregister.js",
     "test": "jest",
-    "test:mcp": "node scripts/test-mcp-tools.js",
+    "test:mcp": "node tests/mcp/test-stdio.js",
     "test:mcp-http": "node tests/mcp/test-http.js",
     "test:mcp-sse": "node tests/mcp/test-sse.js",
     "test:mcp-stdio": "node tests/mcp/test-stdio.js"

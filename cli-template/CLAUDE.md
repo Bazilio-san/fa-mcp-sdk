@@ -10,26 +10,26 @@ An MCP (Model Context Protocol) server built on the `fa-mcp-sdk` framework. It e
 
 ```bash
 # Build & run
-npm run build              # tsc
-npm run cb                 # clean dist/ + build
-npm start                  # node dist/src/start.js (HTTP mode)
+yarn build                 # tsc
+yarn cb                    # clean dist/ + build
+yarn start                 # node dist/src/start.js (HTTP mode)
 node dist/src/start.js stdio   # STDIO mode (Claude Desktop)
 
 # Lint & typecheck
-npm run lint               # eslint
-npm run lint:fix           # eslint --fix
-npm run typecheck          # tsc --noEmit
+yarn lint                  # eslint
+yarn lint:fix              # eslint --fix
+yarn typecheck             # tsc --noEmit
 
 # Tests
-npm test                   # jest (all tests)
-npm run test:mcp           # STDIO transport tests
-npm run test:mcp-http      # HTTP transport tests
-npm run test:mcp-sse       # SSE transport tests
+yarn test                  # jest (all tests)
+yarn test:mcp              # STDIO transport tests
+yarn test:mcp-http         # HTTP transport tests
+yarn test:mcp-sse          # SSE transport tests
 npx jest tests/path/to/file.test.ts   # single test file
 
 # Utilities
-npm run check-llm          # Validate OpenAI API key for Agent Tester
-npm run generate-token     # JWT token generator UI
+yarn check-llm             # Validate OpenAI API key for Agent Tester
+yarn generate-token        # JWT token generator UI
 
 # JWT token generation (CLI)
 node scripts/generate-jwt.js -u <username> -ttl <duration> [-s <service>] [-p <params>]
@@ -39,7 +39,7 @@ node scripts/generate-jwt.js -u <username> -ttl <duration> [-s <service>] [-p <p
 # JWT generation API (HTTP endpoint, requires webServer.genJwtApiEnable: true)
 # POST /gen-jwt  {"username":"user","ttl":"30d","service":"svc","params":"key=val"}
 
-npm run consul:unreg       # deregister from Consul
+yarn consul:unreg          # deregister from Consul
 ```
 
 ## JWT Token Generation (Skill /gen-jwt)
@@ -47,7 +47,7 @@ npm run consul:unreg       # deregister from Consul
 Generate JWT tokens for MCP server authentication using the `/gen-jwt` skill. 
 Triggers: user asks to generate/create a JWT token, mentions "jwt", "token for user", "токен для", "сгенерируй токен для". 
 
-**Start/stop the server**: `npm run build && npm start`. Stop with Ctrl+C. Port is in `config/default.yaml` → `webServer.port`. Force stop: `node scripts/kill-port.js <port>`.
+**Start/stop the server**: `yarn build && yarn start`. Stop with Ctrl+C. Port is in `config/default.yaml` → `webServer.port`. Force stop: `node scripts/kill-port.js <port>`.
 
 **Server endpoints** (HTTP mode): `/mcp/*` (MCP protocol), `/docs` (Swagger UI), `/admin` (token generator), `/health`, `/agent-tester` (chat UI for testing tools).
 
@@ -119,6 +119,7 @@ Detailed fa-mcp-sdk docs are in `FA-MCP-SDK-DOC/`:
 | `02-2-prompts-and-resources.md` | Prompts, resources, `ITransportContext` |
 | `03-configuration.md` | `appConfig`, YAML config, DB, cache |
 | `04-authentication.md` | JWT, Basic auth, permanent tokens |
+| `05-ad-authorization.md` | AD group authorization, AD config |
 | `06-utilities.md` | Error handling, logging, Consul |
 | `07-testing-and-operations.md` | Test clients (STDIO, HTTP, SSE, Streamable HTTP) |
 | `08-agent-tester-and-headless-api.md` | Agent Tester, Headless API, structured logging, automated testing |
@@ -145,7 +146,7 @@ agentTester:
     apiKey: sk-...
 ```
 
-**IMPORTANT for Claude Code**: When the development prompt or instructions mention testing with Headless API or Agent Tester, run `npm run check-llm` before starting any Agent Tester work. This script validates that the OpenAI API key is configured and functional. If it fails (exit code 1 = key missing, exit code 2 = key invalid or API error), inform the user about the issue and ask them to fix the configuration before proceeding with Agent Tester tests. See `08-agent-tester-and-headless-api.md` → "LLM Availability Check" for details.
+**IMPORTANT for Claude Code**: When the development prompt or instructions mention testing with Headless API or Agent Tester, run `yarn check-llm` before starting any Agent Tester work. This script validates that the OpenAI API key is configured and functional. If it fails (exit code 1 = key missing, exit code 2 = key invalid or API error), inform the user about the issue and ask them to fix the configuration before proceeding with Agent Tester tests. See `08-agent-tester-and-headless-api.md` → "LLM Availability Check" for details.
 
 **Disabled state**: If `agentTester.enabled` is `false`, the server returns HTTP 404 on any `/agent-tester/*` request (including the Headless API). When you receive this 404 response, do **NOT** enable Agent Tester yourself — only inform the developer that Agent Tester may be disabled, and that it can be enabled via `agentTester.enabled: true` in `config/local.yaml` or ENV `AGENT_TESTER_ENABLED=true`. The developer decides whether to enable it. However, if the developer's prompt or instructions explicitly state that you should not mention Agent Tester enablement, respect that and do not bring it up.
 
@@ -205,9 +206,9 @@ What to cover in test cases:
 
 Run tests per transport:
 ```bash
-npm run test:mcp           # STDIO
-npm run test:mcp-http      # HTTP
-npm run test:mcp-sse       # SSE
+yarn test:mcp              # STDIO
+yarn test:mcp-http         # HTTP
+yarn test:mcp-sse          # SSE
 ```
 
 → See `07-testing-and-operations.md`.
@@ -215,13 +216,13 @@ npm run test:mcp-sse       # SSE
 #### Step 5: Build, Lint, Verify
 
 ```bash
-npm run cb                 # Clean build — fix all compilation errors
-npm run lint:fix           # ESLint — fix all lint errors
-npm run typecheck          # tsc --noEmit — fix all type errors
-npm start                  # Start server — verify clean startup, no runtime errors
-npm run test:mcp           # STDIO transport tests
-npm run test:mcp-http      # HTTP transport tests
-npm run test:mcp-sse       # SSE transport tests
+yarn cb                    # Clean build — fix all compilation errors
+yarn lint:fix              # ESLint — fix all lint errors
+yarn typecheck             # tsc --noEmit — fix all type errors
+yarn start                 # Start server — verify clean startup, no runtime errors
+yarn test:mcp              # STDIO transport tests
+yarn test:mcp-http         # HTTP transport tests
+yarn test:mcp-sse          # SSE transport tests
 ```
 
 **Goal**: zero build errors, zero lint errors, zero type errors, clean server startup, all tests green.
@@ -237,7 +238,7 @@ Use `gpt-5.2` as the model in Agent Tester — it provides the best balance of t
 - **Handler logic** — if tool results confuse the LLM or lack needed information
 - **Error messages** — if failures produce unhelpful agent responses
 
-Each iteration: observe → diagnose root cause → fix → `npm run cb && npm start` → re-test.
+Each iteration: observe → diagnose root cause → fix → `yarn cb && yarn start` → re-test.
 
 #### Step 7: Development Report
 
@@ -256,7 +257,7 @@ When all tools are implemented, tests pass, and agent testing is complete, creat
 Direct HTTP calls — no browser needed. Provides structured trace data.
 
 ```
-1. npm run cb && npm start
+1. yarn cb && yarn start
 2. GET  /agent-tester/api/mcp/status         → verify tools loaded
 3. POST /agent-tester/api/chat/test           → send message, get response + trace
 4. Analyze trace: correct tool? correct args? expected result?
@@ -269,7 +270,7 @@ Query params: `?verbose=true` (LLM details per turn), `?maxResultChars=8000`, `?
 
 **Prompt control in headless requests.** The `agentPrompt` field sets the system prompt sent to the LLM — when provided, it **replaces** the MCP server's built-in `agent_prompt`. Use it to iterate on prompt variations: read the current `AGENT_PROMPT` from `src/prompts/agent-prompt.ts`, send modified versions via `agentPrompt`, evaluate responses, and write the best variant back. The `customPrompt` field appends additional instructions. The trace response includes `system_prompt_sent` — the exact prompt the LLM received. → See `08-agent-tester-and-headless-api.md` for full prompt assembly logic and examples.
 
-Structured JSON logging: `npm start -- --log-json` or `AGENT_TESTER_LOG_JSON=true npm start` — emits per-event JSON on stdout.
+Structured JSON logging: `yarn start --log-json` or `AGENT_TESTER_LOG_JSON=true yarn start` — emits per-event JSON on stdout.
 
 ### Playwright Testing (Fallback — UI Only)
 
