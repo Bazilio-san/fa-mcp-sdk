@@ -29,6 +29,11 @@ npm run template:stdio       # STDIO transport (for Claude Desktop)
 # Token generator UI
 npm run token-gen      # starts token generation server at /admin
 
+# JWT token generation (CLI)
+node scripts/generate-jwt.js -u <username> -ttl <duration> [-s <service>] [-p <params>]
+# duration: <N>s | <N>m | <N>d | <N>y
+# example: node scripts/generate-jwt.js -u admin -ttl 30d -s my-mcp -p "role=admin;team=ops"
+
 # Tests
 npx jest               # run all tests
 npx jest tests/path/to/file.test.ts   # single test file

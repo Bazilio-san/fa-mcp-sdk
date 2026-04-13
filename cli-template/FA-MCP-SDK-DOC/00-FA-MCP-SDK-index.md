@@ -16,7 +16,7 @@ npm install fa-mcp-sdk
 | [02-1-tools-and-api](02-1-tools-and-api.md) | Tool definitions, `toolHandler`, REST API with tsoa, OpenAPI/Swagger | Creating tools, REST endpoints |
 | [02-2-prompts-and-resources](02-2-prompts-and-resources.md) | Standard/custom prompts, resources, `requireAuth` | Configuring prompts/resources |
 | [03-configuration](03-configuration.md) | `appConfig`, YAML config, cache, PostgreSQL | Server configuration, DB |
-| [04-authentication](04-authentication.md) | JWT, Basic auth, server tokens, `createAuthMW()`, Token Generator | Authentication setup |
+| [04-authentication](04-authentication.md) | JWT, Basic auth, server tokens, `createAuthMW()`, Token Generator, CLI Token Generator | Authentication setup |
 | [05-ad-authorization](05-ad-authorization.md) | AD group authorization at HTTP/tool levels | AD group restrictions |
 | [06-utilities](06-utilities.md) | `ServerError`, `normalizeHeaders`, logging, Consul, graceful shutdown | Error handling, utilities |
 | [07-testing-and-operations](07-testing-and-operations.md) | Test clients (STDIO, HTTP, SSE, Streamable HTTP) | Testing, deployment |

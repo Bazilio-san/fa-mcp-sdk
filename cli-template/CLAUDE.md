@@ -30,6 +30,11 @@ npx jest tests/path/to/file.test.ts   # single test file
 # Utilities
 npm run check-llm          # Validate OpenAI API key for Agent Tester
 npm run generate-token     # JWT token generator UI
+
+# JWT token generation (CLI)
+node scripts/generate-jwt.js -u <username> -ttl <duration> [-s <service>] [-p <params>]
+# duration: <N>s | <N>m | <N>d | <N>y
+# example: node scripts/generate-jwt.js -u admin -ttl 30d -s my-mcp -p "role=admin;team=ops"
 npm run consul:unreg       # deregister from Consul
 ```
 

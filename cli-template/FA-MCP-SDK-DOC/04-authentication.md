@@ -252,6 +252,36 @@ curl -H "Authorization: Basic $(echo -n 'admin:password' | base64)" http://local
 curl -H "X-API-Key: custom-key" http://localhost:3000/mcp
 ```
 
+## CLI Token Generator
+
+Generate JWT tokens from the command line without starting the server:
+
+```bash
+node scripts/generate-jwt.js -u <username> -ttl <duration> [-s <service>] [-p <params>]
+```
+
+| Option | ENV | Description |
+|--------|-----|-------------|
+| `-u`, `--username` | `JWT_PAYLOAD_USERNAME` | Username (required) |
+| `-ttl` | `JWT_TTL` | Token lifetime: `<N>s` \| `<N>m` \| `<N>d` \| `<N>y` (required) |
+| `-s`, `--service-name` | `JWT_PAYLOAD_SERVICE_NAME` | Service name (optional) |
+| `-p`, `--params` | `JWT_PAYLOAD_PARAMS` | Extra payload `key=value;key=value` (optional) |
+
+The `encryptKey` is read from config `webServer.auth.jwtToken.encryptKey` (via `config/local.yaml` or ENV `WS_TOKEN_ENCRYPT_KEY`).
+
+**Examples:**
+
+```bash
+# 30-day token with service name
+node scripts/generate-jwt.js -u admin -ttl 30d -s my-mcp-server
+
+# 1-year token with extra payload fields
+node scripts/generate-jwt.js -u svc-account -ttl 1y -p "role=admin;team=backend"
+
+# Via environment variables
+JWT_PAYLOAD_USERNAME=admin JWT_TTL=8d node scripts/generate-jwt.js
+```
+
 ## Token Generator App
 
 ```typescript

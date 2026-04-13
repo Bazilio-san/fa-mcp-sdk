@@ -151,6 +151,7 @@ my-mcp-server/
 ├── FA-MCP-SDK-DOC/              # FA-MCP-SDK Documentation
 ├── scripts/                     # Utility scripts
 │   ├── npm/                     # NPM utility scripts
+│   ├── generate-jwt.js           # CLI JWT token generator
 │   ├── kill-port.js             # Port cleanup utility
 │   ├── pre-commit               # Git pre-commit hook
 │   └── remove-nul.js            # File cleanup utility
@@ -207,7 +208,8 @@ Note: The `dist/` directory (compiled JavaScript) is created after running `npm 
 | `npm run test:mcp-http` | Test HTTP transport |
 | `npm run test:mcp-sse` | Test SSE transport |
 | `npm run test:mcp-stdio` | Test STDIO transport |
-| `npm run generate-token` | Generate JWT tokens |
+| `npm run generate-token` | Generate JWT tokens (Web UI) |
+| `node scripts/generate-jwt.js` | Generate JWT token (CLI) |
 | `npm run consul:unreg` | Deregister from Consul |
 
 
