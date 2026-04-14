@@ -72,11 +72,11 @@ Resolved project references to SDK:
 
 #### Argument count
 
-**Two arguments** — explicit FROM and TO.
+**Two arguments** — explicit FROM and TO (resolved per scope rules above).
 
-**One argument** — FROM is the current installed SDK version (read from the project's current `package.json`), TO is the argument (resolved per scope rules above).
+**One argument** — it is treated as **FROM**; TO defaults to the **latest published fa-mcp-sdk version** (fetched via `yarn info fa-mcp-sdk version` / `npm view fa-mcp-sdk version`). The point is to upgrade to the newest existing SDK release.
 
-**No arguments** — FROM is the current installed SDK version, TO is the latest published SDK version.
+**No arguments** — FROM is the current installed SDK version (from the project's current `package.json`); TO is the latest published SDK version.
 
 ## Step 1: Determine SDK Versions
 

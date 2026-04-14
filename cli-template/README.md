@@ -111,11 +111,13 @@ Generates a migration guide for upgrading `fa-mcp-sdk` to the latest (or specifi
 By default versions and commit hashes refer to THIS project — the skill looks up which SDK version was used in each project commit/tag. To pass SDK references directly, mention "SDK" explicitly.
 
 ```
-/upgrade-guide                              # current SDK → latest SDK
-/upgrade-guide 1.2.3 1.2.7                  # project versions
-/upgrade-guide abc1234 def5678              # project commits
-/upgrade-guide от версии 0.4.30 SDK до 0.5.0 SDK   # SDK versions directly
-/upgrade-guide от комита sdk abc1234 до комита sdk def5678
+/upgrade-guide                                             # current SDK → latest SDK
+/upgrade-guide 1.2.3                                       # project version 1.2.3 → latest SDK
+/upgrade-guide 1.2.3 1.2.7                                 # project versions
+/upgrade-guide abc1234 def5678                             # project commits
+/upgrade-guide от версии 0.1.30 SDK                        # SDK versions directly → latest SDK
+/upgrade-guide от версии 0.4.30 SDK до 0.5.0 SDK           # SDK versions directly
+/upgrade-guide от комита sdk abc1234 до комита sdk def5678 # SDK commits directly
 /upgrade-guide 1.2.3 1.2.7 на русском
 ```
 
