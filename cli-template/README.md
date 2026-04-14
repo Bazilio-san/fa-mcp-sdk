@@ -109,10 +109,11 @@ Add to `claude_desktop_config.json`:
 Generates a migration guide for upgrading `fa-mcp-sdk` to the latest (or specified) version. Analyzes config changes, template diffs, new exports, and breaking changes, then saves a step-by-step guide to `upgrade-guide-<old>-to-<new>.md`.
 
 ```
-/upgrade-guide
-/upgrade-guide 0.5.0
-/upgrade-guide на русском
-/upgrade-guide 0.5.0 in English
+/upgrade-guide                        # current → latest
+/upgrade-guide 0.5.0                  # current → 0.5.0
+/upgrade-guide 0.4.30 0.5.0           # 0.4.30 → 0.5.0
+/upgrade-guide abc1234 def5678        # commit → commit
+/upgrade-guide 0.4.30 0.5.0 на русском
 ```
 
 ## Security

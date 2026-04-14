@@ -3,7 +3,7 @@ name: upgrade-guide
 description: "Generate a migration guide for upgrading fa-mcp-sdk to the latest version. Use when user asks to upgrade/update fa-mcp-sdk, mentions 'обновить sdk', 'upgrade sdk', 'migration guide', 'обновление fa-mcp-sdk', or wants to see what changed between SDK versions."
 disable-model-invocation: true
 allowed-tools: Bash(yarn *) Bash(npm *) Bash(node *) Bash(git *) Bash(cat *) Bash(diff *) Bash(ls *) Bash(find *) Bash(mkdir *) Read Write Glob Grep WebFetch Agent
-argument-hint: "[target-version] [language hint]"
+argument-hint: "[from-version] [to-version] [language hint]"
 ---
 
 # FA-MCP-SDK Upgrade Guide Generator
@@ -32,29 +32,46 @@ Remove the language hint from the arguments before parsing the target version.
 The detected language determines ALL human-readable text in the generated guide (headings, descriptions, recommendations).
 Technical content (file paths, YAML keys, code snippets, commands) stays as-is regardless of language.
 
-### Target version
+### Version/commit references
 
-After stripping the language hint, the remaining argument (if any) is the target version.
-If no target version is specified, use the latest published version.
+After stripping the language hint, the remaining arguments are version or commit references.
+
+An argument is a **commit hash** if it contains 7+ hex characters and does not match semver pattern.
+Otherwise it is treated as a **version** (with or without `v` prefix — `0.4.30` and `v0.4.30` are equivalent).
+
+**Two arguments** — explicit FROM and TO:
+- `/upgrade-guide 0.4.30 0.4.37` — from version 0.4.30 to 0.4.37
+- `/upgrade-guide abc1234 def5678` — from commit to commit
+
+**One argument** — FROM is the current installed version, TO is the argument:
+- `/upgrade-guide 0.5.0` — upgrade from current to 0.5.0
+- `/upgrade-guide abc1234` — upgrade from current to that commit
+
+**No arguments** — FROM is the current installed version, TO is the latest published version.
 
 ## Step 1: Determine Versions
 
-1. Read the current project's `package.json` and extract the installed `fa-mcp-sdk` version.
-2. Run `yarn info fa-mcp-sdk version` (or `npm view fa-mcp-sdk version`) to get the latest published version.
-3. If `$ARGUMENTS` specifies a target version, use that instead of latest.
-4. If the current version equals the target — inform the user and stop.
+1. Read the current project's `package.json` and extract the installed `fa-mcp-sdk` version — this is the **default FROM**.
+2. Run `yarn info fa-mcp-sdk version` (or `npm view fa-mcp-sdk version`) to get the latest published version — this is the **default TO**.
+3. Apply argument parsing rules above to determine the actual FROM and TO.
+4. If FROM equals TO — inform the user and stop.
 
 Display to the user:
 ```
-Current version: X.Y.Z
-Target version:  A.B.C
+From: X.Y.Z (or commit hash)
+To:   A.B.C (or commit hash)
 ```
 
 ## Step 2: Upgrade the Dependency
 
-Run:
+If TO is a published version (not a commit hash), run:
 ```bash
-yarn add fa-mcp-sdk@<target-version>
+yarn add fa-mcp-sdk@<TO-version>
+```
+
+If TO is a commit hash, run:
+```bash
+yarn add fa-mcp-sdk@https://github.com/Bazilio-san/fa-mcp-sdk#<TO-commit>
 ```
 
 Wait for completion. If it fails, report the error and stop.
@@ -77,10 +94,12 @@ Use the public GitHub repository `https://github.com/Bazilio-san/fa-mcp-sdk` to 
 Fetch the GitHub compare URL to understand what changed:
 
 ```
-https://api.github.com/repos/Bazilio-san/fa-mcp-sdk/compare/v<old-version>...v<new-version>
+https://api.github.com/repos/Bazilio-san/fa-mcp-sdk/compare/<FROM-ref>...<TO-ref>
 ```
 
-If version tags don't exist with `v` prefix, try without prefix, or use the commits API to find commits between versions.
+Where `<FROM-ref>` and `<TO-ref>` are version tags (try both `v0.4.30` and `0.4.30` formats) or commit hashes.
+
+If version tags don't exist, use the commits API to find commits between versions, or search `git log` for version bump commit messages.
 
 Alternative approach — use the npm registry to get git metadata, or simply read the changelog if available.
 
