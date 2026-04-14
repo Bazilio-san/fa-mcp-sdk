@@ -1483,8 +1483,8 @@ textarea.prompt-modified {
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
   width: 100%;
-  max-width: 900px;
-  max-height: 85vh;
+  max-width: 90vw;
+  height: 90vh;
   display: flex;
   flex-direction: column;
   box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
