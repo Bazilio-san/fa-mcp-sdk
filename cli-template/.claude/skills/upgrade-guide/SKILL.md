@@ -39,27 +39,57 @@ After stripping the language hint, the remaining arguments are version or commit
 An argument is a **commit hash** if it contains 7+ hex characters and does not match semver pattern.
 Otherwise it is treated as a **version** (with or without `v` prefix — `0.4.30` and `v0.4.30` are equivalent).
 
-**Two arguments** — explicit FROM and TO:
-- `/upgrade-guide 0.4.30 0.4.37` — from version 0.4.30 to 0.4.37
-- `/upgrade-guide abc1234 def5678` — from commit to commit
+#### Scope of references: PROJECT (default) vs SDK
 
-**One argument** — FROM is the current installed version, TO is the argument:
-- `/upgrade-guide 0.5.0` — upgrade from current to 0.5.0
-- `/upgrade-guide abc1234` — upgrade from current to that commit
+**By default, all versions and commit hashes refer to THIS project** (the repository where the skill is invoked), NOT to fa-mcp-sdk.
 
-**No arguments** — FROM is the current installed version, TO is the latest published version.
+A reference is treated as referring to **fa-mcp-sdk** ONLY if the user's phrasing explicitly says so. Trigger phrases for SDK scope (case-insensitive, English or Russian):
+- "sdk", "fa-mcp-sdk", "of sdk", "sdk commit", "sdk version"
+- "sdk", "fa-mcp-sdk", "версия sdk", "комит sdk", "коммит sdk", "хеш sdk"
 
-## Step 1: Determine Versions
+Examples:
+- `/upgrade-guide 1.2.3 1.2.7` → project versions (look up which SDK version was used in each)
+- `/upgrade-guide от версии 0.2.3 SDK до 0.4.5 SDK` → SDK versions directly
+- `/upgrade-guide от комита sdk abc1234 до комита sdk def5678` → SDK commits directly
+- `/upgrade-guide abc1234 def5678` → project commits (look up which SDK version was pinned in each)
 
-1. Read the current project's `package.json` and extract the installed `fa-mcp-sdk` version — this is the **default FROM**.
-2. Run `yarn info fa-mcp-sdk version` (or `npm view fa-mcp-sdk version`) to get the latest published version — this is the **default TO**.
-3. Apply argument parsing rules above to determine the actual FROM and TO.
-4. If FROM equals TO — inform the user and stop.
+#### Resolving PROJECT references to SDK versions
+
+When a reference is PROJECT-scoped (the default), resolve it to an SDK version/commit before computing the diff:
+
+1. **Project commit hash** — run `git show <hash>:package.json` and extract the `fa-mcp-sdk` dependency value.
+2. **Project version** (e.g. `1.2.3`) — find the project git tag (`v1.2.3` or `1.2.3`), then `git show <tag>:package.json` and extract the `fa-mcp-sdk` value.
+3. If the dependency value is a semver (e.g. `^0.4.30`, `~0.4.30`, `0.4.30`), strip range operators to get the exact SDK version.
+4. If the dependency value is a git URL with a commit hash (e.g. `github:Bazilio-san/fa-mcp-sdk#abc1234`), extract the commit hash as the SDK ref.
+5. If the project tag/commit cannot be found, report an error and stop.
+
+Show the user the resolution result before proceeding:
+```
+Resolved project references to SDK:
+  FROM: project <ref> → SDK <version-or-commit>
+  TO:   project <ref> → SDK <version-or-commit>
+```
+
+#### Argument count
+
+**Two arguments** — explicit FROM and TO.
+
+**One argument** — FROM is the current installed SDK version (read from the project's current `package.json`), TO is the argument (resolved per scope rules above).
+
+**No arguments** — FROM is the current installed SDK version, TO is the latest published SDK version.
+
+## Step 1: Determine SDK Versions
+
+1. Read the current project's `package.json` and extract the installed `fa-mcp-sdk` version — this is the **default FROM (SDK)**.
+2. Run `yarn info fa-mcp-sdk version` (or `npm view fa-mcp-sdk version`) to get the latest published version — this is the **default TO (SDK)**.
+3. Apply argument parsing rules above (scope, count) to determine FROM and TO.
+4. If any argument is PROJECT-scoped, resolve it to an SDK version/commit by reading the project's git history (see "Resolving PROJECT references to SDK versions").
+5. If FROM-SDK equals TO-SDK — inform the user (e.g. "Both project commits pin the same SDK version X.Y.Z — nothing to diff") and stop.
 
 Display to the user:
 ```
-From: X.Y.Z (or commit hash)
-To:   A.B.C (or commit hash)
+From: <project or SDK ref> → SDK <version-or-commit>
+To:   <project or SDK ref> → SDK <version-or-commit>
 ```
 
 ## Step 2: Upgrade the Dependency
