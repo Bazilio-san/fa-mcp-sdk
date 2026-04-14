@@ -119,8 +119,11 @@
                 <section class="config-section">
                     <div class="form-group">
                         <div class="prompt-label-row">
-                            <label for="systemPrompt">Agent Prompt</label>
+                            <label for="systemPrompt">Agent Prompt<span class="prompt-modified-badge" id="promptModifiedBadge" style="display:none">(modified)</span></label>
                             <div class="prompt-actions">
+                                <button type="button" class="btn-view-original" id="btnViewOriginalPrompt" title="View original agent prompt" data-testid="at-system-prompt-view-original" style="display:none">
+                                    <span class="material-icons-round">visibility</span>
+                                </button>
                                 <button type="button" class="btn-reset-prompt" id="btnResetAgentPrompt" title="Reset to original agent prompt" data-testid="at-system-prompt-reset" style="display:none">
                                     <span class="material-icons-round">restart_alt</span>
                                 </button>

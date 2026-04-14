@@ -1391,6 +1391,40 @@ body {
   gap: 2px;
 }
 
+/* --- Prompt Modified Indicator --- */
+.prompt-modified-badge {
+  font-size: 0.75em;
+  color: var(--warning, #f0ad4e);
+  margin-left: 6px;
+  font-style: italic;
+  font-weight: 400;
+}
+
+textarea.prompt-modified {
+  border-left: 3px solid var(--warning, #f0ad4e) !important;
+}
+
+.btn-view-original {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 2px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-sm);
+  transition: color 0.15s;
+}
+
+.btn-view-original:hover {
+  color: var(--primary);
+}
+
+.btn-view-original .material-icons-round {
+  font-size: 16px;
+}
+
 .btn-reset-prompt {
   background: none;
   border: none;

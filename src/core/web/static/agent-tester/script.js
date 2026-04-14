@@ -398,6 +398,8 @@ class McpAgentTester {
     this.systemPromptTextarea = document.getElementById('systemPrompt');
     this.customPromptTextarea = document.getElementById('customPrompt');
     this.btnResetAgentPrompt = document.getElementById('btnResetAgentPrompt');
+    this.btnViewOriginalPrompt = document.getElementById('btnViewOriginalPrompt');
+    this.promptModifiedBadge = document.getElementById('promptModifiedBadge');
     this.originalAgentPrompt = null;
 
     this.connectedServersContainer = document.getElementById('connectedServers');
@@ -442,9 +444,13 @@ class McpAgentTester {
     this.serverUrlDropdown.addEventListener('click', (e) => this.toggleUrlDropdown(e));
     document.addEventListener('click', (e) => this.handleClickOutside(e));
 
-    this.systemPromptTextarea.addEventListener('input', () => this.saveFormValuesToStorage());
+    this.systemPromptTextarea.addEventListener('input', () => {
+      this.saveFormValuesToStorage();
+      this.updatePromptModifiedState();
+    });
     this.customPromptTextarea.addEventListener('input', () => this.saveFormValuesToStorage());
     this.btnResetAgentPrompt.addEventListener('click', () => this.resetAgentPrompt());
+    this.btnViewOriginalPrompt.addEventListener('click', () => this.viewOriginalPrompt());
 
     // LLM settings modal
     this.llmSettingsBtn.addEventListener('click', () => this.openLlmModal());
@@ -532,7 +538,15 @@ class McpAgentTester {
   }
 
   closePromptModal () {
-    document.getElementById('promptModal').style.display = 'none';
+    const modal = document.getElementById('promptModal');
+    const textarea = document.getElementById('promptModalTextarea');
+    const saveBtn = document.getElementById('promptModalSave');
+    modal.style.display = 'none';
+    if (this._viewOriginalMode) {
+      textarea.readOnly = false;
+      saveBtn.style.display = '';
+      this._viewOriginalMode = false;
+    }
     this._promptModalTarget = null;
   }
 
@@ -1693,11 +1707,41 @@ class McpAgentTester {
       this.systemPromptTextarea.value = this.originalAgentPrompt;
       this.currentSystemPrompt = this.originalAgentPrompt;
       this.saveFormValuesToStorage();
+      this.updatePromptModifiedState();
     }
+  }
+
+  viewOriginalPrompt () {
+    if (!this.originalAgentPrompt) { return; }
+    const modal = document.getElementById('promptModal');
+    const textarea = document.getElementById('promptModalTextarea');
+    const title = document.getElementById('promptModalTitle');
+    const saveBtn = document.getElementById('promptModalSave');
+    title.textContent = 'Original Agent Prompt';
+    textarea.value = this.originalAgentPrompt;
+    textarea.readOnly = true;
+    saveBtn.style.display = 'none';
+    this._promptModalTarget = null;
+    this._viewOriginalMode = true;
+    modal.style.display = 'flex';
+    textarea.focus();
   }
 
   updateResetPromptButton () {
     this.btnResetAgentPrompt.style.display = this.originalAgentPrompt ? '' : 'none';
+    this.updatePromptModifiedState();
+  }
+
+  updatePromptModifiedState () {
+    const hasOriginal = !!this.originalAgentPrompt;
+    const isModified = hasOriginal && this.systemPromptTextarea.value.trim() !== this.originalAgentPrompt.trim();
+    this.promptModifiedBadge.style.display = isModified ? '' : 'none';
+    this.btnViewOriginalPrompt.style.display = isModified ? '' : 'none';
+    if (isModified) {
+      this.systemPromptTextarea.classList.add('prompt-modified');
+    } else {
+      this.systemPromptTextarea.classList.remove('prompt-modified');
+    }
   }
 
   saveFormValuesToStorage () {
