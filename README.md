@@ -211,6 +211,7 @@ Note: The `dist/` directory (compiled JavaScript) is created after running `npm 
 | `npm run generate-token` | Generate JWT tokens (Web UI) |
 | `node scripts/generate-jwt.js` | Generate JWT token (CLI) |
 | `/gen-jwt` | Generate JWT token (Claude Code skill) |
+| `/upgrade-guide` | Generate upgrade guide for downstream projects (Claude Code skill) |
 | `npm run consul:unreg` | Deregister from Consul |
 
 
@@ -243,6 +244,23 @@ agentTester:
 
 The tester UI is available at `http://localhost:<port>/agent-tester` and auto-connects to the local MCP server.
 Supports custom LLM endpoints, configurable system prompts, and dynamic HTTP headers. Recommended model for testing: **gpt-5.2**.
+
+## Upgrade Guide Skill
+
+Claude Code skill that generates a step-by-step upgrade guide for projects built on fa-mcp-sdk.
+Analyzes git diff between two versions/commits and produces an MD file covering config changes, template file updates, script changes, API changes, and dependency updates.
+
+**Usage in Claude Code:**
+```
+/upgrade-guide 0.4.30 0.4.37
+/upgrade-guide 0.4.30
+/upgrade-guide abc1234
+/upgrade-guide 0.4.30 0.4.37 на русском
+```
+
+Output language is English by default. Add a natural-language hint (e.g., "на русском", "in German") to change it.
+
+Skill location: `.claude/skills/upgrade-guide/SKILL.md`
 
 ## Directory Requirements
 
