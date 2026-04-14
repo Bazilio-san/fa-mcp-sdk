@@ -24,7 +24,7 @@ export const startupInfo = async (args: {
 
   let consulInfoItem: string | [string, string] = '';
   const s = cfg.consul.service;
-  let consulUI: string | undefined;
+  let consulUI = '';
   if (s.enable) {
     const consulApi: IAFConsulAPI = await getConsulAPI();
     const r = consulApi.registerConfig;
