@@ -99,20 +99,54 @@ Analyze the diff and describe:
 
 #### 3b. CLI template files (`cli-template/`)
 
-These files are copied into new projects. Changes here mean existing projects may need updates:
+These files are copied into new projects by the CLI (`bin/fa-mcp.js`). Changes here mean existing downstream projects may need updates. Use:
 ```bash
 git diff --name-only <FROM_REF> <TO_REF> -- cli-template/
 ```
 
-For each changed file, get the diff and describe what changed and why the project might need updating.
+When describing required actions in the generated guide, instruct downstream projects to take the new file from `node_modules/fa-mcp-sdk/cli-template/...` (after `yarn add fa-mcp-sdk@<TO>`). The CLI applies transformations at project generation time — the generated guide must respect the same mapping so upgrades match what a fresh `fa-mcp` scaffold would produce.
+
+Mapping of template source → project destination (replicate in the generated guide):
+
+| Template (source of truth)                                        | Project (destination)                       | Action |
+|-------------------------------------------------------------------|---------------------------------------------|--------|
+| `node_modules/fa-mcp-sdk/cli-template/package.json`               | `package.json`                              | **ADD new deps only** (see rule below) |
+| `node_modules/fa-mcp-sdk/cli-template/tsconfig.json`              | `tsconfig.json`                             | overwrite (unless customized) |
+| `node_modules/fa-mcp-sdk/cli-template/eslint.config.js`           | `eslint.config.js`                          | overwrite (unless customized) |
+| `node_modules/fa-mcp-sdk/cli-template/CLAUDE.md`                  | `CLAUDE.md`                                 | merge — project may add custom sections |
+| `node_modules/fa-mcp-sdk/cli-template/jest.config.js`             | `jest.config.js`                            | overwrite (unless customized) |
+| `node_modules/fa-mcp-sdk/cli-template/deploy/`                    | `deploy/`                                   | merge per file |
+| `node_modules/fa-mcp-sdk/cli-template/.claude/skills/<skill>/`    | `.claude/skills/<skill>/`                   | overwrite unless locally customized |
+| `node_modules/fa-mcp-sdk/cli-template/r/<name>.xml`               | `.run/<name>.run.xml`                       | **Renamed** (see rule below) |
+| `node_modules/fa-mcp-sdk/cli-template/gitignore`                  | `.gitignore`                                | source has no leading dot |
+| `node_modules/fa-mcp-sdk/cli-template/FA-MCP-SDK-DOC/`            | `FA-MCP-SDK-DOC/`                           | auto-updated by `scripts/update-doc.js` |
+
+**Rule: `package.json` — ADD ONLY new dependencies, do NOT touch anything else.**
+Diff the template `package.json` between FROM and TO. In the generated guide, list ONLY dependencies/devDependencies that were **added** (not changed versions of existing ones, not removed). Instruct the user: "Add these NEW entries to your `package.json` — do NOT touch `name`, `version`, `scripts`, `engines`, or any existing deps." Mention removed deps as informational only — do not instruct deletion (they may still be in use in the project). Do NOT suggest overwriting scripts or any non-dependency fields. Provide a copy-pasteable JSON snippet with only the new keys.
+
+**Rule: `r/` → `.run/` with filename transformation.**
+The downstream project has no `r/` directory — at project generation the CLI renamed `cli-template/r/` to `.run/`, and each `<name>.xml` inside was renamed to `<name>.run.xml`. For each changed file in `cli-template/r/`, the generated guide must show:
+- Source: `node_modules/fa-mcp-sdk/cli-template/r/<name>.xml`
+- Destination: `.run/<name>.run.xml`
+- NEW file → copy + rename; CHANGED file → overwrite with rename (warn about local customizations); REMOVED file → informational only (do not delete automatically).
+
+**Rule: `.claude/skills/<skill>/SKILL.md`.**
+These are Claude Code skills the project owns a copy of. If the SDK ships an updated version, instruct overwrite from `node_modules/fa-mcp-sdk/cli-template/.claude/skills/<skill>/SKILL.md` — unless locally customized, then manual merge.
 
 #### 3c. Scripts (`scripts/`)
+
+The CLI copies scripts from the SDK's **`scripts/`** directory (NOT from `cli-template/scripts/`) into the downstream project's `scripts/`, and removes `copy-static.js` and `publish.sh` (SDK-internal).
 
 ```bash
 git diff --name-only <FROM_REF> <TO_REF> -- scripts/
 ```
 
-For each changed script, describe what changed and whether downstream projects need to copy/update the script.
+In the generated guide:
+- Canonical source: `node_modules/fa-mcp-sdk/scripts/<name>.js`
+- Project destination: `scripts/<name>.js`
+- Exclude from upgrade suggestions: `copy-static.js`, `publish.sh` (SDK-only, not shipped to downstream projects)
+
+For each changed script, describe what changed and whether downstream projects need to copy/update it, using the `node_modules/fa-mcp-sdk/scripts/...` path as the source.
 
 #### 3d. Core library changes (`src/core/`)
 

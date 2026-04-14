@@ -153,23 +153,77 @@ Identify:
 
 ### 4.3 Analyze changes in cli-template files
 
-These directories in the SDK template may have changed:
+The SDK ships a project template at `node_modules/fa-mcp-sdk/cli-template/` (after `yarn add fa-mcp-sdk@<TO>`). This is the **canonical source** for any template files in the project — when generating instructions for the user, always point to this path as the place to copy the latest version from.
 
-- `node_modules/fa-mcp-sdk/cli-template/` — the project template
+Map of template file → project file (the CLI `bin/fa-mcp.js` applies these transformations when creating new projects — upgrades must respect the same mapping):
 
-Compare template files with their project counterparts. Key files to check:
+| Template (source of truth)                                        | Project (destination)                       | Notes |
+|-------------------------------------------------------------------|---------------------------------------------|-------|
+| `node_modules/fa-mcp-sdk/cli-template/package.json`               | `package.json`                              | **Merge carefully** — see rule below |
+| `node_modules/fa-mcp-sdk/cli-template/tsconfig.json`              | `tsconfig.json`                             | overwrite (unless customized) |
+| `node_modules/fa-mcp-sdk/cli-template/eslint.config.js`           | `eslint.config.js`                          | overwrite (unless customized) |
+| `node_modules/fa-mcp-sdk/cli-template/CLAUDE.md`                  | `CLAUDE.md`                                 | merge — project may add custom sections |
+| `node_modules/fa-mcp-sdk/cli-template/jest.config.js`             | `jest.config.js`                            | overwrite (unless customized) |
+| `node_modules/fa-mcp-sdk/cli-template/deploy/`                    | `deploy/`                                   | merge per file |
+| `node_modules/fa-mcp-sdk/cli-template/.claude/skills/<skill>/`    | `.claude/skills/<skill>/`                   | overwrite unless locally customized |
+| `node_modules/fa-mcp-sdk/cli-template/r/<name>.xml`               | `.run/<name>.run.xml`                       | **Renamed** — see rule below |
+| `node_modules/fa-mcp-sdk/cli-template/gitignore`                  | `.gitignore`                                | source has no leading dot |
+| `node_modules/fa-mcp-sdk/cli-template/FA-MCP-SDK-DOC/`            | `FA-MCP-SDK-DOC/`                           | auto-updated by `update-doc.js` |
 
-- `package.json` — new scripts, dependency changes
-- `tsconfig.json` — compiler option changes
-- `eslint.config.js` — linting rule changes
-- `CLAUDE.md` — project instructions updates
-- `deploy/` — deployment configuration changes
-- `jest.config.js` — test configuration changes
-- `.claude/skills/` — new or updated skills
+#### Rule: package.json — ADD ONLY new dependencies, do NOT touch anything else
+
+The project's `package.json` has evolved since generation (project-specific name, version, scripts, dependencies the team has added). When the SDK's template `package.json` changes:
+
+1. Diff `node_modules/fa-mcp-sdk/cli-template/package.json` (TO) against the same file at the FROM version.
+2. Identify ONLY dependencies/devDependencies that were **added** (not changed versions of existing ones, not removed).
+3. The generated guide must instruct the user: "Add these NEW entries to your `package.json` `dependencies`/`devDependencies` sections. Do NOT touch any other field — name, version, scripts, existing deps stay as they are."
+4. If a dep was **removed** from the template, mention it as informational only — do not instruct deletion from the project (it may still be in use).
+5. Do NOT suggest overwriting `scripts`, `engines`, `type`, or any other field.
+
+Provide a copy-pasteable JSON snippet with only the new keys:
+```json
+{
+  "dependencies": {
+    "<new-dep>": "<version>"
+  }
+}
+```
+
+#### Rule: `r/` → `.run/` with filename transformation
+
+The project has no `r/` directory — it was renamed to `.run/` at project generation, and each `<name>.xml` inside was 
+renamed to `<name>.run.xml`. When the SDK template ships new or changed files in `cli-template/r/`:
+
+- Source: `node_modules/fa-mcp-sdk/cli-template/r/<name>.xml`
+- Destination: `.run/<name>.run.xml`
+- Action for NEW files: copy `<name>.xml` → `.run/<name>.run.xml`
+- Action for CHANGED files: copy with the same rename, overwriting the existing `.run.xml` file (warn the user to back up any customizations)
+- Action for REMOVED files: informational only — do not delete the project's `.run/<name>.run.xml` automatically
+
+The generated guide must show the exact source → destination mapping for each changed file, with the filename transformation applied.
+
+#### Rule: `.claude/skills/<skill>/SKILL.md`
+
+This is a Claude Code skill that the project owns a copy of. If the SDK ships an updated version, instruct the user to 
+overwrite their local copy from `node_modules/fa-mcp-sdk/cli-template/.claude/skills/<skill>/SKILL.md` — unless they've 
+customized it locally, in which case manual merge.
+
+For any other changed template file, the generated guide must include:
+- The exact source path under `node_modules/fa-mcp-sdk/cli-template/...`
+- The exact destination path in the project
+- Whether to **overwrite** or **merge carefully** (because the project may have local customizations)
 
 ### 4.4 Analyze changes in scripts
 
-Check `node_modules/fa-mcp-sdk/scripts/` for new or modified scripts that may need to be copied or adapted in the project.
+The CLI copies scripts from `node_modules/fa-mcp-sdk/scripts/` (NOT from `cli-template/scripts/`) into the project's 
+`scripts/` directory, and then removes `copy-static.js` and `publish.sh` (SDK-internal, not needed in downstream projects).
+
+- Canonical source: `node_modules/fa-mcp-sdk/scripts/<name>.js`
+- Project destination: `scripts/<name>.js`
+- Exclude from upgrade suggestions: `copy-static.js`, `publish.sh` (SDK-only)
+
+The generated guide must specify the exact source path under `node_modules/fa-mcp-sdk/scripts/...` for any script the 
+user should copy into their project's `scripts/` directory, and skip the excluded SDK-only scripts.
 
 ### 4.5 Analyze changes in core library exports
 
@@ -242,13 +296,32 @@ Generated: <timestamp>
 
 ## Template File Changes
 
+> **Source of truth**: all updated template files live under `node_modules/fa-mcp-sdk/cli-template/` (after `yarn add fa-mcp-sdk@<TO>`). Copy from there into the project.
+
 ### package.json
 
-<New scripts, changed dependencies, etc.>
+> **Only ADD new dependencies. Do NOT touch anything else** (name, version, scripts, existing deps — all stay untouched). Source: `node_modules/fa-mcp-sdk/cli-template/package.json`.
+
+<List only dependencies/devDependencies that were newly added in the SDK template. Provide a copy-pasteable JSON snippet 
+with only the new keys. Mention removed deps as informational only — do not instruct deletion.>
+
+### `.run/` (from `cli-template/r/`)
+
+<For each changed `cli-template/r/<name>.xml`, show the mapping:>
+- Source: `node_modules/fa-mcp-sdk/cli-template/r/<name>.xml`
+- Destination: `.run/<name>.run.xml` (note the rename)
+- Action: copy + rename (overwrite, warn about local customizations)
+
+### Claude Code Skills (`.claude/skills/`)
+
+<For each updated skill, e.g. `upgrade-guide`:>
+- Source: `node_modules/fa-mcp-sdk/cli-template/.claude/skills/<skill-name>/SKILL.md`
+- Destination: `.claude/skills/<skill-name>/SKILL.md`
+- Action: overwrite (unless locally customized — then manual merge)
 
 ### Other Template Files
 
-<Changes in tsconfig.json, eslint.config.js, deploy/, etc.>
+<For each: source path under `node_modules/fa-mcp-sdk/cli-template/...`, destination, overwrite or merge.>
 
 ## New Features
 
@@ -272,7 +345,8 @@ Generated: <timestamp>
 
 ## Step 6: Assess Impact on the Project
 
-After generating the guide, scan the current project's source code (`src/`, `config/`, `tests/`) to evaluate how the changes specifically affect THIS project. Add a section to the guide:
+After generating the guide, scan the current project's source code (`src/`, `config/`, `tests/`) to evaluate how the 
+changes specifically affect THIS project. Add a section to the guide:
 
 ```markdown
 ## Impact Assessment for This Project
