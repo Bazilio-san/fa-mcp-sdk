@@ -102,4 +102,17 @@ Add to `claude_desktop_config.json`:
 - **/sse** - Server-Sent Events
 - **/mcp** - JSON-RPC 2.0
 
+## Claude Code Skills
+
+### `/upgrade-guide`
+
+Generates a migration guide for upgrading `fa-mcp-sdk` to the latest (or specified) version. Analyzes config changes, template diffs, new exports, and breaking changes, then saves a step-by-step guide to `upgrade-guide-<old>-to-<new>.md`.
+
+```
+/upgrade-guide
+/upgrade-guide 0.5.0
+/upgrade-guide на русском
+/upgrade-guide 0.5.0 in English
+```
+
 ## Security

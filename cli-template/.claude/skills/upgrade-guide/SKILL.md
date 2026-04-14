@@ -3,7 +3,7 @@ name: upgrade-guide
 description: "Generate a migration guide for upgrading fa-mcp-sdk to the latest version. Use when user asks to upgrade/update fa-mcp-sdk, mentions 'обновить sdk', 'upgrade sdk', 'migration guide', 'обновление fa-mcp-sdk', or wants to see what changed between SDK versions."
 disable-model-invocation: true
 allowed-tools: Bash(yarn *) Bash(npm *) Bash(node *) Bash(git *) Bash(cat *) Bash(diff *) Bash(ls *) Bash(find *) Bash(mkdir *) Read Write Glob Grep WebFetch Agent
-argument-hint: "[target-version]"
+argument-hint: "[target-version] [language hint]"
 ---
 
 # FA-MCP-SDK Upgrade Guide Generator
@@ -13,6 +13,29 @@ Generate a comprehensive migration guide for upgrading the fa-mcp-sdk dependency
 ## Overview
 
 This skill analyzes the differences between the currently installed version of `fa-mcp-sdk` and the latest (or specified) version, then produces a detailed migration guide as a markdown file.
+
+## Argument Parsing
+
+Parse `$ARGUMENTS` to extract a target version and an optional language hint.
+
+### Language detection
+
+Look for a natural-language phrase anywhere in the arguments that indicates the desired output language. Examples:
+- "на русском", "по-русски", "in Russian", "ru" → Russian
+- "in English", "en" → English
+- Any similar phrase or ISO 639-1 code
+
+Remove the language hint from the arguments before parsing the target version.
+
+**Default: English** if no language hint is found.
+
+The detected language determines ALL human-readable text in the generated guide (headings, descriptions, recommendations).
+Technical content (file paths, YAML keys, code snippets, commands) stays as-is regardless of language.
+
+### Target version
+
+After stripping the language hint, the remaining argument (if any) is the target version.
+If no target version is specified, use the latest published version.
 
 ## Step 1: Determine Versions
 
@@ -114,6 +137,9 @@ Scan the project's `src/` directory for:
 - Config keys that have been renamed or restructured
 
 ## Step 5: Generate Migration Guide
+
+Write ALL headings, descriptions, and prose in the detected language (default: English).
+Technical content (file paths, YAML keys, code blocks, shell commands) is always in English.
 
 Create a file `upgrade-guide-<old>-to-<new>.md` in the project root with the following structure:
 
@@ -228,4 +254,4 @@ After generating the guide, scan the current project's source code (`src/`, `con
 - Do not modify project files other than `package.json` (via yarn add) and `FA-MCP-SDK-DOC/` (via update-doc.js) unless the user explicitly asks.
 - The migration guide must contain ACTIONABLE instructions with exact code/config snippets — not vague recommendations.
 - If GitHub API is unavailable or rate-limited, fall back to comparing files directly from `node_modules/fa-mcp-sdk/` against project files.
-- Support both English and Russian in communication — follow the user's language.
+- Write the guide in the language detected from the user's arguments (default: **English**). Translate all headings, prose, and descriptions. Keep file paths, YAML keys, code blocks, and shell commands in English.
