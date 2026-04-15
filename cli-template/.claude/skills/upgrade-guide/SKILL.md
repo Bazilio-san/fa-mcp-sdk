@@ -138,10 +138,11 @@ Alternative approach — use the npm registry to get git metadata, or simply rea
 These config files in the SDK may have changed and require corresponding updates in the project:
 
 - `config/default.yaml` — main configuration defaults
+- `config/_local.yaml` — local config template (the CLI scaffolder copies this to the project's `config/_local.yaml` and derives `config/local.yaml` from it with `{{param}}` substitutions)
 - `config/custom-environment-variables.yaml` — env var mappings
 - `config/development.yaml` — dev overrides
 - `config/production.yaml` — production overrides
-- `config/local.yaml` — local secrets template
+- `config/local.yaml` (SDK's own) — reference only, not shipped to projects
 
 For each config file, compare the SDK's version (at `node_modules/fa-mcp-sdk/config/<file>`) with the project's version (at `config/<file>`).
 
@@ -150,6 +151,24 @@ Identify:
 - **Removed keys** that existed in the old SDK but are gone now
 - **Changed defaults** where the SDK's default value has changed
 - **New sections** that represent new features
+
+**Correlate changes across config files.** When `config/default.yaml` has changes (new keys, restructured sections, changed defaults), you MUST also check `config/_local.yaml` for analogous changes. The `_local.yaml` file mirrors the structure of `default.yaml` but contains local-override values — if a section was added or restructured in `default.yaml`, the same section likely needs updating in `_local.yaml`.
+
+Compare both files in the SDK's `node_modules/fa-mcp-sdk/config/`:
+- `node_modules/fa-mcp-sdk/config/default.yaml` — the canonical defaults
+- `node_modules/fa-mcp-sdk/config/_local.yaml` — the template that was used to generate the project's `config/local.yaml`
+
+If `default.yaml` changed but `_local.yaml` did NOT, explicitly note this in the guide: the project's `config/_local.yaml` may still need manual updates to stay consistent with the new `default.yaml` structure.
+
+**Config file mapping (SDK source → project destination):**
+
+| SDK source (in `config/`)            | Project destination             | Action |
+|--------------------------------------|---------------------------------|--------|
+| `config/default.yaml`                | `config/default.yaml`           | Add new keys; do NOT remove existing keys the project may have customized |
+| `config/_local.yaml`                 | `config/_local.yaml`            | Update to match SDK — this is the template users derive their `local.yaml` from |
+| `config/_local.yaml` (via CLI)       | `config/local.yaml`             | Derived by CLI from `_local.yaml` with `{{param}}` substitutions — check for needed adjustments |
+| `config/custom-environment-variables.yaml` | `config/custom-environment-variables.yaml` | Add new env var mappings |
+| `config/local.yaml` (SDK's own)      | *(not shipped — reference only)* | Use as reference for what the SDK itself overrides locally |
 
 ### 4.3 Analyze changes in cli-template files
 
@@ -287,6 +306,14 @@ Generated: <timestamp>
     <actual YAML snippets to add>
     ```
 
+### config/_local.yaml
+
+<If `default.yaml` changed, check whether `_local.yaml` in the SDK also changed. If it did: describe what changed. If it did NOT but the `default.yaml` changes affect keys that also exist in `_local.yaml` (because `_local.yaml` overrides those keys), explicitly warn that the project's `config/_local.yaml` may need manual updates to stay consistent with the new `default.yaml` structure.>
+
+### config/local.yaml (project-local overrides)
+
+<Check whether the project's `config/local.yaml` overrides keys that changed in `default.yaml` or `_local.yaml`. This is especially important when: a new key is added to `default.yaml` that the project's `local.yaml` doesn't override (user just needs to know it exists); a key's meaning or structure changed and `local.yaml` has a stale override; `local.yaml` was derived from the old `_local.yaml` and needs re-derivation from the updated template.>
+
 ### Recommended config/custom-environment-variables.yaml additions
 
     ```yaml
@@ -374,6 +401,8 @@ changes specifically affect THIS project. Add a section to the guide:
 
 - ALWAYS read the actual files to compare — do not guess or assume what changed.
 - When comparing YAML configs, preserve comments and structure.
+- **Correlate config file changes**: when `config/default.yaml` changes, ALWAYS also check `config/_local.yaml` in the SDK. Report whether `_local.yaml` has analogous changes or needs manual updates. Also advise checking the project's `config/local.yaml` for stale overrides that may conflict with the new defaults.
+- **Do not forget `config/local.yaml` in the project**: the project's `config/local.yaml` overrides `config/default.yaml`. When new keys are added or sections restructured in `default.yaml`, explicitly instruct the user to verify that their `config/local.yaml` doesn't have stale overrides that conflict with the new structure, and to add any new keys there too if they want non-default values.
 - Do not modify project files other than `package.json` (via yarn add) and `FA-MCP-SDK-DOC/` (via update-doc.js) unless the user explicitly asks.
 - The migration guide must contain ACTIONABLE instructions with exact code/config snippets — not vague recommendations.
 - If GitHub API is unavailable or rate-limited, fall back to comparing files directly from `node_modules/fa-mcp-sdk/` against project files.
