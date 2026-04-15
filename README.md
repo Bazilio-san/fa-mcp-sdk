@@ -219,6 +219,13 @@ Note: The `dist/` directory (compiled JavaScript) is created after running `npm 
 `http://localhost:3000` with:
 - MCP endpoints at `/mcp/*`
 - Admin panel for generating access tokens at `/admin`
+  - When `adminAuth.type` includes `jwtToken`, the JWT **must** carry `allow: 'gen-token'`
+    in its payload to be accepted. Tokens without this claim (e.g. the short-lived JWT
+    auto-generated for the Agent Tester page) are rejected — this prevents them from
+    being replayed to mint arbitrary long-lived tokens. `permanentServerTokens` and
+    `basic` admin auth are unaffected.
+    Generate an admin-capable JWT:
+    `node scripts/generate-jwt.js -u admin -ttl 30d -p "allow=gen-token"`
 - JWT generation API at `/gen-jwt` (when `webServer.genJwtApiEnable: true`)
 - Swagger UI at `/docs`
 - Health check at `/health`

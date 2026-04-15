@@ -1019,9 +1019,7 @@ class McpAgentTester {
     const hasAuthHeader = this.usedHeaders.some(h => h.name === 'Authorization');
     if (!hasAuthHeader) {return;}
 
-    // Skip if localStorage already has a saved value for this URL's Authorization header
     const savedHeaders = this.loadHeaderValuesFromStorage();
-    if (savedHeaders['Authorization']) {return;}
 
     try {
       const response = await apiFetch(`${API_BASE}/api/auth-token`);
@@ -1029,6 +1027,10 @@ class McpAgentTester {
 
       const data = await response.json();
       this._currentAuthType = data.authType;
+
+      // For non-JWT auth, keep user's saved value if any.
+      // JWT must always be refreshed (short-lived, regenerated on page reload).
+      if (data.authType !== 'jwtToken' && savedHeaders['Authorization']) {return;}
 
       const input = document.getElementById('header_Authorization');
       if (input) {
@@ -1064,7 +1066,7 @@ class McpAgentTester {
       } catch (e) {
         console.warn('Failed to refresh auth token:', e);
       }
-    }, 4 * 60 * 1000); // every 4 minutes
+    }, 3 * 60 * 1000); // every 3 minutes (token TTL is 5 minutes)
   }
 
   stopAuthRefresh () {

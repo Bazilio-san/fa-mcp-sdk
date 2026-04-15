@@ -117,9 +117,10 @@ export function createAgentTesterRouter (options: {
       return;
     }
 
-    // Priority matches authOrder: permanentServerTokens → basic → jwtToken
-    if (auth.permanentServerTokens?.length) {
-      res.json({ authType: 'permanentServerTokens', token: `Bearer ${auth.permanentServerTokens[0]}` });
+    // Agent Tester priority: jwtToken → basic → permanentServerTokens
+    if (auth.jwtToken?.encryptKey) {
+      const jwt = generateToken('agentTester', 300, { service: appConfig.name });
+      res.json({ authType: 'jwtToken', token: `Bearer ${jwt}` });
       return;
     }
 
@@ -129,9 +130,8 @@ export function createAgentTesterRouter (options: {
       return;
     }
 
-    if (auth.jwtToken?.encryptKey) {
-      const jwt = generateToken('agentTester', 300, { service: appConfig.name });
-      res.json({ authType: 'jwtToken', token: `Bearer ${jwt}` });
+    if (auth.permanentServerTokens?.length) {
+      res.json({ authType: 'permanentServerTokens', token: `Bearer ${auth.permanentServerTokens[0]}` });
       return;
     }
 

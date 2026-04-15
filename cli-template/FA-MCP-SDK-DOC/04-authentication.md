@@ -68,6 +68,24 @@ When multiple types are configured (e.g. `['jwtToken', 'basic']`), the login pag
 For `permanentServerTokens`, `basic`, `jwtToken` — credentials are taken from `webServer.auth` section.
 For `ntlm` — uses AD configuration from `ad.domains` section.
 
+### JWT Admin Requirement: `payload.allow === 'gen-token'`
+
+When `jwtToken` is used to authenticate into the admin panel (`/admin`), the decoded
+payload **must** contain `allow: 'gen-token'`. Any JWT without this claim is rejected
+with `401` even if it decrypts and is not expired. This prevents short-lived JWTs
+issued for other purposes (e.g. the Agent Tester page auto-fills a 5-minute JWT into
+its `Authorization` header) from being replayed against `/admin` to mint arbitrary
+long-lived tokens.
+
+Generate an admin-capable JWT by including `allow=gen-token` in the payload:
+
+```bash
+node scripts/generate-jwt.js -u admin -ttl 30d -p "allow=gen-token"
+```
+
+`permanentServerTokens` and `basic` admin auth are unaffected — this check applies
+only to the `jwtToken` admin path.
+
 ## Token Generator Authorization
 
 Protect `/admin/` page with custom authorization:

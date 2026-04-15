@@ -141,9 +141,13 @@ function tryAuthType (
     case 'jwtToken': {
       if (scheme === 'basic') {return null;} // Not a bearer/token
       const result = checkJwtToken({ token: credentials });
-      return result.errorReason
-        ? { success: false, error: result.errorReason }
-        : { success: true, username: result.payload?.user || 'JWT User', payload: result.payload };
+      if (result.errorReason) {
+        return { success: false, error: result.errorReason };
+      }
+      if (result.payload?.allow !== 'gen-token') {
+        return { success: false, error: 'Admin panel requires JWT token with payload.allow === "gen-token"' };
+      }
+      return { success: true, username: result.payload?.user || 'JWT User', payload: result.payload };
     }
 
     default:
