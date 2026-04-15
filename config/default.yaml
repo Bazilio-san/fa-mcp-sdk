@@ -301,6 +301,17 @@ webServer:
       #> Password for HTTP Basic auth
       password: '***'
 
+    #> ========================================================================
+    #> REVOCATION LISTS
+    #> Revoked JWT tokens and usernames are rejected everywhere:
+    #> MCP endpoints, Admin panel, and Agent Tester.
+    #> ========================================================================
+    revoked:
+      #> Revoked JWT tokens. Each entry: { token: '<jwt>', note?: '<reason>' }
+      jwtTokens: [ ]
+      #> Revoked usernames matched against JWT payload.user (case-insensitive)
+      users: [ ]
+
   #> ========================================================================
   #> JWT TOKEN GENERATION API
   #> POST /gen-jwt — generates a JWT token programmatically.

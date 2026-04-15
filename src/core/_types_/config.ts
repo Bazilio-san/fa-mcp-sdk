@@ -23,6 +23,13 @@ interface IWebServerConfig {
         isCheckIP: boolean,
       }
       permanentServerTokens: string[],
+      //> Revocation lists — never accepted by MCP, Admin or Agent Tester
+      revoked?: {
+        //> Revoked JWT tokens. Each entry: { token, note? }
+        jwtTokens?: Array<{ token: string; note?: string }>,
+        //> Revoked usernames matched against JWT payload.user (case-insensitive)
+        users?: string[],
+      },
     },
     adminAuth: {
       enabled: boolean,

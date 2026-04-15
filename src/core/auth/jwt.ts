@@ -8,6 +8,7 @@ import { logger as lgr } from '../logger.js';
 import { isObject, trim } from '../utils/utils.js';
 
 import { parseIpList, isIpAllowed } from './ip-check.js';
+import { isJwtTokenRevoked, isUserRevoked } from './revocation.js';
 import { ICheckTokenResult, ITokenPayload } from './types.js';
 
 const logger = lgr.getSubLogger({ name: chalk.cyan('token-auth') });
@@ -100,6 +101,10 @@ export const checkJwtToken = (arg: {
     return { errorReason: 'The token is not a JWT' };
   }
 
+  if (isJwtTokenRevoked(token)) {
+    return { errorReason: 'JWT Token has been revoked' };
+  }
+
   let payloadStr: string = '';
   try {
     payloadStr = decrypt(encryptedPayload);
@@ -116,6 +121,13 @@ export const checkJwtToken = (arg: {
   } catch (err: Error | any) {
     logger.error(err);
     return { errorReason: `Error deserializing payload of JWT token :: ${err.message}` };
+  }
+
+  if (isUserRevoked(payload.user)) {
+    return {
+      isTokenDecrypted: true,
+      errorReason: `JWT Token: user '${payload.user}' has been revoked`,
+    };
   }
 
   expectedUser = trim(expectedUser).toLowerCase();
