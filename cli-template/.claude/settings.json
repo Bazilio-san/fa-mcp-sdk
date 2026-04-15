@@ -15,7 +15,7 @@
       "Read(./_misc/**)",
       "Read(./**/_tmp/**)",
       "Read(./**/*.private.*)",
-      "Read(./**/*local.*)",
+      "Read(./**/*.local.*)",
       "Read(./**/*local-*)"
     ]
   },
