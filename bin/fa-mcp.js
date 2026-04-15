@@ -939,8 +939,13 @@ certificate's public and private keys`,
         'mkdir', 'node', 'npm install', 'npm run', 'npm test', 'npm', 'npx', 'pkill', 'set', 'playwright', 'powershell',
         'rm', 'taskkill', 'tasklist', 'timeout', 'turbo run', 'wc'];
       const c2 = ['jobs', 'npm start', 'unset http_proxy'];
+      const c3 = ['./config/local.yaml', './node_modules/fa-mcp-sdk/config/_local.yaml'];
       const i = ' '.repeat(8);
-      const allowBashLines = [...c1.map((c) => `${i}"Bash(${c}:*)",`), ...c2.map((c) => `${i}"Bash(${c})",`)].join('\n');
+      const allowBashLines = [
+        ...c1.map((c) => `${i}"Bash(${c}:*)",`),
+        ...c2.map((c) => `${i}"Bash(${c})",`),
+        ...c3.map((c) => `${i}"Read(${c})",`),
+      ].join('\n');
       const transformFn = (c) => c.replace('"acceptEdits"', '"bypassPermissions"')
         .replace(/"allow": \[\s+"Edit",/, `"allow": [\n${allowBashLines}\n${i}"Edit",`);
       await this.transformTargetFile(config, '.claude/settings.json', transformFn);
