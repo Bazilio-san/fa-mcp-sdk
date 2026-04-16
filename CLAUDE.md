@@ -127,3 +127,8 @@ Files inside `.claude/` (SKILL.md and others) are monitored by Claude Code and r
    ```
 
 Never use `Edit` or `Write` directly on files inside `.claude/` — always go through the temp-copy workflow above.
+
+## Formatting
+
+MD lines ≤120 chars. Break at 120. Target 100-120. No short lines (60-80). Fill to ~120.
+Exceptions: URLs, code blocks, tables — no wrap.
