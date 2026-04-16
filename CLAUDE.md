@@ -107,3 +107,23 @@ const logger = lgr.getSubLogger({ name: chalk.cyan('module-name') });
 ## Testing Visual Components
 
 The Agent Tester UI (`/agent-tester`) and other visual components must be tested using the **MCP Playwright** server — use `browser_navigate`, `browser_snapshot`, `browser_take_screenshot`, and other Playwright tools to verify UI changes. The dev server must be running first (`npm run build && npm start`).
+
+## Editing files in `.claude/`
+
+Files inside `.claude/` (SKILL.md and others) are monitored by Claude Code and reloaded on change. To avoid partial reads during multi-edit sessions, follow this protocol:
+
+1. **Copy** the target file to a temp location outside `.claude/`:
+   ```bash
+   cp .claude/skills/headless-test/SKILL.md tmp-skill.md
+   ```
+2. **Edit** `tmp-skill.md` — make ALL changes there (multiple Edit calls are fine).
+3. **Save** atomically via the helper script:
+   ```bash
+   node scripts/save-file.js .claude/skills/headless-test/SKILL.md tmp-skill.md
+   ```
+4. **Remove** the temp file:
+   ```bash
+   rm tmp-skill.md
+   ```
+
+Never use `Edit` or `Write` directly on files inside `.claude/` — always go through the temp-copy workflow above.
