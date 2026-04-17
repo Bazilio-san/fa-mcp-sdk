@@ -58,15 +58,27 @@ export const getTokenFromHttpHeader = (req: Request): { scheme?: AuthType, crede
 };
 
 /**
- * Gets custom auth validator from global context
+ * Gets custom auth validator from global context.
+ *
+ * Lazy lookup with memoization: `global.__MCP_PROJECT_DATA__` is assigned inside `initMcpServer()`,
+ * which runs AFTER this module is imported — so a module-level capture would always read undefined.
+ * We therefore resolve it on first call and only cache the result once project data is installed.
  */
-function getCustomAuthValidator (): CustomAuthValidator | undefined {
-  const projectData = global.__MCP_PROJECT_DATA__;
-  const fn = projectData?.customAuthValidator;
-  return typeof fn === 'function' ? fn : undefined;
-}
+let _cachedValidator: CustomAuthValidator | null | undefined;
 
-const CUSTOM_AUTH_VALIDATOR = getCustomAuthValidator();
+function getCustomAuthValidator (): CustomAuthValidator | undefined {
+  if (_cachedValidator !== undefined) {
+    return _cachedValidator ?? undefined;
+  }
+  const projectData = global.__MCP_PROJECT_DATA__;
+  if (!projectData) {
+    // Not yet installed — don't cache, allow retry on next call
+    return undefined;
+  }
+  const fn = projectData.customAuthValidator;
+  _cachedValidator = typeof fn === 'function' ? fn : null;
+  return _cachedValidator ?? undefined;
+}
 
 
 /**
@@ -110,7 +122,7 @@ export function detectAuthConfiguration (): AuthDetectionResult {
     }
   }
 
-  if (CUSTOM_AUTH_VALIDATOR) {
+  if (getCustomAuthValidator()) {
     configured.push('custom');
   }
 
@@ -120,23 +132,41 @@ export function detectAuthConfiguration (): AuthDetectionResult {
   return result;
 }
 
-const AUTH_CONFIGURATION = detectAuthConfiguration();
+/**
+ * Lazy, memoized wrapper around {@link detectAuthConfiguration}.
+ * The result is only cached after `global.__MCP_PROJECT_DATA__` is installed
+ * (so `'custom'` detection reflects the validator registered via `initMcpServer`).
+ */
+let _cachedAuthConfig: AuthDetectionResult | undefined;
+
+function getAuthConfiguration (): AuthDetectionResult {
+  if (_cachedAuthConfig) {
+    return _cachedAuthConfig;
+  }
+  const result = detectAuthConfiguration();
+  if (global.__MCP_PROJECT_DATA__) {
+    _cachedAuthConfig = result;
+  }
+  return result;
+}
+
 const E_PFX = 'MCP Auth: ';
 
 /**
  * Checks auth using all configured authentication methods in ascending CPU load order
  */
 export async function checkMultiAuth (req: Request): Promise<AuthResult> {
-  const { configured, configuredSet, configuredTypes } = AUTH_CONFIGURATION;
+  const { configured, configuredSet, configuredTypes } = getAuthConfiguration();
   if (!configured.length) {
     return { success: false, error: `${E_PFX}No authentication methods configured` };
   }
 
   // Custom validator runs FIRST — can bypass standard auth (e.g. via x-jira-token headers)
-  if (CUSTOM_AUTH_VALIDATOR) {
+  const customValidator = getCustomAuthValidator();
+  if (customValidator) {
     const requestWithNormalizedHeaders = { ...req, headers: normalizeHeaders(req.headers || {}) };
     try {
-      const customResult = await CUSTOM_AUTH_VALIDATOR(requestWithNormalizedHeaders);
+      const customResult = await customValidator(requestWithNormalizedHeaders);
       if (customResult.success) {
         return customResult;
       }
@@ -208,7 +238,7 @@ export async function checkMultiAuth (req: Request): Promise<AuthResult> {
  * Logs authentication configuration (for debugging)
  */
 export function logAuthConfiguration (): void {
-  const { configured, errors } = AUTH_CONFIGURATION;
+  const { configured, errors } = getAuthConfiguration();
 
   logger.info('Auth system configuration:');
   logger.info(`- enabled: ${!!appConfig.webServer?.auth?.enabled}`);
