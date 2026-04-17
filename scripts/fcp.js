@@ -4,7 +4,7 @@
  * Atomically save content to a file.
  *
  * Usage:
- *   node scripts/save-file.js <filePath> <contentFilePath>
+ *   node scripts/fcp.js <filePath> <contentFilePath>
  *
  * <filePath>        — destination path (absolute or relative to project root)
  * <contentFilePath> — path to a temp file whose contents will be written to <filePath>
@@ -25,7 +25,7 @@ const projectRoot = path.resolve(__dirname, '..');
 const [, , rawTarget, rawSource] = process.argv;
 
 if (!rawTarget || !rawSource) {
-  console.error('Usage: node scripts/save-file.js <filePath> <contentFilePath>');
+  console.error('Usage: node scripts/fcp.js <filePath> <contentFilePath>');
   process.exit(1);
 }
 

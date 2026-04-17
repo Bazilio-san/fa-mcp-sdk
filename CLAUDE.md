@@ -114,19 +114,19 @@ Files inside `.claude/` (SKILL.md and others) are monitored by Claude Code and r
 
 1. **Copy** the target file to a temp location outside `.claude/`:
    ```bash
-   cp .claude/skills/headless-test/SKILL.md tmp-skill.md
+   node scripts/fcp.js tmp-skill.md .claude/skills/<skill-name>/SKILL.md
    ```
 2. **Edit** `tmp-skill.md` — make ALL changes there (multiple Edit calls are fine).
 3. **Save** atomically via the helper script:
    ```bash
-   node scripts/save-file.js .claude/skills/headless-test/SKILL.md tmp-skill.md
+   node scripts/fcp.js .claude/skills/<skill-name>/SKILL.md tmp-skill.md
    ```
 4. **Remove** the temp file:
    ```bash
    rm tmp-skill.md
    ```
 
-Never use `Edit` or `Write` directly on files inside `.claude/` — always go through the temp-copy workflow above.
+CRITICAL: Never use `Edit` or `Write` directly on files inside `.claude/` — always go through the temp-copy workflow above.
 
 ## Formatting
 
