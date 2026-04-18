@@ -47,8 +47,7 @@ const staticPath = join(__dirname, 'static');
 
 const logger = lgr.getSubLogger({ name: chalk.bgYellow('server-http') });
 
-const { adminAuth } = appConfig.webServer || {};
-export const isAdminEnabled = adminAuth?.enabled === true;
+export const isAdminEnabled = appConfig.adminPanel?.enabled === true;
 
 /**
  * Handle rate limiting with consistent error response

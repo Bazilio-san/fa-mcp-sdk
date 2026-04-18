@@ -44,16 +44,23 @@ export const startupInfo = async (args: {
 
   // Authentication info
   const authConfig = cfg.webServer?.auth;
-  const adminAuthConfig = cfg.webServer?.adminAuth;
+  const adminPanelConfig = cfg.adminPanel;
   const { configured: mcpAuthTypes, errors: authErrors } = detectAuthConfiguration();
 
   const mcpAuthInfo = authConfig?.enabled
     ? (mcpAuthTypes.length ? mcpAuthTypes.join(', ') : 'enabled but not configured')
     : 'disabled';
 
-  const adminAuthInfo = adminAuthConfig?.enabled
-    ? adminAuthConfig.type
-    : 'disabled';
+  let adminPanelInfo: string;
+  if (!adminPanelConfig?.enabled) {
+    adminPanelInfo = 'disabled';
+  } else {
+    const raw = adminPanelConfig.authType;
+    const types = !raw || raw === 'none'
+      ? []
+      : (Array.isArray(raw) ? raw.filter((t) => t && t !== 'none') : [raw]);
+    adminPanelInfo = types.length === 0 ? 'open (no auth)' : types.join(', ');
+  }
 
   // Log auth configuration errors if any
   if (Object.keys(authErrors).length > 0) {
@@ -72,7 +79,7 @@ export const startupInfo = async (args: {
     useFileLogger ? ['Logs dir', fileLogger?.logDir] : '',
     ...dbInfo,
     ['MCP Auth', mcpAuthInfo],
-    ['Admin Auth', adminAuthInfo],
+    ['Admin Panel', adminPanelInfo],
     ['Gen JWT API', cfg.webServer?.genJwtApiEnable ? 'POST /gen-jwt' : 'disabled'],
     ...(args.customStartupInfo || []),
     consulInfoItem,

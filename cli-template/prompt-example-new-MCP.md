@@ -69,8 +69,9 @@ webServer:
          isCheckIP: false
       permanentServerTokens: ['psToken1']
 
-   adminAuth:
-      type: 'permanentServerTokens'
+adminPanel:
+   enabled: true
+   authType: 'permanentServerTokens'
 ```
 
 # Task

@@ -22,6 +22,26 @@
 #     #> Override the Consul service name to look up (defaults to the alias key)
 #     consulServiceName: <consulServiceName>
 
+#> ========================================================================
+#> ADMIN PANEL
+#> Token generation & validation UI served at /admin.
+#> Supports 4 authentication methods: permanentServerTokens, basic, jwtToken, ntlm.
+#> ========================================================================
+adminPanel:
+  #> Enable/disable admin panel. false — /admin is not mounted at all.
+  enabled: true
+  #> Authentication type: 'permanentServerTokens' | 'basic' | 'jwtToken' | 'ntlm' | 'none'
+  #> Accepts a single type (string) or multiple types (array):
+  #>   authType: 'basic'
+  #>   authType: ['jwtToken', 'basic']
+  #> 'none' / null / empty array / not set → panel opens WITHOUT authentication
+  #>   (convenience for local development and debugging; do NOT use in production).
+  #> For permanentServerTokens, basic, jwtToken — uses credentials from webServer.auth section.
+  #> For ntlm — uses AD configuration from ad.domains section.
+  #> When multiple types are set (e.g. ['jwtToken', 'basic']), the login page shows tabs
+  #> to choose between Token and Login (username/password) authentication.
+  authType: 'basic'
+
 #> Active Directory / LDAP settings.
 #> Used for authentication/authorization (e.g., NTLM in admin panel) and checking user membership in AD groups.
 ad:
@@ -318,21 +338,3 @@ webServer:
   #> Requires valid Authorization header (any method configured in webServer.auth).
   #> ========================================================================
   genJwtApiEnable: false
-
-  #> ========================================================================
-  #> ADMIN PANEL AUTHENTICATION
-  #> Token generation page available at /admin endpoint
-  #> Supports 4 authentication methods: permanentServerTokens, basic, jwtToken, ntlm
-  #> ========================================================================
-  adminAuth:
-    #> Enable/disable admin panel
-    enabled: true
-    #> Authentication type for admin panel: 'permanentServerTokens' | 'basic' | 'jwtToken' | 'ntlm'
-    #> Accepts a single type (string) or multiple types (array):
-    #>   type: 'basic'
-    #>   type: ['jwtToken', 'basic']
-    #> For permanentServerTokens, basic, jwtToken — uses credentials from webServer.auth section
-    #> For ntlm — uses AD configuration from ad.domains section (no additional credentials needed)
-    #> When multiple types are set (e.g. ['jwtToken', 'basic']), the login page shows tabs
-    #> to choose between Token and Login (username/password) authentication.
-    type: 'basic'

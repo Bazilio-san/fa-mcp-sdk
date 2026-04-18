@@ -1,7 +1,9 @@
 /**
  * Admin panel authentication middleware
  * Supports 4 authentication types: permanentServerTokens, basic, jwtToken, ntlm
- * adminAuth.type accepts a single type or an array of types
+ * adminPanel.authType accepts a single type or an array of types.
+ * When authType is absent / null / empty array / 'none' — admin panel opens
+ * without authentication (dev/debug convenience mode).
  */
 
 import chalk from 'chalk';
@@ -21,14 +23,19 @@ import { setupNTLMAuthentication } from './token-generator/ntlm/ntlm-integration
 const logger = lgr.getSubLogger({ name: chalk.yellow('admin-auth') });
 
 export type { AdminAuthType };
-const { adminAuth, auth } = appConfig.webServer || {};
+const { adminPanel } = appConfig;
+const { auth } = appConfig.webServer || {};
 
 /**
- * Normalizes adminAuth.type to an array
+ * Normalizes adminPanel.authType to an array of real auth types.
+ * 'none', null, empty array and undefined all collapse to an empty array,
+ * which signals open-access mode.
  */
 export function getAdminAuthTypes (): AdminAuthType[] {
-  if (!adminAuth?.type) {return [];}
-  return Array.isArray(adminAuth.type) ? adminAuth.type : [adminAuth.type];
+  const raw = adminPanel?.authType;
+  if (!raw || raw === 'none') {return [];}
+  const list = Array.isArray(raw) ? raw : [raw];
+  return list.filter((t): t is AdminAuthType => !!t && t !== 'none');
 }
 
 /**
@@ -39,7 +46,7 @@ function validateSingleAuthType (authType: AdminAuthType): string | null {
     case 'permanentServerTokens': {
       const tokens = auth?.permanentServerTokens;
       if (!Array.isArray(tokens) || !tokens.filter(Boolean).length) {
-        return `adminAuth type "${authType}" but no tokens are configured in webServer.auth.permanentServerTokens`;
+        return `adminPanel.authType "${authType}" but no tokens are configured in webServer.auth.permanentServerTokens`;
       }
       break;
     }
@@ -47,7 +54,7 @@ function validateSingleAuthType (authType: AdminAuthType): string | null {
     case 'basic': {
       const basic = auth?.basic;
       if (!basic?.username || !basic?.password) {
-        return `adminAuth type "${authType}" but username or password is missing in webServer.auth.basic`;
+        return `adminPanel.authType "${authType}" but username or password is missing in webServer.auth.basic`;
       }
       break;
     }
@@ -55,40 +62,36 @@ function validateSingleAuthType (authType: AdminAuthType): string | null {
     case 'jwtToken': {
       const jwt = auth?.jwtToken;
       if (!jwt?.encryptKey || jwt.encryptKey.length < 8) {
-        return `adminAuth type "${authType}" but encryptKey is missing or too short in webServer.auth.jwtToken`;
+        return `adminPanel.authType "${authType}" but encryptKey is missing or too short in webServer.auth.jwtToken`;
       }
       break;
     }
 
     case 'ntlm': {
       if (!isNTLMEnabled) {
-        return `adminAuth type "${authType}" but no AD configuration found (ad.domains is empty or missing)`;
+        return `adminPanel.authType "${authType}" but no AD configuration found (ad.domains is empty or missing)`;
       }
       break;
     }
 
     default:
-      return `Unknown adminAuth type: ${authType}. Valid types: permanentServerTokens, basic, jwtToken, ntlm`;
+      return `Unknown adminPanel authType: ${authType}. Valid types: permanentServerTokens, basic, jwtToken, ntlm, none`;
   }
 
   return null;
 }
 
 /**
- * Validates admin auth configuration
- * Returns error message if configuration is invalid, null if valid
+ * Validates admin auth configuration.
+ * Returns error message if configuration is invalid, null if valid.
+ * Empty type list with enabled=true is valid and means open access.
  */
 export function validateAdminAuthConfig (): string | null {
-  if (!adminAuth?.enabled) {
+  if (!adminPanel?.enabled) {
     return null; // Disabled, no validation needed
   }
 
-  const types = getAdminAuthTypes();
-  if (types.length === 0) {
-    return 'adminAuth is enabled but no type is configured';
-  }
-
-  for (const t of types) {
+  for (const t of getAdminAuthTypes()) {
     const error = validateSingleAuthType(t);
     if (error) {return error;}
   }
@@ -101,7 +104,7 @@ export function validateAdminAuthConfig (): string | null {
  * Maps auth types to UI categories: 'token' (permanentServerTokens, jwtToken) or 'basic'.
  */
 export function getAdminAuthMethods (): string[] {
-  if (!adminAuth?.enabled) {return [];}
+  if (!adminPanel?.enabled) {return [];}
   const types = getAdminAuthTypes();
   const methods: string[] = [];
   for (const t of types) {
@@ -156,14 +159,23 @@ function tryAuthType (
 }
 
 /**
- * Creates admin authentication middleware based on adminAuth.type config
+ * Creates admin authentication middleware based on adminPanel.authType config.
+ * If enabled=false OR authType is empty/'none' — returns a pass-through middleware
+ * that stamps the request as an anonymous open-access session.
  */
 export function createAdminAuthMW (): RequestHandler[] {
-  // If admin auth is disabled, return pass-through middleware
-  if (!adminAuth?.enabled) {
-    logger.info('Admin authentication is DISABLED');
+  const types = getAdminAuthTypes();
+
+  // Open-access mode: panel mounted (enabled=true) but no auth type configured,
+  // or panel entirely disabled (shouldn't normally reach here since the route is
+  // not mounted, but we keep the branch defensive).
+  if (!adminPanel?.enabled || types.length === 0) {
+    if (adminPanel?.enabled) {
+      logger.info('Admin authentication is OPEN (no authType configured)');
+    } else {
+      logger.info('Admin authentication is DISABLED');
+    }
     return [(req: Request, res: Response, next: NextFunction) => {
-      // Set anonymous user info for compatibility
       req.ntlm = {
         isAuthenticated: false,
         username: 'Anonymous',
@@ -172,8 +184,6 @@ export function createAdminAuthMW (): RequestHandler[] {
       next();
     }];
   }
-
-  const types = getAdminAuthTypes();
 
   // If the only type is NTLM, use existing NTLM middleware
   if (types.length === 1 && types[0] === 'ntlm') {

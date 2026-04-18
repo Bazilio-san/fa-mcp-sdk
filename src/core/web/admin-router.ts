@@ -35,8 +35,8 @@ const timeToSeconds: Record<'minutes' | 'hours' | 'days' | 'months' | 'years', n
   years: 60 * 60 * 24 * 365,
 };
 
-const { adminAuth } = appConfig.webServer || {};
-const adminAuthTypes = adminAuth?.enabled === true ? getAdminAuthTypes() : [];
+const { adminPanel } = appConfig;
+const adminAuthTypes = adminPanel?.enabled === true ? getAdminAuthTypes() : [];
 const ntlmEnabled = adminAuthTypes.includes('ntlm') && isNTLMEnabled;
 
 // Check if auth requires Bearer token modal (handled by frontend)

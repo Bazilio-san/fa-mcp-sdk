@@ -50,16 +50,18 @@ The admin panel (`/admin`) supports 4 authentication types and can be configured
 
 ```yaml
 # config/default.yaml
-webServer:
-  adminAuth:
-    enabled: true
-    # Single type (string)
-    type: 'basic'
-    # Or multiple types (array) — login page shows tabs to choose
-    type: ['jwtToken', 'basic']
+adminPanel:
+  enabled: true
+  # Single type (string)
+  authType: 'basic'
+  # Or multiple types (array) — login page shows tabs to choose
+  authType: ['jwtToken', 'basic']
+  # 'none' / null / empty array / not set — panel opens WITHOUT authentication
+  # (convenience for local development; do NOT use in production).
+  authType: 'none'
 ```
 
-**Supported types:** `permanentServerTokens`, `basic`, `jwtToken`, `ntlm`
+**Supported types:** `permanentServerTokens`, `basic`, `jwtToken`, `ntlm`, `none` (= open access)
 
 When multiple types are configured (e.g. `['jwtToken', 'basic']`), the login page shows tabs:
 - **Token** tab — for `permanentServerTokens` and `jwtToken` authentication

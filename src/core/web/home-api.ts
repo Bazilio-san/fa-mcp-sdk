@@ -6,6 +6,7 @@
 import { Tool } from '@modelcontextprotocol/sdk/types.js';
 import { Request, Response } from 'express';
 
+import { AdminAuthType } from '../_types_/config.js';
 import { detectAuthConfiguration } from '../auth/multi-auth.js';
 import { appConfig, getProjectData } from '../bootstrap/init-config.js';
 import { getMainDBConnectionStatus } from '../db/pg-db.js';
@@ -91,16 +92,23 @@ export async function handleHomeInfo (_req: Request, res: Response): Promise<voi
 
     // Authentication info (same logic as startup-info.ts)
     const authConfig = appConfig.webServer?.auth;
-    const adminAuthConfig = appConfig.webServer?.adminAuth;
+    const adminPanelConfig = appConfig.adminPanel;
     const { configured: mcpAuthTypes } = detectAuthConfiguration();
 
     const mcpAuth = authConfig?.enabled
       ? (mcpAuthTypes.length ? mcpAuthTypes.join(', ') : 'enabled but not configured')
       : 'disabled';
 
-    const adminAuth = adminAuthConfig?.enabled
-      ? adminAuthConfig.type
-      : 'disabled';
+    let adminPanel: string | AdminAuthType | AdminAuthType[];
+    if (!adminPanelConfig?.enabled) {
+      adminPanel = 'disabled';
+    } else {
+      const rawAuthType = adminPanelConfig.authType;
+      const types = !rawAuthType || rawAuthType === 'none'
+        ? []
+        : (Array.isArray(rawAuthType) ? rawAuthType.filter((t) => t && t !== 'none') : [rawAuthType]);
+      adminPanel = types.length === 0 ? 'open (no auth)' : (types.length === 1 ? types[0]! : types as AdminAuthType[]);
+    }
 
     const response = {
       serviceTitle,
@@ -119,7 +127,7 @@ export async function handleHomeInfo (_req: Request, res: Response): Promise<voi
       openAPI: !!httpComponents?.apiRouter,
       consul,
       mcpAuth,
-      adminAuth,
+      adminPanel,
       repo,
       agentTester: appConfig.agentTester?.enabled ? '/agent-tester' : null,
       footer: footerParts.join(' • '),

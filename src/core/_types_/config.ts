@@ -5,6 +5,7 @@ import { IAFConsulConfig, IAccessPoints } from 'fa-consul';
 import { IADConfig } from './active-directory-config.js';
 
 export type AdminAuthType = 'permanentServerTokens' | 'basic' | 'jwtToken' | 'ntlm';
+export type AdminAuthTypeInput = AdminAuthType | 'none';
 
 interface IWebServerConfig {
   webServer: {
@@ -31,11 +32,17 @@ interface IWebServerConfig {
         users?: string[],
       },
     },
-    adminAuth: {
-      enabled: boolean,
-      type: AdminAuthType | AdminAuthType[],
-    },
     genJwtApiEnable: boolean,
+  }
+}
+
+// Admin panel configuration (top-level). enabled=false — panel is not mounted at all.
+// authType absent / null / empty array / 'none' — panel opens without authentication
+// (dev/debug convenience mode).
+interface IAdminPanelConfig {
+  adminPanel?: {
+    enabled: boolean,
+    authType?: AdminAuthTypeInput | AdminAuthTypeInput[] | null,
   }
 }
 
@@ -109,6 +116,7 @@ export interface AppConfig extends IADConfig,
   ILoggerConfig,
   IAFDatabasesConfig,
   IWebServerConfig,
+  IAdminPanelConfig,
   IMCPConfig,
   ISwaggerConfig,
   IAgentTesterConfig,

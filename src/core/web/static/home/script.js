@@ -98,8 +98,8 @@ function renderPageInfo (data) {
   const mcpAuthEl = document.getElementById('mcpAuthValue');
   if (mcpAuthEl) {mcpAuthEl.textContent = data.mcpAuth || 'disabled';}
 
-  const adminAuthEl = document.getElementById('adminAuthValue');
-  if (adminAuthEl) {adminAuthEl.textContent = data.adminAuth || 'disabled';}
+  const adminPanelEl = document.getElementById('adminPanelValue');
+  if (adminPanelEl) {adminPanelEl.textContent = data.adminPanel || 'disabled';}
 
   // Consul info
   const consulSection = document.getElementById('consulSection');
