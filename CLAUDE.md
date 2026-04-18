@@ -88,6 +88,10 @@ See `src/core/auth/multi-auth.ts`.
 
 `AppConfig` (`src/core/_types_/config.ts`) composes: `IWebServerConfig`, `IMCPConfig`, `ILoggerConfig`, `IAgentTesterConfig`, `IAFDatabasesConfig`, `ISwaggerConfig`, `ICacheConfig`, `IADConfig`. Config is loaded by the `config` npm package from YAML files with environment variable overrides defined in `config/custom-environment-variables.yaml`.
 
+**Schema changes in `config/default.yaml` MUST be mirrored in every `config/*.yaml`
+(including `_local.yaml` — ask user if unreadable) and in `src/core/_types_/config.ts`.
+Grep the old key across `config/` + types before finishing.**
+
 ### MCP Transports
 
 - **HTTP/SSE** (`src/core/web/server-http.ts`) — Express server, endpoints: `/mcp/*`, `/admin`, `/docs`, `/health`, `/agent-tester`
