@@ -13,7 +13,7 @@ npm install fa-mcp-sdk
 | File | Content | Read When |
 |------|---------|-----------|
 | [01-getting-started](01-getting-started.md) | `initMcpServer()`, `McpServerData`, `IPromptData`, `IResourceData`, `AppConfig` | Starting new project |
-| [02-1-tools-and-api](02-1-tools-and-api.md) | Tool definitions, `toolHandler`, REST API with tsoa, OpenAPI/Swagger | Creating tools, REST endpoints |
+| [02-1-tools-and-api](02-1-tools-and-api.md) | Tool definitions, `toolHandler`, outbound webhooks, REST API with tsoa, OpenAPI/Swagger | Creating tools, REST endpoints, webhook callbacks |
 | [02-2-prompts-and-resources](02-2-prompts-and-resources.md) | Standard/custom prompts, resources, `requireAuth` | Configuring prompts/resources |
 | [03-configuration](03-configuration.md) | `appConfig`, YAML config, cache, PostgreSQL | Server configuration, DB |
 | [04-authentication](04-authentication.md) | JWT, Basic auth, server tokens, `createAuthMW()`, Token Generator, CLI Token Generator, JWT Generation API | Authentication setup |

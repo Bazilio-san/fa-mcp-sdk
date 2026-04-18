@@ -62,6 +62,66 @@ const clientIP = headers?.['x-real-ip'] || headers?.['x-forwarded-for'];
 `IToolHandlerParams` includes `ITransportContext` fields (`transport`, `headers`, `payload`).
 See [ITransportContext](./02-2-prompts-and-resources.md#itransportcontext).
 
+### Outbound Webhooks
+
+The SDK does not ship a built-in webhook — it is a **handler-level pattern** enabled by
+the fact that `params.headers` already carries every client header through to the tool.
+Use it when the caller should be notified of each tool result (audit, dashboards, CI
+chains). Reference implementation: `mcp-jira` (`src/tools/tools-manager.ts`,
+`callWebHook` + dispatch block).
+
+**Recipe:**
+
+1. **Declare the header** so Agent Tester and `use://http-headers` advertise it:
+
+   ```typescript
+   usedHttpHeaders: [
+     { name: 'x-web-hook', description: 'URL to POST the tool result to.', isOptional: true },
+   ],
+   ```
+
+2. **Dispatch inside the handler** — fire-and-forget, never throw, never block the reply:
+
+   ```typescript
+   import axios from 'axios';
+   import { appConfig, logger, toStr, IToolHandlerParams } from 'fa-mcp-sdk';
+
+   const URL_REGEX = /^https?:\/\/[^\s]+$/i;
+
+   const callWebHook = (url: string, tool: string, response: unknown, user?: string): void => {
+     if (!URL_REGEX.test(url)) { return; }
+     axios.post(url, { mcpName: appConfig.name, tool, user, response }, { timeout: 10_000 })
+       .catch((err) => logger.warn(`Web-hook POST ${url} failed: ${toStr(err?.message || err)}`));
+   };
+
+   export const handleToolCall = async (params: IToolHandlerParams) => {
+     const { name, headers = {} } = params;
+     const result = await runTool(params);                // produce { text, json, hook? }
+     const hookUrl = (result.hook || headers['x-web-hook'] || '').trim();
+     if (hookUrl) { callWebHook(hookUrl, name, result.json, resolveUser(headers, params.payload)); }
+     return formatToolResult(result.json);
+   };
+   ```
+
+3. **Per-tool override (optional)** — let a tool return its own `hook` URL that wins over
+   the client header. Extend your internal tool-response type:
+
+   ```typescript
+   export interface IToolResponse { text: string; json: Record<string, any>; hook?: string; }
+   ```
+
+**Body contract** (recommended; keep stable across tools):
+
+| Field | Description |
+|-------|-------------|
+| `mcpName` | `appConfig.name` — which MCP sent the callback |
+| `tool` | Tool name that was invoked |
+| `user` | Caller identity (JWT `payload.user`, auth header, or a lookup — project-specific) |
+| `response` | Full JSON the tool produced |
+
+**Rules of thumb:** validate the URL (`http(s)://…`), short timeout (≤10 s), catch+log
+only, **never** `await` the POST, and never let a webhook failure surface as a tool error.
+
 
 ## REST API Endpoints
 
