@@ -8,8 +8,9 @@ import * as path from 'node:path';
 import { IUsedHttpHeader, IResource, IResourceData, IResourceInfo, ITransportContext } from '../_types_/types.js';
 import { appConfig, getProjectData } from '../bootstrap/init-config.js';
 import { ROOT_PROJECT_DIR } from '../constants.js';
+import { assembleReadmeWithSatellites } from './readme-assembler.js';
 
-let readme = fs.readFileSync(path.join(ROOT_PROJECT_DIR, './README.md'), 'utf-8');
+let readme = assembleReadmeWithSatellites(ROOT_PROJECT_DIR);
 let packageJson: any;
 try {
   packageJson = JSON.parse(fs.readFileSync(path.join(ROOT_PROJECT_DIR, './package.json'), 'utf-8'));

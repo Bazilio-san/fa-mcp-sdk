@@ -97,3 +97,43 @@ Characteristics:
 /feature-generator REQ-1234: implement webhook callback receiver for external events
 /feature-generator Add OAuth2 token refresh logic to the HTTP client
 ```
+
+---
+
+### `/readme-generator` — MCP Server README Generator
+
+Generates a structured, user-friendly `README.md` for an `fa-mcp-sdk`-based MCP server and a set
+of satellite documents under `readme-docs/`. The main README stays scannable (what is this / what
+tools / how to use); reference tables, priority rules, and long technical topics are moved into
+`readme-docs/*.md` and linked from the main.
+
+What it does:
+
+- **Inventories** the project: `package.json`, `config/*.yaml`, `src/tools/`, `src/api/`,
+  `src/prompts/`, `.claude/skills/`
+- **Detects enabled SDK subsystems** (Consul, AD, Database, Admin Panel, Agent Tester, Swagger,
+  Cache, Webhooks, Impersonation, JWT, configurable tool set) and project-specific capabilities
+- **Classifies each finding** — drop / inline / satellite — and produces the satellite file set
+  dynamically. No stubs for disabled features.
+- **Always inlines** in the main README: the tool list, Quick Start, MCP Client Integration
+  snippets (Claude Code / Desktop / Qwen — adapted to this server's custom header names), and
+  Key Features
+- **Always uses folder `readme-docs/`** — the SDK's `doc://readme` MCP resource automatically
+  inlines every satellite linked from the main README, delivering the full document to the MCP
+  registry's RAG index. Any other folder name would be ignored.
+
+Characteristics:
+
+- **Launch**: by command `/readme-generator` or by trigger phrases ("generate readme", "update
+  readme", "обнови README", "сгенерируй README для MCP")
+- **Input**: none required — reads the current project
+- **Output**: `README.md` in project root, `readme-docs/*.md` (one per satellite topic), backup
+  of the previous README as `README.backup.md` when rewriting
+
+**Examples:**
+
+```
+/readme-generator
+/readme-generator refresh the README after adding 3 new tools
+/readme-generator обнови README с учётом того, что теперь подключён PostgreSQL
+```
