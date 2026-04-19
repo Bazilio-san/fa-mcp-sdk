@@ -169,7 +169,7 @@ The project ships with custom skills in `.claude/skills/`:
 | `/feature-prompt-generator` | Turn a feature description into a self-sufficient prompt for an AI CLI  |
 | `/readme-generator`  | Generate structured README.md + satellite `readme-docs/*.md`            |
 
-Details, launch modes, and examples: [SKILL_README.md](SKILL_README.md)
+Details, launch modes, and examples: [SKILLS](readme-docs/SKILLS.md)
 
 ## Security
 
