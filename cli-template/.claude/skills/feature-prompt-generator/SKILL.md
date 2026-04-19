@@ -1,5 +1,5 @@
 ---
-name: feature-generator
+name: feature-prompt-generator
 description: >-
   Command-only META-SKILL (invoked explicitly, no auto-trigger). Produces an exhaustive,
   self-sufficient prompt for an AI CLI (Claude Code) to implement a feature turnkey.
@@ -11,7 +11,7 @@ argument-hint: "[feature description | path to task file]"
 allowed-tools: Read, Grep, Glob, Bash(git *), Bash(yarn *), Bash(npm *), Bash(node *), Bash(ls *), Bash(cat *)
 ---
 
-# feature-generator — META-SKILL for generating prompts for an AI CLI
+# feature-prompt-generator — META-SKILL for generating prompts for an AI CLI
 
 ## Essence
 
@@ -28,7 +28,7 @@ implementation. You do not touch any code in the target repository.
 ## How to invoke
 
 **Command-only.** The skill is **never auto-invoked by the model** — `disable-model-invocation`
-is set to `true`. Runs solely when the operator explicitly calls it (e.g. `/feature-generator`
+is set to `true`. Runs solely when the operator explicitly calls it (e.g. `/feature-prompt-generator`
 or the equivalent UI invocation). Ignore any implicit triggers from phrasing in user messages.
 
 ## When to use

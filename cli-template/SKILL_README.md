@@ -66,7 +66,7 @@ via `git show <ref>:package.json`. To reference SDK versions/commits directly, m
 
 ---
 
-### `/feature-generator` — Feature Prompt Generator
+### `/feature-prompt-generator` — Feature Prompt Generator
 
 A **META-skill**: turns a feature description into a self-sufficient prompt for an AI CLI (Claude Code or another
 agent) to implement the feature turnkey. The skill itself does NOT write feature code — it produces the prompt.
@@ -83,7 +83,7 @@ What it does:
 
 Characteristics:
 
-- **Launch**: **command-only** via `/feature-generator`. Has `disable-model-invocation: true` — does NOT activate
+- **Launch**: **command-only** via `/feature-prompt-generator`. Has `disable-model-invocation: true` — does NOT activate
   on trigger phrases or implicit mentions
 - **Input**: free-form feature description OR path to a file with the description (e.g. `task.md`, ticket dump)
 - **Output**: file `prop-<kebab-name>.md` in repository root. If the file already exists, a numeric suffix is
@@ -92,10 +92,10 @@ Characteristics:
 **Examples:**
 
 ```
-/feature-generator Add a tool for batch-processing customer records across a project
-/feature-generator task.md
-/feature-generator REQ-1234: implement webhook callback receiver for external events
-/feature-generator Add OAuth2 token refresh logic to the HTTP client
+/feature-prompt-generator Add a tool for batch-processing customer records across a project
+/feature-prompt-generator task.md
+/feature-prompt-generator REQ-1234: implement webhook callback receiver for external events
+/feature-prompt-generator Add OAuth2 token refresh logic to the HTTP client
 ```
 
 ---
