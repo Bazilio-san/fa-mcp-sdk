@@ -76,7 +76,7 @@ supply their own identity).
 ## Related
 
 - Admin panel for token generation: [Admin Panel](./admin-panel.md)
-- `/gen-jwt` skill: [SKILL_README.md](../SKILL_README.md)
+- `/gen-jwt` skill: [SKILLS](./SKILLS.md)
 ```
 
 ---
@@ -136,7 +136,7 @@ Response shape:
 ## `/headless-test` skill
 
 Runs intelligent tests against all tools in a controlled scope (project / space / etc.) and writes
-a Markdown report to `claudedocs/test-report-{RUN_ID}.md`. See [SKILL_README.md](../SKILL_README.md).
+a Markdown report to `claudedocs/test-report-{RUN_ID}.md`. See [SKILLS](./SKILLS.md).
 ```
 
 ---

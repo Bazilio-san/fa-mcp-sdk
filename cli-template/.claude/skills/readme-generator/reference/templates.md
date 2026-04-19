@@ -357,7 +357,7 @@ The project ships with custom skills in `.claude/skills/`:
 | `/headless-test`    | Run headless tests for all MCP tools via curl API   |
 | `/upgrade-guide`    | Generate migration guide for fa-mcp-sdk upgrades    |
 
-Details, launch modes, and examples: [SKILL_README.md](./SKILL_README.md).
+Details, launch modes, and examples: [SKILLS](./readme-docs/SKILLS.md).
 ```
 
 ---

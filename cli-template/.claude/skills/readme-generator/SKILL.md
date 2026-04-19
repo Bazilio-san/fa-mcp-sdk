@@ -167,8 +167,8 @@ Canonical section order. Include only sections backed by actual findings; omit a
     - Impersonation → `readme-docs/impersonation.md`
     - Project-specific: fuzzy resolution, caching strategy, API version detection, batch limits,
       content-format conversion, etc. → `readme-docs/<topic>.md` as appropriate
-13. **Skills** — short paragraph linking to `SKILL_README.md` in repo root (kept at root by
-    convention established in existing fa-mcp-sdk projects)
+13. **Skills** — short paragraph linking to `readme-docs/SKILLS.md` (kept under `readme-docs/`
+    so it is picked up as a satellite and assembled into the `doc://readme` resource)
 14. **Stack** — 4–7 bullets: framework (`fa-mcp-sdk`), transport, language, key libs
 15. **License**
 
@@ -199,12 +199,12 @@ For project-specific capabilities (fuzzy resolution, custom endpoints, etc.) com
 
 Every satellite MD begins with a 1-sentence summary so it stands alone when opened directly.
 
-### Step 6 — Update `SKILL_README.md`
+### Step 6 — Update `readme-docs/SKILLS.md`
 
-If `.claude/skills/` is non-empty, regenerate `SKILL_README.md` in the repository root. Keep the
-existing format (seen in mcp-jira / mcp-wiki): per-skill sections with command, launch mode,
-arguments table, examples. **Do not move this file into `readme-docs/`** — the projects' convention keeps
-it at the root.
+If `.claude/skills/` is non-empty, regenerate `readme-docs/SKILLS.md`. Keep the existing format
+(per-skill sections with command, launch mode, arguments table, examples). The file lives under
+`readme-docs/` so it is included as a satellite in the `doc://readme` assembled document — link
+to it from the main README's **Skills** section.
 
 ### Step 7 — Validate
 
@@ -227,7 +227,7 @@ Run through this checklist before declaring done:
 
 1. `README.md` — restructured per canonical order
 2. `readme-docs/<topic>.md` — one per satellite topic, only those the project needs
-3. `SKILL_README.md` — regenerated if `.claude/skills/` is present
+3. `readme-docs/SKILLS.md` — regenerated if `.claude/skills/` is present
 4. `README.backup.md` — backup of previous README when rewriting
 
 ## References
