@@ -225,7 +225,7 @@ curl -sS http://localhost:<port>/agent-tester/api/mcp/status
 
 (`<port>` comes from the CLI config / `config/default.yaml`.) Verify the expected tools are listed.
 
-Then iterate. For each scenario in the plan:
+Then iterate. For an **independent** scenario (one-shot question, no prior context):
 
 ```
 node ${CLAUDE_SKILL_DIR}/scripts/headless-test.js \
@@ -234,7 +234,38 @@ node ${CLAUDE_SKILL_DIR}/scripts/headless-test.js \
   --verbose
 ```
 
-Parse the JSON response. Check:
+For a **multi-turn** scenario (follow-up question refers back to earlier context), pin a session
+so the server-side dialog history is preserved across calls:
+
+```
+# First question — session file is created and sessionId is written into it.
+node ${CLAUDE_SKILL_DIR}/scripts/headless-test.js \
+  --port <port> \
+  --session-file claudedocs/.agent-session \
+  --message "<first question>" --verbose
+
+# Follow-up — reuses the same sessionId from the file automatically.
+node ${CLAUDE_SKILL_DIR}/scripts/headless-test.js \
+  --port <port> \
+  --session-file claudedocs/.agent-session \
+  --message "<follow-up question>" --verbose
+```
+
+Delete `claudedocs/.agent-session` between unrelated scenario groups to avoid context bleed.
+
+For a prepared sequence of turns, use the batch wrapper — one text file, one user message per
+non-empty line (comments start with `#`):
+
+```
+node ${CLAUDE_SKILL_DIR}/scripts/headless-chat.js \
+  --port <port> \
+  --messages claudedocs/scenarios/<name>.txt \
+  --session-file claudedocs/.agent-session \
+  --out claudedocs/scenarios/<name>.out.json \
+  --verbose
+```
+
+Parse the JSON response(s). For each turn check:
 
 - `trace.tools_used` — the agent called the expected tool?
 - `trace.turns[].tool_calls[].arguments` — args match what the question implies?
@@ -244,7 +275,8 @@ Parse the JSON response. Check:
 
 When something is off, diagnose the root cause (one of: tool description, parameter schema,
 agent prompt, handler logic, error message — per `FA-MCP-SDK-DOC/08-agent-tester-and-headless-api.md`),
-fix, rebuild (`yarn cb`), restart, and re-run the scenario.
+fix, rebuild (`yarn cb`), restart, and re-run the scenario. After restart, in-memory sessions on
+the server are wiped — delete the stale `claudedocs/.agent-session` file before re-running.
 
 Log every iteration in `claudedocs/test-log.md` (session header + per-scenario: sent / expected /
 received / tools used / result / diagnosis / fix). This is the audit trail.
