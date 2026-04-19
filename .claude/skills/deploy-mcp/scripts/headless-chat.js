@@ -35,21 +35,22 @@ function getOpt (flag, fallback) {
   const i = process.argv.indexOf(flag);
   return i >= 0 ? process.argv[i + 1] : fallback;
 }
+
 function hasFlag (flag) { return process.argv.includes(flag); }
 
-const port        = getOpt('--port');
+const port = getOpt('--port');
 const messagesArg = getOpt('--messages');
-const auth        = getOpt('--auth');
-const verbose     = hasFlag('--verbose');
-const maxResult   = getOpt('--max-result', '4000');
-const maxTrace    = getOpt('--max-trace', '50000');
+const auth = getOpt('--auth');
+const verbose = hasFlag('--verbose');
+const maxResult = getOpt('--max-result', '4000');
+const maxTrace = getOpt('--max-trace', '50000');
 const agentPrompt = getOpt('--agent-prompt');
-const model       = getOpt('--model');
-const timeout     = Number(getOpt('--timeout', '120000'));
-const sessionOpt  = getOpt('--session');
+const model = getOpt('--model');
+const timeout = Number(getOpt('--timeout', '120000'));
+const sessionOpt = getOpt('--session');
 const sessionFile = getOpt('--session-file');
 const stopOnError = hasFlag('--stop-on-error');
-const outPath     = getOpt('--out');
+const outPath = getOpt('--out');
 
 if (!port || !messagesArg) {
   console.error('Usage: headless-chat.js --port <n> --messages <file> [--session-file <path>] [--verbose]');
@@ -154,13 +155,11 @@ function sendOne (message) {
   }
 
   if (sessionFile && sessionId) {
-    try { fs.writeFileSync(sessionFile, sessionId); }
-    catch (e) { console.error(`session-file write skipped: ${e.message}`); }
+    try { fs.writeFileSync(sessionFile, sessionId); } catch (e) { console.error(`session-file write skipped: ${e.message}`); }
   }
 
   if (outPath) {
-    try { fs.writeFileSync(outPath, JSON.stringify(results, null, 2)); }
-    catch (e) { console.error(`out write failed: ${e.message}`); }
+    try { fs.writeFileSync(outPath, JSON.stringify(results, null, 2)); } catch (e) { console.error(`out write failed: ${e.message}`); }
   }
 
   process.exit(anyFailure ? 1 : 0);
