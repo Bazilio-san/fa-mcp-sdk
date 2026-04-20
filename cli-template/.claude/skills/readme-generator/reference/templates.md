@@ -38,6 +38,47 @@ Prefer shields.io. Include only badges that are meaningful (skip build status if
 
 ---
 
+## 2a. Quick Links
+
+Navigation block for the main README. Sits immediately after the badges, before **Overview**. Lists
+only the major sections a reader is likely to jump to — never a full TOC.
+
+**Inclusion rule.** Include a link for every `##` section that is either (a) one of the headline
+topics below, or (b) a dynamic feature section produced in Step 3 of the workflow (Impersonation,
+Admin Panel, Webhooks, Agent Tester, Consul, Active Directory, Database, …). Exclude Overview,
+Transports, Stack, License, and every `###` sub-subsection. Target 8–14 entries.
+
+```markdown
+## Quick Links
+
+- [Tools](#tools)
+- [Quick Start](#quick-start)
+- [MCP Client Integration](#mcp-client-integration)
+- [Key Features](#key-features)
+- [Configuration](#configuration-basics)
+- [Build & Run](#build--run)
+- [Authentication](#authentication)
+- [Impersonation](#impersonation)
+- [Admin Panel](#admin-panel)
+- [Webhooks](#webhooks)
+- [Agent Tester + Headless Agent Tester API](#agent-tester)
+- [Claude Code Skills](#claude-code-skills)
+```
+
+**Anchor-slug rules (GitHub Markdown).**
+
+- Lowercase the heading, replace spaces with `-`, strip punctuation (`,`, `.`, `:`, `?`, `!`, `()`).
+- `&` is dropped entirely and produces a double dash — `Build & Run` → `#build--run`.
+- `+` is dropped — `Agent Tester + Headless API` → `#agent-tester--headless-api`.
+- If the Quick Links label diverges from the exact heading text, anchor to the heading, not the
+  label (label is for humans, anchor must match the section's slug).
+- When two headings collide (e.g. two `## Configuration`), GitHub appends `-1`, `-2`; avoid that by
+  using distinct headings.
+
+Verify every anchor resolves after assembly — dead Quick Links are worse than no Quick Links.
+
+---
+
 ## 3. Overview
 
 2–4 sentences. Answer: *what is this / for whom / core value*. Active voice. No marketing fluff.
@@ -56,23 +97,41 @@ distinguishing features>. Use it when you need <primary use case>.
 
 Group by domain. Keep rows short — one-line descriptions only.
 
-```markdown
+The full grouped listing is wrapped in a `<details>` block so it doesn't dominate the page on first
+scroll. The `## Tools (<N>)` heading itself stays *outside* the block — it must remain visible and
+anchor-linkable from **Quick Links**.
+
+````markdown
 ## Tools (<N>)
 
+<details><summary>Expand to view detailed list of tools</summary><br>
+
+
+All tool names are prefixed with `<prefix>_`. Tools can be selectively enabled via
+`<upstream>.usedInstruments` — see [Configuration](./readme-docs/configuration.md).
+
 ### <Domain 1>
+
 | Tool                  | Description                                        |
 |-----------------------|----------------------------------------------------|
 | `<tool_name>`         | <Short description, verb-first, ≤ 80 chars>        |
 | `<tool_name>`         | <Short description>                                |
 
 ### <Domain 2>
+
 | Tool                  | Description                                        |
 |-----------------------|----------------------------------------------------|
 | `<tool_name>`         | <Short description>                                |
-```
 
-Notes:
+</details>
+````
 
+Formatting rules specific to this block:
+
+- `<br>` immediately after `</summary>` is **mandatory** — without it GitHub collapses the first
+  child block against the summary line.
+- Keep one blank line between `<summary>` and the first `###` subsection, and one blank line
+  before `</details>`.
 - Column widths consistent within the file.
 - Tool names always inline-code.
 - If a tool has a caveat (e.g. server vs. cloud behaviour), use a footnote `*` and explain below
@@ -383,3 +442,47 @@ Details, launch modes, and examples: [SKILLS](./readme-docs/SKILLS.md).
 
 <License name> © <Owner>. See [LICENSE](./LICENSE).
 ```
+
+---
+
+## 16. Collapsible `<details>` block (generic pattern)
+
+Use this pattern for any section where the content is important enough to stay inline (so the
+`doc://readme` RAG pipeline captures it) but bulky enough to drown neighbouring sections on a
+casual scroll. Canonical use: the Tools listing (see section 4). Other legitimate uses: long
+example request/response matrices, exhaustive troubleshooting tables, verbose per-endpoint
+catalogues.
+
+**Checklist before reaching for `<details>`:**
+
+1. The content must appear *in this section* (cannot be moved to a satellite file without
+   losing context).
+2. It spans enough lines that a reader scrolling past this section loses sight of the next
+   section on a standard screen.
+3. A casual first-time reader does not need every line immediately — the summary label alone
+   tells them what's hidden.
+
+If any of the three fails, either inline it normally or move it to `readme-docs/`.
+
+```markdown
+## <Section heading stays outside>
+
+<Optional 1–3 sentence intro stays outside too — gives readers enough to decide whether to expand.>
+
+<details><summary>Expand to view <what is inside>: <e.g. "detailed list of tools" /
+"full request/response schema" / "per-endpoint example matrix"></summary><br>
+
+
+<bulky content: tables, code blocks, nested subsections — anything markdown supports>
+
+</details>
+```
+
+**Do NOT wrap in `<details>`:**
+
+- Quick Start commands
+- Key Features bullet list
+- Configuration Basics table (short by design)
+- MCP Client Integration JSON snippets
+- Transports listing
+- Anything under ~20 lines

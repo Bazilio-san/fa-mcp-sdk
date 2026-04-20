@@ -32,6 +32,36 @@
 2. Why should I use it?
 3. How do I get started?
 
+### Progressive disclosure
+
+A long README is fine — a *cluttered* one is not. Two devices shrink perceived volume without
+dropping information the RAG pipeline needs:
+
+- **Quick Links** right after the badges. List only the major `##` sections (8–14 entries),
+  never a full TOC. The reader who knows what they want jumps; the reader who is browsing
+  ignores the list and keeps scrolling.
+- **`<details>` collapsible blocks** for sections that *must* live inline but would otherwise
+  dominate the page — the canonical case is a grouped tool listing that runs 100+ lines. The
+  heading stays visible and anchor-linkable; the bulk is one click away.
+
+Reach for `<details>` only when the content (a) belongs in this section, (b) is long enough to
+push the next section off-screen, and (c) is not needed at a glance. Do *not* hide Quick Start
+commands, Key Features bullets, a compact config table, or integration snippets.
+
+Required markup (GitHub Markdown):
+
+```markdown
+<details><summary>Expand to view <what is inside></summary><br>
+
+
+<bulky content>
+
+</details>
+```
+
+The `<br>` after `</summary>` is mandatory — GitHub otherwise collapses the first child block
+against the summary line.
+
 ### Use Headings Effectively
 
 ```markdown

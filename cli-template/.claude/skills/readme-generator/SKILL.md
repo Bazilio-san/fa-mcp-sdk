@@ -30,6 +30,26 @@ Three-level information hierarchy:
 Level 1 and 2 live in the main README. Level 3 content longer than ~15 lines moves to satellite
 Markdown files under `readme-docs/`. The main README stays scannable; deep detail is one click away.
 
+### Scannability devices: Quick Links + collapsible blocks
+
+Two devices keep the main README scannable even when it carries substantial inline content:
+
+- **Quick Links** — a short navigation block right after the badges, pointing to the *major* sections
+  a reader is likely to jump to. Include only headline topics (Tools, Quick Start, MCP Client
+  Integration, Key Features, Configuration, Build & Run, Authentication, and any enabled feature
+  sections that have their own heading — Impersonation, Admin Panel, Webhooks, Agent Tester, Skills,
+  etc.). Do **not** dump a full TOC: secondary headings such as Overview, Transports, Stack, License
+  stay out; minor sub-subsections stay out. Rule of thumb: 8–14 links, never more.
+- **Collapsible `<details>` blocks** — wrap content that *must* appear inline (so the `doc://readme`
+  RAG pipeline picks it up as part of the main document) but whose volume would drown neighbouring
+  sections on a casual scroll. The canonical case is the grouped Tools table (often 100+ rows across
+  a dozen sub-tables). Use `<details>` when all three hold: (1) content belongs in this section,
+  (2) it is long enough to push everything below off-screen, (3) a casual reader doesn't need every
+  row right away. Do **not** use `<details>` for content readers need at a glance (Quick Start
+  commands, Key Features bullets, the compact Configuration Basics table, Integration snippets).
+  See `reference/templates.md` for the required markup (the `<br>` after `</summary>` is mandatory —
+  GitHub won't render the first child block correctly without it).
+
 ## The `readme-docs/` folder is load-bearing
 
 Satellite Markdown files **must** live in `readme-docs/` at the project root. The fa-mcp-sdk
@@ -140,21 +160,26 @@ Canonical section order. Include only sections backed by actual findings; omit a
 
 1. **Title + one-line description** (from `package.json`)
 2. **Badges** — build, license, language, key stack badges via shields.io
-3. **Overview** — 2–4 sentences. Answers: what is this, for whom, core value
-4. **Tools** — grouped table, `## Tools (<count>)` with per-domain `###` subsections
-5. **Quick Start** — install, run, minimal verification (3 short steps)
-6. **MCP Client Integration** — Claude Code (HTTP), Claude Desktop (STDIO + `mcp-remote` /
+3. **Quick Links** — 8–14 anchor links to the major sections only (see *Scannability devices*
+   above for the inclusion rule and `reference/templates.md` for the canonical block)
+4. **Overview** — 2–4 sentences. Answers: what is this, for whom, core value
+5. **Tools** — grouped table, `## Tools (<count>)` with per-domain `###` subsections.
+   Wrap the whole tool-group listing in a `<details>` block (see the *collapsible blocks* rule
+   above). The `## Tools (<count>)` heading itself stays *outside* the block so it is visible on
+   scroll and anchor-linkable from Quick Links
+6. **Quick Start** — install, run, minimal verification (3 short steps)
+7. **MCP Client Integration** — Claude Code (HTTP), Claude Desktop (STDIO + `mcp-remote` /
    direct STDIO), Qwen Code. Use the server's actual custom header names
    (e.g. `x-jira-token`, `x-wiki-username`)
-7. **Key Features** — 5–8 bullets. Include enabled SDK subsystems and project-specific capabilities
-8. **Transports** — short bulleted list with endpoints (`/mcp`, `/api/*`, `/docs`, `/health`,
+8. **Key Features** — 5–8 bullets. Include enabled SDK subsystems and project-specific capabilities
+9. **Transports** — short bulleted list with endpoints (`/mcp`, `/api/*`, `/docs`, `/health`,
    `/admin`, `/agent-tester`, STDIO for Claude Desktop)
-9. **Configuration Basics** — 5–10 most important keys in a compact table; link to
-   `readme-docs/configuration.md` when the full reference is long
-10. **Build & Run / Deployment** — minimal commands, environment variables
-11. **Authentication** — 2–4 sentences + link to `readme-docs/authentication.md` (satellite is mandatory
+10. **Configuration Basics** — 5–10 most important keys in a compact table; link to
+    `readme-docs/configuration.md` when the full reference is long
+11. **Build & Run / Deployment** — minimal commands, environment variables
+12. **Authentication** — 2–4 sentences + link to `readme-docs/authentication.md` (satellite is mandatory
     when non-trivial auth is present)
-12. **Feature sections (dynamic)** — one short subsection per enabled optional subsystem and per
+13. **Feature sections (dynamic)** — one short subsection per enabled optional subsystem and per
     notable project-specific capability. Each: 2–3 sentences + link to its `readme-docs/*.md` when a
     satellite is warranted. Typical candidates:
     - Consul service discovery → `readme-docs/consul.md`
@@ -167,10 +192,13 @@ Canonical section order. Include only sections backed by actual findings; omit a
     - Impersonation → `readme-docs/impersonation.md`
     - Project-specific: fuzzy resolution, caching strategy, API version detection, batch limits,
       content-format conversion, etc. → `readme-docs/<topic>.md` as appropriate
-13. **Skills** — short paragraph linking to `readme-docs/SKILLS.md` (kept under `readme-docs/`
+
+   Anchor rule: any feature section that is referenced from **Quick Links** must live at `##` level
+   (not `###`), so the anchor resolves from the top of the document.
+14. **Skills** — short paragraph linking to `readme-docs/SKILLS.md` (kept under `readme-docs/`
     so it is picked up as a satellite and assembled into the `doc://readme` resource)
-14. **Stack** — 4–7 bullets: framework (`fa-mcp-sdk`), transport, language, key libs
-15. **License**
+15. **Stack** — 4–7 bullets: framework (`fa-mcp-sdk`), transport, language, key libs
+16. **License**
 
 ### Step 4 — Generate `README.md`
 
@@ -211,7 +239,14 @@ to it from the main README's **Skills** section.
 Run through this checklist before declaring done:
 
 - [ ] Canonical section order followed; no empty headings
-- [ ] Every section in the main README is ≤ ~40 lines, or split into a satellite
+- [ ] **Quick Links** block is present, sits right after the badges, has 8–14 entries covering
+      only major sections, and every anchor resolves to an existing `##` heading in the file
+- [ ] **Tools** section is wrapped in `<details><summary>Expand to view ...</summary><br>` with
+      the heading `## Tools (<count>)` kept *outside* the block
+- [ ] No `<details>` used to hide content readers need at a glance (Quick Start commands,
+      Key Features, Configuration Basics table, Integration snippets)
+- [ ] Every section in the main README is ≤ ~40 lines (or wrapped in `<details>`, or split into
+      a satellite)
 - [ ] Tool count in the `## Tools (<count>)` heading matches the table
 - [ ] Every satellite link resolves to an existing file in `readme-docs/`
 - [ ] No satellite file for a disabled feature
