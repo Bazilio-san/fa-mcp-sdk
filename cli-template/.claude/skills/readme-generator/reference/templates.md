@@ -263,6 +263,22 @@ Add to `~/.qwen/settings.json`:
   }
 }
 ```
+
+Important!: In `--header` values, there must be **no space** after the `:`.  
+`"x-<prefix>-username:<your_username>"` is correct.  
+`"x-<prefix>-username: <your_username>"` is incorrect.  
+Applies to both Claude Desktop Option 2 (HTTP via `mcp-remote`) and Qwen Code.
+
+### Codex
+
+Add to `~/.codex/config.toml`:
+
+```toml
+[mcp_servers.<name>]
+url = "http[s]://<host[:port]>/mcp"
+http_headers = { "x-<prefix>-username" = "<your_username>", "x-<prefix>-password" = "<your_password>" }
+```
+
 ```
 
 ---
