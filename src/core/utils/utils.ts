@@ -4,6 +4,7 @@ import path from 'path';
 import { Tool } from '@modelcontextprotocol/sdk/types.js';
 
 import { ITransportContext } from '../_types_/types.js';
+import { appConfig } from '../bootstrap/init-config.js';
 import { ROOT_PROJECT_DIR } from '../constants.js';
 
 export const trim = (s: any): string => String(s || '').trim();
@@ -76,10 +77,13 @@ export const normalizeHeaders = (headers: Record<string, any>): Record<string, s
 
 export async function getTools (args: ITransportContext): Promise<Tool[]> {
   const toolsOrFn = global.__MCP_PROJECT_DATA__.tools;
-  let toolsArray: Tool[];
-  if (typeof toolsOrFn === 'function') {
-    toolsArray = await toolsOrFn(args);
+  const toolsArray: Tool[] = typeof toolsOrFn === 'function' ? await toolsOrFn(args) : (toolsOrFn as Tool[]);
+  const { hideAnnotations } = appConfig.mcp.tools || {};
+  if (!hideAnnotations) {
     return toolsArray;
   }
-  return toolsOrFn as Tool[];
+  return toolsArray.map((tool) => {
+    const { annotations: _annotations, ...rest } = tool;
+    return rest as Tool;
+  });
 }

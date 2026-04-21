@@ -245,6 +245,11 @@ mcp:
     maxRequests: 100
     #> Rate limit window length in milliseconds (1 minute)
     windowMs: 60000
+  #> Tool listing behavior
+  tools:
+    #> When true, strips `annotations` from tool listings returned to clients
+    #> (hides hints like readOnlyHint / destructiveHint). Default: false.
+    hideAnnotations: false
 
 #> Swagger / OpenAPI documentation settings
 swagger:

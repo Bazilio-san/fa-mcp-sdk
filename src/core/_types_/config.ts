@@ -63,6 +63,9 @@ interface IMCPConfig {
     };
     toolAnswerAs: 'text' | 'structuredContent'
     transportType: 'stdio' | 'http';
+    tools: {
+      hideAnnotations: boolean;
+    };
   }
 }
 

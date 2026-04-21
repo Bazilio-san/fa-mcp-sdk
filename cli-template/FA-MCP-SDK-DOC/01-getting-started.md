@@ -121,7 +121,7 @@ const dbEnabled = appConfig.isMainDBUsed;
 | `shortName` | Name without 'mcp' suffix |
 | `version` | Package version |
 | `webServer` | HTTP server config (host, port, auth) |
-| `mcp` | MCP settings (transportType, rateLimit) |
+| `mcp` | MCP settings (transportType, rateLimit, tools.hideAnnotations) |
 | `logger` | Logging config |
 | `ad` | Active Directory config |
 | `consul` | Service discovery settings |

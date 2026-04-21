@@ -38,6 +38,8 @@ mcp:
   rateLimit:
     maxRequests: MCP_RATE_LIMIT_MAX_REQUESTS
     windowMs: MCP_RATE_LIMIT_WINDOW_MS
+  tools:
+    hideAnnotations: MCP_TOOLS_HIDE_ANNOTATIONS
 
 uiColor:
   primary: UI_COLOR_PRIMARY

@@ -113,6 +113,8 @@ mcp:
   rateLimit:
     maxRequests: 100
     windowMs: 60000
+  tools:
+    hideAnnotations: false  # true — strip `annotations` from tool listings
 
 swagger:
   servers:
