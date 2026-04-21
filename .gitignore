@@ -92,3 +92,4 @@ glm.sh
 /.serena/.gitignore
 /.serena/project.yml
 /.playwright-mcp/
+/claudedocs/
