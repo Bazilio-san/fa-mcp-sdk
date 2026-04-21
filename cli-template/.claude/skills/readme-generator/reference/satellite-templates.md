@@ -354,7 +354,7 @@ Priority: env vars > `config/local.yaml` > `config/{NODE_ENV}.yaml` > `config/de
 
 | Key                                   | Description                             | Default   |
 |---------------------------------------|-----------------------------------------|-----------|
-| `mcp.toolAnswerAs`                    | Response format (`text` / `json`)       | `text`    |
+| `mcp.tools.answerAs`                  | Response format (`text` / `json`)       | `text`    |
 | `mcp.name`                            | Name returned to MCP clients            | —         |
 
 ## Upstream `<prefix>`

@@ -109,11 +109,11 @@ logger:
 
 mcp:
   transportType: http  # stdio | http
-  toolAnswerAs: text   # text | structuredContent
   rateLimit:
     maxRequests: 100
     windowMs: 60000
   tools:
+    answerAs: text   # text | structuredContent
     hideAnnotations: false  # true — strip `annotations` from tool listings
 
 swagger:

@@ -61,9 +61,9 @@ interface IMCPConfig {
       maxRequests: number;
       windowMs: number;
     };
-    toolAnswerAs: 'text' | 'structuredContent'
     transportType: 'stdio' | 'http';
     tools: {
+      answerAs: 'text' | 'structuredContent';
       hideAnnotations: boolean;
     };
   }

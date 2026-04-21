@@ -339,7 +339,7 @@ Priority: env vars > `config/local.yaml` > `config/{NODE_ENV}.yaml` > `config/de
 | `<upstream>.auth.basic.password` | Basic auth password                 | —         |
 | `webServer.port`                 | HTTP server port                    | `<PORT>`  |
 | `webServer.auth.enabled`         | MCP server authorization on/off     | `false`   |
-| `mcp.toolAnswerAs`               | Response format (`text` / `json`)   | `text`    |
+| `mcp.tools.answerAs`             | Response format (`text` / `json`)   | `text`    |
 
 Full reference: [Configuration](./readme-docs/configuration.md).
 ```

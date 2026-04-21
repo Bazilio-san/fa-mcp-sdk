@@ -62,7 +62,7 @@ export function asJson<T = any> (json: T): { structuredContent: T } {
  * Returns either structured content (JSON) or formatted text
  */
 export function formatToolResult (json: any): any {
-  if (appConfig.mcp.toolAnswerAs === 'structuredContent') {
+  if (appConfig.mcp.tools.answerAs === 'structuredContent') {
     return asJson(json);
   }
   if (isObject(json)) {
@@ -75,7 +75,7 @@ export function formatToolResult (json: any): any {
 }
 
 export const getJsonFromResult = <T = any> (result: any): T => {
-  if (appConfig.mcp.toolAnswerAs === 'structuredContent') {
+  if (appConfig.mcp.tools.answerAs === 'structuredContent') {
     return result?.structuredContent as T;
   } else {
     const text = result?.result?.content?.[0]?.text || result?.content?.[0]?.text || '';

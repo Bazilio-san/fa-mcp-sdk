@@ -217,18 +217,18 @@ logger:
 mcp:
   #> Transport for the MCP server: stdio | http
   transportType: http
-  #> Response format configuration.
-  #> - structuredContent — default — the response in result.structuredContent returns JSON
-  #> - text — in the response, serialized JSON is returned in result.content[0].text
-  toolAnswerAs: text
   #> Per-client request rate limiting for the MCP endpoint
   rateLimit:
     #> Maximum number of requests allowed within windowMs
     maxRequests: 100
     #> Rate limit window length in milliseconds (1 minute)
     windowMs: 60000
-  #> Tool listing behavior
+  #> Tool listing and response behavior
   tools:
+    #> Response format configuration.
+    #> - structuredContent — default — the response in result.structuredContent returns JSON
+    #> - text — in the response, serialized JSON is returned in result.content[0].text
+    answerAs: text
     #> When true, strips `annotations` from tool listings returned to clients
     #> (hides hints like readOnlyHint / destructiveHint). Default: false.
     hideAnnotations: false

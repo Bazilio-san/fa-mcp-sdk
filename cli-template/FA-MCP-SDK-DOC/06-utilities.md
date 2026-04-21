@@ -80,21 +80,21 @@ import { getTools, formatToolResult, getJsonFromResult, asTextContent, asJson } 
 
 const tools = await getTools();  // Get registered tools
 
-// Format based on appConfig.mcp.toolAnswerAs
+// Format based on appConfig.mcp.tools.answerAs
 const result = formatToolResult({ message: 'Done', data: {} });
 
-// Returns structuredContent or JSON from text depending on appConfig.mcp.toolAnswerAs
+// Returns structuredContent or JSON from text depending on appConfig.mcp.tools.answerAs
 const original = getJsonFromResult<T>(result);
 
-// Direct formatting helpers (ignore toolAnswerAs config):
+// Direct formatting helpers (ignore tools.answerAs config):
 asTextContent('Hello');           // { content: [{ type: 'text', text: 'Hello' }] }
 asJson({ status: 'ok' });         // { structuredContent: { status: 'ok' } }
 ```
 
 ### When to Use Which
 
-- **`formatToolResult()`** — Primary choice in tool handlers. Respects `appConfig.mcp.toolAnswerAs` config.
-- **`asTextContent()` / `asJson()`** — Direct formatting, ignores `toolAnswerAs`. Use when specific format needed.
+- **`formatToolResult()`** — Primary choice in tool handlers. Respects `appConfig.mcp.tools.answerAs` config.
+- **`asTextContent()` / `asJson()`** — Direct formatting, ignores `tools.answerAs`. Use when specific format needed.
 - **`getJsonFromResult()`** — Inverse of `formatToolResult()`. Extracts JSON from either format. Use in tests.
 
 ## Network Utilities

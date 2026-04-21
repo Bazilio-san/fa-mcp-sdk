@@ -34,11 +34,11 @@ logger:
 
 mcp:
   transportType: MCP_TRANSPORT_TYPE
-  toolAnswerAs: MCP_TOOL_ANSWER_AS
   rateLimit:
     maxRequests: MCP_RATE_LIMIT_MAX_REQUESTS
     windowMs: MCP_RATE_LIMIT_WINDOW_MS
   tools:
+    answerAs: MCP_TOOLS_ANSWER_AS
     hideAnnotations: MCP_TOOLS_HIDE_ANNOTATIONS
 
 uiColor:
