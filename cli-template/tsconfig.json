@@ -35,15 +35,22 @@
   "exclude": [
     ".claude",
     ".idea",
+    ".junie",
+    ".playwright-mcp",
     ".run",
+    ".serena",
     "_misc",
     "_tmp",
     "config",
+    "out",
     "deploy",
     "dist",
     "doc",
+    "docs",
     "node_modules",
-    "coverage"
+    "out",
+    "coverage",
+    "swagger"
   ],
   "ts-node": {
     "esm": true

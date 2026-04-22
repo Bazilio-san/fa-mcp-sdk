@@ -1,6 +1,7 @@
 # Checking the MCP Server Functionality in STDIO Mode
 
-To verify the MCP server functionality in STDIO mode, you need to send JSON-RPC messages through standard input. Below is the sequence of commands for testing:
+To verify the MCP server functionality in STDIO mode, you need to send JSON-RPC 
+messages through standard input. Below is the sequence of commands for testing:
 
 ## 1) Starting the Server in STDIO Mode
 

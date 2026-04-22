@@ -2,6 +2,8 @@
 .claude/
 .idea/
 .git/
+.junie/
+.playwright-mcp/
 .run/
 .serena/
 .vscode/
@@ -13,6 +15,8 @@
 src/
 test/
 tests/
+out/
+swagger/
 __tests__/
 *.test.js
 *.spec.ts
