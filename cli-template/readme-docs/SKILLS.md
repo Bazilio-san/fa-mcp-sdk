@@ -137,3 +137,52 @@ Characteristics:
 /readme-generator refresh the README after adding 3 new tools
 /readme-generator обнови README с учётом того, что теперь подключён PostgreSQL
 ```
+
+---
+
+### `/deploy-mcp` — End-to-End MCP Server Implementation
+
+Orchestrates the full implementation workflow from feature brief to a live GitLab repo. The project
+must already be scaffolded by the `fa-mcp` CLI — this skill picks up from `yarn install` onwards.
+
+Pipeline (10 steps):
+
+1. **Requirements scan** — extracts tools, source-of-truth refs, exclusions, and OpenAI creds from
+   accompanying messages/files
+2. **OpenAI pre-flight** — `scripts/check-openai.js` validates the key against `GET /v1/models`
+   before anything touches `config/local.yaml`
+3. **Dev secrets** — `scripts/gen-secrets.js` writes fresh `jwtToken.encryptKey`,
+   `permanentServerTokens`, OpenAI creds, and lenient dev defaults into `config/local.yaml`
+4. **Install & build** — `yarn install` + `yarn cb`
+5. **First GitLab push** — ensures branch is clean (stashing what shouldn't ship), commits the
+   scaffold, then either creates a new GitLab repo via `scripts/gitlab-push.js` OR pushes to an
+   existing remote when instructed (text says "don't create" / `origin` is already configured)
+6. **Plan** — writes `claudedocs/impl-plan.md` with tools / resources / prompts / REST / config /
+   tests / Agent Tester scenarios / sign-off checklist
+7. **Implementation** — edits `src/tools/*`, `src/prompts/*`, `src/custom-resources.ts`,
+   `src/api/router.ts`, `config/default.yaml`, `tests/mcp/test-cases.js`; rebuilds after each change
+8. **Agent Tester loop** — `yarn check-llm` → `yarn start` → `scripts/headless-test.js` /
+   `scripts/headless-chat.js` against `/agent-tester/api/chat/test`; logs in `claudedocs/test-log.md`
+9. **Quality gates** — `yarn lint:fix`, `yarn typecheck`, `yarn cb`, `yarn test:mcp[-http|-sse]`
+10. **Second GitLab push** — commits implemented feature and `git push origin main` to the remote
+    set up in step 5 (no re-creation, never `--force` without explicit approval)
+
+Characteristics:
+
+- **Launch**: **command-only** via `/deploy-mcp`. `disable-model-invocation: true` — does NOT
+  trigger on implicit mentions
+- **Input**: feature brief comes from the accompanying user message(s) and attached files. OpenAI
+  and GitLab creds may be supplied inline or asked interactively
+- **Ground rules**: every step explicit and verified; free-form inputs asked in plain prose (never
+  predefined options); exclusions from the brief honoured; dev defaults intentionally lenient;
+  `.claude/`, `deploy/`, `FA-MCP-SDK-DOC/` are NOT modified unless the brief explicitly says to
+- **Output**: implemented project + `claudedocs/{impl-plan,test-log,dev-report}.md`, GitLab repo
+  with two commits on `main` (scaffold + feature)
+
+**Examples:**
+
+```
+/deploy-mcp
+/deploy-mcp реализуй инструменты из task.md, OpenAI key sk-..., GitLab group mcp-servers
+/deploy-mcp implement tools from the message; repo уже существует, push to git@gitlab.example:ai/mcp-foo.git
+```
