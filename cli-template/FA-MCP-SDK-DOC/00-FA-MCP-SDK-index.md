@@ -15,12 +15,13 @@ npm install fa-mcp-sdk
 | [01-getting-started](01-getting-started.md) | `initMcpServer()`, `McpServerData`, `IPromptData`, `IResourceData`, `AppConfig` | Starting new project |
 | [02-1-tools-and-api](02-1-tools-and-api.md) | Tool definitions, `toolHandler`, outbound webhooks, REST API with tsoa, OpenAPI/Swagger | Creating tools, REST endpoints, webhook callbacks |
 | [02-2-prompts-and-resources](02-2-prompts-and-resources.md) | Standard/custom prompts, resources, `requireAuth` | Configuring prompts/resources |
-| [03-configuration](03-configuration.md) | `appConfig`, YAML config, access points for external services, cache, PostgreSQL | Server configuration, external services, DB |
+| [03-configuration](03-configuration.md) | `appConfig`, YAML config, access points for external services, cache | Server configuration, external services |
 | [04-authentication](04-authentication.md) | JWT, Basic auth, server tokens, `createAuthMW()`, Token Generator, CLI Token Generator, JWT Generation API | Authentication setup |
 | [05-ad-authorization](05-ad-authorization.md) | AD group authorization at HTTP/tool levels | AD group restrictions |
 | [06-utilities](06-utilities.md) | `ServerError`, `normalizeHeaders`, logging, Consul, graceful shutdown | Error handling, utilities |
 | [07-testing-and-operations](07-testing-and-operations.md) | Test clients (STDIO, HTTP, SSE, Streamable HTTP) | Testing, deployment |
 | [08-agent-tester-and-headless-api](08-agent-tester-and-headless-api.md) | Agent Tester, Headless API, structured logging, automated testing, UI `data-testid` reference | Agent-driven tool development, CLI automation, UI E2E tests |
+| [09-database](09-database.md) | PostgreSQL sugar layer (`queryMAIN`, `execMAIN`, `getInsertSqlMAIN`, `getMergeSqlMAIN`, `mergeByBatch`), `pgvector`, secondary DBs | Database access, upserts, batching |
 
 ## Key Exports
 
@@ -35,7 +36,13 @@ import { createAuthMW, generateToken, getAuthHeadersForTests, TTokenType, genera
 import { formatToolResult, ToolExecutionError, ServerError, BaseMcpError, ValidationError, getTools } from 'fa-mcp-sdk';
 
 // Database & Cache
-import { queryMAIN, execMAIN, oneRowMAIN, checkMainDB, getCache } from 'fa-mcp-sdk';
+import {
+  queryMAIN, queryRsMAIN, oneRowMAIN, execMAIN,
+  getInsertSqlMAIN, getMergeSqlMAIN, mergeByBatch,
+  checkMainDB, getMainDBConnectionStatus,
+  IQueryPgArgsCOptional,
+  getCache,
+} from 'fa-mcp-sdk';
 
 // Utilities
 import { logger, fileLogger, Logger, trim, ppj, toError, toStr, normalizeHeaders } from 'fa-mcp-sdk';
