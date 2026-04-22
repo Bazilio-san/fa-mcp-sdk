@@ -132,10 +132,6 @@ claude.isBypassPermissions: "false"
 # Set to "true" for production deployment, "false" for development
 isProduction: "false"
 
-# Node.js environment variable (auto-set based on isProduction)
-# Either "development" or "production"
-NODE_ENV: "development"
-
 # Service instance identifier suffix
 # Used in Consul service names and process manager
 SERVICE_INSTANCE: "dev"

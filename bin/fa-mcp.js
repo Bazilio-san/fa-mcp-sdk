@@ -296,10 +296,6 @@ certificate's public and private keys`,
         name: 'isProduction',
       },
       {
-        skip: true,
-        name: 'NODE_ENV',
-      },
-      {
         name: 'SERVICE_INSTANCE',
         defaultValue: '',
         title: 'Suffix of the service name in Consul and process manager',
@@ -709,11 +705,6 @@ certificate's public and private keys`,
       await this.setLastConfigPath(config.projectAbsPath, config);
     }
 
-    if (configProxy.NODE_ENV === 'development') {
-      configProxy.isProduction = 'false';
-    } else if (configProxy.NODE_ENV === 'production') {
-      configProxy.isProduction = 'true';
-    }
     if (config['logger.useFileLogger'] !== 'true') {
       config['logger.dir'] = '';
     }
