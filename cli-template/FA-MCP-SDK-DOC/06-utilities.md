@@ -143,7 +143,9 @@ import { getConsulAPI, accessPointUpdater, deregisterServiceFromConsul } from 'f
 const consul = await getConsulAPI();
 const services = await consul.catalog.service.list();
 
-accessPointUpdater.start();  // Auto-update access points
+// accessPointUpdater is started/stopped by the SDK automatically — see 03-configuration.md → "Access Points".
+// The start()/stop() hooks below are exposed only for tests and diagnostics.
+accessPointUpdater.start();
 accessPointUpdater.stop();
 
 await deregisterServiceFromConsul();

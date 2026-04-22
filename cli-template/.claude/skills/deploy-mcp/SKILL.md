@@ -260,7 +260,11 @@ Follow the plan. For each tool/resource/prompt:
    leave demo code in the final build.
 2. Add new config keys to `config/default.yaml` (and matching env mappings in
    `config/custom-environment-variables.yaml` when appropriate). Mirror structural changes
-   in `config/_local.yaml`.
+   in `config/_local.yaml`. **If the feature talks to any third-party / external service
+   (REST API, legacy system, partner endpoint), put its connection attributes — `host`,
+   `port`, `protocol`, `token`, credentials, custom fields — under the `accessPoints` block,
+   not ad-hoc sections. See `FA-MCP-SDK-DOC/03-configuration.md` → "Access Points" for the
+   YAML shape and access pattern.**
 3. Update `tests/mcp/test-cases.js` with real cases.
 4. `yarn cb` after each meaningful change; don't accumulate type errors.
 

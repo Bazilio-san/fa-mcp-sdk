@@ -183,6 +183,158 @@ webServer:
 
 ```
 
+## Access Points
+
+If your MCP server talks to third-party / external services (REST APIs, legacy systems, partner endpoints, etc.),
+declare their connection attributes (`host`, `port`, `protocol`, `token`, credentials, custom fields) under the
+top-level `accessPoints` block in the config — **not** scattered through code or ad-hoc config sections. Benefits:
+
+- Single registry of outbound dependencies visible in diagnostics and admin pages.
+- Automatic `host`/`port` resolution via Consul for services registered there.
+- Uniform access pattern (`appConfig.accessPoints.<alias>`) across all tools and modules.
+- Runtime updates — the SDK periodically refreshes dynamic access points from Consul without restarting the server.
+
+The SDK automatically wraps `appConfig.accessPoints` in an `AccessPoints` instance on startup and starts the Consul
+updater — **do not call `new AccessPoints(...)` or `accessPointUpdater.start()` manually**.
+
+### Declaring Access Points
+
+```yaml
+accessPoints:
+  # Dynamic AP — host/port resolved from Consul
+  wso2siAPI:
+    title: 'WSO2 SI API'
+    consulServiceName: 'dev01-wso2si-d2'
+    host: null               # filled in from Consul
+    port: 9443               # fallback; also used when Consul meta specifies a different port
+    protocol: 'https'
+    user: 'admin'
+    pass: '***'
+    myProp: 'anyValue'       # any custom field is preserved and available at runtime
+
+  # Static AP — Consul is NOT used
+  externalAPI:
+    noConsul: true
+    host: 'api.partner.com'
+    port: 443
+    protocol: 'https'
+    token: '***'
+    timeoutMs: 5000
+```
+
+### Using Access Points in Code
+
+```typescript
+import { appConfig } from 'fa-mcp-sdk';
+
+// Direct access — always works, for dynamic and static APs alike
+const ap = appConfig.accessPoints.wso2siAPI;
+const url = `${ap.protocol}://${ap.host}:${ap.port}`;
+const token = ap.token;              // custom fields available
+const custom = ap.myProp;
+
+// "Clean" copy without service fields
+const ap2 = appConfig.accessPoints.getAP('wso2siAPI');
+
+// All access points at once
+const all = appConfig.accessPoints.get();
+
+// For dynamic APs — wait until host/port are resolved from Consul (first run)
+await ap.waitForHostPortUpdated(5000);
+```
+
+**Strict typing for custom fields:**
+
+```typescript
+import type { IAccessPoint } from 'fa-consul';
+
+interface IWso2AP extends IAccessPoint {
+  user: string;
+  pass: string;
+  myProp: string;
+}
+
+const ap = appConfig.accessPoints.wso2siAPI as IWso2AP;
+```
+
+### Access Point Properties
+
+**User-defined (configured in YAML):**
+
+| Property                         | Required        | Purpose                                                                               |
+|----------------------------------|-----------------|---------------------------------------------------------------------------------------|
+| `consulServiceName`              | yes for dynamic | Consul service name used to resolve `host`/`port`                                     |
+| `host`                           | —               | IP/hostname. Dynamic: usually `null`, filled from Consul. Static (`noConsul`): manual |
+| `port`                           | —               | TCP port. Coerced to `Number` or `null`. Dynamic: from Consul (or `meta.port`)        |
+| `protocol`                       | —               | `http` or `https`. Anything other than `https?` is coerced to `http`, lowercased      |
+| `title`                          | —               | Human-readable name (defaults to the AP key)                                          |
+| `noConsul`                       | —               | `true` → static AP: Consul is not polled, `consulServiceName` is not required         |
+| `retrieveProps`                  | —               | `(host, meta) => ({host, port})`. Custom extractor for Consul response                |
+| `updateIntervalIfSuccessMillis`  | —               | Interval between successful Consul polls for this AP (default 2 min)                  |
+| `user`, `pass`, `token`, any key | —               | Application fields — stored as-is and available at runtime                            |
+
+**Service fields (added automatically by the SDK for dynamic APs):**
+
+| Property                     | Purpose                                                                 |
+|------------------------------|-------------------------------------------------------------------------|
+| `id`                         | The AP key from the config                                              |
+| `isAP`                       | Marker for a dynamic AP; absent on `noConsul` APs                       |
+| `meta`                       | Filled from `Service.Meta` of the Consul service on successful poll     |
+| `isReachable`                | `true` if the last Consul poll returned data                            |
+| `lastSuccessUpdate`          | Timestamp of the last successful update                                 |
+| `idHostPortUpdated`          | `true` once `host` + `port` have been populated at least once           |
+| `setProps(data)`             | Method for externally updating AP fields                                |
+| `waitForHostPortUpdated(ms)` | Promise that resolves when `host`/`port` have been populated            |
+| `getChanges()`               | Returns `[propName, oldValue, newValue][]` for the last `setProps` call |
+
+### `noConsul` Access Points
+
+Setting `noConsul: true` makes the access point **static** — its address is not resolved through Consul. Typical use
+cases: partner APIs, legacy systems, or services with fixed addresses that cannot (or should not) be registered in
+Consul.
+
+Differences from a dynamic AP:
+
+- `consulServiceName` is not required.
+- The AP object is stored **as-is** — no normalization of `port`/`protocol`, no service fields (`isAP`, `setProps`,
+  `waitForHostPortUpdated`, etc.) are added.
+- The AP is excluded from Consul polling; `host`/`port` are never overwritten.
+- `getAP('key')` and `get()` do **not** return static APs by default (they filter on `isAP`). Pass `andNotIsAP = true`
+  to include them, or use direct access — `appConfig.accessPoints.externalAPI` — which always works.
+
+```typescript
+appConfig.accessPoints.getAP('externalAPI', true);  // include static AP in lookup
+appConfig.accessPoints.externalAPI;                 // direct access always works
+```
+
+### Custom Fields
+
+Any additional property on an AP (`apiKey`, `timeoutMs`, `headers: {...}`, etc.) is preserved verbatim and accessible at
+runtime:
+
+- On creation, all fields from the config are copied onto the AP object.
+- Periodic Consul updates only refresh `host`/`port` (and optionally `meta`) — other properties are **never
+  overwritten**.
+- `get()` / `getAP()` copy all enumerable properties except `undefined` and functions.
+- Nested objects are copied shallowly — if a custom field is an object, its inner references are shared with the
+  original config.
+- Only `port` (coerced to `Number`) and `protocol` (coerced to `http`/`https`) are normalized; all other fields are
+  left untouched.
+
+### Subscribing to Updates
+
+When a dynamic AP is refreshed from Consul, events are emitted on the SDK's `eventEmitter`
+(see "Event System" in `06-utilities.md`):
+
+```typescript
+import { eventEmitter } from 'fa-mcp-sdk';
+
+eventEmitter.on('access-point-updated', ({ accessPoint, changes }) => {
+  // changes: [propName, oldValue, newValue][]
+});
+eventEmitter.on('access-points-updated', () => { /* any AP was updated this cycle */ });
+```
+
 ## Cache
 
 ```typescript

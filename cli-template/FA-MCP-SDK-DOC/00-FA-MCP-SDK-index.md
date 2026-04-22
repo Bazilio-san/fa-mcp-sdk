@@ -15,7 +15,7 @@ npm install fa-mcp-sdk
 | [01-getting-started](01-getting-started.md) | `initMcpServer()`, `McpServerData`, `IPromptData`, `IResourceData`, `AppConfig` | Starting new project |
 | [02-1-tools-and-api](02-1-tools-and-api.md) | Tool definitions, `toolHandler`, outbound webhooks, REST API with tsoa, OpenAPI/Swagger | Creating tools, REST endpoints, webhook callbacks |
 | [02-2-prompts-and-resources](02-2-prompts-and-resources.md) | Standard/custom prompts, resources, `requireAuth` | Configuring prompts/resources |
-| [03-configuration](03-configuration.md) | `appConfig`, YAML config, cache, PostgreSQL | Server configuration, DB |
+| [03-configuration](03-configuration.md) | `appConfig`, YAML config, access points for external services, cache, PostgreSQL | Server configuration, external services, DB |
 | [04-authentication](04-authentication.md) | JWT, Basic auth, server tokens, `createAuthMW()`, Token Generator, CLI Token Generator, JWT Generation API | Authentication setup |
 | [05-ad-authorization](05-ad-authorization.md) | AD group authorization at HTTP/tool levels | AD group restrictions |
 | [06-utilities](06-utilities.md) | `ServerError`, `normalizeHeaders`, logging, Consul, graceful shutdown | Error handling, utilities |
