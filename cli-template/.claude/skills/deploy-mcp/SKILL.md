@@ -34,6 +34,13 @@ All supporting scripts live in `${CLAUDE_SKILL_DIR}/scripts/` and are invoked wi
   by the CLI / skill infrastructure and by the SDK maintainer. Do NOT modify, add, or delete files
   inside them unless the accompanying text explicitly instructs you to. This applies to every step
   below — implementation, tests, dev report, everything.
+- **Reporting language**. Language for all generated artifacts (`claudedocs/*.md`, commit
+  messages, user-facing summaries) is resolved in this order:
+    1. Explicit directive in the feature brief.
+    2. Else, contents of `preferred-language.txt` in the project root, if it exists.
+    3. Else — English.
+  Translate prose — headings and body text — to the resolved language; leave code, paths, YAML
+  keys, and CLI commands as-is. Report the resolved language and its source in the Step 1 summary.
 
 ## Step 1 — Scan the accompanying text for requirements
 
@@ -50,8 +57,10 @@ Before touching code, read every message/file the user attached and extract:
 - **Agent Tester OpenAI creds** — `apiKey` (required for Step 2) and `baseURL` (optional — Azure /
   proxy / local LLM). If the text already supplies them, use those. If `config/local.yaml` already
   has a working `agentTester.openAi.apiKey`, re-use it instead of asking again.
+- **Reporting language** — resolve per the Ground rule above; record it for later steps.
 
-Summarize what you found to the user in 3-6 bullets and get a one-line confirmation before proceeding.
+Summarize what you found to the user in 3-6 bullets (including the resolved reporting language
+and its source) and get a one-line confirmation before proceeding.
 
 ## Step 2 — Verify Agent Tester OpenAI credentials
 
@@ -205,7 +214,8 @@ OR switch to branch 4a if the "collision" is in fact the already-existing target
 
 ## Step 6 — Draft and commit to a plan
 
-Create `claudedocs/impl-plan.md` (create the directory if needed). Structure:
+Create `claudedocs/impl-plan.md` (create the directory if needed) in the reporting language.
+Structure:
 
 ```markdown
 # Implementation Plan — <project name>
@@ -353,8 +363,9 @@ agent prompt, handler logic, error message — per `FA-MCP-SDK-DOC/08-agent-test
 fix, rebuild (`yarn cb`), restart, and re-run the scenario. After restart, in-memory sessions on
 the server are wiped — delete the stale `claudedocs/.agent-session` file before re-running.
 
-Log every iteration in `claudedocs/test-log.md` (session header + per-scenario: sent / expected /
-received / tools used / result / diagnosis / fix). This is the audit trail.
+Log every iteration in `claudedocs/test-log.md` in the reporting language (session header +
+per-scenario: sent / expected / received / tools used / result / diagnosis / fix). This is the
+audit trail.
 
 Stop the server with `node scripts/kill-port.js <port>` (or Ctrl+C) when you're done iterating.
 
@@ -373,9 +384,9 @@ yarn test:mcp-sse
 
 Zero errors, zero warnings that matter, all transport tests green.
 
-Write `claudedocs/dev-report.md` per the structure in `CLAUDE.md` → "Development Report"
-(what was built, architecture decisions, agent prompt rationale, test coverage, Agent Tester findings,
-configuration, known limitations).
+Write `claudedocs/dev-report.md` in the reporting language, following the structure in
+`CLAUDE.md` → "Development Report" (what was built, architecture decisions, agent prompt rationale,
+test coverage, Agent Tester findings, configuration, known limitations).
 
 ## Step 10 — Final GitLab push
 

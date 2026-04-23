@@ -176,6 +176,11 @@ Characteristics:
 - **Ground rules**: every step explicit and verified; free-form inputs asked in plain prose (never
   predefined options); exclusions from the brief honoured; dev defaults intentionally lenient;
   `.claude/`, `deploy/`, `FA-MCP-SDK-DOC/` are NOT modified unless the brief explicitly says to
+- **Reporting language**: all generated artifacts (`claudedocs/*.md`, commit messages, user-facing
+  summaries) are written in a language resolved in this order: (1) explicit directive in the
+  feature brief, else (2) contents of `preferred-language.txt` in the project root, else
+  (3) English. Prose (headings + body) is translated; code, paths, YAML keys, and CLI commands
+  stay as-is
 - **Output**: implemented project + `claudedocs/{impl-plan,test-log,dev-report}.md`, GitLab repo
   with two commits on `main` (scaffold + feature)
 
