@@ -140,7 +140,7 @@ Characteristics:
 
 ---
 
-### `/deploy-mcp` — End-to-End MCP Server Implementation
+### `/create-mcp-wizard` — End-to-End MCP Server Implementation
 
 Orchestrates the full implementation workflow from feature brief to a live GitLab repo. The project
 must already be scaffolded by the `fa-mcp` CLI — this skill picks up from `yarn install` onwards.
@@ -169,7 +169,7 @@ Pipeline (10 steps):
 
 Characteristics:
 
-- **Launch**: **command-only** via `/deploy-mcp`. `disable-model-invocation: true` — does NOT
+- **Launch**: **command-only** via `/create-mcp-wizard`. `disable-model-invocation: true` — does NOT
   trigger on implicit mentions
 - **Input**: feature brief comes from the accompanying user message(s) and attached files. OpenAI
   and GitLab creds may be supplied inline or asked interactively
@@ -187,7 +187,7 @@ Characteristics:
 **Examples:**
 
 ```
-/deploy-mcp
-/deploy-mcp реализуй инструменты из task.md, OpenAI key sk-..., GitLab group mcp-servers
-/deploy-mcp implement tools from the message; repo уже существует, push to git@gitlab.example:ai/mcp-foo.git
+/create-mcp-wizard
+/create-mcp-wizard реализуй инструменты из task.md, OpenAI key sk-..., GitLab group mcp-servers
+/create-mcp-wizard implement tools from the message; repo уже существует, push to git@gitlab.example:ai/mcp-foo.git
 ```

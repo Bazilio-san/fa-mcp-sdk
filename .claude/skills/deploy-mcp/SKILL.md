@@ -1,6 +1,6 @@
 ---
-name: deploy-mcp
-description: "Scaffold, implement, test, and push a new fa-mcp MCP server project end-to-end. Use when the user asks to create/bootstrap/deploy a new MCP server, mentions 'deploy-mcp', 'развернуть MCP', 'создать MCP проект', or provides a fa-mcp CLI config and a feature description. Orchestrates: validate cli-config → run `fa-mcp` → generate secrets → set lenient dev config → draft implementation plan → implement tools/prompts/resources → iterate via Agent Tester headless API → create GitLab repo and push."
+name: create-mcp-wizard
+description: "Scaffold, implement, test, and push a new fa-mcp MCP server project end-to-end. Use when the user asks to create/bootstrap/deploy a new MCP server, mentions 'create-mcp-wizard', 'развернуть MCP', 'создать MCP проект', or provides a fa-mcp CLI config and a feature description. Orchestrates: validate cli-config → run `fa-mcp` → generate secrets → set lenient dev config → draft implementation plan → implement tools/prompts/resources → iterate via Agent Tester headless API → create GitLab repo and push."
 disable-model-invocation: true
 argument-hint: "<path-to-cli-config.yaml>"
 allowed-tools: Bash(node *), Bash(fa-mcp *), Bash(npm *), Bash(yarn *), Bash(git *), Bash(pwd), Bash(cd *), Bash(curl *), Read, Write, Edit, Glob, Grep

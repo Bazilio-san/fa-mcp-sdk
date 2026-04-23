@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Thin wrapper around POST /agent-tester/api/chat/test — used by the deploy-mcp skill
+ * Thin wrapper around POST /agent-tester/api/chat/test — used by the create-mcp-wizard skill
  * to exercise the freshly-built MCP server through the full agent loop.
  *
  * Usage:

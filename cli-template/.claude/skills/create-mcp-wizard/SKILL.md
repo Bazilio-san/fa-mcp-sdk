@@ -1,6 +1,6 @@
 ---
-name: deploy-mcp
-description: "Implement an fa-mcp MCP server end-to-end in this already-scaffolded project: verify Agent Tester OpenAI creds, seed dev-time secrets and lenient config, push the scaffold to GitLab (creating a new repo OR reusing an existing one when instructed), draft an implementation plan, implement tools/prompts/resources, iterate via the Agent Tester headless API, then push the finished work. Use when the user asks to develop/implement/deploy the MCP server in this project, mentions 'deploy-mcp', 'развернуть MCP', 'реализовать MCP', or supplies a feature brief."
+name: create-mcp-wizard
+description: "Implement an fa-mcp MCP server end-to-end in this already-scaffolded project: verify Agent Tester OpenAI creds, seed dev-time secrets and lenient config, push the scaffold to GitLab (creating a new repo OR reusing an existing one when instructed), draft an implementation plan, implement tools/prompts/resources, iterate via the Agent Tester headless API, then push the finished work. Use when the user asks to develop/implement/deploy the MCP server in this project, mentions 'create-mcp-wizard', 'развернуть MCP', 'реализовать MCP', or supplies a feature brief."
 disable-model-invocation: true
 allowed-tools: Bash(node *), Bash(yarn *), Bash(npm *), Bash(git *), Bash(pwd), Bash(cd *), Bash(curl *), Read, Write, Edit, Glob, Grep
 ---
@@ -137,7 +137,7 @@ what belongs in the initial commit. If the tree contains scratch notes, local-on
 anything the user flagged as not-for-commit, stash it with an untracked-inclusive stash:
 
 ```
-git stash push -u -m "deploy-mcp: pre-initial-push stash" -- <paths>
+git stash push -u -m "create-mcp-wizard: pre-initial-push stash" -- <paths>
 ```
 
 Announce what you stashed so the user can recover it later via `git stash list` / `git stash pop`.
@@ -255,7 +255,9 @@ Structure:
 - [ ] `yarn typecheck` clean
 - [ ] `yarn test:mcp`, `:mcp-http`, `:mcp-sse` all green
 - [ ] Agent Tester iterations done, `claudedocs/test-log.md` has entries
-- [ ] `claudedocs/dev-report.md` written
+- [ ] `claudedocs/dev-report.md` written (full report)
+- [ ] `claudedocs/breef-report.md` written (brief of work + problems — same content echoed to console)
+- [ ] `claudedocs/dev-problems.md` written (blockers, failed checks, open questions)
 - [ ] Final GitLab push (Step 10) complete
 ```
 
@@ -388,6 +390,19 @@ Write `claudedocs/dev-report.md` in the reporting language, following the struct
 `CLAUDE.md` → "Development Report" (what was built, architecture decisions, agent prompt rationale,
 test coverage, Agent Tester findings, configuration, known limitations).
 
+Alongside the full report, produce two companion files in the reporting language:
+
+- **`claudedocs/breef-report.md`** — a brief of the work done and problems encountered. Keep it
+  short and scannable (not a duplicate of `dev-report.md`): what was implemented, what passed,
+  what failed, the key problems in 1–2 lines each. The same content is echoed verbatim to the
+  console as part of the "Final report" step below — that is the primary way the user sees it.
+- **`claudedocs/dev-problems.md`** — a focused list of what could NOT be done / tested / connected
+  to during this session, plus any open questions, unresolved blockers, or decisions the user
+  needs to make. Include: failed external connections (DB, upstream API, AD, Consul, etc.),
+  tests that were skipped or disabled and why, missing creds, ambiguous requirements from the
+  brief, anything deferred. If there are no problems, write the file anyway with a single
+  "No outstanding issues." line so the user can see the check was done.
+
 ## Step 10 — Final GitLab push
 
 The remote was created in Step 5 — do NOT re-run `gitlab-push.js` here. This step commits the
@@ -397,7 +412,7 @@ implemented feature and pushes it on top of the scaffold commit.
 content that shouldn't ship to the remote, stash it first:
 
 ```
-git stash push -u -m "deploy-mcp: pre-final-push stash" -- <paths>
+git stash push -u -m "create-mcp-wizard: pre-final-push stash" -- <paths>
 ```
 
 Leave anything stashed from Step 5 still stashed — if it shouldn't be in the initial commit, it
@@ -434,8 +449,14 @@ Tell the user:
    (Step 5) and the feature push (Step 10) landed on `main`.
 3. Summary of tools/resources/prompts/endpoints that were implemented.
 4. Any flagged limitations from the dev report.
-5. Link to `claudedocs/impl-plan.md`, `claudedocs/test-log.md`, `claudedocs/dev-report.md`.
+5. Links to `claudedocs/impl-plan.md`, `claudedocs/test-log.md`, `claudedocs/dev-report.md`,
+   `claudedocs/breef-report.md`, `claudedocs/dev-problems.md`.
 6. Anything still stashed from Step 5 / Step 10 (so the user remembers to `git stash pop` or drop).
+7. **Echo the full contents of `claudedocs/breef-report.md` to the console** (in the reporting
+   language, as written). This is the brief of work done + problems — it must appear inline in
+   the chat, not only as a file link, so the user can read it without opening the file. If
+   `claudedocs/dev-problems.md` contains anything other than "No outstanding issues.", also call
+   that out explicitly and point at the file.
 
 ## Troubleshooting
 
