@@ -110,10 +110,15 @@ Wait for completion. If it fails, report the error and stop.
 
 Run:
 ```bash
-node ./node_modules/fa-mcp-sdk/scripts/update-doc.js
+node ./node_modules/fa-mcp-sdk/scripts/update-sdk.js
 ```
 
-This copies the latest `FA-MCP-SDK-DOC/` from the SDK into the project.
+This copies the latest `FA-MCP-SDK-DOC/` and `.claude/` from the SDK into the project.
+
+**Pinned folders.** Any folder under the project's `.claude/` that contains a direct file named
+`pin` is preserved as-is — the script neither deletes it nor overwrites it with template content.
+Drop a `pin` file into `.claude/skills/<your-skill>/` (or any other `.claude/` subdirectory) to
+protect local customizations from being reset on upgrade.
 
 ## Step 4: Analyze Changes in SDK Between Versions
 
@@ -187,7 +192,7 @@ Map of template file → project file (the CLI `bin/fa-mcp.js` applies these tra
 | `node_modules/fa-mcp-sdk/cli-template/.claude/skills/<skill>/`    | `.claude/skills/<skill>/`                   | overwrite unless locally customized |
 | `node_modules/fa-mcp-sdk/cli-template/r/<name>.xml`               | `.run/<name>.run.xml`                       | **Renamed** — see rule below |
 | `node_modules/fa-mcp-sdk/cli-template/gitignore`                  | `.gitignore`                                | source has no leading dot |
-| `node_modules/fa-mcp-sdk/cli-template/FA-MCP-SDK-DOC/`            | `FA-MCP-SDK-DOC/`                           | auto-updated by `update-doc.js` |
+| `node_modules/fa-mcp-sdk/cli-template/FA-MCP-SDK-DOC/`            | `FA-MCP-SDK-DOC/`                           | auto-updated by `update-sdk.js` |
 
 #### Rule: package.json — ADD ONLY new dependencies, do NOT touch anything else
 
@@ -286,7 +291,7 @@ Generated: <timestamp>
 ### New Configuration Keys
 
 <For each new key, provide:>
-- Key path (e.g., `webServer.adminAuth.type`)
+- Key path (e.g., `webServer.auth.enabled`)
 - Default value
 - Description
 - Whether it needs to be added to the project's config
@@ -403,7 +408,7 @@ changes specifically affect THIS project. Add a section to the guide:
 - When comparing YAML configs, preserve comments and structure.
 - **Correlate config file changes**: when `config/default.yaml` changes, ALWAYS also check `config/_local.yaml` in the SDK. Report whether `_local.yaml` has analogous changes or needs manual updates. Also advise checking the project's `config/local.yaml` for stale overrides that may conflict with the new defaults.
 - **Do not forget `config/local.yaml` in the project**: the project's `config/local.yaml` overrides `config/default.yaml`. When new keys are added or sections restructured in `default.yaml`, explicitly instruct the user to verify that their `config/local.yaml` doesn't have stale overrides that conflict with the new structure, and to add any new keys there too if they want non-default values.
-- Do not modify project files other than `package.json` (via yarn add) and `FA-MCP-SDK-DOC/` (via update-doc.js) unless the user explicitly asks.
+- Do not modify project files other than `package.json` (via yarn add) and `FA-MCP-SDK-DOC/` (via update-sdk.js) unless the user explicitly asks.
 - The migration guide must contain ACTIONABLE instructions with exact code/config snippets — not vague recommendations.
 - If GitHub API is unavailable or rate-limited, fall back to comparing files directly from `node_modules/fa-mcp-sdk/` against project files.
 - Write the guide in the language detected from the user's arguments (default: **English**). Translate all headings, prose, and descriptions. Keep file paths, YAML keys, code blocks, and shell commands in English.

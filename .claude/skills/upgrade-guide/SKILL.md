@@ -139,7 +139,7 @@ Mapping of template source → project destination (replicate in the generated g
 | `node_modules/fa-mcp-sdk/cli-template/.claude/skills/<skill>/`    | `.claude/skills/<skill>/`                   | overwrite unless locally customized |
 | `node_modules/fa-mcp-sdk/cli-template/r/<name>.xml`               | `.run/<name>.run.xml`                       | **Renamed** (see rule below) |
 | `node_modules/fa-mcp-sdk/cli-template/gitignore`                  | `.gitignore`                                | source has no leading dot |
-| `node_modules/fa-mcp-sdk/cli-template/FA-MCP-SDK-DOC/`            | `FA-MCP-SDK-DOC/`                           | auto-updated by `scripts/update-doc.js` |
+| `node_modules/fa-mcp-sdk/cli-template/FA-MCP-SDK-DOC/`            | `FA-MCP-SDK-DOC/`                           | auto-updated by `scripts/update-sdk.js` |
 
 **Rule: `package.json` — ADD ONLY new dependencies, do NOT touch anything else.**
 Diff the template `package.json` between FROM and TO. In the generated guide, list ONLY dependencies/devDependencies that were **added** (not changed versions of existing ones, not removed). Instruct the user: "Add these NEW entries to your `package.json` — do NOT touch `name`, `version`, `scripts`, `engines`, or any existing deps." Mention removed deps as informational only — do not instruct deletion (they may still be in use in the project). Do NOT suggest overwriting scripts or any non-dependency fields. Provide a copy-pasteable JSON snippet with only the new keys.
@@ -224,8 +224,13 @@ Below is the structural template. The heading texts shown here are in English �
 ### 2. Update documentation
 
     ```bash
-    node ./scripts/update-doc.js
+    node ./scripts/update-sdk.js
     ```
+
+The script copies the latest `FA-MCP-SDK-DOC/` and `.claude/` trees from the SDK into the project.
+Any folder under `.claude/` that contains a direct file named `pin` is preserved — the script
+neither deletes it nor overwrites it with template content. Use a `pin` marker to protect local
+customizations from being reset on upgrade.
 
 ### 3. Configuration Changes
 
