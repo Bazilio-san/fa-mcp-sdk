@@ -2,16 +2,16 @@ import { Request, Response, NextFunction } from 'express';
 import { authNTLM } from 'ya-express-ntlm';
 
 import { tokenGenNtlmOptions } from './ntlm-auth-options.js';
-import { isNTLMEnabled } from './ntlm-domain-config.js';
+import { isADEnabled } from './ntlm-domain-config.js';
 import { checkTokenGenSession, getSessionStats } from './ntlm-session-storage.js';
 import { getLoginPageHTML } from './ntlm-templates.js';
 
 // Create NTLM middleware instance (only if NTLM is enabled)
-const ntlmMiddleware = isNTLMEnabled ? authNTLM(tokenGenNtlmOptions) : null;
+const ntlmMiddleware = isADEnabled ? authNTLM(tokenGenNtlmOptions) : null;
 
 // Main NTLM authentication setup function
 export const setupNTLMAuthentication = () => {
-  if (!isNTLMEnabled) {
+  if (!isADEnabled) {
     console.log('[TOKEN-GEN] NTLM authentication is DISABLED - skipping middleware setup');
     // Return middleware that just passes through
     return [(req: Request, res: Response, next: NextFunction) => {

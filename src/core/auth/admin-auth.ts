@@ -17,7 +17,7 @@ import { checkBasicAuth } from './basic.js';
 import { checkJwtToken } from './jwt.js';
 import { getTokenFromHttpHeader } from './multi-auth.js';
 import { checkPermanentToken } from './permanent.js';
-import { isNTLMEnabled } from './token-generator/ntlm/ntlm-domain-config.js';
+import { isADEnabled } from './token-generator/ntlm/ntlm-domain-config.js';
 import { setupNTLMAuthentication } from './token-generator/ntlm/ntlm-integration.js';
 
 const logger = lgr.getSubLogger({ name: chalk.yellow('admin-auth') });
@@ -68,7 +68,7 @@ function validateSingleAuthType (authType: AdminAuthType): string | null {
     }
 
     case 'ntlm': {
-      if (!isNTLMEnabled) {
+      if (!isADEnabled) {
         return `adminPanel.authType "${authType}" but no AD configuration found (ad.domains is empty or missing)`;
       }
       break;

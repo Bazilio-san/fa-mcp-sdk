@@ -5,12 +5,17 @@ import { IDcConfig } from '../../../_types_/active-directory-config.js';
 import { appConfig } from '../../../bootstrap/init-config.js';
 
 // Check if AD configuration is available
-export const isNTLMEnabled: boolean = !!(appConfig.ad && isObject(appConfig.ad.domains) && Object.keys(appConfig.ad.domains).length);
+export const isADEnabled: boolean = !!(appConfig.ad && isObject(appConfig.ad.domains) && Object.keys(appConfig.ad.domains).length);
 
-
-// If AD config is null or undefined, NTLM authentication is disabled
-if (!isNTLMEnabled) {
-  console.log('[TOKEN-GEN] NTLM authentication is DISABLED - no AD configuration found');
+// If AD config is null or undefined, NTLM/AD-based authentication is disabled
+if (!isADEnabled) {
+  if (appConfig.adminPanel?.enabled === true) {
+    const raw = appConfig.adminPanel?.authType;
+    const hasNtlm = Array.isArray(raw) ? raw.includes('ntlm') : raw === 'ntlm';
+    if (hasNtlm) {
+      console.log('[TOKEN-GEN] AD configuration not found - NTLM authentication is DISABLED');
+    }
+  }
 } else {
   const { domains } = appConfig.ad;
 
@@ -23,7 +28,7 @@ export const defaultTokenGenDomainConfig: IDcConfig = { controllers: [], usernam
 export const tokenGenDomains: { [domainName: string]: IDcConfig } = {};
 
 // Process and validate all domains (same logic as main NTLM example)
-if (isNTLMEnabled) {
+if (isADEnabled) {
   const { domains } = appConfig.ad;
 
   Object.entries(domains).forEach(([domainName, item]) => {
@@ -66,8 +71,8 @@ export const getDomainConfig = (domainName?: string): IDcConfig => {
 };
 
 export const tokenGenDomainConfig = {
-  defaultDomain: isNTLMEnabled ? defaultTokenGenDomainConfig.name : undefined,
-  domains: isNTLMEnabled ? tokenGenDomains : {},
-  strategy: isNTLMEnabled ? (appConfig.ad.strategy || 'NTLM') : undefined, // from config or default NTLM
-  tlsOptions: isNTLMEnabled ? appConfig.ad.tlsOptions : undefined, // from config if specified
+  defaultDomain: isADEnabled ? defaultTokenGenDomainConfig.name : undefined,
+  domains: isADEnabled ? tokenGenDomains : {},
+  strategy: isADEnabled ? (appConfig.ad.strategy || 'NTLM') : undefined, // from config or default NTLM
+  tlsOptions: isADEnabled ? appConfig.ad.tlsOptions : undefined, // from config if specified
 };

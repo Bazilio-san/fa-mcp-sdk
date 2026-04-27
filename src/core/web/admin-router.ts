@@ -12,7 +12,7 @@ import { Router, Request, Response } from 'express';
 import { TokenGenAuthInput } from '../_types_/types.js';
 import { createAdminAuthMW, getAdminAuthMethods, getAdminAuthTypes } from '../auth/admin-auth.js';
 import { checkJwtToken, generateToken } from '../auth/jwt.js';
-import { isNTLMEnabled } from '../auth/token-generator/ntlm/ntlm-domain-config.js';
+import { isADEnabled } from '../auth/token-generator/ntlm/ntlm-domain-config.js';
 import { getSessionStats } from '../auth/token-generator/ntlm/ntlm-session-storage.js';
 import { getLoginPageHTML } from '../auth/token-generator/ntlm/ntlm-templates.js';
 import { AuthResult } from '../auth/types.js';
@@ -37,18 +37,17 @@ const timeToSeconds: Record<'minutes' | 'hours' | 'days' | 'months' | 'years', n
 
 const { adminPanel } = appConfig;
 const adminAuthTypes = adminPanel?.enabled === true ? getAdminAuthTypes() : [];
-const ntlmEnabled = adminAuthTypes.includes('ntlm') && isNTLMEnabled;
+const isNTLMEnabled = adminAuthTypes.includes('ntlm') && isADEnabled;
 
 // Check if auth requires Bearer token modal (handled by frontend)
 // Bearer-only means all types are token-based (no basic, no ntlm)
 const hasTokenAuth = adminAuthTypes.includes('permanentServerTokens') || adminAuthTypes.includes('jwtToken');
 const hasBasicAuth = adminAuthTypes.includes('basic');
-const hasNtlmAuth = adminAuthTypes.includes('ntlm') && isNTLMEnabled;
 
 // The frontend handles auth when we have token-based or basic types (not ntlm-only)
-const requiresFrontendAuth = (hasTokenAuth || hasBasicAuth) && !hasNtlmAuth;
+const requiresFrontendAuth = (hasTokenAuth || hasBasicAuth) && !isNTLMEnabled;
 // For backward compat: requiresBearerToken is true when only token-based types (no basic, no ntlm)
-const requiresBearerToken = hasTokenAuth && !hasBasicAuth && !hasNtlmAuth;
+const requiresBearerToken = hasTokenAuth && !hasBasicAuth && !isNTLMEnabled;
 
 /**
  * Checks custom authorization for Token Generator access
@@ -161,7 +160,7 @@ export function createAdminRouter (): Router {
     router.get('/logout', (req: Request, res: Response) => {
       logger.info(`Logout requested by: ${req.ntlm?.domain || 'Unknown'}\\${req.ntlm?.username || 'Unknown'}`);
 
-      if (hasNtlmAuth) {
+      if (isNTLMEnabled) {
         res.setHeader('WWW-Authenticate', 'NTLM');
         res.setHeader('Clear-Site-Data', '"cookies", "storage"');
         return res.status(401).send('Authentication required - please login again');
@@ -317,7 +316,7 @@ export function createAdminRouter (): Router {
         authenticatedUser: `${domain}\\${username}`,
         isAuthenticated,
         authType: adminAuthTypes.length === 1 ? adminAuthTypes[0] : adminAuthTypes,
-        ntlmEnabled,
+        ntlmEnabled: isNTLMEnabled,
         timestamp: new Date().toISOString(),
       });
     } catch (error: any) {
@@ -329,7 +328,7 @@ export function createAdminRouter (): Router {
         error: error.message,
         serviceName: appConfig.name,
         authType: adminAuthTypes.length === 1 ? adminAuthTypes[0] : adminAuthTypes,
-        ntlmEnabled,
+        ntlmEnabled: isNTLMEnabled,
       });
     }
   });

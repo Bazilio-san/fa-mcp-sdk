@@ -10,7 +10,7 @@ import { faviconSvg } from '../../web/favicon-svg.js';
 import { createSvgRouter } from '../../web/svg-icons.js';
 import { checkJwtToken, generateToken } from '../jwt.js';
 
-import { isNTLMEnabled } from './ntlm/ntlm-domain-config.js';
+import { isADEnabled } from './ntlm/ntlm-domain-config.js';
 import { setupNTLMAuthentication } from './ntlm/ntlm-integration.js';
 
 
@@ -19,7 +19,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
 
-const ntlmEnabled = isNTLMEnabled;
+const ntlmEnabled = isADEnabled;
 
 export const generateTokenApp = (port?: number) => {
 
@@ -48,7 +48,7 @@ export const generateTokenApp = (port?: number) => {
   app.use('/svg', createSvgRouter());
 
   // NTLM Authentication middleware
-  if (isNTLMEnabled) {
+  if (isADEnabled) {
     console.log(chalk.cyan('[TOKEN-GEN]'), 'Setting up NTLM authentication...');
     app.use(setupNTLMAuthentication());
   } else {
@@ -256,7 +256,7 @@ export const generateTokenApp = (port?: number) => {
     logger.info(`Token Generator Server started on port ${port}`);
     logger.info(`Open http://localhost:${port} in your browser`);
 
-    if (isNTLMEnabled) {
+    if (isADEnabled) {
       logger.info('NTLM authentication is ENABLED - valid domain credentials required');
     } else {
       logger.info('NTLM authentication is DISABLED - running without authentication');
