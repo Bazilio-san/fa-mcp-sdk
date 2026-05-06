@@ -16,6 +16,30 @@ This is a sibling to `/upgrade-guide`, but the output must be **substantially sh
 think changelog entry, not full migration document. No verbose templates, no risk-assessment
 sections, no impact analysis. List what changed, flag config/breaking impact, done.
 
+## Audience and Perspective
+
+The generated guide is read **inside a downstream MCP project** that was scaffolded from this SDK.
+It is **not** a SDK changelog. Frame everything from the MCP author's standpoint: what they will
+see in their own project after upgrading `fa-mcp-sdk` and re-running the sync command.
+
+Downstream MCPs upgrade via:
+
+```bash
+npm i fa-mcp-sdk@latest
+node node_modules/fa-mcp-sdk/scripts/update-sdk.js
+```
+
+`scripts/update-sdk.js` (in this SDK repo) defines exactly what propagates into the MCP. Currently
+it copies **only**:
+
+- `cli-template/FA-MCP-SDK-DOC/**` → `<mcp>/FA-MCP-SDK-DOC/**`
+- `cli-template/.claude/**` → `<mcp>/.claude/**`, **preserving** `.claude/settings.json` and any
+  folder that contains a `pin` file.
+
+Everything else under `cli-template/` (e.g. `cli-template/package.json`, `cli-template/r/`,
+`cli-template/src/`, …) is used **only** by `fa-mcp create` when scaffolding a fresh project. It
+**does not reach existing MCPs** and must be silently ignored by this skill.
+
 ## Two Modes
 
 The first positional token decides the mode:
@@ -128,24 +152,46 @@ git diff <FROM> <TO> -- src/core/index.ts     # public exports diff
 
 ### Step 6: Detect special change classes
 
-Walk the changed files list and tag each into at most one bucket:
+Walk the changed files list and tag each into at most one bucket. **Skip rules apply first** —
+files matching any skip rule are dropped entirely (not listed, not counted).
+
+**Skip rules** (drop the file from the report):
+
+- `cli-template/**` outside `cli-template/FA-MCP-SDK-DOC/` and `cli-template/.claude/` —
+  scaffolding-only, never reaches existing MCPs.
+- `cli-template/.claude/settings.json` — preserved by `update-sdk.js`, never overwritten.
+- `cli-template/.claude/**` paths whose ancestor folder contains a `pin` file — preserved by
+  `update-sdk.js`. (Check the SDK working tree at TO commit for `pin` markers.)
+- Root `package.json` whose diff touches **only** the top-level `version` field — implicit from
+  the SDK version bump.
+- Any `package.json` whose diff touches **only** the `version` field and/or
+  `dependencies.fa-mcp-sdk` / `devDependencies.fa-mcp-sdk` pin — implicit from running
+  `npm i fa-mcp-sdk@latest`.
+- The SDK's own meta files irrelevant to consumers: `package-lock.json`, `.eslintignore`,
+  `tsconfig.json` changes that don't affect emitted types, `scripts/copy-static.js`,
+  `scripts/publish.sh`.
+- SDK-internal tooling that never ships to MCPs: `.claude/**` at the SDK repo root (this is the
+  SDK developer's tooling — not the same as `cli-template/.claude/**`), `change-history/**`,
+  `docs/**`, `tests/**`, `README.md`, `LICENSE`, `.gitignore`, `.eslintrc*`.
+
+**Buckets** (after skip rules):
 
 | Bucket | Match | Treatment |
 |---|---|---|
-| **Config** | path starts with `config/` | inline diff highlight in the Configuration section |
-| **CLI template** | path starts with `cli-template/` | one-liner in Changed Files; flag if `cli-template/r/` (run configs renamed) |
-| **Scripts** | path starts with `scripts/` and not `copy-static.js`/`publish.sh` | one-liner in Changed Files |
+| **Config** | path starts with `config/` | inline diff highlight in Configuration section; render keys the MCP author will mirror in their own `config/*.yaml` |
+| **MCP-synced docs** | path starts with `cli-template/FA-MCP-SDK-DOC/` | list with destination path `FA-MCP-SDK-DOC/<rest>` (drop the `cli-template/` prefix) |
+| **MCP-synced .claude** | path starts with `cli-template/.claude/` (after skip rules) | list with destination path `.claude/<rest>` |
 | **Core public API** | path is `src/core/index.ts` or matches `src/core/**/*.ts` re-exported through it | feed into the Breaking Changes detection below |
-| **Other** | anything else | one-liner only, no special section |
+| **Core internals** | other `src/core/**` | one-liner only; relevant only if the MCP imports the symbol directly |
+| **Other** | anything else not skipped | one-liner only, no special section |
 
 **Breaking change signals** (any one triggers the ⚠️ Breaking Changes section):
 
 - A line removed (`-`) from `src/core/index.ts` `export` statements (a removed/renamed export).
 - A removed key from `config/default.yaml` or `config/_local.yaml` (renamed counts as removed +
-  added — note both).
+  added — note both). Frame the action as "remove/rename the key in your own MCP config".
 - A commit message containing `BREAKING CHANGE`, `BREAKING:`, `breaking change`, or starting with
   `feat!:` / `fix!:` (conventional-commit breaking marker).
-- A renamed file inside `cli-template/r/` (downstream projects have these as `.run/<name>.run.xml`).
 
 ### Step 7: Generate the compact guide
 
@@ -166,22 +212,25 @@ No marketing language. State facts.>
 
 ## Changed Files
 
-<Flat bulleted list. Group by bucket order: Config → CLI template → Scripts → Core → Other.
-One line per file: `- [A|M|D] path/to/file — <very brief reason if non-obvious>`.
-Skip the reason if the path is self-explanatory.>
+<Flat bulleted list. Group by bucket order:
+Config → MCP-synced docs → MCP-synced .claude → Core public API → Core internals → Other.
+One line per file: `- [A|M|D] <path-as-seen-in-MCP> — <very brief reason if non-obvious>`.
+For MCP-synced buckets the path is the destination inside the MCP (no `cli-template/` prefix).
+Skip the reason if the path is self-explanatory. Files dropped by Step 6 skip rules do not
+appear here.>
 
 ## ⚠️ Breaking Changes
 
 <Only if Step 6 found signals. For each:
 - What changed (one line)
-- Action required in downstream project (one line, imperative)
+- Action required in the MCP project (one line, imperative — addressed to the MCP author)
 Skip rationale — that's what /upgrade-guide is for.>
 
 ## 🔧 Configuration Changes
 
 <Only if config/ files changed. For each changed key:
 - `path.to.key` — added | removed | default changed `old → new`
-Group by file. No prose.>
+Group by file. No prose. The MCP author mirrors these keys into their own `config/*.yaml`.>
 
 ## Commits
 
@@ -282,8 +331,14 @@ or full (40 hex) form.
 ## Important Rules
 
 - **Output language**: detected language for prose; English for paths/keys/commands/hashes.
-- **Output is anonymized**: no references to any specific downstream project. Always describe
-  changes in terms of "the SDK" / "downstream projects".
+- **Output is anonymized**: no references to any specific downstream project. Address the reader
+  as "the MCP project" / "your MCP" / "the MCP author".
+- **MCP perspective, not SDK perspective**: list paths as the MCP author will see them in their
+  own checkout. For `cli-template/FA-MCP-SDK-DOC/**` and `cli-template/.claude/**` files, drop the
+  `cli-template/` prefix. For all other `cli-template/**` files, drop them entirely (scaffolding-
+  only, never propagated by `update-sdk.js`).
+- **Skip noise**: never list `package.json` if its only diff is `version` and/or the
+  `fa-mcp-sdk` dependency pin — that change is implicit when the MCP runs `npm i fa-mcp-sdk@latest`.
 - **Be specific, be short**: each bullet ≤ 1 line. No paragraphs in Changed Files / Config /
   Breaking Changes sections.
 - **Don't duplicate `/upgrade-guide`**: if the user wants verbose migration steps, point them
