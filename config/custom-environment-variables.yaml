@@ -8,6 +8,9 @@ agentTester:
   sessionTtlMs:
     __name: AGENT_TESTER_SESSION_TTL_MS
     __format: number
+  tokenTTLSec:
+    __name: AGENT_TESTER_TOKEN_TTL_SEC
+    __format: number
   openAi:
     apiKey: AGENT_TESTER_OPENAI_API_KEY
     baseURL: AGENT_TESTER_OPENAI_BASE_URL

@@ -71,6 +71,7 @@ After successful login via `POST /api/auth/login`, the server issues an httpOnly
 agentTester:
   useAuth: true              # Show login screen for browser, require auth for API
   sessionTtlMs: 28800000     # Browser session lifetime in ms (default: 8h)
+  tokenTTLSec: 1800          # TTL of JWTs auto-issued for the chat UI / headless clients (default: 30 min)
 
 webServer:
   auth:
@@ -83,6 +84,7 @@ Environment variables:
 
 - `AGENT_TESTER_USE_AUTH=true`
 - `AGENT_TESTER_SESSION_TTL_MS=28800000`
+- `AGENT_TESTER_TOKEN_TTL_SEC=1800`
 
 When `useAuth` is `false` (default), the Agent Tester is accessible without any authentication and `sessionTtlMs` has no effect.
 
@@ -121,6 +123,25 @@ When `useAuth` is `true`, a successful browser login creates a server-side sessi
 | `/api/auth/status` | GET | Returns `{ authRequired, authenticated, methods }` |
 | `/api/auth/login` | POST | Validates credentials, sets session cookie |
 | `/api/auth/logout` | POST | Destroys session, clears cookie |
+| `/api/auth-token` | GET | Returns a ready-to-use `Authorization` header value for the configured MCP auth method (used by the chat UI to auto-fill the header). Response: `{ authType, token, ttlSec? }`. |
+| `/api/auth-token/refresh` | POST | Re-issues a fresh JWT (only when `webServer.auth.jwtToken.encryptKey` is configured). Response: `{ authType: 'jwtToken', token, ttlSec }`. |
+
+### Auto-filled Authorization Header
+
+When the MCP server requires authentication (`webServer.auth.enabled: true`) and the chat UI is configured to send the `Authorization` header, the page does **not** ask the user to type a token — it issues one for itself by calling `GET /api/auth-token` on load. The endpoint returns a header value derived from the configured method, in priority order:
+
+1. **`jwtToken`** — `Bearer <encrypted JWT>` issued by the server with `sub: 'agentTester'`, `service: <appConfig.name>`, and TTL = `agentTester.tokenTTLSec` (default 1800 sec / 30 min). The response also includes `ttlSec` so the client can plan refresh.
+2. **`basic`** — `Basic <base64(user:password)>` from `webServer.auth.basic`.
+3. **`permanentServerTokens`** — `Bearer <first configured token>`.
+
+For **JWT only**, the page periodically refreshes the token on its own via `POST /api/auth-token/refresh`. The refresh cadence is approximately `max(30, ttlSec/3 - 60)` seconds (≈ once per 1/3 of TTL, with a 60-second safety lead and a 30-second floor). At the default `tokenTTLSec: 1800`, this means a refresh roughly every **9 minutes**. The page additionally triggers an immediate refresh when the tab regains focus or `visibilitychange` fires `'visible'`, to recover from background-tab timer throttling.
+
+If the MCP call still fails with HTTP 401 — for example, the cached token expired in the brief window between the last refresh and the request — the server transparently re-issues a JWT and retries the call **once**, but only when the target URL points to the same server (host/port match `webServer.{host,port}`, with `localhost`/`127.0.0.1`/`::1`/`0.0.0.0` treated as equivalent) and the cached header was a `Bearer …` token. This means the user typically does not see a 401 even if a request races against TTL expiry.
+
+**Tuning**:
+- Shorter `tokenTTLSec` → more frequent refresh requests but smaller window of exposure if a token leaks.
+- Longer `tokenTTLSec` → fewer refreshes; useful for very long-running sessions.
+- Headless clients (the `headless-chat.js` wrapper, custom curl scripts) may either rely on the 401-retry path or, for long-running scripts, mint their own JWT via `node scripts/generate-jwt.js` with an appropriate TTL — Agent Tester does not refresh tokens on behalf of headless clients.
 
 **Login request body:**
 

@@ -197,7 +197,10 @@ class McpAgentTester {
     this.defaultMcpUrl = null;
     this.authEnabled = false;
     this.configHttpHeaders = {};
-    this._authRefreshInterval = null;
+    this._authRefreshTimer = null;
+    this._authTtlSec = null;
+    this._authVisibilityListenerAttached = false;
+    this._authRefreshInFlight = false;
     this._currentAuthType = null;
     this.messageFormats = {};
     this.messageTexts = {};
@@ -1010,7 +1013,24 @@ class McpAgentTester {
   }
 
   isOwnService () {
-    return this.defaultMcpUrl && this.serverUrlInput.value.trim() === this.defaultMcpUrl;
+    if (!this.defaultMcpUrl) { return false; }
+    const current = this.serverUrlInput?.value?.trim();
+    if (!current) { return false; }
+    const norm = (s) => {
+      try {
+        const u = new URL(s, window.location.origin);
+        const host = u.hostname.toLowerCase();
+        const localHosts = new Set(['localhost', '127.0.0.1', '::1']);
+        // Treat any localhost variant as the same host on the same port.
+        const canonicalHost = localHosts.has(host) ? 'localhost' : host;
+        const port = u.port || (u.protocol === 'https:' ? '443' : '80');
+        const path = u.pathname.replace(/\/+$/, '');
+        return `${u.protocol}//${canonicalHost}:${port}${path}`;
+      } catch {
+        return s;
+      }
+    };
+    return norm(current) === norm(this.defaultMcpUrl);
   }
 
   async autoFillAuthHeader () {
@@ -1042,37 +1062,85 @@ class McpAgentTester {
 
       // Start JWT refresh interval if connecting to own service
       if (data.authType === 'jwtToken' && this.isOwnService()) {
-        this.startAuthRefresh();
+        this.startAuthRefresh(data.ttlSec);
       }
     } catch (e) {
       console.warn('Failed to auto-fill auth header:', e);
     }
   }
 
-  startAuthRefresh () {
-    this.stopAuthRefresh();
-    this._authRefreshInterval = setInterval(async () => {
-      try {
-        const response = await apiFetch(`${API_BASE}/api/auth-token/refresh`, { method: 'POST' });
-        if (!response.ok) {return;}
+  // Compute the delay (ms) until the next refresh: ~1/3 of TTL minus a 60s safety window.
+  // Math.max(30, ...) clamps against negative or too-short delays when ttl/3 - 60 <= 30.
+  _refreshDelayMs (ttlSec) {
+    const ttl = Number(ttlSec);
+    if (!Number.isFinite(ttl) || ttl <= 0) { return 3 * 60 * 1000; }
+    return Math.max(30, ttl / 3 - 60) * 1000;
+  }
 
-        const data = await response.json();
-        const input = document.getElementById('header_Authorization');
-        if (input) {
-          input.value = data.token;
-          this.saveHeaderValuesToStorage();
-          this.scheduleHeadersUpdate();
+  startAuthRefresh (ttlSec) {
+    this.stopAuthRefresh();
+    if (ttlSec) { this._authTtlSec = Number(ttlSec); }
+    this._scheduleNextRefresh(this._refreshDelayMs(this._authTtlSec));
+    this._attachAuthVisibilityListeners();
+  }
+
+  _scheduleNextRefresh (delayMs) {
+    if (this._authRefreshTimer) { clearTimeout(this._authRefreshTimer); }
+    this._authRefreshTimer = setTimeout(() => {
+      this._authRefreshTimer = null;
+      this._doRefreshAuthToken().finally(() => {
+        // Reschedule even if the refresh failed — TTL hasn't necessarily expired yet,
+        // and the next attempt may succeed (e.g., transient network blip).
+        if (this._authTtlSec) {
+          this._scheduleNextRefresh(this._refreshDelayMs(this._authTtlSec));
         }
-      } catch (e) {
-        console.warn('Failed to refresh auth token:', e);
+      });
+    }, delayMs);
+  }
+
+  async _doRefreshAuthToken () {
+    if (this._authRefreshInFlight) { return; }
+    this._authRefreshInFlight = true;
+    try {
+      const response = await apiFetch(`${API_BASE}/api/auth-token/refresh`, { method: 'POST' });
+      if (!response.ok) { return; }
+      const data = await response.json();
+      if (data.ttlSec) { this._authTtlSec = Number(data.ttlSec); }
+      const input = document.getElementById('header_Authorization');
+      if (input) {
+        input.value = data.token;
+        this.saveHeaderValuesToStorage();
+        this.scheduleHeadersUpdate();
       }
-    }, 3 * 60 * 1000); // every 3 minutes (token TTL is 5 minutes)
+    } catch (e) {
+      console.warn('Failed to refresh auth token:', e);
+    } finally {
+      this._authRefreshInFlight = false;
+    }
+  }
+
+  _attachAuthVisibilityListeners () {
+    if (this._authVisibilityListenerAttached) { return; }
+    this._authVisibilityListenerAttached = true;
+    const handler = () => {
+      // Background-tab throttling can starve setTimeout — refresh eagerly when the user comes back.
+      if (document.visibilityState !== 'visible') { return; }
+      if (this._currentAuthType !== 'jwtToken') { return; }
+      if (!this.isOwnService()) { return; }
+      this._doRefreshAuthToken().finally(() => {
+        if (this._authTtlSec) {
+          this._scheduleNextRefresh(this._refreshDelayMs(this._authTtlSec));
+        }
+      });
+    };
+    document.addEventListener('visibilitychange', handler);
+    window.addEventListener('focus', handler);
   }
 
   stopAuthRefresh () {
-    if (this._authRefreshInterval) {
-      clearInterval(this._authRefreshInterval);
-      this._authRefreshInterval = null;
+    if (this._authRefreshTimer) {
+      clearTimeout(this._authRefreshTimer);
+      this._authRefreshTimer = null;
     }
   }
 
@@ -1480,8 +1548,14 @@ class McpAgentTester {
     const cfg = this.llmDefaults || {};
     let touched = false;
 
-    if (!merged.baseURL && cfg.baseURL) { merged.baseURL = cfg.baseURL; touched = true; }
-    if (!merged.apiKey && cfg.apiKey) { merged.apiKey = cfg.apiKey; touched = true; }
+    if (!merged.baseURL && cfg.baseURL) {
+      merged.baseURL = cfg.baseURL;
+      touched = true;
+    }
+    if (!merged.apiKey && cfg.apiKey) {
+      merged.apiKey = cfg.apiKey;
+      touched = true;
+    }
 
     this.llmSettings = merged;
 
@@ -1521,7 +1595,10 @@ class McpAgentTester {
         this.llmSettings.model = legacy.model;
         dirty = true;
       }
-      if (dirty) { this.saveLlmSettings(); this.renderModelDisplay(); }
+      if (dirty) {
+        this.saveLlmSettings();
+        this.renderModelDisplay();
+      }
     } catch { /* ignore */ }
   }
 

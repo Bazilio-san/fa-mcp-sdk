@@ -75,9 +75,9 @@ For `ntlm` — uses AD configuration from `ad.domains` section.
 When `jwtToken` is used to authenticate into the admin panel (`/admin`), the decoded
 payload **must** contain `allow: 'gen-token'`. Any JWT without this claim is rejected
 with `401` even if it decrypts and is not expired. This prevents short-lived JWTs
-issued for other purposes (e.g. the Agent Tester page auto-fills a 5-minute JWT into
-its `Authorization` header) from being replayed against `/admin` to mint arbitrary
-long-lived tokens.
+issued for other purposes (e.g. the Agent Tester page auto-fills a JWT into its
+`Authorization` header — TTL is configurable via `agentTester.tokenTTLSec`, default
+30 min) from being replayed against `/admin` to mint arbitrary long-lived tokens.
 
 Generate an admin-capable JWT by including `allow=gen-token` in the payload:
 

@@ -80,6 +80,10 @@ agentTester:
   #> Browser login session lifetime in milliseconds. Default: 28800000 (8 hours).
   #> Applies only when useAuth is true. Sessions are in-memory on the server — lost on restart.
   sessionTtlMs: 28800000
+  #> JWT TTL (seconds) for tokens auto-issued via /agent-tester/api/auth-token (auto-fill of Authorization header
+  #> in the chat UI and for headless clients). Default: 1800 (30 min). The UI refreshes the token every
+  #> max(30, ttlSec/3 - 60) seconds (≈ 1/3 of TTL with a 60s safety lead, lower-bounded by 30s).
+  tokenTTLSec: 1800
   #> true — emit structured JSON events (tool_call, tool_result, llm_response, response) to stdout during agent execution
   logJson: false
   #> OpenAI-compatible LLM credentials used by Agent Tester to drive tool calls

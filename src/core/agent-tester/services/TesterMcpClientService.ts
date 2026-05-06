@@ -5,6 +5,8 @@ import { SSEClientTransport } from '@modelcontextprotocol/sdk/client/sse.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
 import chalk from 'chalk';
 
+import { appConfig } from '../../bootstrap/init-config.js';
+import { generateToken } from '../../auth/jwt.js';
 import { logger as lgr } from '../../logger.js';
 import {
   TesterMcpConfig,
@@ -168,22 +170,98 @@ export class TesterMcpClientService {
   }
 
   public async callToolWithConfig (mcpConfig: TesterMcpConfig, toolName: string, parameters: any): Promise<any> {
-    const cached = await this.getOrCreateClient(mcpConfig);
-
     logger.info(`Calling tool ${toolName} via cached client`, { parameters });
 
-    try {
-      const result = await cached.client.callTool({
+    const invoke = async () => {
+      const cached = await this.getOrCreateClient(mcpConfig);
+      return cached.client.callTool({
         name: toolName,
         arguments: parameters || {},
       });
+    };
 
+    try {
+      const result = await invoke();
       logger.info(`Tool ${toolName} executed successfully`);
       return result;
     } catch (error) {
+      if (this.isAuthError(error) && this.reissueOwnJwt(mcpConfig)) {
+        logger.warn(`Tool ${toolName}: 401 received, JWT reissued, retrying once`);
+        try {
+          const result = await invoke();
+          logger.info(`Tool ${toolName} executed successfully after retry`);
+          return result;
+        } catch (retryError) {
+          logger.error(`Failed to call tool ${toolName} after retry:`, retryError);
+          throw new Error(`Tool execution failed: ${retryError instanceof Error ? retryError.message : 'Unknown error'}`);
+        }
+      }
       logger.error(`Failed to call tool ${toolName}:`, error);
       throw new Error(`Tool execution failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
+  }
+
+  private isAuthError (err: unknown): boolean {
+    const msg = err instanceof Error ? err.message : String(err);
+    return /\b401\b|unauthorized/i.test(msg);
+  }
+
+  private isOwnMcpUrl (url: string): boolean {
+    try {
+      const u = new URL(url);
+      const port = u.port || (u.protocol === 'https:' ? '443' : '80');
+      const ownPort = String(appConfig.webServer?.port ?? '');
+      if (!ownPort || port !== ownPort) {
+        return false;
+      }
+      const host = u.hostname.toLowerCase();
+      const ownHost = (appConfig.webServer?.host ?? '').toLowerCase();
+      const localHosts = new Set(['localhost', '127.0.0.1', '::1', '0.0.0.0']);
+      return localHosts.has(host) || (!!ownHost && host === ownHost);
+    } catch {
+      return false;
+    }
+  }
+
+  // Reissue a JWT for our own server when the cached Authorization header has expired.
+  // Returns true if the header was rewritten and the cached client purged — caller may retry once.
+  private reissueOwnJwt (mcpConfig: TesterMcpConfig): boolean {
+    const auth = appConfig.webServer?.auth;
+    if (!auth?.enabled || !auth.jwtToken?.encryptKey) {
+      return false;
+    }
+    if (!this.isOwnMcpUrl(mcpConfig.url)) {
+      return false;
+    }
+    const headers = mcpConfig.headers || {};
+    const headerKey = 'Authorization' in headers
+      ? 'Authorization'
+      : ('authorization' in headers ? 'authorization' : null);
+    if (!headerKey) {
+      return false;
+    }
+    if (!/^Bearer\s+/i.test(headers[headerKey] || '')) {
+      return false;
+    }
+
+    const ttlSec = appConfig.agentTester?.tokenTTLSec ?? 1800;
+    const jwt = generateToken('agentTester', ttlSec, { service: appConfig.name });
+
+    const oldKey = this.getConnectionKey(mcpConfig);
+    const oldEntry = this.clientCache.get(oldKey);
+    if (oldEntry) {
+      try {
+        oldEntry.client.close?.();
+      } catch { /* ignore */
+      }
+      this.clientCache.delete(oldKey);
+    }
+
+    if (!mcpConfig.headers) {
+      mcpConfig.headers = {};
+    }
+    mcpConfig.headers[headerKey] = `Bearer ${jwt}`;
+    return true;
   }
 
   private buildSafeHeaders (headers?: Record<string, string>): Record<string, string> | undefined {

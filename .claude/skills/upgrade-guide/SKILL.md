@@ -85,6 +85,8 @@ These files are critical — downstream projects have their own copies that must
 - `config/_local.yaml` — local config template (the CLI scaffolder copies this to the project's `config/_local.yaml` and also derives `config/local.yaml` from it with template parameter substitutions)
 - `config/local.yaml` — SDK's own local overrides (not shipped to projects; used as reference)
 - `config/custom-environment-variables.yaml` — env var mappings
+- `config/development.yaml` — dev overrides (shipped to projects, applied when `NODE_ENV=development`)
+- `config/production.yaml` — production overrides (shipped to projects, applied when `NODE_ENV=production`)
 
 For each changed config file, run:
 ```bash
@@ -115,6 +117,8 @@ If `default.yaml` changed but `_local.yaml` did NOT, explicitly note this in the
 | `config/_local.yaml`                 | `config/_local.yaml`            | Update to match SDK — this is the template users derive their `local.yaml` from |
 | `config/_local.yaml` (via CLI)       | `config/local.yaml`             | Derived by CLI from `_local.yaml` with `{{param}}` substitutions — check for needed adjustments |
 | `config/custom-environment-variables.yaml` | `config/custom-environment-variables.yaml` | Add new env var mappings |
+| `config/development.yaml`            | `config/development.yaml`       | Add new keys; do NOT remove existing keys the project may have customized |
+| `config/production.yaml`             | `config/production.yaml`        | Add new keys; do NOT remove existing keys the project may have customized |
 | `config/local.yaml` (SDK's own)      | *(not shipped — reference only)* | Use as reference for what the SDK itself overrides locally |
 
 #### 3b. CLI template files (`cli-template/`)
@@ -271,6 +275,31 @@ customizations from being reset on upgrade.
 ### 7. Dependency Changes
 
 <New/updated/removed dependencies>
+
+## Upgrade Risk Assessment
+
+**Risk Level: <Low | Medium | High>**
+
+<Assess risk based on the nature of changes — without scanning a specific downstream project, judge from change characteristics alone:>
+
+- **High** — any of: removed/renamed exports from `src/core/index.ts`; removed config keys; changed
+  meaning of existing config keys; renamed `cli-template/r/<name>.xml`; changed signatures of
+  exported functions/types; major version bump of a runtime dependency.
+- **Medium** — any of: new required config keys without sensible defaults; restructured config
+  sections (`_local.yaml` divergence from `default.yaml`); new template files the project must copy;
+  minor-version dep bumps with known migration notes.
+- **Low** — only additive changes: new optional config keys with defaults, new exports, new
+  template files that don't replace existing ones, patch-level dep bumps, doc/README updates.
+
+**Estimated Effort: <S | M | L>**
+- **S** (≤30 min) — pure Low-risk additive changes; mostly `yarn add` + `update-sdk.js`.
+- **M** (≈1–3 h) — several config keys to merge, a few template files to copy, no code changes.
+- **L** (≥half a day) — High-risk changes requiring code edits in the project's `src/`, removed
+  exports to migrate from, or restructured config sections to reconcile with project's `local.yaml`.
+
+List the **specific signals** that drove the rating (e.g. "Removed export `foo` from `src/core/index.ts`",
+"Renamed `auth.token` → `auth.jwt` in `default.yaml`") so the downstream developer can verify the
+assessment against their own usage.
 
 ## Recommendations
 

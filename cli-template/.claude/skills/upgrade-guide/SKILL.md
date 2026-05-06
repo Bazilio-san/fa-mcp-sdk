@@ -76,6 +76,8 @@ Resolved project references to SDK:
 
 **One argument** — it is treated as **FROM**; TO defaults to the **latest published fa-mcp-sdk version** (fetched via `yarn info fa-mcp-sdk version` / `npm view fa-mcp-sdk version`). The point is to upgrade to the newest existing SDK release.
 
+**Alternative TO=HEAD mode.** If the user explicitly says "to HEAD", "до HEAD", "до последнего коммита SDK", "to latest commit", "до master", or supplies the literal `HEAD`/`master` as the second argument, TO becomes the **tip of `master` on `Bazilio-san/fa-mcp-sdk`** (resolved via `https://api.github.com/repos/Bazilio-san/fa-mcp-sdk/commits/master`), not the latest **published** version. This is useful for diffing against unreleased commits. In this mode `yarn add` must use the git-URL form with the resolved commit hash (see Step 2).
+
 **No arguments** — FROM is the current installed SDK version (from the project's current `package.json`); TO is the latest published SDK version.
 
 ## Step 1: Determine SDK Versions
@@ -84,12 +86,21 @@ Resolved project references to SDK:
 2. Run `yarn info fa-mcp-sdk version` (or `npm view fa-mcp-sdk version`) to get the latest published version — this is the **default TO (SDK)**.
 3. Apply argument parsing rules above (scope, count) to determine FROM and TO.
 4. If any argument is PROJECT-scoped, resolve it to an SDK version/commit by reading the project's git history (see "Resolving PROJECT references to SDK versions").
-5. If FROM-SDK equals TO-SDK — inform the user (e.g. "Both project commits pin the same SDK version X.Y.Z — nothing to diff") and stop.
+5. **Validate that both SDK refs actually exist** before doing any diff work — fail fast with a clear message instead of letting a later GitHub API call return 404. For each of FROM-SDK and TO-SDK:
+   - If it's a **version** (e.g. `0.4.30` / `v0.4.30`) — probe the GitHub tag endpoint:
+     `https://api.github.com/repos/Bazilio-san/fa-mcp-sdk/git/refs/tags/v<version>` (also try without
+     the `v` prefix). Fall back to `yarn info fa-mcp-sdk@<version> version` — if that also fails,
+     report `Cannot resolve SDK version <X>: not found on GitHub or npm` and stop.
+   - If it's a **commit hash** — probe `https://api.github.com/repos/Bazilio-san/fa-mcp-sdk/commits/<hash>`.
+     If it returns 404, report `Cannot resolve SDK commit <hash>: not found in repo` and stop.
+   - If GitHub API is rate-limited, fall back to `git ls-remote https://github.com/Bazilio-san/fa-mcp-sdk.git`
+     for tag/branch existence, and skip commit-hash validation with a warning.
+6. If FROM-SDK equals TO-SDK — inform the user (e.g. "Both project commits pin the same SDK version X.Y.Z — nothing to diff") and stop.
 
 Display to the user:
 ```
-From: <project or SDK ref> → SDK <version-or-commit>
-To:   <project or SDK ref> → SDK <version-or-commit>
+From: <project or SDK ref> → SDK <version-or-commit>  ✓ validated
+To:   <project or SDK ref> → SDK <version-or-commit>  ✓ validated
 ```
 
 ## Step 2: Upgrade the Dependency
@@ -137,6 +148,14 @@ Where `<FROM-ref>` and `<TO-ref>` are version tags (try both `v0.4.30` and `0.4.
 If version tags don't exist, use the commits API to find commits between versions, or search `git log` for version bump commit messages.
 
 Alternative approach — use the npm registry to get git metadata, or simply read the changelog if available.
+
+**Explicit commit-message review.** The compare endpoint returns a `commits[]` array — extract `commit.message` (subject + body) for **every** commit in the range, not just the file diffs. Commit messages capture the **why** of each change (motivation, fixed issue, design rationale) which is invisible from file diffs alone. In the generated guide, include a "Changelog" subsection that lists each commit's short hash + first line of its message in chronological order. Use these messages to:
+- Spot intent (e.g. "fix: ...", "BREAKING CHANGE: ...", "refactor: ...") — flag any conventional-commit BREAKING markers prominently in the Breaking Changes section.
+- Group related file changes under a single narrative ("These three files changed because of <reason from commit>").
+- Reach out for missing context: if a file diff is non-obvious and the commit message is terse, note it in the guide as "rationale unclear — check commit `<hash>` directly".
+
+If the compare API is rate-limited, fall back to fetching commits one page at a time via
+`https://api.github.com/repos/Bazilio-san/fa-mcp-sdk/commits?sha=<TO>&until=<TO-date>&since=<FROM-date>`.
 
 ### 4.2 Analyze changes in config files
 
@@ -251,10 +270,32 @@ user should copy into their project's `scripts/` directory, and skip the exclude
 
 ### 4.5 Analyze changes in core library exports
 
-Read `node_modules/fa-mcp-sdk/dist/core/index.js` (or `.d.ts`) to identify:
+**Prefer the TypeScript source over the compiled output.** Fetch `src/core/index.ts` (and any
+re-exported `_types_/` files it references) at both FROM and TO via GitHub raw:
+
+```
+https://raw.githubusercontent.com/Bazilio-san/fa-mcp-sdk/<FROM-ref>/src/core/index.ts
+https://raw.githubusercontent.com/Bazilio-san/fa-mcp-sdk/<TO-ref>/src/core/index.ts
+```
+
+Compare them to identify:
 - New exports that may be useful
 - Removed/renamed exports that may break existing code
 - Changed type signatures
+- Type-level changes (generics, conditional types, union narrowing) that don't survive `.d.ts`
+  emission cleanly
+
+Why source over `dist/`:
+- Original JSDoc comments and inline rationale are preserved in `.ts` but stripped/compressed in `dist/*.js`.
+- Renames are visible as renames in the source diff; in `dist/` they may appear as unrelated
+  add+remove pairs because of import-order shuffling or minification.
+- TS `export *` chains resolve naturally in source; in `.d.ts` they may be flattened, hiding which
+  module a symbol came from originally.
+
+**Fallback** — if GitHub raw is unavailable (rate-limited, network blocked), use
+`node_modules/fa-mcp-sdk/dist/core/index.js` and the matching `.d.ts`. State explicitly in the
+generated guide that the analysis was made from the compiled artifacts and recommend that the user
+double-check via the GitHub source viewer for any flagged change.
 
 ### 4.6 Check project code for breaking changes
 

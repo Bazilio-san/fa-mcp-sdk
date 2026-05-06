@@ -117,10 +117,12 @@ export function createAgentTesterRouter (options: {
       return;
     }
 
+    const ttlSec = appConfig.agentTester?.tokenTTLSec ?? 1800;
+
     // Agent Tester priority: jwtToken → basic → permanentServerTokens
     if (auth.jwtToken?.encryptKey) {
-      const jwt = generateToken('agentTester', 300, { service: appConfig.name });
-      res.json({ authType: 'jwtToken', token: `Bearer ${jwt}` });
+      const jwt = generateToken('agentTester', ttlSec, { service: appConfig.name });
+      res.json({ authType: 'jwtToken', token: `Bearer ${jwt}`, ttlSec });
       return;
     }
 
@@ -146,8 +148,9 @@ export function createAgentTesterRouter (options: {
       return;
     }
 
-    const jwt = generateToken('agentTester', 300, { service: appConfig.name });
-    res.json({ authType: 'jwtToken', token: `Bearer ${jwt}` });
+    const ttlSec = appConfig.agentTester?.tokenTTLSec ?? 1800;
+    const jwt = generateToken('agentTester', ttlSec, { service: appConfig.name });
+    res.json({ authType: 'jwtToken', token: `Bearer ${jwt}`, ttlSec });
   });
 
   // ===== Chat API =====
