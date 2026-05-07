@@ -166,6 +166,28 @@ curl -X POST http://localhost:9876/agent-tester/api/chat/test \
   -d '{"message":"Hello","mcpConfig":{"url":"http://localhost:9876/mcp","transport":"http"}}'
 ```
 
+### Windows Encoding Note (curl + Cyrillic / Non-ASCII)
+
+On Windows, curl's `-d` flag may corrupt non-ASCII characters (e.g. Cyrillic) because the shell passes bytes in the system codepage (CP1251), not UTF-8. The LLM then receives garbled text and propagates it into tool arguments.
+
+**Symptom:** tool call arguments contain mojibake like `п�?п�?п�?п�?п�?` instead of readable Russian text.
+
+**Fix:** write the JSON body to a file (UTF-8) and use `--data-binary @file`:
+
+```bash
+# 1. Write request JSON to a file (editor must save as UTF-8)
+cat > tmp-request.json << 'EOF'
+{"message":"Отправь письмо на user@example.com с темой \"Тест\"","mcpConfig":{"url":"http://localhost:9876/mcp","transport":"http"}}
+EOF
+
+# 2. Send with --data-binary to preserve UTF-8 encoding
+curl -X POST http://localhost:9876/agent-tester/api/chat/test \
+  -H "Content-Type: application/json; charset=utf-8" \
+  --data-binary @tmp-request.json
+```
+
+This is only needed when running curl from a Windows shell with non-ASCII text. Linux/macOS terminals use UTF-8 by default and are not affected.
+
 ## Disabled State
 
 When `agentTester.enabled` is `false` (or not set), all `/agent-tester/*` endpoints — including the Headless API — return HTTP 404:
