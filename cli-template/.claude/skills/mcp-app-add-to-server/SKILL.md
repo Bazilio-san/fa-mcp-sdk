@@ -62,6 +62,24 @@ These examples demonstrate servers with both App-enhanced and plain tools — th
 | `examples/pdf-server/` | `display_pdf` (App tool) + `list_pdfs` (plain tool) + `read_pdf_bytes` (app-only tool) |
 | `examples/system-monitor-server/` | `get-system-info` (App tool) + `poll-system-stats` (app-only polling tool) |
 
+### Domain-Specific Examples
+
+When the new UI matches one of these domains, consult the corresponding example for patterns
+the basic templates and mixed examples don't cover. All paths are under `./mcp-ext-apps/`:
+
+| Domain | Example | What it shows |
+|---|---|---|
+| Charts / dashboards | `examples/scenario-modeler-server/` | Chart.js with structured React (`hooks/`, `lib/`, `components/`); multi-scenario comparison |
+| Analytics drill-down | `examples/cohort-heatmap-server/` | Heatmap with hover tooltips and click drilldown (React) |
+| 3D visualization | `examples/threejs-server/` | Three.js + streaming tool input into canvas, OrbitControls, post-processing |
+| WebGL / shaders | `examples/shadertoy-server/` | GLSL live compilation, fullscreen mode, `vendor/` pattern for custom JS libs |
+| Graph visualization | `examples/wiki-explorer-server/` | 3D force-directed graph (`force-graph`), web scraping with `cheerio` |
+| Audio / music | `examples/sheet-music-server/` | ABC notation → SVG render + MIDI synthesis (`abcjs`) |
+| Streaming + audio | `examples/say-server/` | `ontoolinputpartial` + async audio queue + multi-view lock (**Python FastMCP**) |
+| Browser APIs | `examples/transcript-server/` | Web Speech API for live transcription |
+| Binary / media resources | `examples/video-resource-server/` | Base64 video blobs, `ResourceTemplate`, large-payload limits |
+| SDK surface reference | `examples/debug-server/` | All content types in one place — PNG/WAV blobs, structured output, stateful counter, resource downloads |
+
 ### Framework Templates
 
 Learn and adapt from `./mcp-ext-apps/examples/basic-server-{framework}/`:

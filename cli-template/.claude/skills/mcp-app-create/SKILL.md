@@ -90,6 +90,24 @@ Each template includes:
 - `package.json` with `npm run` scripts and required dependencies
 - `.gitignore` excluding `node_modules/` and `dist/`
 
+### Domain-Specific Examples
+
+When the App's UI matches one of these domains, consult the corresponding example for patterns
+the basic templates don't cover. All paths are under `./mcp-ext-apps/`:
+
+| Domain | Example | What it shows |
+|---|---|---|
+| Charts / dashboards | `examples/scenario-modeler-server/` | Chart.js with structured React (`hooks/`, `lib/`, `components/`); multi-scenario comparison |
+| Analytics drill-down | `examples/cohort-heatmap-server/` | Heatmap with hover tooltips and click drilldown (React) |
+| 3D visualization | `examples/threejs-server/` | Three.js + streaming tool input into canvas, OrbitControls, post-processing |
+| WebGL / shaders | `examples/shadertoy-server/` | GLSL live compilation, fullscreen mode, `vendor/` pattern for custom JS libs |
+| Graph visualization | `examples/wiki-explorer-server/` | 3D force-directed graph (`force-graph`), web scraping with `cheerio` |
+| Audio / music | `examples/sheet-music-server/` | ABC notation → SVG render + MIDI synthesis (`abcjs`) |
+| Streaming + audio | `examples/say-server/` | `ontoolinputpartial` + async audio queue + multi-view lock (**Python FastMCP**) |
+| Browser APIs | `examples/transcript-server/` | Web Speech API for live transcription |
+| Binary / media resources | `examples/video-resource-server/` | Base64 video blobs, `ResourceTemplate`, large-payload limits |
+| SDK surface reference | `examples/debug-server/` | All content types in one place — PNG/WAV blobs, structured output, stateful counter, resource downloads |
+
 ### API Reference (Source Files)
 
 Read JSDoc documentation directly from `./mcp-ext-apps/src/`:
