@@ -162,12 +162,14 @@ Add to `~\.qwen\settings.json`:
 
 The project ships with custom skills in `.claude/skills/`:
 
-| Command              | Description                                                             |
-|----------------------|-------------------------------------------------------------------------|
-| `/gen-jwt`           | Generate JWT tokens for MCP server authentication                       |
-| `/upgrade-guide`     | Generate migration guide for `fa-mcp-sdk` upgrades                      |
-| `/feature-prompt-generator` | Turn a feature description into a self-sufficient prompt for an AI CLI  |
-| `/readme-generator`  | Generate structured README.md + satellite `readme-docs/*.md`            |
+| Command                     | Description                                                                  |
+|-----------------------------|------------------------------------------------------------------------------|
+| `/gen-jwt`                  | Generate JWT tokens for MCP server authentication                            |
+| `/upgrade-guide`            | Generate migration guide for `fa-mcp-sdk` upgrades                           |
+| `/feature-prompt-generator` | Turn a feature description into a self-sufficient prompt for an AI CLI       |
+| `/readme-generator`         | Generate structured README.md + satellite `readme-docs/*.md`                 |
+| `/mcp-app-create`           | Scaffold a new MCP App (interactive UI: tool + HTML resource via ext-apps)   |
+| `/mcp-app-add-to-server`    | Enrich existing MCP server tools with interactive UIs (MCP Apps SDK)         |
 
 Details, launch modes, and examples: [SKILLS](readme-docs/SKILLS.md)
 

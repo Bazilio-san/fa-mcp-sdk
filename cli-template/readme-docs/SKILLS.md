@@ -140,6 +140,91 @@ Characteristics:
 
 ---
 
+### `/mcp-app-create` — Scaffold a New MCP App
+
+Comprehensive guidance for building **MCP Apps** — interactive UIs that render inside MCP-enabled hosts (Claude
+Desktop, etc.) using the [`@modelcontextprotocol/ext-apps`](https://github.com/modelcontextprotocol/ext-apps) SDK.
+Every MCP App pairs an MCP **tool** (called by the LLM/host) with an HTML **resource** (the UI shown to the user);
+the tool's `_meta.ui.resourceUri` links them.
+
+What it does:
+
+- Clones the upstream `ext-apps` repo into `./mcp-ext-apps/` (added to `.gitignore`) for working examples,
+  JSDoc-annotated source, and the formal protocol spec (`specification/2026-01-26/apps.mdx`, SEP-1865)
+- Walks through framework selection — React (with `useApp` hook), Vanilla JS, Vue, Svelte, Preact, Solid —
+  using the matching `basic-server-{framework}/` template as a reference
+- Sets up the build pipeline: `vite` + `vite-plugin-singlefile` to bundle UI into a single HTML file, plus
+  `tsx` for running the TypeScript server (broader compatibility than `bun`)
+- Generates `registerAppTool` + `registerAppResource` calls with the correct `_meta.ui.resourceUri` linking
+- Implements lifecycle handlers (`ontoolinput`, `ontoolresult`, `onhostcontextchanged`, `onteardown`)
+  — emphasising they MUST be registered BEFORE `app.connect()`
+- Covers advanced patterns (`docs/patterns.md`): app-only tools, polling, chunked responses, binary resources,
+  CSP/CORS, host context (theme/styles/fonts), fullscreen mode, streaming input, view state, visibility-pause
+
+Characteristics:
+
+- **Launch**: by command `/mcp-app-create` or by trigger phrases ("create an MCP App", "add a UI to an MCP tool",
+  "build an interactive MCP View", "scaffold an MCP App")
+- **Input**: project context (existing server vs new server) + UI requirements
+- **Output**: working tool + resource pair, single-file HTML bundle, framework-specific entry point with
+  registered handlers, `vite.config.ts`, updated `package.json` scripts
+
+**Examples:**
+
+```
+/mcp-app-create
+/mcp-app-create create an MCP App that shows search results as an interactive table (React)
+/mcp-app-create scaffold a new MCP server with a map UI tool, vanilla JS
+/mcp-app-create build a system-monitor App with a polling chart, use Vue
+```
+
+---
+
+### `/mcp-app-add-to-server` — Add Interactive UI to Existing MCP Server
+
+Analyses the tools already exposed by an existing MCP server and enriches the ones that benefit from UI with
+inline rendering via the MCP Apps SDK. Tools that don't need UI stay untouched; the text fallback is preserved
+for text-only clients, so adding UI is a strict enhancement.
+
+What it does:
+
+- **Inventories** the server's existing tools (reads source, lists every registered tool)
+- **Classifies** each tool by UI benefit using a decision framework: structured data / metrics over time /
+  media → high benefit; simple confirmations → text-only is fine; data feeds for other tools → app-only helper
+- **Confirms** the analysis with the user before writing code
+- Adds `@modelcontextprotocol/ext-apps` + `vite` + `vite-plugin-singlefile` (plus framework deps if needed)
+  via `npm install` — never hardcoded versions
+- Configures the build pipeline (`vite.config.ts`, `mcp-app.html` entry, `package.json` scripts: `build:ui`,
+  `build:server`, `build`, `serve`) and links resources to tools via `_meta.ui.resourceUri`
+- Converts plain `server.tool(...)` calls to `registerAppTool(...)` with `structuredContent` for the UI
+  while keeping the `content` array as a text fallback
+- Registers HTML resources via `registerAppResource(...)` reading the bundled `dist/mcp-app.html`
+- Wires UI lifecycle handlers + applies host styling (`applyDocumentTheme`, `applyHostStyleVariables`,
+  `applyHostFonts`, safe-area insets)
+- Optional enhancements: app-only helper tools (`visibility: ["app"]`), CSP/CORS allow-lists
+  (`connectDomains` / `resourceDomains` / `frameDomains`), streaming partial input (`ontoolinputpartial`),
+  fullscreen mode (`requestDisplayMode`), graceful degradation via `getUiCapability()`
+
+Characteristics:
+
+- **Launch**: by command `/mcp-app-add-to-server` or by trigger phrases ("add an app to my MCP server",
+  "add UI to my MCP server", "add a view to my MCP tool", "enrich MCP tools with UI", "add MCP Apps to
+  my server")
+- **Input**: none required — reads the project; user confirms which tools to enhance after the analysis
+- **Output**: refactored `server.ts` (App tools + plain tools coexist), HTML entry + `vite.config.ts`,
+  resource registration code, lifecycle handlers in the UI entry, updated `package.json` scripts
+
+**Examples:**
+
+```
+/mcp-app-add-to-server
+/mcp-app-add-to-server add UI to the search and analytics tools, leave the lookup tools as text-only
+/mcp-app-add-to-server обогати UI инструмент get_dashboard, остальные оставь без изменений
+/mcp-app-add-to-server add an interactive map view to the geo-search tool
+```
+
+---
+
 ### `/create-mcp-wizard` — End-to-End MCP Server Implementation
 
 Orchestrates the full implementation workflow from feature brief to a live GitLab repo. The project
