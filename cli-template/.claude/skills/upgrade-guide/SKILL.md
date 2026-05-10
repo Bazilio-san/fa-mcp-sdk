@@ -204,7 +204,8 @@ Map of template file → project file (the CLI `bin/fa-mcp.js` applies these tra
 |-------------------------------------------------------------------|---------------------------------------------|-------|
 | `node_modules/fa-mcp-sdk/cli-template/package.json`               | `package.json`                              | **Merge carefully** — see rule below |
 | `node_modules/fa-mcp-sdk/cli-template/tsconfig.json`              | `tsconfig.json`                             | overwrite (unless customized) |
-| `node_modules/fa-mcp-sdk/cli-template/eslint.config.js`           | `eslint.config.js`                          | overwrite (unless customized) |
+| `node_modules/fa-mcp-sdk/cli-template/.oxlintrc.json`             | `.oxlintrc.json`                            | overwrite (unless customized) |
+| `node_modules/fa-mcp-sdk/cli-template/.oxfmtrc.json`              | `.oxfmtrc.json`                             | overwrite (unless customized) |
 | `node_modules/fa-mcp-sdk/cli-template/CLAUDE.md`                  | `CLAUDE.md`                                 | merge — project may add custom sections |
 | `node_modules/fa-mcp-sdk/cli-template/jest.config.js`             | `jest.config.js`                            | overwrite (unless customized) |
 | `node_modules/fa-mcp-sdk/cli-template/deploy/`                    | `deploy/`                                   | merge per file |

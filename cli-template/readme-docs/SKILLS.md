@@ -37,7 +37,7 @@ Generates JWT tokens for MCP server authentication via `scripts/generate-jwt.js`
 Generates a migration guide for upgrading the `fa-mcp-sdk` dependency in this project. Analyzes diffs in:
 
 - `config/*.yaml` — new/removed/changed keys and defaults (correlates `default.yaml`, `_local.yaml`, `local.yaml`)
-- `cli-template/` — `package.json` (new deps only), `tsconfig.json`, `eslint.config.js`, `CLAUDE.md`, `deploy/`,
+- `cli-template/` — `package.json` (new deps only), `tsconfig.json`, `.oxlintrc.json`, `.oxfmtrc.json`, `CLAUDE.md`, `deploy/`,
   `.claude/skills/`, `.run/` (from `r/`)
 - `scripts/` — new or updated SDK utilities (excluding SDK-internal `copy-static.js`, `publish.sh`)
 - `dist/core/index.js` — added/removed/renamed exports and breaking type changes

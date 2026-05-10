@@ -167,12 +167,12 @@ files matching any skip rule are dropped entirely (not listed, not counted).
 - Any `package.json` whose diff touches **only** the `version` field and/or
   `dependencies.fa-mcp-sdk` / `devDependencies.fa-mcp-sdk` pin — implicit from running
   `npm i fa-mcp-sdk@latest`.
-- The SDK's own meta files irrelevant to consumers: `package-lock.json`, `.eslintignore`,
+- The SDK's own meta files irrelevant to consumers: `package-lock.json`,
   `tsconfig.json` changes that don't affect emitted types, `scripts/copy-static.js`,
   `scripts/publish.sh`.
 - SDK-internal tooling that never ships to MCPs: `.claude/**` at the SDK repo root (this is the
   SDK developer's tooling — not the same as `cli-template/.claude/**`), `change-history/**`,
-  `docs/**`, `tests/**`, `README.md`, `LICENSE`, `.gitignore`, `.eslintrc*`.
+  `docs/**`, `tests/**`, `README.md`, `LICENSE`, `.gitignore`.
 
 **Buckets** (after skip rules):
 

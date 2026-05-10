@@ -181,7 +181,8 @@ my-mcp-server/
 ├── .env.example                 # Environment variables template
 ├── .envrc                       # direnv configuration
 ├── .gitignore                   # Git ignore rules
-├── eslint.config.js             # ESLint configuration
+├── .oxlintrc.json               # Oxlint configuration
+├── .oxfmtrc.json                # Oxfmt configuration
 ├── jest.config.js               # Jest test configuration
 ├── LICENSE                      # MIT license file
 ├── package.json                 # NPM package configuration
@@ -202,8 +203,12 @@ Note: The `dist/` directory (compiled JavaScript) is created after running `npm 
 | `npm run cb` | Clean and build |
 | `npm run ci` | Install dependencies |
 | `npm run reinstall` | Reinstall all dependencies |
-| `npm run lint` | Run ESLint |
-| `npm run lint:fix` | Fix ESLint issues |
+| `npm run lint` | Run Oxlint |
+| `npm run lint:fix` | Fix Oxlint issues |
+| `npm run format` | Check formatting via Oxfmt |
+| `npm run format:fix` | Format the project via Oxfmt |
+| `npm run quality` | Lint + format check |
+| `npm run quality:fix` | Auto-fix lint + format |
 | `npm run test:mcp` | Test MCP tools |
 | `npm run test:mcp-http` | Test HTTP transport |
 | `npm run test:mcp-sse` | Test SSE transport |

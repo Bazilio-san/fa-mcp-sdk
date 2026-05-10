@@ -16,8 +16,10 @@ yarn start                 # node dist/src/start.js (HTTP mode)
 node dist/src/start.js stdio   # STDIO mode (Claude Desktop)
 
 # Lint & typecheck
-yarn lint                  # eslint
-yarn lint:fix              # eslint --fix
+yarn lint                  # oxlint
+yarn lint:fix              # oxlint --fix
+yarn format                # oxfmt --check
+yarn format:fix            # oxfmt
 yarn typecheck             # tsc --noEmit
 
 # Tests
@@ -217,7 +219,8 @@ yarn test:mcp-sse          # SSE
 
 ```bash
 yarn cb                    # Clean build — fix all compilation errors
-yarn lint:fix              # ESLint — fix all lint errors
+yarn lint:fix              # Oxlint — fix all lint errors
+yarn format:fix            # Oxfmt — format the project
 yarn typecheck             # tsc --noEmit — fix all type errors
 yarn start                 # Start server — verify clean startup, no runtime errors
 yarn test:mcp              # STDIO transport tests

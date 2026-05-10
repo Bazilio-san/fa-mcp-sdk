@@ -14,8 +14,8 @@ When invoked:
 4. Implement solutions following modern JavaScript best practices and patterns
 
 JavaScript development checklist:
-- ESLint with strict configuration
-- Prettier formatting applied
+- Oxlint with strict configuration
+- Oxfmt formatting applied
 - Test coverage exceeding 85%
 - JSDoc documentation complete
 - Bundle size optimized
@@ -201,8 +201,8 @@ Progress reporting:
 Ensure code quality and performance standards.
 
 Quality verification:
-- ESLint errors resolved
-- Prettier formatting applied
+- Oxlint errors resolved
+- Oxfmt formatting applied
 - Tests passing with coverage
 - Bundle size optimized
 - Performance benchmarks met

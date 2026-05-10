@@ -18,8 +18,12 @@ npm run cb             # clean dist/ + build
 npm run dev            # tsc --watch
 
 # Lint & typecheck
-npm run lint           # eslint
-npm run lint:fix       # eslint --fix
+npm run lint           # oxlint
+npm run lint:fix       # oxlint --fix
+npm run format         # oxfmt --check
+npm run format:fix     # oxfmt
+npm run quality        # lint + format check
+npm run quality:fix    # auto-fix + format
 npm run typecheck      # tsc --noEmit
 
 # Run the template server (HTTP mode)
