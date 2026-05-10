@@ -5,7 +5,7 @@ import { AuthResult } from './types.js';
 /**
  * Basic Authentication validation
  */
-export function checkBasicAuth (credentials: string): AuthResult {
+export function checkBasicAuth(credentials: string): AuthResult {
   const basic = appConfig.webServer?.auth?.basic;
   if (!basic?.username || !basic?.password) {
     return { success: false, error: 'Basic auth not configured' };

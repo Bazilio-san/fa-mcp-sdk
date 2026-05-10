@@ -31,9 +31,11 @@ const { auth } = appConfig.webServer || {};
  * 'none', null, empty array and undefined all collapse to an empty array,
  * which signals open-access mode.
  */
-export function getAdminAuthTypes (): AdminAuthType[] {
+export function getAdminAuthTypes(): AdminAuthType[] {
   const raw = adminPanel?.authType;
-  if (!raw || raw === 'none') {return [];}
+  if (!raw || raw === 'none') {
+    return [];
+  }
   const list = Array.isArray(raw) ? raw : [raw];
   return list.filter((t): t is AdminAuthType => !!t && t !== 'none');
 }
@@ -41,7 +43,7 @@ export function getAdminAuthTypes (): AdminAuthType[] {
 /**
  * Validates admin auth configuration for a single type
  */
-function validateSingleAuthType (authType: AdminAuthType): string | null {
+function validateSingleAuthType(authType: AdminAuthType): string | null {
   switch (authType) {
     case 'permanentServerTokens': {
       const tokens = auth?.permanentServerTokens;
@@ -86,14 +88,16 @@ function validateSingleAuthType (authType: AdminAuthType): string | null {
  * Returns error message if configuration is invalid, null if valid.
  * Empty type list with enabled=true is valid and means open access.
  */
-export function validateAdminAuthConfig (): string | null {
+export function validateAdminAuthConfig(): string | null {
   if (!adminPanel?.enabled) {
     return null; // Disabled, no validation needed
   }
 
   for (const t of getAdminAuthTypes()) {
     const error = validateSingleAuthType(t);
-    if (error) {return error;}
+    if (error) {
+      return error;
+    }
   }
 
   return null;
@@ -103,8 +107,10 @@ export function validateAdminAuthConfig (): string | null {
  * Returns the list of auth methods available for the admin login UI.
  * Maps auth types to UI categories: 'token' (permanentServerTokens, jwtToken) or 'basic'.
  */
-export function getAdminAuthMethods (): string[] {
-  if (!adminPanel?.enabled) {return [];}
+export function getAdminAuthMethods(): string[] {
+  if (!adminPanel?.enabled) {
+    return [];
+  }
   const types = getAdminAuthTypes();
   const methods: string[] = [];
   for (const t of types) {
@@ -122,27 +128,27 @@ export function getAdminAuthMethods (): string[] {
  * Try authenticating a request against a single auth type.
  * Returns auth result or null if this type doesn't match the request.
  */
-function tryAuthType (
-  authType: AdminAuthType,
-  scheme: string,
-  credentials: string,
-): { success: boolean; error?: string; username?: string; payload?: any } | null {
+function tryAuthType(authType: AdminAuthType, scheme: string, credentials: string): { success: boolean; error?: string; username?: string; payload?: any } | null {
   switch (authType) {
     case 'permanentServerTokens': {
-      if (scheme === 'basic') {return null;} // Not a bearer/token
+      if (scheme === 'basic') {
+        return null;
+      } // Not a bearer/token
       const result = checkPermanentToken(credentials);
-      return result.errorReason
-        ? { success: false, error: result.errorReason }
-        : { success: true, username: 'ServerToken' };
+      return result.errorReason ? { success: false, error: result.errorReason } : { success: true, username: 'ServerToken' };
     }
 
     case 'basic': {
-      if (scheme !== 'basic') {return null;} // Not basic auth
+      if (scheme !== 'basic') {
+        return null;
+      } // Not basic auth
       return checkBasicAuth(credentials);
     }
 
     case 'jwtToken': {
-      if (scheme === 'basic') {return null;} // Not a bearer/token
+      if (scheme === 'basic') {
+        return null;
+      } // Not a bearer/token
       const result = checkJwtToken({ token: credentials });
       if (result.errorReason) {
         return { success: false, error: result.errorReason };
@@ -163,7 +169,7 @@ function tryAuthType (
  * If enabled=false OR authType is empty/'none' — returns a pass-through middleware
  * that stamps the request as an anonymous open-access session.
  */
-export function createAdminAuthMW (): RequestHandler[] {
+export function createAdminAuthMW(): RequestHandler[] {
   const types = getAdminAuthTypes();
 
   // Open-access mode: panel mounted (enabled=true) but no auth type configured,
@@ -175,14 +181,16 @@ export function createAdminAuthMW (): RequestHandler[] {
     } else {
       logger.info('Admin authentication is DISABLED');
     }
-    return [(req: Request, res: Response, next: NextFunction) => {
-      req.ntlm = {
-        isAuthenticated: false,
-        username: 'Anonymous',
-        domain: 'NoAuth',
-      };
-      next();
-    }];
+    return [
+      (req: Request, res: Response, next: NextFunction) => {
+        req.ntlm = {
+          isAuthenticated: false,
+          username: 'Anonymous',
+          domain: 'NoAuth',
+        };
+        next();
+      },
+    ];
   }
 
   // If the only type is NTLM, use existing NTLM middleware
@@ -235,7 +243,7 @@ export function createAdminAuthMW (): RequestHandler[] {
 /**
  * Send authentication required response
  */
-function sendAuthRequired (res: Response, authTypes: AdminAuthType[], message?: string): void {
+function sendAuthRequired(res: Response, authTypes: AdminAuthType[], message?: string): void {
   const errorMessage = message || 'Authentication required';
 
   const hasBasic = authTypes.includes('basic');

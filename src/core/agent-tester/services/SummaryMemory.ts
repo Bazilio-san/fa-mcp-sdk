@@ -23,11 +23,11 @@ export class SummaryMemory {
   private map: Map<string, SummaryState> = new Map();
   private config: SummaryConfig;
 
-  constructor (config?: Partial<SummaryConfig>) {
-    this.config = { ...DEFAULT_CONFIG, ...(config || {}) };
+  constructor(config?: Partial<SummaryConfig>) {
+    this.config = { ...DEFAULT_CONFIG, ...config };
   }
 
-  public getState (sessionId: string): SummaryState {
+  public getState(sessionId: string): SummaryState {
     let state = this.map.get(sessionId);
     if (!state) {
       state = {
@@ -41,18 +41,16 @@ export class SummaryMemory {
     return state;
   }
 
-  public delete (sessionId: string): void {
+  public delete(sessionId: string): void {
     this.map.delete(sessionId);
   }
 
-  public clear (): void {
+  public clear(): void {
     this.map.clear();
   }
 
-  public buildMessages (systemPrompt: string, state: SummaryState): OpenAI.Chat.ChatCompletionMessageParam[] {
-    const messages: OpenAI.Chat.ChatCompletionMessageParam[] = [
-      { role: 'system', content: systemPrompt },
-    ];
+  public buildMessages(systemPrompt: string, state: SummaryState): OpenAI.Chat.ChatCompletionMessageParam[] {
+    const messages: OpenAI.Chat.ChatCompletionMessageParam[] = [{ role: 'system', content: systemPrompt }];
 
     if (state.summary) {
       messages.push({ role: 'system', content: `Summary Memory:\n${state.summary}` });
@@ -62,7 +60,7 @@ export class SummaryMemory {
     return messages;
   }
 
-  public pushMessage (state: SummaryState, msg: OpenAI.Chat.ChatCompletionMessageParam): void {
+  public pushMessage(state: SummaryState, msg: OpenAI.Chat.ChatCompletionMessageParam): void {
     const normalized = this.normalizeToolPayload(msg);
     state.tail.push(normalized);
     state.estimatedTokens += this.estimateTokens(normalized);
@@ -78,22 +76,20 @@ export class SummaryMemory {
     }
   }
 
-  public needsCompression (state: SummaryState): boolean {
+  public needsCompression(state: SummaryState): boolean {
     return state.estimatedTokens > this.config.maxTokens;
   }
 
-  public getConfig (): SummaryConfig {
+  public getConfig(): SummaryConfig {
     return this.config;
   }
 
-  public resetAfterCompression (state: SummaryState): void {
+  public resetAfterCompression(state: SummaryState): void {
     state.estimatedTokens = 0;
     state.lastSummarizedAt = new Date();
   }
 
-  private normalizeToolPayload (
-    msg: OpenAI.Chat.ChatCompletionMessageParam,
-  ): OpenAI.Chat.ChatCompletionMessageParam {
+  private normalizeToolPayload(msg: OpenAI.Chat.ChatCompletionMessageParam): OpenAI.Chat.ChatCompletionMessageParam {
     if (msg.role !== 'tool' || typeof msg.content !== 'string') {
       return msg;
     }
@@ -102,16 +98,14 @@ export class SummaryMemory {
       return msg;
     }
 
-    const truncated = [
-      msg.content.slice(0, this.config.maxToolPayloadChars),
-      '',
-      `[TRUNCATED tool result: original_length=${msg.content.length} chars, kept=${this.config.maxToolPayloadChars}]`,
-    ].join('\n');
+    const truncated = [msg.content.slice(0, this.config.maxToolPayloadChars), '', `[TRUNCATED tool result: original_length=${msg.content.length} chars, kept=${this.config.maxToolPayloadChars}]`].join(
+      '\n',
+    );
 
     return { ...msg, content: truncated };
   }
 
-  private estimateTokens (msg: OpenAI.Chat.ChatCompletionMessageParam): number {
+  private estimateTokens(msg: OpenAI.Chat.ChatCompletionMessageParam): number {
     const text = JSON.stringify(msg);
     // Rough estimate: 1 token ~= 4 characters
     return Math.ceil(text.length / 4);

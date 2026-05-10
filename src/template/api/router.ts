@@ -29,7 +29,7 @@ export class ExampleController {
    */
   @Get('example')
   @Tags('Example')
-  public async getExample (): Promise<ExampleResponse> {
+  public async getExample(): Promise<ExampleResponse> {
     try {
       logger.info('Example endpoint called');
 
@@ -40,7 +40,7 @@ export class ExampleController {
       };
     } catch (error) {
       logger.error('Error in example endpoint:', error);
-      throw new Error(error instanceof Error ? error.message : 'Unknown error');
+      throw new Error(error instanceof Error ? error.message : 'Unknown error', { cause: error });
     }
   }
 
@@ -50,7 +50,7 @@ export class ExampleController {
    */
   @Get('health')
   @Tags('Server')
-  public async getHealth (): Promise<{
+  public async getHealth(): Promise<{
     status: string;
     timestamp: string;
     version: string;

@@ -9,31 +9,31 @@ export type AdminAuthTypeInput = AdminAuthType | 'none';
 
 interface IWebServerConfig {
   webServer: {
-    host: string,
-    port: number,
-    originHosts: string[],
+    host: string;
+    port: number;
+    originHosts: string[];
     auth: {
-      enabled: boolean,
+      enabled: boolean;
       basic?: {
         username: string;
         password: string;
       };
       jwtToken: {
-        encryptKey: string,
-        checkMCPName: boolean,
-        isCheckIP: boolean,
-      }
-      permanentServerTokens: string[],
+        encryptKey: string;
+        checkMCPName: boolean;
+        isCheckIP: boolean;
+      };
+      permanentServerTokens: string[];
       //> Revocation lists — never accepted by MCP, Admin or Agent Tester
       revoked?: {
         //> Revoked JWT tokens. Each entry: { token, note? }
-        jwtTokens?: Array<{ token: string; note?: string }>,
+        jwtTokens?: Array<{ token: string; note?: string }>;
         //> Revoked usernames matched against JWT payload.user (case-insensitive)
-        users?: string[],
-      },
-    },
-    genJwtApiEnable: boolean,
-  }
+        users?: string[];
+      };
+    };
+    genJwtApiEnable: boolean;
+  };
 }
 
 // Admin panel configuration (top-level). enabled=false — panel is not mounted at all.
@@ -41,9 +41,9 @@ interface IWebServerConfig {
 // (dev/debug convenience mode).
 interface IAdminPanelConfig {
   adminPanel?: {
-    enabled: boolean,
-    authType?: AdminAuthTypeInput | AdminAuthTypeInput[] | null,
-  }
+    enabled: boolean;
+    authType?: AdminAuthTypeInput | AdminAuthTypeInput[] | null;
+  };
 }
 
 // Logging configuration
@@ -52,7 +52,7 @@ interface ILoggerConfig {
     level: TFileLogLevel;
     useFileLogger: boolean;
     dir?: string; // Directory for log files (if useFileLogger is true)
-  }
+  };
 }
 
 interface IMCPConfig {
@@ -66,16 +66,16 @@ interface IMCPConfig {
       answerAs: 'text' | 'structuredContent';
       hideAnnotations: boolean;
     };
-  }
+  };
 }
 
 interface ISwaggerConfig {
   swagger: {
     servers?: {
-      url: string,
-      description: string,
-    }[], // An array of servers that will be added to swagger docs
-  }
+      url: string;
+      description: string;
+    }[]; // An array of servers that will be added to swagger docs
+  };
 }
 
 interface IAgentTesterConfig {
@@ -92,7 +92,7 @@ interface IAgentTesterConfig {
       exposeToClient?: boolean; // default false; when true — apiKey/baseURL sent to Agent Tester UI as defaults
     };
     httpHeaders?: Record<string, string>;
-  }
+  };
 }
 
 interface IHomePageConfig {
@@ -110,39 +110,29 @@ interface IHomePageConfig {
 
 interface ICacheConfig {
   cache: {
-    ttlSeconds: 300, // Cache TTL in seconds
-    maxItems: 1000, // Maximum number of cached items
-  }
+    ttlSeconds: 300; // Cache TTL in seconds
+    maxItems: 1000; // Maximum number of cached items
+  };
 }
 
-export interface AppConfig extends IADConfig,
-  ICacheConfig,
-  ILoggerConfig,
-  IAFDatabasesConfig,
-  IWebServerConfig,
-  IAdminPanelConfig,
-  IMCPConfig,
-  ISwaggerConfig,
-  IAgentTesterConfig,
-  IHomePageConfig {
-
-  isMainDBUsed: boolean, // = !!appConfig.db.postgres?.dbs.main?.host
+export interface AppConfig extends IADConfig, ICacheConfig, ILoggerConfig, IAFDatabasesConfig, IWebServerConfig, IAdminPanelConfig, IMCPConfig, ISwaggerConfig, IAgentTesterConfig, IHomePageConfig {
+  isMainDBUsed: boolean; // = !!appConfig.db.postgres?.dbs.main?.host
   // Package metadata (enriched from package.json)
   name: string; // env SERVICE_NAME | <package.json>.name
   shortName: string; // name without 'mcp'
   repo: string;
   version: string;
-  productName: string, // env PRODUCT_NAME | <package.json>.productName
+  productName: string; // env PRODUCT_NAME | <package.json>.productName
   description: string; // <package.json>.description
 
-  accessPoints: IAccessPoints,
+  accessPoints: IAccessPoints;
   consul: IAFConsulConfig & {
     envCode: {
       prod: string; // Production environment code
       dev: string; // Development environment code
     };
-  },
+  };
   uiColor: {
     primary: string; // Font color of the header and a number of interface elements on the HOME page
-  }
+  };
 }

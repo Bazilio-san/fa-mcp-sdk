@@ -6,15 +6,7 @@ import { Router } from 'express';
 import express from 'express';
 
 import { generateToken } from '../auth/jwt.js';
-import {
-  COOKIE_NAME,
-  createSession,
-  deleteSession,
-  getAvailableAuthMethods,
-  getSessionTtlMs,
-  hasValidSession,
-  validateLoginCredentials,
-} from '../auth/agent-tester-auth.js';
+import { COOKIE_NAME, createSession, deleteSession, getAvailableAuthMethods, getSessionTtlMs, hasValidSession, validateLoginCredentials } from '../auth/agent-tester-auth.js';
 import { appConfig } from '../bootstrap/init-config.js';
 import { logger as lgr } from '../logger.js';
 
@@ -22,18 +14,17 @@ import { TesterAgentService } from './services/TesterAgentService.js';
 import { TesterMcpClientService } from './services/TesterMcpClientService.js';
 import { ITesterChatRequest, TesterMcpConnectionRequest } from './types.js';
 
-
-
-
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
 const logger = lgr.getSubLogger({ name: chalk.cyan('agent-tester') });
 
-export function createAgentTesterRouter (options: {
-  defaultMcpUrl?: string;
-  openAi?: { apiKey?: string; baseURL?: string };
-} = {}): Router {
+export function createAgentTesterRouter(
+  options: {
+    defaultMcpUrl?: string;
+    openAi?: { apiKey?: string; baseURL?: string };
+  } = {},
+): Router {
   const router = Router();
 
   const mcpClientService = new TesterMcpClientService();
@@ -103,8 +94,8 @@ export function createAgentTesterRouter (options: {
       authEnabled: !!appConfig.webServer?.auth?.enabled,
       httpHeaders: appConfig.agentTester?.httpHeaders || {},
       llmDefaults: {
-        baseURL: expose ? (openAi?.baseURL || '') : '',
-        apiKey: expose ? (openAi?.apiKey || '') : '',
+        baseURL: expose ? openAi?.baseURL || '' : '',
+        apiKey: expose ? openAi?.apiKey || '' : '',
       },
     });
   });
@@ -220,14 +211,14 @@ export function createAgentTesterRouter (options: {
   // GET /api/mcp/status — connection state and available tools
   router.get('/api/mcp/status', (req, res) => {
     const servers = mcpClientService.getAllServerConfigs();
-    const connected = servers.filter(s => s.isConnected);
+    const connected = servers.filter((s) => s.isConnected);
     res.json({
       connected: connected.length > 0,
-      servers: connected.map(s => ({
+      servers: connected.map((s) => ({
         name: s.name,
         url: s.url,
         transport: s.transport,
-        tools: (s.tools || []).map(t => ({ name: t.name, description: t.description, inputSchema: t.inputSchema })),
+        tools: (s.tools || []).map((t) => ({ name: t.name, description: t.description, inputSchema: t.inputSchema })),
         toolCount: s.tools?.length || 0,
       })),
       totalTools: connected.reduce((sum, s) => sum + (s.tools?.length || 0), 0),
@@ -302,11 +293,13 @@ export function createAgentTesterRouter (options: {
   return router;
 }
 
-function generateServerName (url: string): string {
+function generateServerName(url: string): string {
   try {
     const urlObj = new URL(url);
     let { hostname } = urlObj;
-    if (hostname.startsWith('www.')) {hostname = hostname.substring(4);}
+    if (hostname.startsWith('www.')) {
+      hostname = hostname.substring(4);
+    }
     const firstSegment = hostname.split('.')[0] || hostname;
     const { port } = urlObj;
     return port ? `${firstSegment}${port}` : firstSegment;

@@ -15,7 +15,6 @@ export const getConsulAPI = async () => {
     em: eventEmitter,
     envCode: isProd ? appConfig.consul.envCode.prod : appConfig.consul.envCode.dev,
     getConsulUIAddress:
-      getProjectData().getConsulUIAddress ||
-      ((serviceId: string) => `Consul service id: ${serviceId}. Can not construct UI url because custom getConsulUIAddress function was not provided`),
+      getProjectData().getConsulUIAddress || ((serviceId: string) => `Consul service id: ${serviceId}. Can not construct UI url because custom getConsulUIAddress function was not provided`),
   });
 };

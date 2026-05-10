@@ -34,8 +34,8 @@ const pjContent = fss.readFileSync(path.join(PROJ_ROOT, 'package.json'));
 const faMcpSdkVersion = JSON.parse(pjContent).version;
 
 // Print version and exit on -V or --version
-const argv = process.argv.slice(2);
-if (argv.includes('-V') || argv.includes('--version')) {
+const argv = new Set(process.argv.slice(2));
+if (argv.has('-V') || argv.has('--version')) {
   console.log(faMcpSdkVersion);
   process.exit(0);
 }
@@ -63,27 +63,30 @@ const getAsk = () => {
     output: process.stdout,
   });
 
-  const yn_ = (prompt, defaultAnswer = 'y') => new Promise((resolve) => {
-    rl.question(prompt, (v) => {
-      resolve((trim(v) || defaultAnswer).toLowerCase());
+  const yn_ = (prompt, defaultAnswer = 'y') =>
+    new Promise((resolve) => {
+      rl.question(prompt, (v) => {
+        resolve((trim(v) || defaultAnswer).toLowerCase());
+      });
     });
-  });
 
   return {
     close: rl.close.bind(rl),
 
-    question: (prompt) => new Promise(resolve => {
-      rl.question(prompt, resolve);
-    }),
+    question: (prompt) =>
+      new Promise((resolve) => {
+        rl.question(prompt, resolve);
+      }),
 
-    optional: (title, paramName, defaultValue, example = undefined) => new Promise(resolve => {
-      const defaultText = formatDefaultValue(defaultValue);
-      example = example ? ` (example: ${example})` : '';
-      const prompt = `${title}${hp(paramName)}${defaultText}${example}${OPTIONAL}: `;
-      rl.question(prompt, (v) => {
-        resolve(trim(v) || trim(defaultValue));
-      });
-    }),
+    optional: (title, paramName, defaultValue, example = undefined) =>
+      new Promise((resolve) => {
+        const defaultText = formatDefaultValue(defaultValue);
+        example = example ? ` (example: ${example})` : '';
+        const prompt = `${title}${hp(paramName)}${defaultText}${example}${OPTIONAL}: `;
+        rl.question(prompt, (v) => {
+          resolve(trim(v) || trim(defaultValue));
+        });
+      }),
 
     yn: async (title, paramName, defaultValue = 'false') => {
       const isTrue = /^(true|y)$/i.test(trim(defaultValue));
@@ -127,7 +130,7 @@ const parseConfigFile = (filePath, content) => {
       }
     }
   } catch (error) {
-    throw new Error(`Failed to parse configuration file ${filePath}: ${error.message}`);
+    throw new Error(`Failed to parse configuration file ${filePath}: ${error.message}`, { cause: error });
   }
 };
 
@@ -153,7 +156,7 @@ const removeIfExists = async (targetPath, relPath, options = {}) => {
 };
 
 class MCPGenerator {
-  constructor () {
+  constructor() {
     this.lastConfigPath = null;
     this.requiredParams = [
       {
@@ -343,11 +346,11 @@ certificate's public and private keys`,
     ];
   }
 
-  createConfigProxy (config) {
+  createConfigProxy(config) {
     const self = this; // Capture this in closure
 
     return new Proxy(config, {
-      set (target, prop, value, receiver) {
+      set(target, prop, value, receiver) {
         // Check if the value is actually changing
         const currentValue = target[prop];
         if (currentValue === value) {
@@ -358,15 +361,14 @@ certificate's public and private keys`,
         // Save to file asynchronously without blocking — only if project path is known
         const { lastConfigPath } = self;
         if (lastConfigPath) {
-          fs.writeFile(lastConfigPath, JSON.stringify(target, null, 2), 'utf8')
-            .catch(error => console.warn(`⚠️  Warning: Could not save config to file ${lastConfigPath}:`, error.message));
+          fs.writeFile(lastConfigPath, JSON.stringify(target, null, 2), 'utf8').catch((error) => console.warn(`⚠️  Warning: Could not save config to file ${lastConfigPath}:`, error.message));
         }
         return result;
       },
     });
   }
 
-  async setLastConfigPath (projectAbsPath, config) {
+  async setLastConfigPath(projectAbsPath, config) {
     const tp = path.resolve(projectAbsPath);
     try {
       await fs.mkdir(tp, { recursive: true });
@@ -384,7 +386,7 @@ certificate's public and private keys`,
     }
   }
 
-  async collectConfigData (config, isRetry = false) {
+  async collectConfigData(config, isRetry = false) {
     const ask = getAsk();
     // Collect required parameters
     for (const param of this.requiredParams) {
@@ -647,7 +649,7 @@ certificate's public and private keys`,
     ask.close();
   }
 
-  async confirmConfiguration (config) {
+  async confirmConfiguration(config) {
     console.log('\n📋 Configuration Summary:');
     console.log('========================');
 
@@ -680,10 +682,9 @@ certificate's public and private keys`,
     return confirmed;
   }
 
-  async collectConfiguration () {
+  async collectConfiguration() {
     const config = {};
-    const configFile = process.argv.find((arg) => arg.endsWith('.json') || arg.endsWith('.yaml') || arg.endsWith('.yml')) ||
-      process.argv.find((arg) => arg.startsWith('--config='))?.split('=')[1];
+    const configFile = process.argv.find((arg) => arg.endsWith('.json') || arg.endsWith('.yaml') || arg.endsWith('.yml')) || process.argv.find((arg) => arg.startsWith('--config='))?.split('=')[1];
 
     if (configFile) {
       try {
@@ -723,7 +724,7 @@ certificate's public and private keys`,
       confirmed = await this.confirmConfiguration(config);
 
       if (!confirmed) {
-        console.log('\n🔄 Let\'s re-enter the configuration:\n');
+        console.log("\n🔄 Let's re-enter the configuration:\n");
         isRetry = true;
       }
     }
@@ -731,7 +732,7 @@ certificate's public and private keys`,
     return config;
   }
 
-  async getTargetPath (config = {}) {
+  async getTargetPath(config = {}) {
     const ask = getAsk();
 
     let tp = process.cwd();
@@ -778,14 +779,14 @@ certificate's public and private keys`,
         console.error(errMsg);
         process.exit(1);
       }
-      throw new Error(`Cannot access directory: ${error.message}`);
+      throw new Error(`Cannot access directory: ${error.message}`, { cause: error });
     }
 
     ask.close();
     return tp;
   }
 
-  async copyDirectory (source, target) {
+  async copyDirectory(source, target) {
     const entries = await fs.readdir(source, { withFileTypes: true });
     if (!fss.existsSync(target)) {
       await fs.mkdir(target, { recursive: true });
@@ -808,11 +809,9 @@ certificate's public and private keys`,
     }
   }
 
-  async handlePackageJson (content, config) {
+  async handlePackageJson(content, config) {
     try {
-      content = content
-        .replace(/"project\.name"/g, '"{{project.name}}"')
-        .replace(/"node \.\.\/scripts/g, '"node ./scripts');
+      content = content.replace(/"project\.name"/g, '"{{project.name}}"').replace(/"node \.\.\/scripts/g, '"node ./scripts');
       // First replace all template parameters in the content string
       let updatedContent = content;
       for (const [param, value] of Object.entries(config)) {
@@ -830,7 +829,9 @@ certificate's public and private keys`,
       if (!authorName && !authorEmail) {
         delete packageJson.author;
       } else {
-        if (!packageJson.author) {packageJson.author = {};}
+        if (!packageJson.author) {
+          packageJson.author = {};
+        }
         if (authorName) {
           packageJson.author.name = authorName;
         }
@@ -851,11 +852,11 @@ certificate's public and private keys`,
 
       return JSON.stringify(packageJson, null, 2);
     } catch (error) {
-      throw new Error(`Error processing package.json: ${error.message}`);
+      throw new Error(`Error processing package.json: ${error.message}`, { cause: error });
     }
   }
 
-  async getAllFiles (dir, skipRootDirs) {
+  async getAllFiles(dir, skipRootDirs) {
     const files = [];
     const entries = await fs.readdir(dir, { withFileTypes: true });
 
@@ -866,7 +867,7 @@ certificate's public and private keys`,
       const fullPath = path.join(dir, entry.name);
 
       if (entry.isDirectory()) {
-        files.push(...await this.getAllFiles(fullPath));
+        files.push(...(await this.getAllFiles(fullPath)));
       } else {
         files.push(fullPath);
       }
@@ -875,7 +876,7 @@ certificate's public and private keys`,
     return files;
   }
 
-  async transformTargetFile (config, targetRelPath, transformFn) {
+  async transformTargetFile(config, targetRelPath, transformFn) {
     const targetPath = config.projectAbsPath;
     const targetFullPath = path.join(targetPath, targetRelPath);
     const content = await fs.readFile(targetFullPath, 'utf8');
@@ -883,10 +884,10 @@ certificate's public and private keys`,
     await fs.writeFile(targetFullPath, transformedContent, 'utf8');
   }
 
-  async replaceTemplateParameters (config) {
+  async replaceTemplateParameters(config) {
     const targetPath = config.projectAbsPath;
     const files = await this.getAllFiles(targetPath, ALLOWED_FILES);
-    const importRe = /'[^']+\/core\/index.js'/ig;
+    const importRe = /'[^']+\/core\/index.js'/gi;
     for (const filePath of files) {
       let content = await fs.readFile(filePath, 'utf8');
       let modified = false;
@@ -905,7 +906,7 @@ certificate's public and private keys`,
           }
         }
         if (importRe.test(content)) {
-          content = content.replace(importRe, '\'fa-mcp-sdk\'');
+          content = content.replace(importRe, "'fa-mcp-sdk'");
           modified = true;
         }
       }
@@ -926,24 +927,46 @@ certificate's public and private keys`,
       await this.transformTargetFile(config, '.env', (c) => c.replace(/^(NODE_CONSUL_ENV)=([^\r\n]*)/m, '#$1=$2'));
     }
     if (config['claude.isBypassPermissions'] === 'true') {
-      const c1 = ['sudo cp', 'sudo', 'bash', 'chmod', 'curl', 'dir', 'echo', 'git', 'find', 'grep', 'jest',
-        'mkdir', 'node', 'npm install', 'npm run', 'npm test', 'npm', 'npx', 'pkill', 'set', 'playwright', 'powershell',
-        'rm', 'taskkill', 'tasklist', 'timeout', 'turbo run', 'wc'];
+      const c1 = [
+        'sudo cp',
+        'sudo',
+        'bash',
+        'chmod',
+        'curl',
+        'dir',
+        'echo',
+        'git',
+        'find',
+        'grep',
+        'jest',
+        'mkdir',
+        'node',
+        'npm install',
+        'npm run',
+        'npm test',
+        'npm',
+        'npx',
+        'pkill',
+        'set',
+        'playwright',
+        'powershell',
+        'rm',
+        'taskkill',
+        'tasklist',
+        'timeout',
+        'turbo run',
+        'wc',
+      ];
       const c2 = ['jobs', 'npm start', 'unset http_proxy'];
       const c3 = ['./config/local.yaml', './node_modules/fa-mcp-sdk/config/_local.yaml'];
       const i = ' '.repeat(8);
-      const allowBashLines = [
-        ...c1.map((c) => `${i}"Bash(${c}:*)",`),
-        ...c2.map((c) => `${i}"Bash(${c})",`),
-        ...c3.map((c) => `${i}"Read(${c})",`),
-      ].join('\n');
-      const transformFn = (c) => c.replace('"acceptEdits"', '"bypassPermissions"')
-        .replace(/"allow": \[\s+"Edit",/, `"allow": [\n${allowBashLines}\n${i}"Edit",`);
+      const allowBashLines = [...c1.map((c) => `${i}"Bash(${c}:*)",`), ...c2.map((c) => `${i}"Bash(${c})",`), ...c3.map((c) => `${i}"Read(${c})",`)].join('\n');
+      const transformFn = (c) => c.replace('"acceptEdits"', '"bypassPermissions"').replace(/"allow": \[\s+"Edit",/, `"allow": [\n${allowBashLines}\n${i}"Edit",`);
       await this.transformTargetFile(config, '.claude/settings.json', transformFn);
     }
   }
 
-  async createProject (config) {
+  async createProject(config) {
     const targetPath = config.projectAbsPath;
     // Copy template files
     await this.copyDirectory(path.join(PROJ_ROOT, 'cli-template'), targetPath);
@@ -996,7 +1019,6 @@ certificate's public and private keys`,
     const localYamlExamplePath = path.join(targetPath, 'config', '_local.yaml');
     const localYamlPath = path.join(targetPath, 'config', 'local.yaml');
     try {
-
       localYamlExampleContent = await fs.readFile(localYamlExamplePath, 'utf8');
     } catch (error) {
       console.log('⚠️  Warning: Could not process config/_local.yaml file:', error.message);
@@ -1030,7 +1052,7 @@ certificate's public and private keys`,
           }
         }
         if (!config['consul.agent.reg.host']) {
-          localYamlModifiedContent = localYamlModifiedContent.replace(/(\n +)host: '[^']*'( # The host of the consul agent)/, '$1# host: \'\'$2');
+          localYamlModifiedContent = localYamlModifiedContent.replace(/(\n +)host: '[^']*'( # The host of the consul agent)/, "$1# host: ''$2");
         }
 
         await fs.writeFile(localYamlPath, localYamlModifiedContent, 'utf8');
@@ -1039,16 +1061,12 @@ certificate's public and private keys`,
         console.log('⚠️  Warning: Could not create config/_local.yaml file:', error.message);
       }
     }
-    const pathsToRemove = [
-      { rel: 'package-lock.json' },
-    ];
+    const pathsToRemove = [{ rel: 'package-lock.json' }];
 
-    await Promise.all(
-      pathsToRemove.map(({ rel, options }) => removeIfExists(targetPath, rel, options)),
-    );
+    await Promise.all(pathsToRemove.map(({ rel, options }) => removeIfExists(targetPath, rel, options)));
   }
 
-  async run () {
+  async run() {
     console.log('MCP Server Template Generator');
     console.log('==================================\n');
 
@@ -1067,7 +1085,6 @@ certificate's public and private keys`,
       console.log('   npm start');
 
       process.exit(0);
-
     } catch (error) {
       if (error.message && !(error.stack || '').includes(String(error.message))) {
         console.error('\n❌  Error:', error.message);
@@ -1078,7 +1095,7 @@ certificate's public and private keys`,
   }
 }
 
-function escapeRegExp (string) {
+function escapeRegExp(string) {
   return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 

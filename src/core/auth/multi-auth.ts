@@ -7,7 +7,6 @@
 import chalk from 'chalk';
 import { Request } from 'express';
 
-
 import { CustomAuthValidator } from '../_types_/types.js';
 import { appConfig } from '../bootstrap/init-config.js';
 import { logger as lgr } from '../logger.js';
@@ -20,25 +19,20 @@ import { AuthDetectionResult, AuthResult, AuthType } from './types.js';
 
 const logger = lgr.getSubLogger({ name: chalk.magenta('multi-auth') });
 
-const {
-  enabled: authEnabled,
-  permanentServerTokens: pt,
-  basic: { username: bUsername, password: bPassword } = {},
-  jwtToken: { encryptKey } = {},
-} = appConfig.webServer?.auth || {};
+const { enabled: authEnabled, permanentServerTokens: pt, basic: { username: bUsername, password: bPassword } = {}, jwtToken: { encryptKey } = {} } = appConfig.webServer?.auth || {};
 
 /**
  * Authentication check order in ascending CPU load
  */
 const authOrder = {
-  'permanentServerTokens': 1,  // O(1) Set.has()
-  'basic': 2,                  // Base64 decoding
-  'jwtToken': 3,               // Symmetric decryption + JSON.parse
-  'custom': 4,
+  permanentServerTokens: 1, // O(1) Set.has()
+  basic: 2, // Base64 decoding
+  jwtToken: 3, // Symmetric decryption + JSON.parse
+  custom: 4,
 };
 
 const schemaRe = /^([^ ]+) +(.+)$/;
-export const getTokenFromHttpHeader = (req: Request): { scheme?: AuthType, credentials?: string } => {
+export const getTokenFromHttpHeader = (req: Request): { scheme?: AuthType; credentials?: string } => {
   const a = trim(req.headers.authorization);
   if (!a) {
     return {};
@@ -46,7 +40,7 @@ export const getTokenFromHttpHeader = (req: Request): { scheme?: AuthType, crede
   let scheme: string = '';
   let credentials: string = a;
   if (schemaRe.test(a)) {
-    ([scheme = '', credentials = ''] = a.split(/ +/));
+    [scheme = '', credentials = ''] = a.split(/ +/);
   }
   if (scheme.toLowerCase() === 'basic') {
     return { scheme: 'basic', credentials };
@@ -66,7 +60,7 @@ export const getTokenFromHttpHeader = (req: Request): { scheme?: AuthType, crede
  */
 let _cachedValidator: CustomAuthValidator | null | undefined;
 
-function getCustomAuthValidator (): CustomAuthValidator | undefined {
+function getCustomAuthValidator(): CustomAuthValidator | undefined {
   if (_cachedValidator !== undefined) {
     return _cachedValidator ?? undefined;
   }
@@ -80,11 +74,10 @@ function getCustomAuthValidator (): CustomAuthValidator | undefined {
   return _cachedValidator ?? undefined;
 }
 
-
 /**
  * Detects configured authentication types in priority order (ascending CPU load)
  */
-export function detectAuthConfiguration (): AuthDetectionResult {
+export function detectAuthConfiguration(): AuthDetectionResult {
   const configured: AuthType[] = [];
   const errors: Record<string, string[]> = {};
   const result: AuthDetectionResult = { configured, errors, configuredSet: new Set(), configuredTypes: '' };
@@ -139,7 +132,7 @@ export function detectAuthConfiguration (): AuthDetectionResult {
  */
 let _cachedAuthConfig: AuthDetectionResult | undefined;
 
-function getAuthConfiguration (): AuthDetectionResult {
+function getAuthConfiguration(): AuthDetectionResult {
   if (_cachedAuthConfig) {
     return _cachedAuthConfig;
   }
@@ -155,7 +148,7 @@ const E_PFX = 'MCP Auth: ';
 /**
  * Checks auth using all configured authentication methods in ascending CPU load order
  */
-export async function checkMultiAuth (req: Request): Promise<AuthResult> {
+export async function checkMultiAuth(req: Request): Promise<AuthResult> {
   const { configured, configuredSet, configuredTypes } = getAuthConfiguration();
   if (!configured.length) {
     return { success: false, error: `${E_PFX}No authentication methods configured` };
@@ -237,7 +230,7 @@ export async function checkMultiAuth (req: Request): Promise<AuthResult> {
 /**
  * Logs authentication configuration (for debugging)
  */
-export function logAuthConfiguration (): void {
+export function logAuthConfiguration(): void {
   const { configured, errors } = getAuthConfiguration();
 
   logger.info('Auth system configuration:');
@@ -260,7 +253,7 @@ export function logAuthConfiguration (): void {
  * 3. JWT token - if jwtToken.encryptKey is set, generate token on the fly
  * @returns {Object} Headers object with Authorization header if auth is enabled
  */
-export function getAuthHeadersForTests (): object {
+export function getAuthHeadersForTests(): object {
   const auth = appConfig.webServer?.auth;
 
   // If auth is not enabled, no headers needed

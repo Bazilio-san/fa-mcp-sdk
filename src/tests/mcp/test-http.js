@@ -11,7 +11,7 @@ import TEMPLATE_TESTS from './test-cases.js';
 
 const baseURL = (process.env.TEST_MCP_SERVER_URL || `http://localhost:${appConfig.webServer.port}`).replace(/\/+$/, '');
 
-async function runTestGroup (title, tests, client) {
+async function runTestGroup(title, tests, client) {
   console.log(`\n${title}:`);
   let passed = 0;
   for (const test of tests) {
@@ -34,7 +34,7 @@ async function runTestGroup (title, tests, client) {
   return passed;
 }
 
-async function main () {
+async function main() {
   console.log('🧪 HTTP tests for template MCP server');
   console.log('='.repeat(60));
 

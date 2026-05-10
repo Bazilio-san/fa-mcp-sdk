@@ -1,6 +1,6 @@
 // noinspection UnnecessaryLocalVariableJS
 
-import './dotenv.js';  // Load environment variables first
+import './dotenv.js'; // Load environment variables first
 import configModule from 'config';
 import { AppConfig } from '../_types_/config.js';
 
@@ -20,8 +20,8 @@ const productName = process.env.PRODUCT_NAME || pj.productName;
  * Build application configuration from YAML and environment variables
  * Priority: environment variables > config.yaml > defaults
  */
-function buildConfig (): AppConfig {
-  const shortName = name.replace(/[\s\-]*\bmcp\b[\s\-]*/ig, '');
+function buildConfig(): AppConfig {
+  const shortName = name.replace(/[\s-]*\bmcp\b[\s-]*/gi, '');
   const cfg: AppConfig = {
     ...config,
     // Package metadata from package.json
@@ -50,13 +50,13 @@ function buildConfig (): AppConfig {
     cfg.agentTester = { ...cfg.agentTester, logJson: true } as any;
   }
   cfg.isMainDBUsed = !!config.db?.postgres?.dbs?.main?.host;
-  const urlRe = /\b(https?|ftp|file):\/\/[-A-Z0-9+&@#\/%?=~_|$!:,.;]*[A-Z0-9+&@#\/%=~_|$]/i;
+  const urlRe = /\b(https?|ftp|file):\/\/[-A-Z0-9+&@#/%?=~_|$!:,.;]*[A-Z0-9+&@#/%=~_|$]/i;
   if (urlRe.test(trim(repository?.url))) {
     cfg.repo = urlRe.exec(repository.url)?.[0] || '';
   } else if (urlRe.test(trim(homepage))) {
     cfg.repo = urlRe.exec(homepage)?.[0] || '';
   }
-  const pst = cfg.webServer?.auth?.permanentServerTokens as (string | string[] | undefined);
+  const pst = cfg.webServer?.auth?.permanentServerTokens as string | string[] | undefined;
   if (typeof pst === 'string' && pst.includes(',')) {
     cfg.webServer.auth.permanentServerTokens = pst.split(',').map(trim);
   }
@@ -72,7 +72,7 @@ export const appConfig: AppConfig = buildConfig();
 /**
  * Returns configuration with sensitive data masked for safe display
  */
-export function getSafeAppConfig (): any {
+export function getSafeAppConfig(): any {
   const cfg = JSON.parse(JSON.stringify(appConfig)); // Deep clone
 
   // Mask database password
@@ -83,6 +83,6 @@ export function getSafeAppConfig (): any {
   return cfg;
 }
 
-export function getProjectData (): McpServerData {
+export function getProjectData(): McpServerData {
   return global.__MCP_PROJECT_DATA__;
 }

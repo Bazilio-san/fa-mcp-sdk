@@ -35,7 +35,7 @@ export const COOKIE_NAME = '__at_sid';
  * Session TTL in ms. Sourced from `agentTester.sessionTtlMs` with an 8h fallback.
  * Read via a function so runtime config changes and tests don't observe a stale value.
  */
-export function getSessionTtlMs (): number {
+export function getSessionTtlMs(): number {
   const v = appConfig.agentTester?.sessionTtlMs;
   return Number.isFinite(v) && (v as number) > 0 ? (v as number) : DEFAULT_SESSION_TTL_MS;
 }
@@ -47,25 +47,28 @@ interface SessionEntry {
 
 const sessions = new Map<string, SessionEntry>();
 
-export function hasValidSession (req: Request): boolean {
+export function hasValidSession(req: Request): boolean {
   return !!getValidSession(req);
 }
 
 /** Periodic cleanup of expired sessions (every 30 min) */
-setInterval(() => {
-  const now = Date.now();
-  for (const [sid, entry] of sessions) {
-    if (now - entry.createdAt > getSessionTtlMs()) {
-      sessions.delete(sid);
+setInterval(
+  () => {
+    const now = Date.now();
+    for (const [sid, entry] of sessions) {
+      if (now - entry.createdAt > getSessionTtlMs()) {
+        sessions.delete(sid);
+      }
     }
-  }
-}, 30 * 60 * 1000);
+  },
+  30 * 60 * 1000,
+);
 
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
-export function parseCookie (cookieHeader: string | undefined, name: string): string | undefined {
+export function parseCookie(cookieHeader: string | undefined, name: string): string | undefined {
   if (!cookieHeader) {
     return undefined;
   }
@@ -73,7 +76,7 @@ export function parseCookie (cookieHeader: string | undefined, name: string): st
   return match?.[1] ? decodeURIComponent(match[1]) : undefined;
 }
 
-function getValidSession (req: Request): SessionEntry | undefined {
+function getValidSession(req: Request): SessionEntry | undefined {
   const sid = parseCookie(req.headers.cookie, COOKIE_NAME);
   if (!sid) {
     return undefined;
@@ -93,13 +96,13 @@ function getValidSession (req: Request): SessionEntry | undefined {
 // Session CRUD (used by router endpoints)
 // ---------------------------------------------------------------------------
 
-export function createSession (authInfo: AuthResult): string {
+export function createSession(authInfo: AuthResult): string {
   const sid = crypto.randomUUID();
   sessions.set(sid, { createdAt: Date.now(), authInfo });
   return sid;
 }
 
-export function deleteSession (req: Request): void {
+export function deleteSession(req: Request): void {
   const sid = parseCookie(req.headers.cookie, COOKIE_NAME);
   if (sid) {
     sessions.delete(sid);
@@ -110,7 +113,7 @@ export function deleteSession (req: Request): void {
 // Auth methods available for login
 // ---------------------------------------------------------------------------
 
-export function getAvailableAuthMethods (): string[] {
+export function getAvailableAuthMethods(): string[] {
   const auth = appConfig.webServer?.auth;
   const methods: string[] = [];
   if (auth?.permanentServerTokens?.filter(Boolean).length) {
@@ -129,7 +132,7 @@ export function getAvailableAuthMethods (): string[] {
  * Validate login credentials.
  * Returns AuthResult with success=true if valid.
  */
-export function validateLoginCredentials (body: { token?: string; username?: string; password?: string }): AuthResult {
+export function validateLoginCredentials(body: { token?: string; username?: string; password?: string }): AuthResult {
   const { token, username, password } = body;
 
   if (token) {
@@ -158,14 +161,9 @@ export function validateLoginCredentials (body: { token?: string; username?: str
 // Middleware
 // ---------------------------------------------------------------------------
 
-const PUBLIC_PATHS = new Set<string>([
-  '/',
-  '/api/auth/status',
-  '/api/auth/login',
-  '/api/auth/logout',
-]);
+const PUBLIC_PATHS = new Set<string>(['/', '/api/auth/status', '/api/auth/login', '/api/auth/logout']);
 
-function isPublicPath (path: string): boolean {
+function isPublicPath(path: string): boolean {
   return PUBLIC_PATHS.has(path) || path.startsWith('/static/');
 }
 
@@ -178,7 +176,7 @@ function isPublicPath (path: string): boolean {
  *   2. Accepts a valid session cookie (sets req.authInfo).
  *   3. Otherwise delegates to the universal authMW (Authorization header, headless API).
  */
-export function createAgentTesterSessionMW (): RequestHandler[] {
+export function createAgentTesterSessionMW(): RequestHandler[] {
   if (!appConfig.agentTester?.useAuth) {
     return [];
   }

@@ -4,7 +4,7 @@ import { ChatCompletionCreateParamsNonStreaming } from 'openai/resources/chat/co
 import { appConfig } from '../bootstrap/init-config.js';
 import { isMainModule } from '../utils/utils.js';
 
-export async function checkLlm (model?: string): Promise<boolean> {
+export async function checkLlm(model?: string): Promise<boolean> {
   const apiKey = appConfig.agentTester?.openAi?.apiKey?.trim();
   const baseURL = appConfig.agentTester?.openAi?.baseURL?.trim();
   if (!apiKey) {

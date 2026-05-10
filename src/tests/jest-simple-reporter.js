@@ -1,5 +1,5 @@
 export default class SimpleReporter {
-  onRunComplete (contexts, runResults) {
+  onRunComplete(contexts, runResults) {
     const { numPassedTests, numFailedTests, numPendingTests } = runResults;
     const total = numPassedTests + numFailedTests + numPendingTests;
     const actualSuccess = numFailedTests === 0 && total > 0;

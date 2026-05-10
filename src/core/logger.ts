@@ -50,7 +50,7 @@ if (appConfig.mcp.transportType === 'stdio') {
       // URL credentials
       /https?:\/\/[^:]+:[^@]+@/gi,
     ],
-    noFileLogger: !Boolean(useFileLogger),
+    noFileLogger: !useFileLogger,
   };
   if (useFileLogger && logDir) {
     settings.logDir = logDir;
@@ -59,6 +59,5 @@ if (appConfig.mcp.transportType === 'stdio') {
   logger = l;
   fileLogger = fl;
 }
-
 
 export { logger, fileLogger, useFileLogger };

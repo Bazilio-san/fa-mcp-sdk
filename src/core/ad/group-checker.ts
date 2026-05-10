@@ -14,29 +14,39 @@ export interface IGroupCheckerInitResult {
  * Derives baseDn from LDAP controller URL.
  * Example: 'ldap://dc1.corp.company.com' -> 'DC=corp,DC=company,DC=com'
  */
-function deriveBaseDnFromController (controllerUrl: string): string {
+function deriveBaseDnFromController(controllerUrl: string): string {
   const url = controllerUrl.replace(/^ldaps?:\/\//, '');
   const parts = url.split('.').reverse().slice(0, 3).reverse();
   return parts.map((v) => `DC=${v}`).join(',');
 }
 
-function getDefaultDomain (): { name: string; config: IDcConfig } | undefined {
+function getDefaultDomain(): { name: string; config: IDcConfig } | undefined {
   const domains = appConfig.ad?.domains;
-  if (!domains) {return undefined;}
+  if (!domains) {
+    return undefined;
+  }
 
   for (const [name, config] of Object.entries(domains)) {
-    if (config.default) {return { name, config };}
+    if (config.default) {
+      return { name, config };
+    }
   }
 
   const names = Object.keys(domains);
   return names.length > 0 ? { name: names[0]!, config: domains[names[0]!]! } : undefined;
 }
 
-function validateConfig (config: IDcConfig, domain: string): string[] {
+function validateConfig(config: IDcConfig, domain: string): string[] {
   const missing: string[] = [];
-  if (!config.controllers?.length) {missing.push(`ad.domains.${domain}.controllers`);}
-  if (!config.username) {missing.push(`ad.domains.${domain}.username`);}
-  if (!config.password) {missing.push(`ad.domains.${domain}.password`);}
+  if (!config.controllers?.length) {
+    missing.push(`ad.domains.${domain}.controllers`);
+  }
+  if (!config.username) {
+    missing.push(`ad.domains.${domain}.username`);
+  }
+  if (!config.password) {
+    missing.push(`ad.domains.${domain}.password`);
+  }
   return missing;
 }
 
@@ -47,7 +57,7 @@ let cachedDefaultDomain: { name: string; config: IDcConfig } | undefined;
  * @param domainName - Optional domain name. Uses default domain if not specified.
  * @throws Error if AD configuration is missing or incomplete
  */
-export function initADGroupChecker (domainName?: string): IGroupCheckerInitResult {
+export function initADGroupChecker(domainName?: string): IGroupCheckerInitResult {
   let domainConfig: IDcConfig | undefined;
   let resolvedDomainName: string;
 

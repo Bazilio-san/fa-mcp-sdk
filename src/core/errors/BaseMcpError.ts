@@ -14,13 +14,7 @@ export class BaseMcpError extends Error implements IMcpError {
   public readonly statusCode: number;
   public readonly printed?: boolean;
 
-  constructor (
-    code: string,
-    message: string,
-    details?: Record<string, unknown>,
-    statusCode?: number,
-    printed?: boolean,
-  ) {
+  constructor(code: string, message: string, details?: Record<string, unknown>, statusCode?: number, printed?: boolean) {
     super(message);
     this.name = this.constructor.name;
     this.code = code;
@@ -44,7 +38,7 @@ export class BaseMcpError extends Error implements IMcpError {
     }
   }
 
-  toJSON (): IMcpError {
+  toJSON(): IMcpError {
     const result: IMcpError = {
       code: this.code,
       message: this.message,

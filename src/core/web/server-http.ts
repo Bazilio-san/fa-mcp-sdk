@@ -2,13 +2,7 @@ import { dirname, join } from 'path';
 import { fileURLToPath } from 'url';
 
 import { SSEServerTransport } from '@modelcontextprotocol/sdk/server/sse.js';
-import {
-  CallToolRequestSchema,
-  ListToolsRequestSchema,
-  ListPromptsRequestSchema,
-  ListResourcesRequestSchema,
-  ReadResourceRequestSchema,
-} from '@modelcontextprotocol/sdk/types.js';
+import { CallToolRequestSchema, ListToolsRequestSchema, ListPromptsRequestSchema, ListResourcesRequestSchema, ReadResourceRequestSchema } from '@modelcontextprotocol/sdk/types.js';
 import chalk from 'chalk';
 import express from 'express';
 import helmet from 'helmet';
@@ -38,7 +32,6 @@ import { handleHomeInfo } from './home-api.js';
 import { configureOpenAPI, createSwaggerUIAssetsMiddleware } from './openapi.js';
 import { createSvgRouter } from './svg-icons.js';
 
-
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
@@ -52,22 +45,12 @@ export const isAdminEnabled = appConfig.adminPanel?.enabled === true;
 /**
  * Handle rate limiting with consistent error response
  */
-async function handleRateLimit (
-  rateLimiter: RateLimiterMemory,
-  clientId: string,
-  ip: string,
-  context: string = '',
-  res?: express.Response,
-  id?: any,
-): Promise<void> {
+async function handleRateLimit(rateLimiter: RateLimiterMemory, clientId: string, ip: string, context: string = '', res?: express.Response, id?: any): Promise<void> {
   try {
     await rateLimiter.consume(clientId);
   } catch (rateLimitError) {
     if (isRateLimitError(rateLimitError)) {
-      const rateLimitMessage = formatRateLimitError(
-        rateLimitError as any,
-        appConfig.mcp.rateLimit.maxRequests,
-      );
+      const rateLimitMessage = formatRateLimitError(rateLimitError as any, appConfig.mcp.rateLimit.maxRequests);
       logger.warn(`Rate limit exceeded${context ? ` in ${context}` : ''}: ip: ${ip}`);
 
       if (res) {
@@ -81,7 +64,7 @@ async function handleRateLimit (
         });
         return;
       } else {
-        throw new Error(rateLimitMessage);
+        throw new Error(rateLimitMessage, { cause: rateLimitError });
       }
     }
     throw rateLimitError;
@@ -91,7 +74,7 @@ async function handleRateLimit (
 /**
  * Start HTTP server with SSE transport
  */
-export async function startHttpServer (): Promise<void> {
+export async function startHttpServer(): Promise<void> {
   const app = express();
   // Initialize rate limiter
   const rateLimiter = new RateLimiterMemory({
@@ -104,10 +87,12 @@ export async function startHttpServer (): Promise<void> {
   const authMW = createAuthMW();
 
   // Security middleware
-  app.use(helmet({
-    contentSecurityPolicy: false, // Allow for SSE
-    crossOriginEmbedderPolicy: false,
-  }));
+  app.use(
+    helmet({
+      contentSecurityPolicy: false, // Allow for SSE
+      crossOriginEmbedderPolicy: false,
+    }),
+  );
 
   // JSON parsing
   app.use(express.json({ limit: '10mb' }));
@@ -250,7 +235,7 @@ export async function startHttpServer (): Promise<void> {
           }
 
           const token = generateToken(username.trim(), liveTimeSec, payload);
-          const expire = Date.now() + (liveTimeSec * 1000);
+          const expire = Date.now() + liveTimeSec * 1000;
 
           return res.json({
             success: true,
@@ -290,15 +275,18 @@ export async function startHttpServer (): Promise<void> {
 
   // SSE endpoints for legacy MCP communication
   // Store SSE transports by session ID with transport, server, preserved headers, and auth payload
-  const sseTransports = new Map<string, {
-    transport: SSEServerTransport,
-    server: any,
-    headers: Record<string, string>,
-    payload?: { user: string; [key: string]: any }
-  }>();
+  const sseTransports = new Map<
+    string,
+    {
+      transport: SSEServerTransport;
+      server: any;
+      headers: Record<string, string>;
+      payload?: { user: string; [key: string]: any };
+    }
+  >();
 
   // Create SSE server instance with preserved headers and auth payload from connection establishment
-  async function createSseServer (preservedHeaders: Record<string, string>, mcpAuthPayload?: { user: string; [key: string]: any }) {
+  async function createSseServer(preservedHeaders: Record<string, string>, mcpAuthPayload?: { user: string; [key: string]: any }) {
     const sseServer = createMcpServer();
 
     const sseArgs = { transport: 'sse' as const, headers: preservedHeaders, payload: mcpAuthPayload };
@@ -321,7 +309,7 @@ export async function startHttpServer (): Promise<void> {
 
     // Override resources/read to pass correct transport and context
     sseServer.setRequestHandler(ReadResourceRequestSchema, async (request: any) => {
-      return await getResource(request.params.uri, sseArgs) as any;
+      return (await getResource(request.params.uri, sseArgs)) as any;
     });
 
     // Override the tool call handler to include rate limiting, preserved headers and auth payload
@@ -358,7 +346,7 @@ export async function startHttpServer (): Promise<void> {
       logger.debug('SSE connection headers preserved:', Object.keys(preservedHeaders));
 
       // Extract auth payload from middleware (set by authMW)
-      const { authInfo } = (req as any);
+      const { authInfo } = req as any;
       const authPayload = authInfo?.payload;
 
       // Create SSE transport that will use the same endpoint for POST requests
@@ -387,9 +375,7 @@ export async function startHttpServer (): Promise<void> {
       return;
     } catch (error) {
       logger.error('SSE connection failed:', error);
-      return res.status(500).json(createJsonRpcErrorResponse(
-        new ServerError('Failed to establish SSE connection'),
-      ));
+      return res.status(500).json(createJsonRpcErrorResponse(new ServerError('Failed to establish SSE connection')));
     }
   });
 
@@ -427,9 +413,7 @@ export async function startHttpServer (): Promise<void> {
     } catch (error) {
       logger.error('SSE message handling failed', error);
       if (!res.headersSent) {
-        res.status(500).json(createJsonRpcErrorResponse(
-          new ServerError('Failed to handle SSE message'),
-        ));
+        res.status(500).json(createJsonRpcErrorResponse(new ServerError('Failed to handle SSE message')));
       }
     }
   });
@@ -470,9 +454,7 @@ export async function startHttpServer (): Promise<void> {
     } catch (error) {
       logger.error('SSE POST request failed', error);
       if (!res.headersSent) {
-        res.status(500).json(createJsonRpcErrorResponse(
-          new ServerError('Failed to handle SSE POST request'),
-        ));
+        res.status(500).json(createJsonRpcErrorResponse(new ServerError('Failed to handle SSE POST request')));
       }
     }
   });

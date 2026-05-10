@@ -9,16 +9,12 @@ import { appConfig } from '../bootstrap/init-config.js';
 import { logger } from '../logger.js';
 
 export interface IQueryPgArgsCOptional extends Omit<IQueryPgArgs, 'connectionId'> {
-  connectionId?: string
+  connectionId?: string;
 }
 
 const connectionId = 'main';
 
-export const queryMAIN = async <R extends QueryResultRow = any> (
-  arg: string | IQueryPgArgsCOptional,
-  sqlValues?: any[],
-  throwError = false,
-): Promise<QueryResult<R> | undefined> => {
+export const queryMAIN = async <R extends QueryResultRow = any>(arg: string | IQueryPgArgsCOptional, sqlValues?: any[], throwError = false): Promise<QueryResult<R> | undefined> => {
   if (typeof arg === 'string') {
     arg = { sqlText: arg, connectionId, sqlValues, throwError } as IQueryPgArgs;
   }
@@ -58,9 +54,7 @@ export const checkMainDB = async () => {
   }
 };
 
-export const execMAIN = async (
-  arg: string | IQueryPgArgsCOptional,
-): Promise<number | undefined> => {
+export const execMAIN = async (arg: string | IQueryPgArgsCOptional): Promise<number | undefined> => {
   if (typeof arg === 'string') {
     arg = { sqlText: arg, connectionId } as IQueryPgArgs;
   } else {
@@ -68,14 +62,10 @@ export const execMAIN = async (
   }
   const res = await queryPg(arg as IQueryPgArgs);
   // If a batch of SQL statements is executed, recordset is returned
-  return Array.isArray(res) ? res.reduce((accum, item) => accum + (item?.rowCount ?? 0), 0) : res?.rowCount ?? undefined;
+  return Array.isArray(res) ? res.reduce((accum, item) => accum + (item?.rowCount ?? 0), 0) : (res?.rowCount ?? undefined);
 };
 
-export const queryRsMAIN = async <R extends QueryResultRow = any> (
-  arg: string | IQueryPgArgsCOptional,
-  sqlValues?: any[],
-  throwError = false,
-): Promise<R[] | undefined> => {
+export const queryRsMAIN = async <R extends QueryResultRow = any>(arg: string | IQueryPgArgsCOptional, sqlValues?: any[], throwError = false): Promise<R[] | undefined> => {
   if (typeof arg === 'string') {
     arg = { sqlText: arg, connectionId, sqlValues, throwError } as IQueryPgArgs;
   } else {
@@ -85,11 +75,7 @@ export const queryRsMAIN = async <R extends QueryResultRow = any> (
   return res?.rows;
 };
 
-export const oneRowMAIN = async <R extends QueryResultRow = any> (
-  arg: string | IQueryPgArgsCOptional,
-  sqlValues?: any[],
-  throwError = false,
-): Promise<R | undefined> => {
+export const oneRowMAIN = async <R extends QueryResultRow = any>(arg: string | IQueryPgArgsCOptional, sqlValues?: any[], throwError = false): Promise<R | undefined> => {
   if (typeof arg === 'string') {
     arg = { sqlText: arg, connectionId, sqlValues, throwError } as IQueryPgArgs;
   } else {
@@ -99,55 +85,47 @@ export const oneRowMAIN = async <R extends QueryResultRow = any> (
   return res?.rows?.[0];
 };
 
-export const getInsertSqlMAIN = async <U extends TDBRecord = TDBRecord> (arg: {
-  commonSchemaAndTable: string,
-  recordset: TRecordSet<U>,
-  excludeFromInsert?: string[],
-  addOutputInserted?: boolean,
-  isErrorOnConflict?: boolean,
-  keepSerialFields?: boolean,
+export const getInsertSqlMAIN = async <U extends TDBRecord = TDBRecord>(arg: {
+  commonSchemaAndTable: string;
+  recordset: TRecordSet<U>;
+  excludeFromInsert?: string[];
+  addOutputInserted?: boolean;
+  isErrorOnConflict?: boolean;
+  keepSerialFields?: boolean;
 }): Promise<string> => getInsertSqlPg({ ...arg, connectionId });
 
-export const getMergeSqlMAIN = async <U extends TDBRecord = TDBRecord> (arg: {
-  commonSchemaAndTable: string,
-  recordset: TRecordSet<U>,
+export const getMergeSqlMAIN = async <U extends TDBRecord = TDBRecord>(arg: {
+  commonSchemaAndTable: string;
+  recordset: TRecordSet<U>;
   /**
    * The fields of the conflictFields array will be specified in the ON CONFLICT(<conflictFields>)
    * If conflictFields is NOT PASSED, the ON CONFLICT part will list the fields included in the Primary Key.
    */
-  conflictFields?: string[],
+  conflictFields?: string[];
   /**
    * omitFields: These fields will be excluded from both the INSERT part and the UPDATE part.
    * Unless the updateFields array is passed, omitFields is not affected
    */
-  omitFields?: string[],
+  omitFields?: string[];
   /**
    * If an array of updateFields is specified, then these fields will participate in the DO UPDATE part
    * Subtract fields in fieldsExcludedFromUpdatePart
    * If updateFields is NOT SPECIFIED, then all the fields will be present in the UPDATE part,
    * minus auto-incremental, RO, omitFields and fieldsExcludedFromUpdatePart
    */
-  updateFields?: string[],
-  fieldsExcludedFromUpdatePart?: string[],
-  noUpdateIfNull?: boolean,
-  mergeCorrection?: (_sql: string) => string,
-  returning?: string, // '*' | ' "anyFieldName1", "anyFieldName2"'
+  updateFields?: string[];
+  fieldsExcludedFromUpdatePart?: string[];
+  noUpdateIfNull?: boolean;
+  mergeCorrection?: (_sql: string) => string;
+  returning?: string; // '*' | ' "anyFieldName1", "anyFieldName2"'
 }): Promise<string> => getMergeSqlPg({ ...arg, connectionId });
 
-export const mergeByBatch = async <U extends TDBRecord = TDBRecord> (arg: {
-  recordset: TRecordSet<U>,
-  getMergeSqlFn: Function
-  batchSize?: number
-}) => {
-  const {
-    recordset,
-    getMergeSqlFn,
-    batchSize = 999,
-  } = arg;
+export const mergeByBatch = async <U extends TDBRecord = TDBRecord>(arg: { recordset: TRecordSet<U>; getMergeSqlFn: Function; batchSize?: number }) => {
+  const { recordset, getMergeSqlFn, batchSize = 999 } = arg;
   const results: any[] = [];
   while (recordset.length) {
     const batch = recordset.splice(0, batchSize);
-    const mergeSql = await getMergeSqlFn(batch) as string;
+    const mergeSql = (await getMergeSqlFn(batch)) as string;
     const result = await queryMAIN(mergeSql);
     results.push(result);
   }

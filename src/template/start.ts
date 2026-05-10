@@ -46,23 +46,18 @@ const startProject = async (): Promise<void> => {
       if (!agent?.dev?.host || !agent?.prd?.host) {
         return '--consul-ui-not-configured--';
       }
-      return `${isConsulProd
-        ? `https://${agent.prd.host}/ui/${agent.prd.dc}`
-        : `https://${agent.dev.host}/ui/${agent.dev.dc}`
-      }/services/${serviceId}/instances`;
+      return `${isConsulProd ? `https://${agent.prd.host}/ui/${agent.prd.dc}` : `https://${agent.dev.host}/ui/${agent.dev.dc}`}/services/${serviceId}/instances`;
     },
 
     // Custom startup diagnostic info displayed in the console at server start
-    customStartupInfo: [
-      ['Custom param', 'any value'],
-    ],
+    customStartupInfo: [['Custom param', 'any value']],
   };
 
   // Start MCP server with assembled data
   await initMcpServer(serverData);
 };
 
-startProject().catch(error => {
+startProject().catch((error) => {
   console.error('Failed to start project:', error);
   process.exit(1);
 });

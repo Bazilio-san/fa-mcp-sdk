@@ -9,22 +9,22 @@ let requiresFrontendAuth = false;
 let authMethods = []; // ['token', 'basic']
 
 // Get stored auth token from sessionStorage
-function getStoredToken () {
+function getStoredToken() {
   return sessionStorage.getItem(AUTH_TOKEN_KEY);
 }
 
 // Store auth token in sessionStorage
-function storeToken (token) {
+function storeToken(token) {
   sessionStorage.setItem(AUTH_TOKEN_KEY, token);
 }
 
 // Clear stored auth token
-function clearStoredToken () {
+function clearStoredToken() {
   sessionStorage.removeItem(AUTH_TOKEN_KEY);
 }
 
 // Show authentication modal
-function showAuthModal (errorMessage = null) {
+function showAuthModal(errorMessage = null) {
   const modal = document.getElementById('tokenModal');
 
   // Clear errors on both forms
@@ -35,8 +35,7 @@ function showAuthModal (errorMessage = null) {
 
   if (errorMessage) {
     // Show error in the active form
-    const activeError = document.getElementById('basicAuthForm').style.display !== 'none'
-      ? basicError : tokenError;
+    const activeError = document.getElementById('basicAuthForm').style.display !== 'none' ? basicError : tokenError;
     activeError.innerHTML = `<strong>Error:</strong> ${errorMessage}`;
     activeError.style.display = 'block';
   }
@@ -45,13 +44,13 @@ function showAuthModal (errorMessage = null) {
 }
 
 // Hide authentication modal
-function hideAuthModal () {
+function hideAuthModal() {
   const modal = document.getElementById('tokenModal');
   modal.style.display = 'none';
 }
 
 // Setup auth tabs and forms based on available methods
-function setupAuthForms (methods) {
+function setupAuthForms(methods) {
   const hasToken = methods.includes('token');
   const hasBasic = methods.includes('basic');
 
@@ -79,7 +78,7 @@ function setupAuthForms (methods) {
 }
 
 // Bind tab click handlers
-function bindAuthTabs () {
+function bindAuthTabs() {
   const tabButtons = document.querySelectorAll('.admin-auth-tab');
   const tokenForm = document.getElementById('tokenAuthForm');
   const basicForm = document.getElementById('basicAuthForm');
@@ -108,13 +107,13 @@ function bindAuthTabs () {
 }
 
 // Authenticated fetch wrapper - adds Authorization header
-async function authFetch (url, options = {}) {
+async function authFetch(url, options = {}) {
   const token = getStoredToken();
 
   if (requiresFrontendAuth && token) {
     options.headers = {
       ...options.headers,
-      'Authorization': token,
+      Authorization: token,
     };
   }
 
@@ -140,7 +139,7 @@ async function authFetch (url, options = {}) {
 }
 
 // Check auth config and initialize authentication if needed
-async function initializeAuth () {
+async function initializeAuth() {
   try {
     // Get auth config from public endpoint (no auth required)
     const response = await fetch('/admin/api/auth-config');
@@ -205,9 +204,11 @@ async function initializeAuth () {
 }
 
 // Handle token authentication form submission
-function setupTokenAuthForm () {
+function setupTokenAuthForm() {
   const form = document.getElementById('tokenAuthForm');
-  if (!form) {return;}
+  if (!form) {
+    return;
+  }
 
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
@@ -246,9 +247,11 @@ function setupTokenAuthForm () {
 }
 
 // Handle basic authentication form submission
-function setupBasicAuthForm () {
+function setupBasicAuthForm() {
   const form = document.getElementById('basicAuthForm');
-  if (!form) {return;}
+  if (!form) {
+    return;
+  }
 
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
@@ -297,32 +300,32 @@ function setupBasicAuthForm () {
 }
 
 // Set primary color CSS variable
-function setPrimaryColor (color) {
+function setPrimaryColor(color) {
   if (color) {
     document.documentElement.style.setProperty('--primary-color', color);
   }
 }
 
-function switchTab (tabName) {
-  document.querySelectorAll('.tab-content').forEach(content => {
+function switchTab(tabName) {
+  document.querySelectorAll('.tab-content').forEach((content) => {
     content.classList.remove('active');
   });
-  document.querySelectorAll('.tab').forEach(tab => {
+  document.querySelectorAll('.tab').forEach((tab) => {
     tab.classList.remove('active');
   });
   document.getElementById(tabName).classList.add('active');
 
   // Activate the corresponding tab button
   const tabs = document.querySelectorAll('.tab');
-  tabs.forEach(tab => {
+  tabs.forEach((tab) => {
     const onclick = tab.getAttribute('onclick');
-    if (onclick && onclick.includes('switchTab(\'' + tabName + '\')')) {
+    if (onclick && onclick.includes("switchTab('" + tabName + "')")) {
       tab.classList.add('active');
     }
   });
 }
 
-function addKeyValuePair (key = '', value = '', readonly = false, placeholder = 'Value') {
+function addKeyValuePair(key = '', value = '', readonly = false, placeholder = 'Value') {
   if (keyValuePairCount >= 15) {
     alert('Maximum of 15 key-value pairs');
     return;
@@ -331,25 +334,24 @@ function addKeyValuePair (key = '', value = '', readonly = false, placeholder = 
   const pairDiv = document.createElement('div');
   pairDiv.className = 'key-value-pair';
 
-  const keyInput = readonly ?
-    '<input type="text" placeholder="Key" name="keys" value="' + key + '" readonly style="background-color: #f8f9fa;">' :
-    '<input type="text" placeholder="Key" name="keys" value="' + key + '">';
+  const keyInput = readonly
+    ? '<input type="text" placeholder="Key" name="keys" value="' + key + '" readonly style="background-color: #f8f9fa;">'
+    : '<input type="text" placeholder="Key" name="keys" value="' + key + '">';
 
   const valueInput = '<input type="text" placeholder="' + placeholder + '" name="values" value="' + value + '">';
 
-  pairDiv.innerHTML = keyInput + valueInput +
-    '<button type="button" class="remove-btn" onclick="removeKeyValuePair(this)">×</button>';
+  pairDiv.innerHTML = keyInput + valueInput + '<button type="button" class="remove-btn" onclick="removeKeyValuePair(this)">×</button>';
   container.appendChild(pairDiv);
   keyValuePairCount++;
 }
 
 // eslint-disable-next-line unused-imports/no-unused-vars
-function removeKeyValuePair (button) {
+function removeKeyValuePair(button) {
   button.parentElement.remove();
   keyValuePairCount--;
 }
 
-function addCopyButtonToTokenOutput (tokenOutput, token) {
+function addCopyButtonToTokenOutput(tokenOutput, token) {
   if (!tokenOutput || tokenOutput.hasAttribute('data-copy-added')) {
     return;
   }
@@ -387,7 +389,6 @@ function addCopyButtonToTokenOutput (tokenOutput, token) {
       setTimeout(() => {
         notification.classList.remove('show');
       }, 1000);
-
     } catch {
       // Fallback for browsers that don't support clipboard API
       const textArea = document.createElement('textarea');
@@ -434,22 +435,30 @@ function addCopyButtonToTokenOutput (tokenOutput, token) {
   });
 }
 
-function formatTime (ms) {
+function formatTime(ms) {
   const seconds = Math.floor(ms / 1000);
   const minutes = Math.floor(seconds / 60);
   const hours = Math.floor(minutes / 60);
   const days = Math.floor(hours / 24);
 
-  if (days > 0) {return days + ' d. ' + (hours % 24) + ' h.';}
-  if (hours > 0) {return hours + ' h. ' + (minutes % 60) + ' min.';}
-  if (minutes > 0) {return minutes + ' min.';}
+  if (days > 0) {
+    return days + ' d. ' + (hours % 24) + ' h.';
+  }
+  if (hours > 0) {
+    return hours + ' h. ' + (minutes % 60) + ' min.';
+  }
+  if (minutes > 0) {
+    return minutes + ' min.';
+  }
   return seconds + ' s.';
 }
 
 // Render authentication status in header
-function renderAuthStatus (data) {
+function renderAuthStatus(data) {
   const container = document.getElementById('authStatusContainer');
-  if (!container) {return;}
+  if (!container) {
+    return;
+  }
 
   const { authType, isAuthenticated, user, canLogout } = data;
 
@@ -476,7 +485,7 @@ function renderAuthStatus (data) {
 }
 
 // Load authentication status from API
-async function loadAuthStatus () {
+async function loadAuthStatus() {
   try {
     const response = await authFetch('/admin/api/auth-status');
     const data = await response.json();
@@ -493,8 +502,8 @@ document.getElementById('generateForm').addEventListener('submit', async (e) => 
   e.preventDefault();
 
   const formData = new FormData(e.target);
-  const keys = formData.getAll('keys').filter(k => k.trim());
-  const values = formData.getAll('values').filter(v => v.trim());
+  const keys = formData.getAll('keys').filter((k) => k.trim());
+  const values = formData.getAll('values').filter((v) => v.trim());
 
   const payload = {};
   for (let i = 0; i < keys.length; i++) {
@@ -526,8 +535,7 @@ document.getElementById('generateForm').addEventListener('submit', async (e) => 
     const resultDiv = document.getElementById('generateResult');
 
     if (result.success) {
-      resultDiv.innerHTML =
-        `<div class="result success">
+      resultDiv.innerHTML = `<div class="result success">
 <strong>The token has been successfully created!</strong><br>
 <div class="token-output">${result.token}</div>
 </div>`;
@@ -544,14 +552,12 @@ document.getElementById('generateForm').addEventListener('submit', async (e) => 
         tokenTextarea.value = result.token;
       }
     } else {
-      resultDiv.innerHTML =
-        `<div class="result error">
+      resultDiv.innerHTML = `<div class="result error">
 <strong>Error:</strong> ${result.error}
 </div>`;
     }
   } catch (error) {
-    document.getElementById('generateResult').innerHTML =
-      `<div class="result error">
+    document.getElementById('generateResult').innerHTML = `<div class="result error">
 <strong>Error:</strong> ${error.message}
 </div>`;
   }
@@ -581,7 +587,7 @@ document.getElementById('validateForm').addEventListener('submit', async (e) => 
       let payloadHtml = '';
       if (payloadKeys.length > 0) {
         payloadHtml = '<h4>Additional data:</h4>';
-        payloadKeys.forEach(key => {
+        payloadKeys.forEach((key) => {
           payloadHtml += '<p><strong>' + key + ':</strong> ' + result.payload[key] + '</p>';
         });
       }
@@ -589,8 +595,7 @@ document.getElementById('validateForm').addEventListener('submit', async (e) => 
       // Format issued at time
       const issuedAtTime = result.payload.iat ? new Date(result.payload.iat).toLocaleString('ru-RU') : 'N/A';
 
-      resultDiv.innerHTML =
-        `<div class="result success">
+      resultDiv.innerHTML = `<div class="result success">
 <strong>The token is valid!</strong>
 <div class="token-info">
 <h4>Token Information:</h4>
@@ -604,22 +609,20 @@ ${payloadHtml}
 </div>
 </div>`;
     } else {
-      resultDiv.innerHTML =
-        `<div class="result error">
+      resultDiv.innerHTML = `<div class="result error">
 <strong>Token invalid!</strong><br>
 Reason: ${result.error}
 </div>`;
     }
   } catch (error) {
-    document.getElementById('validateResult').innerHTML =
-      `<div class="result error">
+    document.getElementById('validateResult').innerHTML = `<div class="result error">
 <strong>Error:</strong> ${error.message}
 </div>`;
   }
 });
 
 // Function to initialize the form
-async function initializeForm () {
+async function initializeForm() {
   try {
     // Getting information about the service
     const response = await authFetch('/admin/api/service-info');
@@ -637,7 +640,6 @@ async function initializeForm () {
     // Adding a pre-filled pair serviceName
     addKeyValuePair('service', serviceName, true);
     addKeyValuePair('issue', '', true, 'URL of request for the issuance of a token in JIRA');
-
   } catch (error) {
     console.error('Error loading service info:', error);
     return;
@@ -648,7 +650,7 @@ async function initializeForm () {
 
 // Logout function
 // eslint-disable-next-line unused-imports/no-unused-vars
-async function logout () {
+async function logout() {
   try {
     // For frontend auth, clear the stored credentials
     if (requiresFrontendAuth) {

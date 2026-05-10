@@ -53,7 +53,7 @@ const requiresBearerToken = hasTokenAuth && !hasBasicAuth && !isNTLMEnabled;
  * Checks custom authorization for Token Generator access
  * Returns null if authorized, or AuthResult with error if not
  */
-async function checkTokenGenAuthorization (req: Request): Promise<AuthResult | null> {
+async function checkTokenGenAuthorization(req: Request): Promise<AuthResult | null> {
   const projectData = getProjectData();
   const handler = projectData?.tokenGenAuthHandler;
 
@@ -97,7 +97,7 @@ async function checkTokenGenAuthorization (req: Request): Promise<AuthResult | n
 /**
  * Creates admin router with all token generation endpoints
  */
-export function createAdminRouter (): Router {
+export function createAdminRouter(): Router {
   const router = Router();
 
   // ============================
@@ -108,7 +108,7 @@ export function createAdminRouter (): Router {
   router.get('/api/auth-config', (req: Request, res: Response) => {
     res.json({
       success: true,
-      authType: adminAuthTypes.length === 1 ? adminAuthTypes[0] : (adminAuthTypes.length ? adminAuthTypes : null),
+      authType: adminAuthTypes.length === 1 ? adminAuthTypes[0] : adminAuthTypes.length ? adminAuthTypes : null,
       requiresBearerToken,
       requiresFrontendAuth,
       methods: getAdminAuthMethods(),
@@ -243,7 +243,6 @@ export function createAdminRouter (): Router {
         success: true,
         token: token,
       });
-
     } catch (error: any) {
       const username = req.ntlm?.username || 'Unknown';
       const domain = req.ntlm?.domain || 'Unknown';
@@ -288,7 +287,6 @@ export function createAdminRouter (): Router {
         success: true,
         payload: result.payload,
       });
-
     } catch (error: any) {
       const username = req.ntlm?.username || 'Unknown';
       const domain = req.ntlm?.domain || 'Unknown';
@@ -355,7 +353,7 @@ export function createAdminRouter (): Router {
 
       res.json({
         success: true,
-        authType: adminAuthTypes.length === 1 ? adminAuthTypes[0] : (adminAuthTypes.length ? adminAuthTypes : null),
+        authType: adminAuthTypes.length === 1 ? adminAuthTypes[0] : adminAuthTypes.length ? adminAuthTypes : null,
         isAuthenticated,
         user: userDisplay,
         canLogout,
@@ -365,7 +363,7 @@ export function createAdminRouter (): Router {
       res.json({
         success: false,
         error: error.message,
-        authType: adminAuthTypes.length === 1 ? adminAuthTypes[0] : (adminAuthTypes.length ? adminAuthTypes : null),
+        authType: adminAuthTypes.length === 1 ? adminAuthTypes[0] : adminAuthTypes.length ? adminAuthTypes : null,
       });
     }
   });

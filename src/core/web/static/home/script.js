@@ -4,19 +4,19 @@ let resourcesData = [];
 let promptsData = [];
 
 // Set primary color CSS variable
-function setPrimaryColor (color) {
+function setPrimaryColor(color) {
   if (color) {
     document.documentElement.style.setProperty('--primary-color', color);
   }
 }
 
 // Set favicon dynamically
-function setFavicon (svgContent) {
-  if (!svgContent) {return;}
+function setFavicon(svgContent) {
+  if (!svgContent) {
+    return;
+  }
 
-  const encoded = encodeURIComponent(svgContent)
-    .replace(/'/g, '%27')
-    .replace(/"/g, '%22');
+  const encoded = encodeURIComponent(svgContent).replace(/'/g, '%27').replace(/"/g, '%22');
 
   const link = document.querySelector('link[rel="icon"]') || document.createElement('link');
   link.rel = 'icon';
@@ -29,7 +29,7 @@ function setFavicon (svgContent) {
 }
 
 // Set header icon dynamically
-function setHeaderIcon (svgContent) {
+function setHeaderIcon(svgContent) {
   const iconContainer = document.getElementById('serviceIcon');
   if (iconContainer && svgContent) {
     iconContainer.innerHTML = svgContent;
@@ -37,7 +37,7 @@ function setHeaderIcon (svgContent) {
 }
 
 // Render page info
-function renderPageInfo (data) {
+function renderPageInfo(data) {
   // Service title
   const titleEl = document.getElementById('serviceTitle');
   if (titleEl) {
@@ -49,27 +49,39 @@ function renderPageInfo (data) {
 
   // Description
   const descEl = document.getElementById('serviceDescription');
-  if (descEl) {descEl.textContent = data.description;}
+  if (descEl) {
+    descEl.textContent = data.description;
+  }
 
   // Version
   const versionEl = document.getElementById('serviceVersion');
-  if (versionEl) {versionEl.textContent = data.version;}
+  if (versionEl) {
+    versionEl.textContent = data.version;
+  }
 
   // Uptime
   const uptimeEl = document.getElementById('serviceUptime');
-  if (uptimeEl) {uptimeEl.textContent = data.uptime;}
+  if (uptimeEl) {
+    uptimeEl.textContent = data.uptime;
+  }
 
   // Tools count
   const toolsEl = document.getElementById('toolsCount');
-  if (toolsEl) {toolsEl.textContent = data.toolsCount + ' available';}
+  if (toolsEl) {
+    toolsEl.textContent = data.toolsCount + ' available';
+  }
 
   // Resources count
   const resourcesEl = document.getElementById('resourcesCount');
-  if (resourcesEl) {resourcesEl.textContent = data.resourcesCount + ' available';}
+  if (resourcesEl) {
+    resourcesEl.textContent = data.resourcesCount + ' available';
+  }
 
   // Prompts count
   const promptsEl = document.getElementById('promptsCount');
-  if (promptsEl) {promptsEl.textContent = data.promptsCount + ' available';}
+  if (promptsEl) {
+    promptsEl.textContent = data.promptsCount + ' available';
+  }
 
   // Database info
   const dbSection = document.getElementById('dbSection');
@@ -78,7 +90,9 @@ function renderPageInfo (data) {
       dbSection.style.display = 'block';
       const dbValue = document.getElementById('dbValue');
       const dbStatus = document.getElementById('dbStatus');
-      if (dbValue) {dbValue.textContent = data.db.connection + ' • ';}
+      if (dbValue) {
+        dbValue.textContent = data.db.connection + ' • ';
+      }
       if (dbStatus) {
         dbStatus.textContent = data.db.status;
         dbStatus.className = 'value ' + data.db.status;
@@ -96,10 +110,14 @@ function renderPageInfo (data) {
 
   // Auth info
   const mcpAuthEl = document.getElementById('mcpAuthValue');
-  if (mcpAuthEl) {mcpAuthEl.textContent = data.mcpAuth || 'disabled';}
+  if (mcpAuthEl) {
+    mcpAuthEl.textContent = data.mcpAuth || 'disabled';
+  }
 
   const adminPanelEl = document.getElementById('adminPanelValue');
-  if (adminPanelEl) {adminPanelEl.textContent = data.adminPanel || 'disabled';}
+  if (adminPanelEl) {
+    adminPanelEl.textContent = data.adminPanel || 'disabled';
+  }
 
   // Consul info
   const consulSection = document.getElementById('consulSection');
@@ -124,7 +142,7 @@ function renderPageInfo (data) {
 }
 
 // Load page data from API
-async function loadPageData () {
+async function loadPageData() {
   try {
     const response = await fetch('/api/home-info');
     if (!response.ok) {
@@ -147,14 +165,13 @@ async function loadPageData () {
 
     // Render page info
     renderPageInfo(data);
-
   } catch (error) {
     console.error('Error loading page data:', error);
   }
 }
 
 // eslint-disable-next-line unused-imports/no-unused-vars
-function openModal (sectionName) {
+function openModal(sectionName) {
   const modal = document.getElementById(sectionName + '-modal');
   const tableBody = document.getElementById(sectionName + '-table').querySelector('tbody');
 
@@ -168,12 +185,12 @@ function openModal (sectionName) {
   }, 300);
 }
 
-function closeModal (sectionName) {
+function closeModal(sectionName) {
   const modal = document.getElementById(sectionName + '-modal');
   modal.style.display = 'none';
 }
 
-function loadTableData (sectionName) {
+function loadTableData(sectionName) {
   const tableBody = document.getElementById(sectionName + '-table').querySelector('tbody');
   let data, html;
 
@@ -195,12 +212,14 @@ function loadTableData (sectionName) {
   tableBody.innerHTML = html;
 }
 
-function generateToolsTableRows (tools) {
+function generateToolsTableRows(tools) {
   if (!tools || tools.length === 0) {
     return '<tr><td colspan="3" class="loading-cell">No tools available</td></tr>';
   }
-  return tools.map((tool, index) =>
-    `<tr>
+  return tools
+    .map(
+      (tool, index) =>
+        `<tr>
 <td><code>${tool.name}</code></td>
 <td>${tool.annotations?.title || tool.description}</td>
 <td>
@@ -215,15 +234,18 @@ function generateToolsTableRows (tools) {
 </div>
 </td>
 </tr>`,
-  ).join('');
+    )
+    .join('');
 }
 
-function generateResourcesTableRows (resources) {
+function generateResourcesTableRows(resources) {
   if (!resources || resources.length === 0) {
     return '<tr><td colspan="5" class="loading-cell">No resources available</td></tr>';
   }
-  return resources.map((resource, index) =>
-    `<tr>
+  return resources
+    .map(
+      (resource, index) =>
+        `<tr>
 <td><code>${resource.uri}</code></td>
 <td>${resource.name}</td>
 <td>${resource.description}</td>
@@ -243,15 +265,18 @@ function generateResourcesTableRows (resources) {
 </div>
 </td>
 </tr>`,
-  ).join('');
+    )
+    .join('');
 }
 
-function generatePromptsTableRows (prompts) {
+function generatePromptsTableRows(prompts) {
   if (!prompts || prompts.length === 0) {
     return '<tr><td colspan="2" class="loading-cell">No prompts available</td></tr>';
   }
-  return prompts.map((prompt, index) =>
-    `<tr>
+  return prompts
+    .map(
+      (prompt, index) =>
+        `<tr>
 <td><code>${prompt.name}</code></td>
 <td>
 <a class="detail-link" id="prompts-toggle-details-${index}" onclick="togglePromptDetails('prompts', ${index}, 'details')">details</a>
@@ -268,11 +293,12 @@ function generatePromptsTableRows (prompts) {
 </div>
 </td>
 </tr>`,
-  ).join('');
+    )
+    .join('');
 }
 
 // eslint-disable-next-line unused-imports/no-unused-vars
-function toggleDetails (sectionName, index) {
+function toggleDetails(sectionName, index) {
   const detailRow = document.getElementById(sectionName + '-detail-' + index);
   const toggleLink = document.getElementById(sectionName + '-toggle-' + index);
   const loadingSpinner = detailRow.querySelector('.loading-spinner');
@@ -323,7 +349,7 @@ function toggleDetails (sectionName, index) {
 
 // Handle prompt details and prompt content display
 // eslint-disable-next-line unused-imports/no-unused-vars
-async function togglePromptDetails (sectionName, index, displayType) {
+async function togglePromptDetails(sectionName, index, displayType) {
   const detailRow = document.getElementById(sectionName + '-detail-' + index);
   const toggleLinkDetails = document.getElementById(sectionName + '-toggle-details-' + index);
   const toggleLinkPrompt = document.getElementById(sectionName + '-toggle-prompt-' + index);
@@ -385,7 +411,9 @@ async function togglePromptDetails (sectionName, index, displayType) {
         let promptText = '';
 
         messages.forEach((msg, i) => {
-          if (i > 0) {promptText += '\n\n---\n\n';}
+          if (i > 0) {
+            promptText += '\n\n---\n\n';
+          }
           promptText += 'Role: ' + msg.role + '\n\n';
           if (typeof msg.content === 'string') {
             promptText += msg.content;
@@ -416,7 +444,7 @@ async function togglePromptDetails (sectionName, index, displayType) {
 
 // Handle resource details and resource content display
 // eslint-disable-next-line unused-imports/no-unused-vars
-async function toggleResourceDetails (sectionName, index, displayType) {
+async function toggleResourceDetails(sectionName, index, displayType) {
   const detailRow = document.getElementById(sectionName + '-detail-' + index);
   const toggleLinkDetails = document.getElementById(sectionName + '-toggle-details-' + index);
   const toggleLinkResource = document.getElementById(sectionName + '-toggle-resource-' + index);
@@ -478,7 +506,9 @@ async function toggleResourceDetails (sectionName, index, displayType) {
         let resourceText = '';
 
         contents.forEach((content, i) => {
-          if (i > 0) {resourceText += '\n\n---\n\n';}
+          if (i > 0) {
+            resourceText += '\n\n---\n\n';
+          }
           resourceText += 'URI: ' + content.uri + '\n';
           resourceText += 'MIME Type: ' + content.mimeType + '\n\n';
 
@@ -519,7 +549,7 @@ async function toggleResourceDetails (sectionName, index, displayType) {
 
 // Health Check Modal
 // eslint-disable-next-line unused-imports/no-unused-vars
-async function openHealthCheckModal () {
+async function openHealthCheckModal() {
   const modal = document.getElementById('health-modal');
   const loading = document.getElementById('health-loading');
   const result = document.getElementById('health-result');
@@ -561,14 +591,14 @@ async function openHealthCheckModal () {
 }
 
 // Escape HTML to prevent XSS
-function escapeHtml (text) {
+function escapeHtml(text) {
   const div = document.createElement('div');
   div.textContent = text;
   return div.innerHTML;
 }
 
 // Copy to clipboard functionality
-function addCopyButton (contentElement) {
+function addCopyButton(contentElement) {
   if (!contentElement || contentElement.hasAttribute('data-copy-added')) {
     return;
   }
@@ -601,7 +631,6 @@ function addCopyButton (contentElement) {
       setTimeout(() => {
         notification.classList.remove('show');
       }, 1000);
-
     } catch {
       // Fallback for browsers that don't support clipboard API
       const textArea = document.createElement('textarea');

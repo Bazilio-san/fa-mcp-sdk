@@ -14,15 +14,17 @@ export const setupNTLMAuthentication = () => {
   if (!isADEnabled) {
     console.log('[TOKEN-GEN] NTLM authentication is DISABLED - skipping middleware setup');
     // Return middleware that just passes through
-    return [(req: Request, res: Response, next: NextFunction) => {
-      // Set dummy NTLM info for compatibility
-      req.ntlm = {
-        isAuthenticated: false,
-        username: 'Anonymous',
-        domain: 'NoAuth',
-      };
-      next();
-    }];
+    return [
+      (req: Request, res: Response, next: NextFunction) => {
+        // Set dummy NTLM info for compatibility
+        req.ntlm = {
+          isAuthenticated: false,
+          username: 'Anonymous',
+          domain: 'NoAuth',
+        };
+        next();
+      },
+    ];
   }
 
   return [

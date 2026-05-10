@@ -73,6 +73,6 @@ export const getDomainConfig = (domainName?: string): IDcConfig => {
 export const tokenGenDomainConfig = {
   defaultDomain: isADEnabled ? defaultTokenGenDomainConfig.name : undefined,
   domains: isADEnabled ? tokenGenDomains : {},
-  strategy: isADEnabled ? (appConfig.ad.strategy || 'NTLM') : undefined, // from config or default NTLM
+  strategy: isADEnabled ? appConfig.ad.strategy || 'NTLM' : undefined, // from config or default NTLM
   tlsOptions: isADEnabled ? appConfig.ad.tlsOptions : undefined, // from config if specified
 };

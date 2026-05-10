@@ -5,14 +5,12 @@
 /**
  * Format time duration
  */
-function formatTimeDuration (seconds: number): string {
+function formatTimeDuration(seconds: number): string {
   const minutes = Math.floor(seconds / 60);
   const remainingSeconds = seconds % 60;
 
   if (minutes > 0) {
-    return remainingSeconds > 0
-      ? `${minutes} min ${remainingSeconds} sec`
-      : `${minutes} min`;
+    return remainingSeconds > 0 ? `${minutes} min ${remainingSeconds} sec` : `${minutes} min`;
   } else {
     return `${seconds} sec`;
   }
@@ -21,7 +19,7 @@ function formatTimeDuration (seconds: number): string {
 /**
  * Format next available time
  */
-function formatNextAvailableTime (milliseconds: number): string {
+function formatNextAvailableTime(milliseconds: number): string {
   const nextTime = new Date(Date.now() + milliseconds);
   const timeString = nextTime.toLocaleTimeString('ru-RU', {
     hour: '2-digit',
@@ -40,12 +38,15 @@ function formatNextAvailableTime (milliseconds: number): string {
 /**
  * Format MCP server rate limit error message (from rate-limiter-flexible)
  */
-export function formatRateLimitError (errorData: {
-  remainingPoints: number;
-  msBeforeNext: number;
-  consumedPoints: number;
-  isFirstInDuration: boolean;
-}, maxRequests: number): string {
+export function formatRateLimitError(
+  errorData: {
+    remainingPoints: number;
+    msBeforeNext: number;
+    consumedPoints: number;
+    isFirstInDuration: boolean;
+  },
+  maxRequests: number,
+): string {
   const seconds = Math.ceil(errorData.msBeforeNext / 1000);
   const timeRemaining = formatTimeDuration(seconds);
   const nextAvailable = formatNextAvailableTime(errorData.msBeforeNext);
@@ -56,10 +57,6 @@ export function formatRateLimitError (errorData: {
 /**
  * Check if error is from rate-limiter-flexible
  */
-export function isRateLimitError (error: any): boolean {
-  return error &&
-    typeof error === 'object' &&
-    typeof error.remainingPoints === 'number' &&
-    typeof error.msBeforeNext === 'number' &&
-    typeof error.consumedPoints === 'number';
+export function isRateLimitError(error: any): boolean {
+  return error && typeof error === 'object' && typeof error.remainingPoints === 'number' && typeof error.msBeforeNext === 'number' && typeof error.consumedPoints === 'number';
 }

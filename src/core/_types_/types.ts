@@ -40,17 +40,17 @@ export interface TokenGenAuthInput {
 export type TokenGenAuthHandler = (input: TokenGenAuthInput) => Promise<AuthResult> | AuthResult;
 
 export interface IPromptData {
-  name: string,
-  description: string,
-  arguments: [],
-  content: IPromptContent,
-  requireAuth?: boolean,
+  name: string;
+  description: string;
+  arguments: [];
+  content: IPromptContent;
+  requireAuth?: boolean;
 }
 
 export interface IUsedHttpHeader {
-  name: string, // E.g. "Authorization",
-  description: string, // E.g. "JWT Token issued on request"
-  isOptional?: boolean,
+  name: string; // E.g. "Authorization",
+  description: string; // E.g. "JWT Token issued on request"
+  isOptional?: boolean;
 }
 
 export interface IResourceInfo {
@@ -72,14 +72,14 @@ export type IResourceContent = string | object | TResourceContentFunction;
 export interface IResource {
   contents: [
     {
-      uri: string,
-      mimeType: string,
-      text: string | object,
+      uri: string;
+      mimeType: string;
+      text: string | object;
     },
-  ],
+  ];
 }
 
-export type IEndpointsOn404 = Record<string, string | string[]>
+export type IEndpointsOn404 = Record<string, string | string[]>;
 
 /**
  * Custom Authentication validation function
@@ -101,7 +101,7 @@ export interface IToolHandlerParams {
 export interface ITransportContext {
   transport: TTransportType;
   headers?: Record<string, string>;
-  payload?: { user: string; [key: string]: any } | undefined
+  payload?: { user: string; [key: string]: any } | undefined;
 }
 
 export interface IGetPromptRequest {
@@ -143,16 +143,15 @@ export interface McpServerData {
   };
   // Function to get Consul UI address (if consul enabled: consul.service.enable = true)
   // for example: `https://consul.my.ui/ui/dc-${isProd ? 'prod' : 'dev'}/services/${serviceId}/instances`
-  getConsulUIAddress?: (serviceId: string) => string,
+  getConsulUIAddress?: (serviceId: string) => string;
 
   // Custom startup diagnostic information displayed at server start
   // Array of [key, value] pairs to be shown in the startup info block
   // Example: [['Admin Auth', 'JWT'], ['Custom param', 'any value']]
-  customStartupInfo?: [string, string][],
+  customStartupInfo?: [string, string][];
 }
 
-
-export type TPromptContentFunction = (request: IGetPromptRequest) => string | Promise<string>
+export type TPromptContentFunction = (request: IGetPromptRequest) => string | Promise<string>;
 export type IPromptContent = string | TPromptContentFunction;
 
 export interface IGetPromptParams {
@@ -185,4 +184,3 @@ export interface IToolInputSchema {
 
   [x: string]: unknown;
 }
-

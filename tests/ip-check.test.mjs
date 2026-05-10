@@ -6,7 +6,6 @@ import assert from 'node:assert';
 
 import { parseIpList, isIpAllowed } from '../dist/core/auth/ip-check.js';
 
-
 // ===== parseIpList =====
 
 assert.deepStrictEqual(parseIpList(''), [], 'empty string');
@@ -14,11 +13,7 @@ assert.deepStrictEqual(parseIpList('   '), [], 'whitespace-only');
 assert.deepStrictEqual(parseIpList('192.168.1.1, 10.0.0.1'), ['192.168.1.1', '10.0.0.1'], 'comma-separated');
 assert.deepStrictEqual(parseIpList('192.168.1.1;10.0.0.1'), ['192.168.1.1', '10.0.0.1'], 'semicolon-separated');
 assert.deepStrictEqual(parseIpList('192.168.1.1 10.0.0.1'), ['192.168.1.1', '10.0.0.1'], 'space-separated');
-assert.deepStrictEqual(
-  parseIpList('192.168.1.1, 10.0.0.0/8; 172.16.0.0/12 ::1'),
-  ['192.168.1.1', '10.0.0.0/8', '172.16.0.0/12', '::1'],
-  'mixed separators',
-);
+assert.deepStrictEqual(parseIpList('192.168.1.1, 10.0.0.0/8; 172.16.0.0/12 ::1'), ['192.168.1.1', '10.0.0.0/8', '172.16.0.0/12', '::1'], 'mixed separators');
 
 // ===== isIpAllowed — exact IPv4 =====
 

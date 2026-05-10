@@ -47,21 +47,26 @@ export class McpHttpClient extends BaseMcpClient {
   public capabilities?: any;
   public protocolVersion?: string;
 
-  constructor (baseURL: string, options?: {
-    endpointPath?: string; // e.g.: '/mcp'
-    headers?: Record<string, string>;
-    requestTimeoutMs?: number;
-  }) {
+  constructor(
+    baseURL: string,
+    options?: {
+      endpointPath?: string; // e.g.: '/mcp'
+      headers?: Record<string, string>;
+      requestTimeoutMs?: number;
+    },
+  ) {
     super(options?.headers ?? {});
     this.baseURL = baseURL.replace(/\/$/, '');
     this.endpointPath = options?.endpointPath ?? '/mcp';
   }
 
-  override async initialize (params: {
-    protocolVersion?: string;
-    capabilities?: any;
-    clientInfo?: { name: string; version: string };
-  } = {}) {
+  override async initialize(
+    params: {
+      protocolVersion?: string;
+      capabilities?: any;
+      clientInfo?: { name: string; version: string };
+    } = {},
+  ) {
     const res = await this.sendRpc('initialize', params);
     this.protocolVersion = res?.protocolVersion;
     this.capabilities = res?.capabilities;
@@ -72,14 +77,14 @@ export class McpHttpClient extends BaseMcpClient {
     return res;
   }
 
-  override async close () {
+  override async close() {
     // No persistent connection to close for simple HTTP client
   }
 
-  private async sendHttpRequest (request: JsonRpcRequest): Promise<JsonRpcMessage> {
+  private async sendHttpRequest(request: JsonRpcRequest): Promise<JsonRpcMessage> {
     const headers = {
       'Content-Type': 'application/json',
-      'Accept': 'application/json',
+      Accept: 'application/json',
       ...this.customHeaders,
     } as Record<string, string>;
 
@@ -93,11 +98,11 @@ export class McpHttpClient extends BaseMcpClient {
       throw new Error(`HTTP request failed: ${response.status} ${response.statusText}`);
     }
 
-    const result = await response.json() as JsonRpcMessage;
+    const result = (await response.json()) as JsonRpcMessage;
     return result;
   }
 
-  notify (method: string, params?: Json) {
+  notify(method: string, params?: Json) {
     const req: JsonRpcRequest = { jsonrpc: '2.0', method, params };
     // Fire and forget for notifications
     this.sendHttpRequest(req).catch(() => {
@@ -105,7 +110,7 @@ export class McpHttpClient extends BaseMcpClient {
     });
   }
 
-  async sendRpc<T = any> (method: string, params?: Json): Promise<T> {
+  async sendRpc<T = any>(method: string, params?: Json): Promise<T> {
     const id = this.nextId++;
     const req: JsonRpcRequest = { jsonrpc: '2.0', id, method, params };
 
@@ -129,7 +134,7 @@ export class McpHttpClient extends BaseMcpClient {
   }
 
   // Override sendRequest to handle JSON-RPC requests
-  protected override async sendRequest (method: string, params: any): Promise<any> {
+  protected override async sendRequest(method: string, params: any): Promise<any> {
     return this.sendRpc(method, params);
   }
 }

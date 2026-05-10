@@ -14,10 +14,7 @@ app.use((req, res, next) => {
   if (!auth) {
     // Sending NTLM challenge
     console.log('[TEST-SERVER] No auth header, sending NTLM challenge');
-    return res
-      .setHeader('WWW-Authenticate', 'NTLM')
-      .status(401)
-      .send(`
+    return res.setHeader('WWW-Authenticate', 'NTLM').status(401).send(`
 <!DOCTYPE html>
 <html>
 <head><title>NTLM Authentication</title></head>

@@ -3,7 +3,6 @@ import { ChildProcess } from 'child_process';
 
 import chalk from 'chalk';
 
-
 import { BaseMcpClient } from './BaseMcpClient.js';
 
 const SHOW_IN = process.env.TEST_SHOW_IN === 'true';
@@ -21,7 +20,7 @@ export class McpStdioClient extends BaseMcpClient {
   private pending: Map<number, PendingRequest>;
   private buffer: string;
 
-  constructor (proc: ChildProcess) {
+  constructor(proc: ChildProcess) {
     super({});
     this.proc = proc;
     this.pending = new Map();
@@ -42,7 +41,7 @@ export class McpStdioClient extends BaseMcpClient {
     }
   }
 
-  processLines () {
+  processLines() {
     const lines = this.buffer.split('\n');
     this.buffer = lines.pop() || '';
     for (const line of lines) {
@@ -73,7 +72,7 @@ export class McpStdioClient extends BaseMcpClient {
     }
   }
 
-  send (method: string, params = {}, timeoutMs = 15000) {
+  send(method: string, params = {}, timeoutMs = 15000) {
     const id = this.nextId++;
     const req = { jsonrpc: '2.0', id, method, params };
     const text = JSON.stringify(req) + '\n';
@@ -95,7 +94,7 @@ export class McpStdioClient extends BaseMcpClient {
   }
 
   // Override sendRequest to use the existing send method
-  protected override async sendRequest (method: string, params: any): Promise<any> {
+  protected override async sendRequest(method: string, params: any): Promise<any> {
     return this.send(method, params);
   }
 }

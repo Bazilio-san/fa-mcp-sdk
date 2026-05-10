@@ -11,7 +11,7 @@ import TEMPLATE_TESTS from './test-cases.js';
 
 const baseURL = (process.env.TEST_MCP_SERVER_URL || `http://localhost:${appConfig.webServer.port}`).replace(/\/+$/, '');
 
-async function runTestGroup (title, tests, client) {
+async function runTestGroup(title, tests, client) {
   console.log(`\n${title}:`);
   let passed = 0;
   for (const test of tests) {
@@ -34,7 +34,7 @@ async function runTestGroup (title, tests, client) {
   return passed;
 }
 
-async function main () {
+async function main() {
   console.log('🧪 SSE tests for template MCP server');
   console.log('='.repeat(60));
 
@@ -52,11 +52,13 @@ async function main () {
     await client.health().catch(() => undefined);
 
     // Initialize over RPC channel used by SSE client (POST /rpc)
-    await client.sendRequest('initialize', {
-      protocolVersion: '2024-11-05',
-      capabilities: { tools: {} },
-      clientInfo: { name: 'sse-test', version: '1.0.0' },
-    }).catch(() => undefined);
+    await client
+      .sendRequest('initialize', {
+        protocolVersion: '2024-11-05',
+        capabilities: { tools: {} },
+        clientInfo: { name: 'sse-test', version: '1.0.0' },
+      })
+      .catch(() => undefined);
 
     const p1 = await runTestGroup('Prompts', TEMPLATE_TESTS.prompts, client);
     const p2 = await runTestGroup('Resources', TEMPLATE_TESTS.resources, client);

@@ -5,14 +5,8 @@
 import { BaseMcpError } from './BaseMcpError.js';
 
 export class ToolExecutionError extends BaseMcpError {
-  constructor (toolName: string, message: string, printed?: boolean) {
-    super(
-      'TOOL_EXECUTION_ERROR',
-      `Failed to execute tool '${toolName}': ${message}`,
-      undefined,
-      400,
-      printed,
-    );
+  constructor(toolName: string, message: string, printed?: boolean) {
+    super('TOOL_EXECUTION_ERROR', `Failed to execute tool '${toolName}': ${message}`, undefined, 400, printed);
   }
 }
 
@@ -20,7 +14,7 @@ export class ToolExecutionError extends BaseMcpError {
  * Server-related errors
  */
 export class ServerError extends BaseMcpError {
-  constructor (message: string, details?: Record<string, unknown>, printed?: boolean) {
+  constructor(message: string, details?: Record<string, unknown>, printed?: boolean) {
     super('SERVER_ERROR', message, details, 500, printed);
   }
 }
@@ -28,10 +22,7 @@ export class ServerError extends BaseMcpError {
 /**
  * Create JSON-RPC 2.0 error response
  */
-export function createJsonRpcErrorResponse (
-  error: Error | BaseMcpError,
-  requestId?: string | number | null,
-): any {
+export function createJsonRpcErrorResponse(error: Error | BaseMcpError, requestId?: string | number | null): any {
   const isCustomError = error instanceof BaseMcpError;
 
   return {
@@ -50,7 +41,7 @@ export const toError = (err: any): Error => {
 };
 
 export const toStr = (err: any): string => {
-  return err instanceof Error ? err.message : (err ? String(err) : 'Unknown error');
+  return err instanceof Error ? err.message : err ? String(err) : 'Unknown error';
 };
 
 export const addErrorMessage = (err: any, msg: string) => {
@@ -58,4 +49,3 @@ export const addErrorMessage = (err: any, msg: string) => {
     err.message = `${msg}. ${err.message}`;
   }
 };
-

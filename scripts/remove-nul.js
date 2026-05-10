@@ -35,7 +35,7 @@ if (fs.existsSync(nulFile)) {
 // Also check for other common accidental files on Windows
 const accidentalFiles = ['nul', 'NUL', 'con', 'CON', 'aux', 'AUX', 'prn', 'PRN'];
 
-accidentalFiles.forEach(fileName => {
+accidentalFiles.forEach((fileName) => {
   const filePath = path.join(projectRoot, fileName);
   if (fs.existsSync(filePath)) {
     try {

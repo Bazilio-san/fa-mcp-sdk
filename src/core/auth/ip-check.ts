@@ -7,7 +7,7 @@
  * Parses IP string (comma/semicolon/space-separated) into array of trimmed non-empty entries.
  * Each entry is either a plain IP or a CIDR notation (e.g., "10.0.0.0/24").
  */
-export function parseIpList (ipStr: string): string[] {
+export function parseIpList(ipStr: string): string[] {
   if (!ipStr) {
     return [];
   }
@@ -22,7 +22,7 @@ export function parseIpList (ipStr: string): string[] {
  * - Strips IPv4-mapped IPv6 prefix (::ffff:x.x.x.x → x.x.x.x)
  * - Trims whitespace
  */
-function normalizeIp (ip: string): string {
+function normalizeIp(ip: string): string {
   ip = ip.trim();
   // Strip IPv4-mapped IPv6 prefix
   const mapped = /^::ffff:(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})$/i.exec(ip);
@@ -36,7 +36,7 @@ function normalizeIp (ip: string): string {
  * Parses an IPv4 address string into a 32-bit number.
  * Returns null if the string is not a valid IPv4 address.
  */
-function parseIpv4 (ip: string): number | null {
+function parseIpv4(ip: string): number | null {
   const parts = ip.split('.');
   if (parts.length !== 4) {
     return null;
@@ -57,7 +57,7 @@ function parseIpv4 (ip: string): number | null {
  * Supports full and abbreviated (::) notation.
  * Returns null if the string is not a valid IPv6 address.
  */
-function parseIpv6 (ip: string): bigint | null {
+function parseIpv6(ip: string): bigint | null {
   // Handle IPv4-mapped IPv6
   const v4mapped = /^::ffff:(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})$/i.exec(ip);
   if (v4mapped?.[1]) {
@@ -65,7 +65,7 @@ function parseIpv6 (ip: string): bigint | null {
     if (v4 === null) {
       return null;
     }
-    return BigInt(0xFFFF00000000n) | BigInt(v4);
+    return BigInt(0xffff00000000n) | BigInt(v4);
   }
 
   const halves = ip.split('::');
@@ -103,7 +103,7 @@ function parseIpv6 (ip: string): bigint | null {
 /**
  * Checks if a client IP matches a single allowed entry (exact IP or CIDR).
  */
-function matchEntry (clientIp: string, entry: string): boolean {
+function matchEntry(clientIp: string, entry: string): boolean {
   const cidrMatch = /^(.+)\/(\d+)$/.exec(entry);
 
   if (cidrMatch?.[1] && cidrMatch[2]) {
@@ -136,7 +136,7 @@ function matchEntry (clientIp: string, entry: string): boolean {
         return true;
       }
       const shift = BigInt(128 - prefixLen);
-      return (subnetV6 >> shift) === (clientV6 >> shift);
+      return subnetV6 >> shift === clientV6 >> shift;
     }
 
     return false;
@@ -153,7 +153,7 @@ function matchEntry (clientIp: string, entry: string): boolean {
  *   - CIDR subnet match (e.g., 10.0.0.0/24)
  *   - IPv4-mapped IPv6 normalization (::ffff:x.x.x.x → x.x.x.x)
  */
-export function isIpAllowed (clientIp: string, allowedIps: string[]): boolean {
+export function isIpAllowed(clientIp: string, allowedIps: string[]): boolean {
   if (!clientIp || !allowedIps.length) {
     return false;
   }

@@ -16,12 +16,13 @@ export const SATELLITE_DIR_NAME = 'readme-docs';
 
 const SEPARATOR = '\n\n---\n\n';
 
-const slugify = (heading: string): string => heading
-  .toLowerCase()
-  .replace(/[`*_~]/g, '')
-  .replace(/[^\w\s-]/g, '')
-  .trim()
-  .replace(/\s+/g, '-');
+const slugify = (heading: string): string =>
+  heading
+    .toLowerCase()
+    .replace(/[`*_~]/g, '')
+    .replace(/[^\w\s-]/g, '')
+    .trim()
+    .replace(/\s+/g, '-');
 
 const collectHeadings = (md: string): Map<string, string> => {
   const map = new Map<string, string>();
@@ -31,7 +32,9 @@ const collectHeadings = (md: string): Map<string, string> => {
   while ((m = re.exec(md)) !== null) {
     const text = (m[1] ?? '').trim();
     const slug = slugify(text);
-    if (!map.has(slug)) {map.set(slug, text);}
+    if (!map.has(slug)) {
+      map.set(slug, text);
+    }
   }
   return map;
 };
@@ -50,7 +53,9 @@ const getH1 = (md: string): string | null => {
  */
 export const assembleReadmeWithSatellites = (projectRoot: string): string => {
   const readmePath = path.join(projectRoot, 'README.md');
-  if (!fs.existsSync(readmePath)) {return '';}
+  if (!fs.existsSync(readmePath)) {
+    return '';
+  }
 
   let main = fs.readFileSync(readmePath, 'utf-8');
 
@@ -65,14 +70,13 @@ export const assembleReadmeWithSatellites = (projectRoot: string): string => {
   // [text](./readme-docs/foo.md)         — no anchor
   // [text](readme-docs/foo.md#bar)       — relative, with anchor
   // [text](./readme-docs/foo.md#bar)     — full form
-  const linkRegex = new RegExp(
-    `\\[([^\\]]+)\\]\\(\\.?\\/?${SATELLITE_DIR_NAME}\\/([^)#\\s]+\\.md)(#[^)\\s]*)?\\)`,
-    'g',
-  );
+  const linkRegex = new RegExp(`\\[([^\\]]+)\\]\\(\\.?\\/?${SATELLITE_DIR_NAME}\\/([^)#\\s]+\\.md)(#[^)\\s]*)?\\)`, 'g');
 
   main = main.replace(linkRegex, (match, _text: string, filename: string, anchor?: string) => {
     const filePath = path.join(satelliteDir, filename);
-    if (!fs.existsSync(filePath)) {return match;} // leave broken links untouched
+    if (!fs.existsSync(filePath)) {
+      return match;
+    } // leave broken links untouched
 
     let entry = loaded.get(filename);
     if (!entry) {
@@ -93,8 +97,12 @@ export const assembleReadmeWithSatellites = (projectRoot: string): string => {
     return `See "${heading}" below`;
   });
 
-  if (loaded.size === 0) {return main;}
+  if (loaded.size === 0) {
+    return main;
+  }
 
-  const appended = Array.from(loaded.values()).map((e) => e.content).join(SEPARATOR);
+  const appended = Array.from(loaded.values())
+    .map((e) => e.content)
+    .join(SEPARATOR);
   return `${main}${SEPARATOR}${appended}`;
 };

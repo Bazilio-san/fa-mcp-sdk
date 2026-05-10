@@ -21,11 +21,7 @@ const ONE_YEAR_MS = 60 * 60 * 24 * 365 * 1000; // 1 year
 const svgCache = new Map<string, string>();
 
 const etagS = (entity: string): string => {
-  const hash = crypto
-    .createHash('sha1')
-    .update(entity, 'utf8')
-    .digest('base64')
-    .substring(0, 27);
+  const hash = crypto.createHash('sha1').update(entity, 'utf8').digest('base64').substring(0, 27);
   return `"${Buffer.byteLength(entity, 'utf8').toString(16)}-${hash}"`;
 };
 

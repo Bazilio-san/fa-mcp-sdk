@@ -8,15 +8,7 @@ import chalk from 'chalk';
 import { appConfig } from '../../bootstrap/init-config.js';
 import { generateToken } from '../../auth/jwt.js';
 import { logger as lgr } from '../../logger.js';
-import {
-  TesterMcpConfig,
-  ITesterCachedMcpClient,
-  ITesterMcpTool,
-  TesterMcpServerConfig,
-  TesterMcpConnectionRequest,
-  TesterMcpConnectionResponse,
-  TesterHeaderRequirement,
-} from '../types.js';
+import { TesterMcpConfig, ITesterCachedMcpClient, ITesterMcpTool, TesterMcpServerConfig, TesterMcpConnectionRequest, TesterMcpConnectionResponse, TesterHeaderRequirement } from '../types.js';
 
 const logger = lgr.getSubLogger({ name: chalk.cyan('agent-tester:mcp') });
 
@@ -28,23 +20,26 @@ export class TesterMcpClientService {
   private cleanupInterval: ReturnType<typeof setInterval> | null = null;
   private readonly CACHE_MAX_AGE_MS = 10 * 60 * 1000; // 10 minutes
 
-  constructor () {
+  constructor() {
     this.cleanupInterval = setInterval(() => {
       this.cleanupStaleClients();
     }, 60 * 1000);
   }
 
-  public getConnectionKey (config: TesterMcpConfig): string {
+  public getConnectionKey(config: TesterMcpConfig): string {
     const headersHash = this.hashObject(config.headers || {});
     return `${config.url}:${config.transport}:${headersHash}`;
   }
 
-  private hashObject (obj: Record<string, string>): string {
-    const sorted = Object.keys(obj).sort().map(k => `${k}=${obj[k]}`).join('&');
+  private hashObject(obj: Record<string, string>): string {
+    const sorted = Object.keys(obj)
+      .sort()
+      .map((k) => `${k}=${obj[k]}`)
+      .join('&');
     return crypto.createHash('md5').update(sorted).digest('hex').slice(0, 8);
   }
 
-  private cleanupStaleClients (): void {
+  private cleanupStaleClients(): void {
     const now = Date.now();
     const keysToDelete: string[] = [];
 
@@ -72,7 +67,7 @@ export class TesterMcpClientService {
     }
   }
 
-  public async getOrCreateClient (mcpConfig: TesterMcpConfig): Promise<ITesterCachedMcpClient> {
+  public async getOrCreateClient(mcpConfig: TesterMcpConfig): Promise<ITesterCachedMcpClient> {
     const connectionKey = this.getConnectionKey(mcpConfig);
 
     const cached = this.clientCache.get(connectionKey);
@@ -91,7 +86,7 @@ export class TesterMcpClientService {
     const client = await this.createMcpClientFromConfig(mcpConfig);
 
     const toolsList = await client.listTools();
-    const tools: ITesterMcpTool[] = toolsList.tools.map(tool => ({
+    const tools: ITesterMcpTool[] = toolsList.tools.map((tool) => ({
       name: tool.name,
       description: tool.description || '',
       inputSchema: tool.inputSchema,
@@ -104,9 +99,7 @@ export class TesterMcpClientService {
       if (agentPromptInfo) {
         try {
           const promptData = await client.getPrompt({ name: 'agent_prompt' });
-          const validMessages = promptData.messages.filter((m: any) =>
-            m.role === 'user' || m.role === 'assistant',
-          );
+          const validMessages = promptData.messages.filter((m: any) => m.role === 'user' || m.role === 'assistant');
           agentPrompt = validMessages.map((m: any) => m.content.text).join('\n');
         } catch (promptDataError) {
           logger.info('Invalid agent_prompt format:', promptDataError);
@@ -133,7 +126,7 @@ export class TesterMcpClientService {
     return cachedClient;
   }
 
-  private async createMcpClientFromConfig (mcpConfig: TesterMcpConfig): Promise<Client> {
+  private async createMcpClientFromConfig(mcpConfig: TesterMcpConfig): Promise<Client> {
     const client = new Client({
       name: 'agent-tester',
       version: '1.0.0',
@@ -169,7 +162,7 @@ export class TesterMcpClientService {
     return client;
   }
 
-  public async callToolWithConfig (mcpConfig: TesterMcpConfig, toolName: string, parameters: any): Promise<any> {
+  public async callToolWithConfig(mcpConfig: TesterMcpConfig, toolName: string, parameters: any): Promise<any> {
     logger.info(`Calling tool ${toolName} via cached client`, { parameters });
 
     const invoke = async () => {
@@ -193,20 +186,20 @@ export class TesterMcpClientService {
           return result;
         } catch (retryError) {
           logger.error(`Failed to call tool ${toolName} after retry:`, retryError);
-          throw new Error(`Tool execution failed: ${retryError instanceof Error ? retryError.message : 'Unknown error'}`);
+          throw new Error(`Tool execution failed: ${retryError instanceof Error ? retryError.message : 'Unknown error'}`, { cause: retryError });
         }
       }
       logger.error(`Failed to call tool ${toolName}:`, error);
-      throw new Error(`Tool execution failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      throw new Error(`Tool execution failed: ${error instanceof Error ? error.message : 'Unknown error'}`, { cause: error });
     }
   }
 
-  private isAuthError (err: unknown): boolean {
+  private isAuthError(err: unknown): boolean {
     const msg = err instanceof Error ? err.message : String(err);
     return /\b401\b|unauthorized/i.test(msg);
   }
 
-  private isOwnMcpUrl (url: string): boolean {
+  private isOwnMcpUrl(url: string): boolean {
     try {
       const u = new URL(url);
       const port = u.port || (u.protocol === 'https:' ? '443' : '80');
@@ -225,7 +218,7 @@ export class TesterMcpClientService {
 
   // Reissue a JWT for our own server when the cached Authorization header has expired.
   // Returns true if the header was rewritten and the cached client purged — caller may retry once.
-  private reissueOwnJwt (mcpConfig: TesterMcpConfig): boolean {
+  private reissueOwnJwt(mcpConfig: TesterMcpConfig): boolean {
     const auth = appConfig.webServer?.auth;
     if (!auth?.enabled || !auth.jwtToken?.encryptKey) {
       return false;
@@ -234,9 +227,7 @@ export class TesterMcpClientService {
       return false;
     }
     const headers = mcpConfig.headers || {};
-    const headerKey = 'Authorization' in headers
-      ? 'Authorization'
-      : ('authorization' in headers ? 'authorization' : null);
+    const headerKey = 'Authorization' in headers ? 'Authorization' : 'authorization' in headers ? 'authorization' : null;
     if (!headerKey) {
       return false;
     }
@@ -252,7 +243,8 @@ export class TesterMcpClientService {
     if (oldEntry) {
       try {
         oldEntry.client.close?.();
-      } catch { /* ignore */
+      } catch {
+        /* ignore */
       }
       this.clientCache.delete(oldKey);
     }
@@ -264,7 +256,7 @@ export class TesterMcpClientService {
     return true;
   }
 
-  private buildSafeHeaders (headers?: Record<string, string>): Record<string, string> | undefined {
+  private buildSafeHeaders(headers?: Record<string, string>): Record<string, string> | undefined {
     if (!headers) {
       return undefined;
     }
@@ -277,8 +269,8 @@ export class TesterMcpClientService {
     return Object.keys(result).length ? result : undefined;
   }
 
-  public async getRequiredHeaders (serverUrl: string): Promise<TesterHeaderRequirement[]> {
-    const existingEntry = Array.from(this.servers.values()).find(s => s.url === serverUrl && s.isConnected);
+  public async getRequiredHeaders(serverUrl: string): Promise<TesterHeaderRequirement[]> {
+    const existingEntry = Array.from(this.servers.values()).find((s) => s.url === serverUrl && s.isConnected);
     if (existingEntry) {
       const client = this.clients.get(existingEntry.name);
       if (client) {
@@ -289,7 +281,7 @@ export class TesterMcpClientService {
       }
     }
 
-    const transport = /(\/mcp)$/i.test(serverUrl) ? 'http' : (/(\/sse)$/i.test(serverUrl) ? 'sse' : 'http');
+    const transport = /(\/mcp)$/i.test(serverUrl) ? 'http' : /(\/sse)$/i.test(serverUrl) ? 'sse' : 'http';
     const tempName = `used-headers-${Math.random().toString(36).slice(2, 8)}`;
 
     const resp = await this.connectToServer({
@@ -311,20 +303,21 @@ export class TesterMcpClientService {
     } finally {
       try {
         await this.disconnectFromServer(tempName);
-      } catch { /* ignore */
+      } catch {
+        /* ignore */
       }
     }
 
     return [];
   }
 
-  private async fetchRequiredHeadersUsing (client: Client, serverUrl: string): Promise<TesterHeaderRequirement[]> {
+  private async fetchRequiredHeadersUsing(client: Client, serverUrl: string): Promise<TesterHeaderRequirement[]> {
     // 1) Try HTTP endpoint /used-http-headers
     try {
       const baseURL = serverUrl.replace(/\/(mcp|sse)$/, '');
       const headersUrl = baseURL + '/used-http-headers';
       logger.info(`Fetching used headers from: ${headersUrl}`);
-      const response = await fetch(headersUrl, { method: 'GET', headers: { 'Accept': 'application/json' } });
+      const response = await fetch(headersUrl, { method: 'GET', headers: { Accept: 'application/json' } });
       if (response.ok) {
         const headers = await response.json();
         if (Array.isArray(headers)) {
@@ -341,9 +334,7 @@ export class TesterMcpClientService {
     // 2) Fallback: MCP resource use://http-headers
     try {
       const resource: any = await (client as any).readResource({ uri: 'use://http-headers' });
-      const contents: any[] = Array.isArray(resource?.contents)
-        ? resource.contents
-        : (Array.isArray(resource) ? resource : []);
+      const contents: any[] = Array.isArray(resource?.contents) ? resource.contents : Array.isArray(resource) ? resource : [];
 
       let parsed: any = undefined;
       for (const c of contents) {
@@ -352,12 +343,14 @@ export class TesterMcpClientService {
         if (mime === 'application/json' && typeof text === 'string') {
           try {
             parsed = JSON.parse(text);
-          } catch { /* ignore */
+          } catch {
+            /* ignore */
           }
         } else if (typeof c === 'string') {
           try {
             parsed = JSON.parse(c);
-          } catch { /* ignore */
+          } catch {
+            /* ignore */
           }
         } else if (typeof text === 'object' && text) {
           parsed = text;
@@ -370,7 +363,8 @@ export class TesterMcpClientService {
       if (!parsed && typeof resource?.text === 'string') {
         try {
           parsed = JSON.parse(resource.text);
-        } catch { /* ignore */
+        } catch {
+          /* ignore */
         }
       }
 
@@ -380,16 +374,14 @@ export class TesterMcpClientService {
         return headerRequirements;
       }
     } catch (e: Error | any) {
-      const em = e.message && e.message.includes('Unknown resource:')
-        ? 'Unknown resource: use://http-headers'
-        : e;
+      const em = e.message && e.message.includes('Unknown resource:') ? 'Unknown resource: use://http-headers' : e;
       logger.info(`Failed to fetch used headers via MCP resource for ${serverUrl}:`, em);
     }
 
     return [];
   }
 
-  public async connectToServer (request: TesterMcpConnectionRequest): Promise<TesterMcpConnectionResponse> {
+  public async connectToServer(request: TesterMcpConnectionRequest): Promise<TesterMcpConnectionResponse> {
     try {
       logger.info(`Attempting to connect to MCP server: ${request.name} at ${request.url} via ${request.transport}`);
 
@@ -398,7 +390,7 @@ export class TesterMcpClientService {
         client = await this.createMcpClient(request);
 
         const toolsList = await client.listTools();
-        const tools = toolsList.tools.map(tool => ({
+        const tools = toolsList.tools.map((tool) => ({
           name: tool.name,
           description: tool.description || '',
           inputSchema: tool.inputSchema,
@@ -407,13 +399,11 @@ export class TesterMcpClientService {
         let agentPrompt: string | undefined;
         try {
           const prompts = await client.listPrompts();
-          const agentPromptInfo = prompts.prompts.find(p => p.name === 'agent_prompt');
+          const agentPromptInfo = prompts.prompts.find((p) => p.name === 'agent_prompt');
           if (agentPromptInfo) {
             try {
               const promptData = await client.getPrompt({ name: 'agent_prompt' });
-              const validMessages = promptData.messages.filter((m) =>
-                m.role === 'user' || m.role === 'assistant',
-              );
+              const validMessages = promptData.messages.filter((m) => m.role === 'user' || m.role === 'assistant');
               agentPrompt = validMessages.map((m: any) => m.content.text).join('\n');
             } catch (promptDataError) {
               logger.info(`Invalid agent_prompt format on ${request.name}:`, promptDataError);
@@ -451,7 +441,6 @@ export class TesterMcpClientService {
           success: true,
           config: serverConfig,
         };
-
       } catch (connectionError) {
         logger.error(`Failed to connect to MCP server ${request.name}:`, connectionError);
 
@@ -474,7 +463,6 @@ export class TesterMcpClientService {
           error: connectionError instanceof Error ? connectionError.message : 'Connection failed',
         };
       }
-
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
       logger.error(`Unexpected error connecting to MCP server ${request.name}:`, error);
@@ -500,7 +488,7 @@ export class TesterMcpClientService {
     }
   }
 
-  private async createMcpClient (request: TesterMcpConnectionRequest): Promise<Client> {
+  private async createMcpClient(request: TesterMcpConnectionRequest): Promise<Client> {
     const client = new Client({
       name: 'agent-tester',
       version: '1.0.0',
@@ -532,7 +520,7 @@ export class TesterMcpClientService {
     return client;
   }
 
-  public async disconnectFromServer (serverName: string): Promise<void> {
+  public async disconnectFromServer(serverName: string): Promise<void> {
     logger.info(`Disconnecting from MCP server: ${serverName}`);
 
     const client = this.clients.get(serverName);
@@ -553,7 +541,7 @@ export class TesterMcpClientService {
     }
   }
 
-  public async updateHeaders (serverName: string, headers: Record<string, string>): Promise<TesterMcpConnectionResponse> {
+  public async updateHeaders(serverName: string, headers: Record<string, string>): Promise<TesterMcpConnectionResponse> {
     const config = this.servers.get(serverName);
     if (!config) {
       return { success: false, error: `Server ${serverName} not found` };
@@ -564,8 +552,7 @@ export class TesterMcpClientService {
     try {
       try {
         await this.disconnectFromServer(serverName);
-      } catch {
-      }
+      } catch {}
 
       const response = await this.connectToServer({
         name: config.name,
@@ -581,11 +568,11 @@ export class TesterMcpClientService {
     }
   }
 
-  public getAllServerConfigs (): TesterMcpServerConfig[] {
+  public getAllServerConfigs(): TesterMcpServerConfig[] {
     return Array.from(this.servers.values());
   }
 
-  public async cleanup (): Promise<void> {
+  public async cleanup(): Promise<void> {
     logger.info('Cleaning up MCP connections');
 
     if (this.cleanupInterval) {

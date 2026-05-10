@@ -10,27 +10,28 @@ import { getResourcesList } from '../mcp/resources.js';
 import { checkMultiAuth, logAuthConfiguration } from './multi-auth.js';
 import { AuthResult } from './types.js';
 
-
 const { enabled: authEnabled } = appConfig.webServer.auth;
 
 const SHOW_HEADERS_SET = new Set(['user', 'authorization', 'x-real-ip', 'x-mode', 'host']);
 
-const debugAuth = (req: Request, code: number, message: string): { code: number, message: string } => {
+const debugAuth = (req: Request, code: number, message: string): { code: number; message: string } => {
   if (debugTokenAuth.enabled) {
     let headersStr: string = '';
     if (req.headers) {
-      headersStr = Object.entries(req.headers).map(([k, v]) => {
-        if (SHOW_HEADERS_SET.has(k.toLowerCase())) {
-          return `${cyan}${k}${lBlue}: ${magenta}${v}${reset}`;
-        }
-        return undefined;
-      }).filter(Boolean).join(', ');
+      headersStr = Object.entries(req.headers)
+        .map(([k, v]) => {
+          if (SHOW_HEADERS_SET.has(k.toLowerCase())) {
+            return `${cyan}${k}${lBlue}: ${magenta}${v}${reset}`;
+          }
+          return undefined;
+        })
+        .filter(Boolean)
+        .join(', ');
     }
     debugTokenAuth(`${red}Unauthorized ${lBlue}${code}${red} ${message}${reset} Headers: ${headersStr || '-'}`);
   }
   return { code, message };
 };
-
 
 // Legacy functions removed - use createAuthMW() instead
 
@@ -40,7 +41,7 @@ const debugAuth = (req: Request, code: number, message: string): { code: number,
 const isPublicResource = async (uri: string): Promise<boolean> => {
   // Get all resources including built-in and custom
   const { resources: allResources } = await getResourcesList({ transport: 'http' });
-  const resource = allResources.find(r => r.uri === uri);
+  const resource = allResources.find((r) => r.uri === uri);
 
   if (!resource) {
     return false; // Unknown resources require auth by default
@@ -55,7 +56,7 @@ const isPublicResource = async (uri: string): Promise<boolean> => {
 const isPublicPrompt = async (name: string): Promise<boolean> => {
   // Get all prompts including built-in and custom
   const { prompts: allPrompts } = await getPromptsList({ transport: 'http' });
-  const prompt = allPrompts.find(p => p.name === name);
+  const prompt = allPrompts.find((p) => p.name === name);
 
   if (!prompt) {
     return false; // Unknown prompts require auth by default
@@ -101,7 +102,7 @@ const isPublicMcpRequest = async (req: Request): Promise<boolean> => {
  * Programmatic authentication checking - for manual auth validation in code
  * Returns error object if authentication failed, undefined if successful
  */
-export const getMultiAuthError = async (req: Request): Promise<{ code: number, message: string } | undefined> => {
+export const getMultiAuthError = async (req: Request): Promise<{ code: number; message: string } | undefined> => {
   if (!authEnabled) {
     return undefined;
   }
@@ -122,18 +123,15 @@ export const getMultiAuthError = async (req: Request): Promise<{ code: number, m
 // ========================================================================
 
 interface AuthMiddlewareOptions {
-  mcpPaths?: string[];        // Paths to check for public MCP requests (default: ['/mcp', '/messages', '/sse'])
-  logConfig?: boolean;        // Log auth configuration on first request (default: from LOG_AUTH_CONFIG env)
+  mcpPaths?: string[]; // Paths to check for public MCP requests (default: ['/mcp', '/messages', '/sse'])
+  logConfig?: boolean; // Log auth configuration on first request (default: from LOG_AUTH_CONFIG env)
 }
 
 /**
  * Universal authentication middleware - handles all authentication scenarios
  */
-export function createAuthMW (options: AuthMiddlewareOptions = {}) {
-  const {
-    mcpPaths = ['/mcp', '/messages', '/sse'],
-    logConfig = process.env.LOG_AUTH_CONFIG === 'true',
-  } = options;
+export function createAuthMW(options: AuthMiddlewareOptions = {}) {
+  const { mcpPaths = ['/mcp', '/messages', '/sse'], logConfig = process.env.LOG_AUTH_CONFIG === 'true' } = options;
 
   return async (req: Request, res: Response, next: NextFunction) => {
     // If authInfo is already set by an upstream middleware (e.g. Agent Tester session), skip
@@ -149,7 +147,7 @@ export function createAuthMW (options: AuthMiddlewareOptions = {}) {
 
     // Check if this is a public MCP request on any of the configured paths
     const isMcpRequest = mcpPaths.includes(req.path);
-    if (isMcpRequest && await isPublicMcpRequest(req)) {
+    if (isMcpRequest && (await isPublicMcpRequest(req))) {
       return next();
     }
 
@@ -178,4 +176,3 @@ export function createAuthMW (options: AuthMiddlewareOptions = {}) {
 
 // Static property for logging tracking
 (createAuthMW as any)._logged = false;
-

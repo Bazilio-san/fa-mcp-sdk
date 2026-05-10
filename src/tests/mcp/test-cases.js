@@ -30,10 +30,10 @@ export const TEMPLATE_TESTS = {
       try {
         const list = await client.listPrompts();
         const prompts = list?.prompts || list;
-        const names = Array.isArray(prompts) ? prompts.map(p => p.name) : [];
+        const names = Array.isArray(prompts) ? prompts.map((p) => p.name) : [];
         const okBrief = names.includes('agent_brief');
         const okPrompt = names.includes('agent_prompt');
-        return (okBrief && okPrompt) ? ok(name, { names }) : fail(name, { names });
+        return okBrief && okPrompt ? ok(name, { names }) : fail(name, { names });
       } catch (e) {
         return fail(name, { error: e?.message });
       }
@@ -77,7 +77,7 @@ export const TEMPLATE_TESTS = {
       try {
         const list = await client.listResources();
         const resources = list?.resources || list;
-        const uris = Array.isArray(resources) ? resources.map(r => r.uri) : [];
+        const uris = Array.isArray(resources) ? resources.map((r) => r.uri) : [];
         const found = uris.includes('custom-resource://resource1');
         return found ? ok(name, { uris }) : fail(name, { uris });
       } catch (e) {
@@ -105,10 +105,10 @@ export const TEMPLATE_TESTS = {
       try {
         const list = await client.listTools();
         const tools = list?.tools || list;
-        const names = Array.isArray(tools) ? tools.map(t => t.name) : [];
+        const names = Array.isArray(tools) ? tools.map((t) => t.name) : [];
         const ok1 = names.includes('example_tool');
         const ok2 = names.includes('example_search');
-        return (ok1 && ok2) ? ok(name, { names }) : fail(name, { names });
+        return ok1 && ok2 ? ok(name, { names }) : fail(name, { names });
       } catch (e) {
         return fail(name, { error: e?.message });
       }
@@ -121,8 +121,7 @@ export const TEMPLATE_TESTS = {
         // Both structuredContent and text are acceptable; check message echo
         const structured = r?.structuredContent;
         const text = r?.content?.[0]?.text;
-        const hasProcessed = (structured && structured.message?.includes('Processed query'))
-          || (typeof text === 'string' && text.includes('Processed query'));
+        const hasProcessed = (structured && structured.message?.includes('Processed query')) || (typeof text === 'string' && text.includes('Processed query'));
         return hasProcessed ? ok(name, { response: r }) : fail(name, { response: r });
       } catch (e) {
         return fail(name, { error: e?.message });

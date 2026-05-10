@@ -3,10 +3,7 @@ import { IAuthNtlmOptions, EAuthStrategy, IRsn } from 'ya-express-ntlm';
 import { debugNtlmAuthFlow } from 'ya-express-ntlm';
 
 import { tokenGenDomainConfig, getDomainConfig } from './ntlm-domain-config.js';
-import {
-  getTokenGenSessionData,
-  setTokenGenSessionData,
-} from './ntlm-session-storage.js';
+import { getTokenGenSessionData, setTokenGenSessionData } from './ntlm-session-storage.js';
 import { getNotAuthenticatedPageHTML, getNotAuthorizedPageHTML } from './ntlm-templates.js';
 
 // Authorization logic - initially allow all authenticated users
@@ -67,7 +64,10 @@ export const tokenGenNtlmOptions: IAuthNtlmOptions = {
 
   // Error handlers using HTML templates
   handleHttpError403: (rsn: IRsn) => {
-    const { req: { protocol, hostname, ntlm: { username, domain } = {} }, res } = rsn;
+    const {
+      req: { protocol, hostname, ntlm: { username, domain } = {} },
+      res,
+    } = rsn;
     const msg = `HTTP 403: User ${username} did not pass authorization in the "${domain}" domain`;
     debugNtlmAuthFlow(red + msg);
     console.log(`[TOKEN-GEN] ${msg}`);

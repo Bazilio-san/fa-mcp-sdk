@@ -8,7 +8,7 @@ const server = createMcpServer();
 /**
  * Start STDIO server
  */
-export async function startStdioServer (): Promise<void> {
+export async function startStdioServer(): Promise<void> {
   const transport = new StdioServerTransport();
   await server.connect(transport);
   console.error('MCP Server running on stdio');

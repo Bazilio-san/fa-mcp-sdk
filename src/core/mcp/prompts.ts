@@ -5,7 +5,7 @@
 import { IGetPromptRequest, ITransportContext, IPromptContent, IPromptData } from '../_types_/types.js';
 import { getProjectData } from '../bootstrap/init-config.js';
 
-async function getPrompts (args: ITransportContext): Promise<IPromptData[]> {
+async function getPrompts(args: ITransportContext): Promise<IPromptData[]> {
   const projectData = getProjectData();
   if (!projectData) {
     console.error('Error: Project data not initialized. Make sure initMcpServer() has been called.');
@@ -49,7 +49,7 @@ async function getPrompts (args: ITransportContext): Promise<IPromptData[]> {
   ];
 }
 
-export async function getPromptsList (args: ITransportContext) {
+export async function getPromptsList(args: ITransportContext) {
   const prompts = await getPrompts(args);
   return { prompts: prompts.map(({ content, ...rest }) => ({ ...rest })) };
 }

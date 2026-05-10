@@ -13,7 +13,7 @@ import { McpSseClient } from 'fa-mcp-sdk';
 
 const SERVER_URL = 'http://localhost:9876';
 
-async function testMcpClient () {
+async function testMcpClient() {
   console.log('🧪 Testing MCP client as npm package');
   console.log('='.repeat(50));
 
@@ -42,7 +42,7 @@ async function testMcpClient () {
     // List tools
     console.log('3. Listing tools...');
     const tools = await client.listTools();
-    const toolNames = tools.tools?.map(t => t.name) || [];
+    const toolNames = tools.tools?.map((t) => t.name) || [];
     console.log('✅ Available tools:', toolNames.join(', '));
 
     // Test successful tool call
@@ -76,7 +76,6 @@ async function testMcpClient () {
 
     console.log('\n🎉 All tests completed successfully!');
     console.log('✨ No unhandledRejection errors occurred');
-
   } catch (error) {
     console.error('❌ Unexpected error:', error.message);
   } finally {

@@ -26,7 +26,7 @@ export interface ITestResult {
 
   // Temporal metadata
   timestamp: string; // ISO string
-  duration: number;  // milliseconds
+  duration: number; // milliseconds
 
   // Execution status
   status: 'pending' | 'passed' | 'failed' | 'skipped' | 'expected_failure';
@@ -85,7 +85,9 @@ export const formatResultAsMarkdown = (result: ITestResult) => {
 
   let requestHeaders = '';
   if (result.requestHeaders && Object.keys(result.requestHeaders).length > 0) {
-    requestHeaders = `\nHeaders:\n${Object.entries(result.requestHeaders).map(([k, v]) => `  ${k}: ${v}`).join('\n')}\n`;
+    requestHeaders = `\nHeaders:\n${Object.entries(result.requestHeaders)
+      .map(([k, v]) => `  ${k}: ${v}`)
+      .join('\n')}\n`;
   }
 
   // Format response section
@@ -121,7 +123,6 @@ export const formatResultAsMarkdown = (result: ITestResult) => {
         }
         responseText = `## Response\n\n${mdJson(text)}\n\n${addText}`;
       }
-
     } catch {
       // Fallback to text if any parsing errors
       responseText = `## Response\n\n${mdText(String(result.response))}\n\n`;

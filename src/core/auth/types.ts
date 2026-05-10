@@ -5,17 +5,17 @@
 export type TTokenType = 'permanent' | 'JWT';
 
 export interface ITokenPayload {
-  user: string,
-  expire: number,
+  user: string;
+  expire: number;
 
-  [key: string]: any,
+  [key: string]: any;
 }
 
 export interface ICheckTokenResult {
-  payload?: ITokenPayload,
+  payload?: ITokenPayload;
   // errorReason is returned only if there is an error. If it is empty, the check is OK
-  errorReason?: string,
-  isTokenDecrypted?: boolean,
+  errorReason?: string;
+  isTokenDecrypted?: boolean;
 }
 
 export type AuthType = 'permanentServerTokens' | 'jwtToken' | 'basic' | 'custom';

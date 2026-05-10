@@ -13,16 +13,12 @@ import { checkJwtToken, generateToken } from '../jwt.js';
 import { isADEnabled } from './ntlm/ntlm-domain-config.js';
 import { setupNTLMAuthentication } from './ntlm/ntlm-integration.js';
 
-
-
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
-
 
 const ntlmEnabled = isADEnabled;
 
 export const generateTokenApp = (port?: number) => {
-
   port = port || Number(process.env.TOKEN_GEN_PORT || 3030);
 
   const logger = {
@@ -133,7 +129,6 @@ export const generateTokenApp = (port?: number) => {
         success: true,
         token: token,
       });
-
     } catch (error: any) {
       const username = req.ntlm?.username || 'Unknown';
       const domain = req.ntlm?.domain || 'Unknown';
@@ -177,7 +172,6 @@ export const generateTokenApp = (port?: number) => {
         success: true,
         payload: result.payload,
       });
-
     } catch (error: any) {
       const username = req.ntlm?.username || 'Unknown';
       const domain = req.ntlm?.domain || 'Unknown';

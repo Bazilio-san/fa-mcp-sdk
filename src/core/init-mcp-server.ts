@@ -17,7 +17,6 @@ import { checkPortAvailability } from './utils/port-checker.js';
 import { isNonEmptyObject } from './utils/utils.js';
 import { startHttpServer } from './web/server-http.js';
 
-
 let cyclicRegisterServiceInConsul: IRegisterCyclic;
 const initCyclicRegisterServiceInConsul = async () => {
   if (appConfig.consul.service.enable) {
@@ -42,7 +41,7 @@ const initAccessPoints = () => {
   accessPointUpdater.start();
 };
 
-export async function gracefulShutdown (signal: string, exitCode: number = 0) {
+export async function gracefulShutdown(signal: string, exitCode: number = 0) {
   console.error(`A ${signal} signal has been received. Complete...`);
   const FORCE_EXIT_TIMEOUT_MS = 5_000;
   const forceTimer = setTimeout(() => {
@@ -77,7 +76,7 @@ export async function gracefulShutdown (signal: string, exitCode: number = 0) {
  * The main function of MCP server initialization
  * Accepts all design data and starts the server
  */
-export async function initMcpServer (data: McpServerData): Promise<void> {
+export async function initMcpServer(data: McpServerData): Promise<void> {
   const needCheckDb = process.env.NODE_ENV !== 'test' && appConfig.isMainDBUsed;
 
   // Handle graceful shutdown

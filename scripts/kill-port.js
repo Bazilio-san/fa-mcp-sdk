@@ -15,7 +15,7 @@ if (!port) {
   process.exit(1);
 }
 
-async function killProcessOnPort (portNumber) {
+async function killProcessOnPort(portNumber) {
   const isWindows = process.platform === 'win32';
 
   console.log(`Searching for process on port ${portNumber}...`);
@@ -75,7 +75,10 @@ async function killProcessOnPort (portNumber) {
           return;
         }
 
-        const pids = stdout.trim().split('\n').filter(pid => pid);
+        const pids = stdout
+          .trim()
+          .split('\n')
+          .filter((pid) => pid);
 
         for (const pid of pids) {
           try {

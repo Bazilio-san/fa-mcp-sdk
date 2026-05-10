@@ -30,7 +30,7 @@ const LLM_DEFAULTS = {
 /**
  * Wrapper around fetch that always includes credentials (session cookie).
  */
-function apiFetch (url, options = {}) {
+function apiFetch(url, options = {}) {
   return fetch(url, { ...options, credentials: 'include' });
 }
 
@@ -38,13 +38,13 @@ function apiFetch (url, options = {}) {
  * Auth manager — handles login overlay when agentTester.useAuth is enabled.
  */
 class AuthManager {
-  constructor () {
+  constructor() {
     this._authenticated = false;
     this._authRequired = false;
   }
 
   /** Check auth status and show login if needed. Returns true if app can proceed. */
-  async init () {
+  async init() {
     try {
       const resp = await apiFetch(`${API_BASE}/api/auth/status`);
       const status = await resp.json();
@@ -69,7 +69,7 @@ class AuthManager {
     }
   }
 
-  _showLoginOverlay (methods) {
+  _showLoginOverlay(methods) {
     const overlay = document.getElementById('authOverlay');
     const appEl = document.querySelector('.app');
     overlay.style.display = 'flex';
@@ -98,18 +98,22 @@ class AuthManager {
     tokenForm.addEventListener('submit', (e) => {
       e.preventDefault();
       const token = document.getElementById('authToken').value.trim();
-      if (token) { this._login({ token }); }
+      if (token) {
+        this._login({ token });
+      }
     });
 
     basicForm.addEventListener('submit', (e) => {
       e.preventDefault();
       const username = document.getElementById('authUsername').value.trim();
       const password = document.getElementById('authPassword').value;
-      if (username && password) { this._login({ username, password }); }
+      if (username && password) {
+        this._login({ username, password });
+      }
     });
   }
 
-  _bindTabs () {
+  _bindTabs() {
     const tabs = document.querySelectorAll('.auth-tab');
     const tokenForm = document.getElementById('authTokenForm');
     const basicForm = document.getElementById('authBasicForm');
@@ -130,7 +134,7 @@ class AuthManager {
     });
   }
 
-  async _login (credentials) {
+  async _login(credentials) {
     this._hideError();
     try {
       const resp = await apiFetch(`${API_BASE}/api/auth/login`, {
@@ -159,7 +163,7 @@ class AuthManager {
     }
   }
 
-  _showLogoutButton () {
+  _showLogoutButton() {
     const btn = document.getElementById('logoutBtn');
     if (btn) {
       btn.style.display = '';
@@ -167,27 +171,29 @@ class AuthManager {
     }
   }
 
-  async _logout () {
+  async _logout() {
     try {
       await apiFetch(`${API_BASE}/api/auth/logout`, { method: 'POST' });
-    } catch { /* ignore */ }
+    } catch {
+      /* ignore */
+    }
     location.reload();
   }
 
-  _showError (msg) {
+  _showError(msg) {
     const el = document.getElementById('authError');
     el.textContent = msg;
     el.style.display = 'block';
   }
 
-  _hideError () {
+  _hideError() {
     const el = document.getElementById('authError');
     el.style.display = 'none';
   }
 }
 
 class McpAgentTester {
-  constructor () {
+  constructor() {
     this.currentSessionId = null;
     this.currentServer = null;
     this.currentSystemPrompt = '';
@@ -223,22 +229,46 @@ class McpAgentTester {
     console.log('MCP Agent Tester initialized');
   }
 
-  sanitizeHtml (html) {
-    const allowedTags = [
-      'p', 'br', 'strong', 'b', 'em', 'i', 'u', 'code', 'pre',
-      'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
-      'ul', 'ol', 'li', 'blockquote', 'a', 'span', 'div',
-      'table', 'thead', 'tbody', 'tr', 'th', 'td',
-    ];
+  sanitizeHtml(html) {
+    const allowedTags = new Set([
+      'p',
+      'br',
+      'strong',
+      'b',
+      'em',
+      'i',
+      'u',
+      'code',
+      'pre',
+      'h1',
+      'h2',
+      'h3',
+      'h4',
+      'h5',
+      'h6',
+      'ul',
+      'ol',
+      'li',
+      'blockquote',
+      'a',
+      'span',
+      'div',
+      'table',
+      'thead',
+      'tbody',
+      'tr',
+      'th',
+      'td',
+    ]);
 
     const allowedAttributes = {
-      'a': ['href', 'title', 'target'],
-      'th': ['colspan', 'rowspan'],
-      'td': ['colspan', 'rowspan'],
-      'code': ['class'],
-      'pre': ['class'],
-      'span': ['class'],
-      'div': ['class'],
+      a: ['href', 'title', 'target'],
+      th: ['colspan', 'rowspan'],
+      td: ['colspan', 'rowspan'],
+      code: ['class'],
+      pre: ['class'],
+      span: ['class'],
+      div: ['class'],
     };
 
     const tempDiv = document.createElement('div');
@@ -255,7 +285,7 @@ class McpAgentTester {
 
       const tagName = node.tagName.toLowerCase();
 
-      if (!allowedTags.includes(tagName)) {
+      if (!allowedTags.has(tagName)) {
         const textNode = document.createTextNode(node.textContent || '');
         return textNode;
       }
@@ -263,7 +293,7 @@ class McpAgentTester {
       const cleanedElement = document.createElement(tagName);
 
       const allowedAttrs = allowedAttributes[tagName] || [];
-      allowedAttrs.forEach(attr => {
+      allowedAttrs.forEach((attr) => {
         if (node.hasAttribute(attr)) {
           const value = node.getAttribute(attr);
           if (attr === 'href') {
@@ -281,7 +311,7 @@ class McpAgentTester {
         }
       });
 
-      Array.from(node.childNodes).forEach(child => {
+      Array.from(node.childNodes).forEach((child) => {
         const cleanedChild = cleanNode(child);
         if (cleanedChild) {
           cleanedElement.appendChild(cleanedChild);
@@ -291,15 +321,17 @@ class McpAgentTester {
       return cleanedElement;
     };
 
-    const cleanedNodes = Array.from(tempDiv.childNodes).map(cleanNode).filter(node => node !== null);
+    const cleanedNodes = Array.from(tempDiv.childNodes)
+      .map(cleanNode)
+      .filter((node) => node !== null);
 
     const finalDiv = document.createElement('div');
-    cleanedNodes.forEach(node => finalDiv.appendChild(node));
+    cleanedNodes.forEach((node) => finalDiv.appendChild(node));
 
     return finalDiv.innerHTML.trim();
   }
 
-  createFormatToggle (messageId) {
+  createFormatToggle(messageId) {
     const toggleContainer = document.createElement('div');
     toggleContainer.className = 'format-toggle-container';
 
@@ -311,7 +343,7 @@ class McpAgentTester {
     const options = ['MD', 'HTML'];
     const currentFormat = this.messageFormats[messageId] || 'MD';
 
-    options.forEach(opt => {
+    options.forEach((opt) => {
       const option = document.createElement('option');
       option.value = opt;
       option.textContent = opt;
@@ -329,7 +361,7 @@ class McpAgentTester {
     return toggleContainer;
   }
 
-  onFormatChange (messageId, format) {
+  onFormatChange(messageId, format) {
     this.messageFormats[messageId] = format;
     const originalText = this.messageTexts[messageId];
     const messageText = document.querySelector(`.message-text[data-message-id="${messageId}"]`);
@@ -338,7 +370,7 @@ class McpAgentTester {
     }
   }
 
-  handleDefaultFormatChange () {
+  handleDefaultFormatChange() {
     const { value } = this.defaultFormatSelect;
     this.defaultDisplayFormat = value;
     localStorage.setItem('agentTesterDefaultFormat', value);
@@ -347,7 +379,7 @@ class McpAgentTester {
     }
   }
 
-  renderMessageContent (element, text, format) {
+  renderMessageContent(element, text, format) {
     if (format === 'HTML') {
       element.innerHTML = this.sanitizeHtml(text).trim();
       element.classList.add('html-content');
@@ -359,7 +391,7 @@ class McpAgentTester {
     }
   }
 
-  initializeElements () {
+  initializeElements() {
     this.sidebar = document.getElementById('sidebar');
     this.sidebarToggle = document.getElementById('sidebarToggle');
     this.sidebarToggleMobile = document.getElementById('sidebarToggleMobile');
@@ -422,7 +454,7 @@ class McpAgentTester {
     this.defaultFormatSelect = document.getElementById('defaultDisplayFormat');
   }
 
-  bindEvents () {
+  bindEvents() {
     if (this.sidebarToggle) {
       this.sidebarToggle.addEventListener('click', () => this.toggleSidebar());
     }
@@ -464,7 +496,9 @@ class McpAgentTester {
     this.llmModelDropdownToggle.addEventListener('click', (e) => this.toggleLlmModelDropdown(e));
     this.renderLlmModelDropdown();
     this.llmModal.addEventListener('click', (e) => {
-      if (e.target === this.llmModal) { this.closeLlmModal(); }
+      if (e.target === this.llmModal) {
+        this.closeLlmModal();
+      }
     });
     document.addEventListener('keydown', (e) => {
       if (e.key === 'Escape' && this.llmModal.style.display === 'flex') {
@@ -472,13 +506,15 @@ class McpAgentTester {
       }
     });
 
-    document.querySelectorAll('.btn-enlarge').forEach(btn => {
+    document.querySelectorAll('.btn-enlarge').forEach((btn) => {
       btn.addEventListener('click', () => this.openPromptModal(btn.dataset.target));
     });
     document.getElementById('promptModalClose').addEventListener('click', () => this.closePromptModal());
     document.getElementById('promptModalSave').addEventListener('click', () => this.savePromptModal());
     document.getElementById('promptModal').addEventListener('click', (e) => {
-      if (e.target === e.currentTarget) {this.closePromptModal();}
+      if (e.target === e.currentTarget) {
+        this.closePromptModal();
+      }
     });
 
     this.messageInput.addEventListener('input', () => this.handleInputChange());
@@ -487,10 +523,7 @@ class McpAgentTester {
     this.clearChatBtn.addEventListener('click', () => this.clearChat());
 
     document.addEventListener('click', (e) => {
-      if (window.innerWidth <= 768 &&
-        !this.sidebar.contains(e.target) &&
-        !this.sidebarToggleMobile.contains(e.target) &&
-        this.sidebar.classList.contains('open')) {
+      if (window.innerWidth <= 768 && !this.sidebar.contains(e.target) && !this.sidebarToggleMobile.contains(e.target) && this.sidebar.classList.contains('open')) {
         this.toggleSidebar();
       }
     });
@@ -502,24 +535,23 @@ class McpAgentTester {
     });
   }
 
-  initTheme () {
+  initTheme() {
     const saved = localStorage.getItem('mcpAgentTheme');
     let theme = saved;
     if (!theme) {
-      theme = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches
-        ? 'dark' : 'light';
+      theme = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
     }
     this.applyTheme(theme);
   }
 
-  toggleTheme () {
+  toggleTheme() {
     const current = document.documentElement.getAttribute('data-theme') || 'light';
     const next = current === 'dark' ? 'light' : 'dark';
     this.applyTheme(next);
     localStorage.setItem('mcpAgentTheme', next);
   }
 
-  applyTheme (theme) {
+  applyTheme(theme) {
     document.documentElement.setAttribute('data-theme', theme);
     if (this.themeToggle) {
       const icon = this.themeToggle.querySelector('.material-icons-round');
@@ -529,7 +561,7 @@ class McpAgentTester {
     }
   }
 
-  openPromptModal (targetId) {
+  openPromptModal(targetId) {
     this._promptModalTarget = document.getElementById(targetId);
     const modal = document.getElementById('promptModal');
     const textarea = document.getElementById('promptModalTextarea');
@@ -540,7 +572,7 @@ class McpAgentTester {
     textarea.focus();
   }
 
-  closePromptModal () {
+  closePromptModal() {
     const modal = document.getElementById('promptModal');
     const textarea = document.getElementById('promptModalTextarea');
     const saveBtn = document.getElementById('promptModalSave');
@@ -553,7 +585,7 @@ class McpAgentTester {
     this._promptModalTarget = null;
   }
 
-  savePromptModal () {
+  savePromptModal() {
     if (this._promptModalTarget) {
       this._promptModalTarget.value = document.getElementById('promptModalTextarea').value;
       this.saveFormValuesToStorage();
@@ -561,18 +593,18 @@ class McpAgentTester {
     this.closePromptModal();
   }
 
-  setupAutoResize () {
+  setupAutoResize() {
     this.messageInput.addEventListener('input', function () {
       this.style.height = 'auto';
       this.style.height = Math.min(this.scrollHeight, 120) + 'px';
     });
   }
 
-  toggleSidebar () {
+  toggleSidebar() {
     this.sidebar.classList.toggle('open');
   }
 
-  async loadInitialData () {
+  async loadInitialData() {
     try {
       this.loadFormValuesFromStorage();
       this.loadFormValuesFromURL();
@@ -596,9 +628,11 @@ class McpAgentTester {
     }
   }
 
-  async autoConnect () {
+  async autoConnect() {
     const serverUrl = this.serverUrlInput.value.trim();
-    if (!serverUrl) {return;}
+    if (!serverUrl) {
+      return;
+    }
 
     const transport = this.transportSelect.value;
     const serverName = this.generateServerName(serverUrl);
@@ -663,7 +697,7 @@ class McpAgentTester {
     }
   }
 
-  async loadDefaultConfig () {
+  async loadDefaultConfig() {
     try {
       const response = await apiFetch(`${API_BASE}/api/config`);
       const config = await response.json();
@@ -682,7 +716,7 @@ class McpAgentTester {
     }
   }
 
-  async handleMcpConnection (event) {
+  async handleMcpConnection(event) {
     event.preventDefault();
 
     const serverUrl = this.serverUrlInput.value.trim();
@@ -745,7 +779,6 @@ class McpAgentTester {
       } else {
         this.showToast('Failed to connect: ' + result.error, 'error');
       }
-
     } catch (error) {
       console.error('Connection error:', error);
       this.showToast('Connection failed: ' + error.message, 'error');
@@ -754,7 +787,7 @@ class McpAgentTester {
     }
   }
 
-  generateServerName (url) {
+  generateServerName(url) {
     try {
       const parsedUrl = new URL(url);
       const { hostname, port } = parsedUrl;
@@ -771,7 +804,7 @@ class McpAgentTester {
     }
   }
 
-  async checkRequiredHeaders () {
+  async checkRequiredHeaders() {
     const url = this.serverUrlInput.value.trim();
 
     if (!url) {
@@ -784,7 +817,7 @@ class McpAgentTester {
     try {
       const response = await apiFetch(`${API_BASE}/api/mcp/used-headers?url=${encodeURIComponent(url)}`, {
         method: 'GET',
-        headers: { 'Accept': 'application/json' },
+        headers: { Accept: 'application/json' },
       });
 
       if (response.ok) {
@@ -794,7 +827,7 @@ class McpAgentTester {
         await this.autoFillAuthHeader();
 
         if (this.usedHeaders.length > 0) {
-          const reqCount = this.usedHeaders.filter(h => !h.isOptional).length;
+          const reqCount = this.usedHeaders.filter((h) => !h.isOptional).length;
           this.showToast(`Found ${this.usedHeaders.length} headers (${reqCount} used)`, 'success');
           this.headersSection.style.display = 'block';
         } else {
@@ -806,7 +839,6 @@ class McpAgentTester {
         this.headersSection.style.display = 'none';
         this.usedHeaders = [];
       }
-
     } catch (error) {
       console.log('Headers check failed:', error);
       this.showToast('Headers endpoint not available - proceeding without additional headers', 'info');
@@ -817,11 +849,11 @@ class McpAgentTester {
     }
   }
 
-  renderHeaderInputs () {
+  renderHeaderInputs() {
     this.dynamicHeaders.innerHTML = '';
     const savedHeaders = this.loadHeaderValuesFromStorage();
 
-    this.usedHeaders.forEach(header => {
+    this.usedHeaders.forEach((header) => {
       const headerGroup = document.createElement('div');
       headerGroup.className = 'header-row';
 
@@ -886,31 +918,31 @@ class McpAgentTester {
     this.mcpConfig.headers = this.getHeadersFromForm();
   }
 
-  showHeaderTooltip (e, text) {
+  showHeaderTooltip(e, text) {
     const tip = document.getElementById('headerTooltip');
     tip._sourceEl = e.target;
     tip.textContent = text;
     const rect = e.target.getBoundingClientRect();
     tip.style.left = rect.left + 'px';
-    tip.style.top = (rect.top - 4) + 'px';
+    tip.style.top = rect.top - 4 + 'px';
     tip.style.transform = 'translateY(-100%)';
     tip.classList.add('visible');
   }
 
-  hideHeaderTooltip () {
+  hideHeaderTooltip() {
     const tip = document.getElementById('headerTooltip');
     tip.classList.remove('visible');
     tip._sourceEl = null;
   }
 
-  copyToClipboard (text) {
+  copyToClipboard(text) {
     if (navigator.clipboard && navigator.clipboard.writeText) {
       return navigator.clipboard.writeText(text).catch(() => this._fallbackCopy(text));
     }
     return this._fallbackCopy(text);
   }
 
-  _fallbackCopy (text) {
+  _fallbackCopy(text) {
     const ta = document.createElement('textarea');
     ta.value = text;
     ta.style.position = 'fixed';
@@ -922,7 +954,7 @@ class McpAgentTester {
     return Promise.resolve();
   }
 
-  updateHeaderBorder (inputEl) {
+  updateHeaderBorder(inputEl) {
     if (inputEl.dataset.required === 'true') {
       if (inputEl.value.trim()) {
         inputEl.classList.remove('empty-required');
@@ -932,12 +964,12 @@ class McpAgentTester {
     }
   }
 
-  getHeaderStorageKey () {
+  getHeaderStorageKey() {
     const url = this.serverUrlInput.value.trim();
     return `mcpHeaderValues_${url}`;
   }
 
-  saveHeaderValuesToStorage () {
+  saveHeaderValuesToStorage() {
     const headers = this.getHeadersFromForm();
     const key = this.getHeaderStorageKey();
     try {
@@ -947,7 +979,7 @@ class McpAgentTester {
     }
   }
 
-  loadHeaderValuesFromStorage () {
+  loadHeaderValuesFromStorage() {
     const key = this.getHeaderStorageKey();
     try {
       const stored = localStorage.getItem(key);
@@ -958,18 +990,18 @@ class McpAgentTester {
     }
   }
 
-  scheduleHeadersUpdate () {
+  scheduleHeadersUpdate() {
     this.mcpConfig.headers = this.getHeadersFromForm();
 
     if (this._headersUpdateTimer) {
       clearTimeout(this._headersUpdateTimer);
     }
     this._headersUpdateTimer = setTimeout(() => {
-      this.applyHeadersUpdate().catch(err => console.warn('Apply headers failed:', err));
+      this.applyHeadersUpdate().catch((err) => console.warn('Apply headers failed:', err));
     }, 600);
   }
 
-  async applyHeadersUpdate () {
+  async applyHeadersUpdate() {
     if (!this.currentServer || !this.currentServer.name) {
       return;
     }
@@ -995,14 +1027,14 @@ class McpAgentTester {
     }
   }
 
-  getHeadersFromForm () {
+  getHeadersFromForm() {
     const headers = {};
 
     if (this.usedHeaders.length === 0) {
       return headers;
     }
 
-    this.usedHeaders.forEach(header => {
+    this.usedHeaders.forEach((header) => {
       const input = document.getElementById(`header_${header.name}`);
       if (input && input.value.trim()) {
         headers[header.name] = input.value.trim();
@@ -1012,10 +1044,14 @@ class McpAgentTester {
     return headers;
   }
 
-  isOwnService () {
-    if (!this.defaultMcpUrl) { return false; }
+  isOwnService() {
+    if (!this.defaultMcpUrl) {
+      return false;
+    }
     const current = this.serverUrlInput?.value?.trim();
-    if (!current) { return false; }
+    if (!current) {
+      return false;
+    }
     const norm = (s) => {
       try {
         const u = new URL(s, window.location.origin);
@@ -1033,24 +1069,32 @@ class McpAgentTester {
     return norm(current) === norm(this.defaultMcpUrl);
   }
 
-  async autoFillAuthHeader () {
-    if (!this.authEnabled) {return;}
+  async autoFillAuthHeader() {
+    if (!this.authEnabled) {
+      return;
+    }
 
-    const hasAuthHeader = this.usedHeaders.some(h => h.name === 'Authorization');
-    if (!hasAuthHeader) {return;}
+    const hasAuthHeader = this.usedHeaders.some((h) => h.name === 'Authorization');
+    if (!hasAuthHeader) {
+      return;
+    }
 
     const savedHeaders = this.loadHeaderValuesFromStorage();
 
     try {
       const response = await apiFetch(`${API_BASE}/api/auth-token`);
-      if (!response.ok) {return;}
+      if (!response.ok) {
+        return;
+      }
 
       const data = await response.json();
       this._currentAuthType = data.authType;
 
       // For non-JWT auth, keep user's saved value if any.
       // JWT must always be refreshed (short-lived, regenerated on page reload).
-      if (data.authType !== 'jwtToken' && savedHeaders['Authorization']) {return;}
+      if (data.authType !== 'jwtToken' && savedHeaders['Authorization']) {
+        return;
+      }
 
       const input = document.getElementById('header_Authorization');
       if (input) {
@@ -1071,21 +1115,27 @@ class McpAgentTester {
 
   // Compute the delay (ms) until the next refresh: ~1/3 of TTL minus a 60s safety window.
   // Math.max(30, ...) clamps against negative or too-short delays when ttl/3 - 60 <= 30.
-  _refreshDelayMs (ttlSec) {
+  _refreshDelayMs(ttlSec) {
     const ttl = Number(ttlSec);
-    if (!Number.isFinite(ttl) || ttl <= 0) { return 3 * 60 * 1000; }
+    if (!Number.isFinite(ttl) || ttl <= 0) {
+      return 3 * 60 * 1000;
+    }
     return Math.max(30, ttl / 3 - 60) * 1000;
   }
 
-  startAuthRefresh (ttlSec) {
+  startAuthRefresh(ttlSec) {
     this.stopAuthRefresh();
-    if (ttlSec) { this._authTtlSec = Number(ttlSec); }
+    if (ttlSec) {
+      this._authTtlSec = Number(ttlSec);
+    }
     this._scheduleNextRefresh(this._refreshDelayMs(this._authTtlSec));
     this._attachAuthVisibilityListeners();
   }
 
-  _scheduleNextRefresh (delayMs) {
-    if (this._authRefreshTimer) { clearTimeout(this._authRefreshTimer); }
+  _scheduleNextRefresh(delayMs) {
+    if (this._authRefreshTimer) {
+      clearTimeout(this._authRefreshTimer);
+    }
     this._authRefreshTimer = setTimeout(() => {
       this._authRefreshTimer = null;
       this._doRefreshAuthToken().finally(() => {
@@ -1098,14 +1148,20 @@ class McpAgentTester {
     }, delayMs);
   }
 
-  async _doRefreshAuthToken () {
-    if (this._authRefreshInFlight) { return; }
+  async _doRefreshAuthToken() {
+    if (this._authRefreshInFlight) {
+      return;
+    }
     this._authRefreshInFlight = true;
     try {
       const response = await apiFetch(`${API_BASE}/api/auth-token/refresh`, { method: 'POST' });
-      if (!response.ok) { return; }
+      if (!response.ok) {
+        return;
+      }
       const data = await response.json();
-      if (data.ttlSec) { this._authTtlSec = Number(data.ttlSec); }
+      if (data.ttlSec) {
+        this._authTtlSec = Number(data.ttlSec);
+      }
       const input = document.getElementById('header_Authorization');
       if (input) {
         input.value = data.token;
@@ -1119,14 +1175,22 @@ class McpAgentTester {
     }
   }
 
-  _attachAuthVisibilityListeners () {
-    if (this._authVisibilityListenerAttached) { return; }
+  _attachAuthVisibilityListeners() {
+    if (this._authVisibilityListenerAttached) {
+      return;
+    }
     this._authVisibilityListenerAttached = true;
     const handler = () => {
       // Background-tab throttling can starve setTimeout — refresh eagerly when the user comes back.
-      if (document.visibilityState !== 'visible') { return; }
-      if (this._currentAuthType !== 'jwtToken') { return; }
-      if (!this.isOwnService()) { return; }
+      if (document.visibilityState !== 'visible') {
+        return;
+      }
+      if (this._currentAuthType !== 'jwtToken') {
+        return;
+      }
+      if (!this.isOwnService()) {
+        return;
+      }
       this._doRefreshAuthToken().finally(() => {
         if (this._authTtlSec) {
           this._scheduleNextRefresh(this._refreshDelayMs(this._authTtlSec));
@@ -1137,14 +1201,14 @@ class McpAgentTester {
     window.addEventListener('focus', handler);
   }
 
-  stopAuthRefresh () {
+  stopAuthRefresh() {
     if (this._authRefreshTimer) {
       clearTimeout(this._authRefreshTimer);
       this._authRefreshTimer = null;
     }
   }
 
-  resetConnectionForm () {
+  resetConnectionForm() {
     this.stopAuthRefresh();
     this.mcpConnectionForm.reset();
     this.serverUrlInput.value = '';
@@ -1165,7 +1229,7 @@ class McpAgentTester {
     localStorage.removeItem('mcpAgentFormValues');
   }
 
-  async loadCurrentServer () {
+  async loadCurrentServer() {
     try {
       const response = await apiFetch(`${API_BASE}/api/mcp/servers`);
       const servers = await response.json();
@@ -1179,7 +1243,6 @@ class McpAgentTester {
         this.updateConnectionStatus();
         this.renderServerInfo();
       }
-
     } catch (error) {
       console.error('Error loading current server:', error);
       this.currentServer = null;
@@ -1188,7 +1251,7 @@ class McpAgentTester {
     }
   }
 
-  renderServerInfo () {
+  renderServerInfo() {
     if (!this.currentServer) {
       this.connectedServersContainer.innerHTML = '';
       return;
@@ -1220,7 +1283,7 @@ class McpAgentTester {
     });
   }
 
-  async disconnectServer () {
+  async disconnectServer() {
     if (!this.currentServer) {
       return;
     }
@@ -1246,14 +1309,13 @@ class McpAgentTester {
       } else {
         this.showToast('Failed to disconnect', 'error');
       }
-
     } catch (error) {
       console.error('Disconnect error:', error);
       this.showToast('Disconnect failed: ' + error.message, 'error');
     }
   }
 
-  async handleReconnect () {
+  async handleReconnect() {
     if (!this.currentServer) {
       return;
     }
@@ -1297,8 +1359,10 @@ class McpAgentTester {
     }
   }
 
-  updateConnectionStatus () {
-    if (!this.connectionStatus) {return;}
+  updateConnectionStatus() {
+    if (!this.connectionStatus) {
+      return;
+    }
     if (this.currentServer && this.currentServer.isConnected) {
       this.connectionStatus.textContent = `Connected to ${this.currentServer.name}`;
       this.connectionStatus.classList.add('connected');
@@ -1308,7 +1372,7 @@ class McpAgentTester {
     }
   }
 
-  handleInputChange () {
+  handleInputChange() {
     const { length } = this.messageInput.value;
     this.charCount.textContent = `${length}/40000`;
 
@@ -1324,16 +1388,18 @@ class McpAgentTester {
     }
   }
 
-  handleKeyDown (event) {
+  handleKeyDown(event) {
     if (event.key === 'Enter' && !event.shiftKey) {
       event.preventDefault();
       this.sendMessage();
     }
   }
 
-  async sendMessage () {
+  async sendMessage() {
     const message = this.messageInput.value.trim();
-    if (!message) {return;}
+    if (!message) {
+      return;
+    }
 
     if (!this.validateLlmSettings()) {
       return;
@@ -1357,12 +1423,14 @@ class McpAgentTester {
         customPrompt: trim(this.customPromptTextarea.value) || undefined,
         model: modelConfig.model,
         useStreaming: false,
-        mcpConfig: this.mcpConfig.url ? {
-          url: this.mcpConfig.url,
-          transport: this.mcpConfig.transport,
-          headers: this.mcpConfig.headers,
-          name: this.mcpConfig.name,
-        } : undefined,
+        mcpConfig: this.mcpConfig.url
+          ? {
+              url: this.mcpConfig.url,
+              transport: this.mcpConfig.transport,
+              headers: this.mcpConfig.headers,
+              name: this.mcpConfig.name,
+            }
+          : undefined,
         modelConfig: modelConfig,
       };
 
@@ -1381,7 +1449,6 @@ class McpAgentTester {
       this.currentSessionId = result.sessionId;
 
       this.addMessage(result.message, 'assistant', result.metadata);
-
     } catch (error) {
       console.error('Send message error:', error);
       this.addMessage(`Error: ${error.message}`, 'assistant', { error: true });
@@ -1391,7 +1458,7 @@ class McpAgentTester {
     }
   }
 
-  addMessage (text, sender, metadata = {}) {
+  addMessage(text, sender, metadata = {}) {
     const messageId = Date.now() + '_' + Math.random().toString(36).substr(2, 9);
     const messageDiv = document.createElement('div');
     messageDiv.className = `message ${sender}`;
@@ -1471,15 +1538,15 @@ class McpAgentTester {
     this.scrollToBottom();
   }
 
-  showTypingIndicator () {
+  showTypingIndicator() {
     this.typingIndicator.classList.add('visible');
   }
 
-  hideTypingIndicator () {
+  hideTypingIndicator() {
     this.typingIndicator.classList.remove('visible');
   }
 
-  clearChat () {
+  clearChat() {
     const welcomeMessage = this.chatMessages.querySelector('.message.welcome');
     this.chatMessages.innerHTML = '';
     if (welcomeMessage) {
@@ -1491,32 +1558,33 @@ class McpAgentTester {
     this.showToast('Chat cleared', 'success');
   }
 
-  scrollToBottom () {
+  scrollToBottom() {
     setTimeout(() => {
       this.chatMessages.scrollTop = this.chatMessages.scrollHeight;
     }, 100);
   }
 
-  showLoading (message = 'Loading...') {
+  showLoading(message = 'Loading...') {
     this.loadingOverlay.querySelector('span').textContent = message;
     this.loadingOverlay.style.display = 'flex';
   }
 
-  hideLoading () {
+  hideLoading() {
     this.loadingOverlay.style.display = 'none';
   }
 
-  showToast (message, type = 'info') {
+  showToast(message, type = 'info') {
     const toast = document.createElement('div');
     toast.className = `toast ${type}`;
     toast.setAttribute('data-testid', `at-toast-${type}`);
 
-    const icon = {
-      'success': 'check_circle',
-      'error': 'error',
-      'warning': 'warning',
-      'info': 'info',
-    }[type] || 'info';
+    const icon =
+      {
+        success: 'check_circle',
+        error: 'error',
+        warning: 'warning',
+        info: 'info',
+      }[type] || 'info';
 
     toast.innerHTML = `
             <span class="material-icons-round">${icon}</span>
@@ -1538,11 +1606,13 @@ class McpAgentTester {
     });
   }
 
-  initLlmSettings () {
+  initLlmSettings() {
     let stored = {};
     try {
       stored = JSON.parse(localStorage.getItem(LLM_LS_KEY) || '{}');
-    } catch { stored = {}; }
+    } catch {
+      stored = {};
+    }
 
     const merged = { ...LLM_DEFAULTS, ...stored };
     const cfg = this.llmDefaults || {};
@@ -1559,13 +1629,15 @@ class McpAgentTester {
 
     this.llmSettings = merged;
 
-    if (touched) { this.saveLlmSettings(); }
+    if (touched) {
+      this.saveLlmSettings();
+    }
 
     this.migrateLegacyLlmSettings();
     this.renderModelDisplay();
   }
 
-  migrateLegacyLlmSettings () {
+  migrateLegacyLlmSettings() {
     try {
       const legacy = JSON.parse(localStorage.getItem('mcpAgentFormValues') || '{}');
       let dirty = false;
@@ -1581,12 +1653,18 @@ class McpAgentTester {
       };
       for (const [from, to] of Object.entries(map)) {
         const raw = legacy[from];
-        if (raw == null || raw === '') { continue; }
+        if (raw == null || raw === '') {
+          continue;
+        }
         const current = this.llmSettings[to];
         const isEmpty = current == null || current === '' || current === LLM_DEFAULTS[to];
-        if (!isEmpty) { continue; }
+        if (!isEmpty) {
+          continue;
+        }
         const v = numericFields.has(to) ? Number(raw) : raw;
-        if (numericFields.has(to) && Number.isNaN(v)) { continue; }
+        if (numericFields.has(to) && Number.isNaN(v)) {
+          continue;
+        }
         this.llmSettings[to] = v;
         dirty = true;
       }
@@ -1599,10 +1677,12 @@ class McpAgentTester {
         this.saveLlmSettings();
         this.renderModelDisplay();
       }
-    } catch { /* ignore */ }
+    } catch {
+      /* ignore */
+    }
   }
 
-  saveLlmSettings () {
+  saveLlmSettings() {
     try {
       localStorage.setItem(LLM_LS_KEY, JSON.stringify(this.llmSettings));
     } catch (e) {
@@ -1610,13 +1690,13 @@ class McpAgentTester {
     }
   }
 
-  renderModelDisplay () {
+  renderModelDisplay() {
     const name = trim(this.llmSettings.model) || '—';
     this.modelDisplay.textContent = name;
     this.apiKeyWarning.style.display = this.llmSettings.apiKey ? 'none' : 'block';
   }
 
-  openLlmModal () {
+  openLlmModal() {
     const s = this.llmSettings;
     this.llmBaseUrl.value = s.baseURL || '';
     this.llmApiKey.value = s.apiKey || '';
@@ -1629,17 +1709,19 @@ class McpAgentTester {
     // Reset API key visibility to hidden on open
     this.llmApiKey.type = 'password';
     const icon = this.llmApiKeyToggle.querySelector('.material-icons-round');
-    if (icon) { icon.textContent = 'visibility'; }
+    if (icon) {
+      icon.textContent = 'visibility';
+    }
 
     this.llmModal.style.display = 'flex';
   }
 
-  closeLlmModal () {
+  closeLlmModal() {
     this.closeLlmModelDropdown();
     this.llmModal.style.display = 'none';
   }
 
-  saveLlmModal () {
+  saveLlmModal() {
     const baseURL = trim(this.llmBaseUrl.value);
     const apiKey = trim(this.llmApiKey.value);
     const model = trim(this.llmModelName.value);
@@ -1649,13 +1731,23 @@ class McpAgentTester {
     const toolResultLimitChars = parseInt(this.llmLimitChars.value, 10);
 
     const missing = [];
-    if (!model) { missing.push('Model Name'); }
+    if (!model) {
+      missing.push('Model Name');
+    }
     // baseURL is optional (OpenAI default) — empty means use provider default
     // apiKey intentionally not required here — its absence triggers the red warning instead
-    if (Number.isNaN(temperature)) { missing.push('Temperature'); }
-    if (!maxTokens) { missing.push('Max Tokens'); }
-    if (!maxTurns) { missing.push('Max Turns'); }
-    if (!toolResultLimitChars) { missing.push('Limit (chars)'); }
+    if (Number.isNaN(temperature)) {
+      missing.push('Temperature');
+    }
+    if (!maxTokens) {
+      missing.push('Max Tokens');
+    }
+    if (!maxTurns) {
+      missing.push('Max Turns');
+    }
+    if (!toolResultLimitChars) {
+      missing.push('Limit (chars)');
+    }
 
     if (missing.length) {
       this.showToast(`Missing required fields: ${missing.join(', ')}`, 'error');
@@ -1669,18 +1761,22 @@ class McpAgentTester {
     this.showToast('LLM settings saved', 'success');
   }
 
-  toggleApiKeyVisibility () {
+  toggleApiKeyVisibility() {
     const icon = this.llmApiKeyToggle.querySelector('.material-icons-round');
     if (this.llmApiKey.type === 'password') {
       this.llmApiKey.type = 'text';
-      if (icon) { icon.textContent = 'visibility_off'; }
+      if (icon) {
+        icon.textContent = 'visibility_off';
+      }
     } else {
       this.llmApiKey.type = 'password';
-      if (icon) { icon.textContent = 'visibility'; }
+      if (icon) {
+        icon.textContent = 'visibility';
+      }
     }
   }
 
-  renderLlmModelDropdown () {
+  renderLlmModelDropdown() {
     this.llmModelDropdownList.innerHTML = '';
     LLM_PRESET_MODELS.forEach((name) => {
       const item = document.createElement('div');
@@ -1696,7 +1792,7 @@ class McpAgentTester {
     });
   }
 
-  toggleLlmModelDropdown (e) {
+  toggleLlmModelDropdown(e) {
     e.preventDefault();
     e.stopPropagation();
     const visible = this.llmModelDropdownList.style.display !== 'none';
@@ -1707,7 +1803,7 @@ class McpAgentTester {
     }
   }
 
-  openLlmModelDropdown () {
+  openLlmModelDropdown() {
     this.llmModelDropdownList.style.display = 'block';
     this.llmModelDropdownToggle.classList.add('active');
     // Close on outside click (one-shot)
@@ -1722,17 +1818,21 @@ class McpAgentTester {
     }, 0);
   }
 
-  closeLlmModelDropdown () {
+  closeLlmModelDropdown() {
     this.llmModelDropdownList.style.display = 'none';
     this.llmModelDropdownToggle.classList.remove('active');
   }
 
-  validateLlmSettings () {
+  validateLlmSettings() {
     const s = this.llmSettings;
     const missing = [];
     // baseURL is optional — empty means use provider default (OpenAI)
-    if (!s.apiKey) { missing.push('API Key'); }
-    if (!s.model) { missing.push('Model Name'); }
+    if (!s.apiKey) {
+      missing.push('API Key');
+    }
+    if (!s.model) {
+      missing.push('Model Name');
+    }
     if (missing.length) {
       this.showToast(`Cannot send message — missing: ${missing.join(', ')}. Open LLM Settings.`, 'error');
       return false;
@@ -1740,7 +1840,7 @@ class McpAgentTester {
     return true;
   }
 
-  getModelConfig () {
+  getModelConfig() {
     const s = this.llmSettings;
     return {
       baseURL: s.baseURL,
@@ -1753,7 +1853,7 @@ class McpAgentTester {
     };
   }
 
-  handleServerUrlChange () {
+  handleServerUrlChange() {
     this.stopAuthRefresh();
     let url = this.serverUrlInput.value.trim();
 
@@ -1781,7 +1881,7 @@ class McpAgentTester {
     this.saveFormValuesToStorage();
   }
 
-  resetAgentPrompt () {
+  resetAgentPrompt() {
     if (this.originalAgentPrompt) {
       this.systemPromptTextarea.value = this.originalAgentPrompt;
       this.currentSystemPrompt = this.originalAgentPrompt;
@@ -1790,8 +1890,10 @@ class McpAgentTester {
     }
   }
 
-  viewOriginalPrompt () {
-    if (!this.originalAgentPrompt) { return; }
+  viewOriginalPrompt() {
+    if (!this.originalAgentPrompt) {
+      return;
+    }
     const modal = document.getElementById('promptModal');
     const textarea = document.getElementById('promptModalTextarea');
     const title = document.getElementById('promptModalTitle');
@@ -1806,12 +1908,12 @@ class McpAgentTester {
     textarea.focus();
   }
 
-  updateResetPromptButton () {
+  updateResetPromptButton() {
     this.btnResetAgentPrompt.style.display = this.originalAgentPrompt ? '' : 'none';
     this.updatePromptModifiedState();
   }
 
-  updatePromptModifiedState () {
+  updatePromptModifiedState() {
     const hasOriginal = !!this.originalAgentPrompt;
     const isModified = hasOriginal && this.systemPromptTextarea.value.trim() !== this.originalAgentPrompt.trim();
     this.promptModifiedBadge.style.display = isModified ? '' : 'none';
@@ -1823,7 +1925,7 @@ class McpAgentTester {
     }
   }
 
-  saveFormValuesToStorage () {
+  saveFormValuesToStorage() {
     const formData = {
       serverUrl: this.serverUrlInput.value,
       transport: this.transportSelect.value,
@@ -1833,7 +1935,7 @@ class McpAgentTester {
     localStorage.setItem('mcpAgentFormValues', JSON.stringify(formData));
   }
 
-  loadFormValuesFromURL () {
+  loadFormValuesFromURL() {
     try {
       const params = new URLSearchParams(window.location.search);
       const serverUrl = params.get('serverUrl');
@@ -1850,22 +1952,30 @@ class McpAgentTester {
     }
   }
 
-  loadFormValuesFromStorage () {
+  loadFormValuesFromStorage() {
     try {
       const stored = localStorage.getItem('mcpAgentFormValues');
       if (stored) {
         const formData = JSON.parse(stored);
-        if (formData.serverUrl) {this.serverUrlInput.value = formData.serverUrl;}
-        if (formData.transport) {this.transportSelect.value = formData.transport;}
-        if (formData.agentPrompt) {this.systemPromptTextarea.value = trim(formData.agentPrompt);}
-        if (formData.customPrompt) {this.customPromptTextarea.value = trim(formData.customPrompt);}
+        if (formData.serverUrl) {
+          this.serverUrlInput.value = formData.serverUrl;
+        }
+        if (formData.transport) {
+          this.transportSelect.value = formData.transport;
+        }
+        if (formData.agentPrompt) {
+          this.systemPromptTextarea.value = trim(formData.agentPrompt);
+        }
+        if (formData.customPrompt) {
+          this.customPromptTextarea.value = trim(formData.customPrompt);
+        }
       }
     } catch (error) {
       console.error('Error loading form values from storage:', error);
     }
   }
 
-  getSavedUrls () {
+  getSavedUrls() {
     try {
       const saved = localStorage.getItem('mcpSavedUrls');
       return saved ? JSON.parse(saved) : [];
@@ -1875,7 +1985,7 @@ class McpAgentTester {
     }
   }
 
-  saveSavedUrls (urls) {
+  saveSavedUrls(urls) {
     try {
       localStorage.setItem('mcpSavedUrls', JSON.stringify(urls));
     } catch (error) {
@@ -1883,7 +1993,7 @@ class McpAgentTester {
     }
   }
 
-  addUrlToSaved (url) {
+  addUrlToSaved(url) {
     if (!url || url.trim() === '') {
       return;
     }
@@ -1891,7 +2001,7 @@ class McpAgentTester {
     url = url.trim();
     let savedUrls = this.getSavedUrls();
 
-    savedUrls = savedUrls.filter(savedUrl => savedUrl !== url);
+    savedUrls = savedUrls.filter((savedUrl) => savedUrl !== url);
 
     savedUrls.unshift(url);
 
@@ -1901,14 +2011,14 @@ class McpAgentTester {
     this.renderSavedUrls();
   }
 
-  removeUrlFromSaved (url) {
+  removeUrlFromSaved(url) {
     let savedUrls = this.getSavedUrls();
-    savedUrls = savedUrls.filter(savedUrl => savedUrl !== url);
+    savedUrls = savedUrls.filter((savedUrl) => savedUrl !== url);
     this.saveSavedUrls(savedUrls);
     this.renderSavedUrls();
   }
 
-  renderSavedUrls () {
+  renderSavedUrls() {
     const savedUrls = this.getSavedUrls();
     this.savedUrlsList.innerHTML = '';
 
@@ -1920,7 +2030,7 @@ class McpAgentTester {
       return;
     }
 
-    savedUrls.forEach(url => {
+    savedUrls.forEach((url) => {
       const item = document.createElement('div');
       item.className = 'dropdown-item';
       item.setAttribute('data-testid', 'at-saved-url-item');
@@ -1947,14 +2057,14 @@ class McpAgentTester {
     });
   }
 
-  selectUrl (url) {
+  selectUrl(url) {
     this.serverUrlInput.value = url;
     this.handleServerUrlChange();
     this.closeUrlDropdown();
     this.autoConnect();
   }
 
-  toggleUrlDropdown (e) {
+  toggleUrlDropdown(e) {
     e.preventDefault();
     e.stopPropagation();
 
@@ -1967,7 +2077,7 @@ class McpAgentTester {
     }
   }
 
-  openUrlDropdown () {
+  openUrlDropdown() {
     this.renderSavedUrls();
     this.serverUrlDropdownList.style.display = 'block';
     this.serverUrlDropdown.classList.add('active');
@@ -1980,12 +2090,12 @@ class McpAgentTester {
     }
   }
 
-  closeUrlDropdown () {
+  closeUrlDropdown() {
     this.serverUrlDropdownList.style.display = 'none';
     this.serverUrlDropdown.classList.remove('active');
   }
 
-  addCurrentUrlToSaved () {
+  addCurrentUrlToSaved() {
     const currentUrl = this.serverUrlInput.value.trim();
     if (currentUrl) {
       this.addUrlToSaved(currentUrl);
@@ -1994,7 +2104,7 @@ class McpAgentTester {
     }
   }
 
-  handleClickOutside (e) {
+  handleClickOutside(e) {
     const container = e.target.closest('.custom-select-container');
     if (!container) {
       this.closeUrlDropdown();

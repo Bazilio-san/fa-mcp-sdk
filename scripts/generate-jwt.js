@@ -22,7 +22,7 @@ import configModule from 'config';
 
 // ── CLI argument parsing ────────────────────────────────────────────
 
-function getArg (shortFlag, longFlag) {
+function getArg(shortFlag, longFlag) {
   const args = process.argv.slice(2);
   for (let i = 0; i < args.length; i++) {
     if (args[i] === shortFlag || args[i] === longFlag) {
@@ -84,13 +84,9 @@ if (!encryptKey || String(encryptKey).trim() === '' || encryptKey === '***') {
 // ── Encryption (mirrors src/core/auth/jwt.ts) ───────────────────────
 
 const ALGORITHM = 'aes-256-ctr';
-const KEY = crypto
-  .createHash('sha256')
-  .update(String(encryptKey))
-  .digest('base64')
-  .substring(0, 32);
+const KEY = crypto.createHash('sha256').update(String(encryptKey)).digest('base64').substring(0, 32);
 
-function encrypt (text) {
+function encrypt(text) {
   const buffer = Buffer.from(text);
   const iv = crypto.randomBytes(16);
   const cipher = crypto.createCipheriv(ALGORITHM, KEY, iv);
@@ -102,7 +98,7 @@ function encrypt (text) {
 
 let effectiveService = service;
 
-if ((!effectiveService || !effectiveService.trim())) {
+if (!effectiveService || !effectiveService.trim()) {
   let checkMCPName = false;
   try {
     checkMCPName = configModule.get('webServer.auth.jwtToken.checkMCPName');
@@ -158,7 +154,7 @@ if (paramsRaw && paramsRaw.trim()) {
   }
 }
 
-const expire = Date.now() + (liveTimeSec * 1000);
+const expire = Date.now() + liveTimeSec * 1000;
 payload.expire = expire;
 payload.iat = new Date().toISOString();
 

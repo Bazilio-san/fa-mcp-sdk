@@ -11,7 +11,7 @@ export const applyCors = (app: Express) => {
   const corsOptions = {
     // https://www.npmjs.com/package/cors#configuring-cors
     // origin: /https?:\/\/(localhost|any-service.corp.com)(:\d+)?/
-    origin (origin: any, callback: Function) {
+    origin(origin: any, callback: Function) {
       if (originTestRe.test(origin) || !origin) {
         callback(null, true);
       } else {

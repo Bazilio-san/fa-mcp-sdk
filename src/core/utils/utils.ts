@@ -13,21 +13,19 @@ export const ppj = (v: any) => {
   return JSON.stringify(v, null, 2);
 };
 
-export const isObject = (o: any): boolean => (o && typeof o === 'object');
+export const isObject = (o: any): boolean => o && typeof o === 'object';
 
 export const isNonEmptyObject = (o: any): boolean => isObject(o) && !Array.isArray(o) && Object.values(o).some((v) => v !== undefined);
 
 export const isMainModule = (url: string) => {
   const modulePath = (process.argv[1] || '').replace(/\\/g, '/');
   url = url.replace(/file:\/+/, '');
-  return modulePath && (url === modulePath);
+  return modulePath && url === modulePath;
 };
 
 export const encodeSvgForDataUri = (svg: string): string => {
   // Encode SVG for use in data URI
-  return encodeURIComponent(svg)
-    .replace(/'/g, '%27')
-    .replace(/"/g, '%22');
+  return encodeURIComponent(svg).replace(/'/g, '%27').replace(/"/g, '%22');
 };
 
 /**
@@ -75,7 +73,7 @@ export const normalizeHeaders = (headers: Record<string, any>): Record<string, s
   return normalized;
 };
 
-export async function getTools (args: ITransportContext): Promise<Tool[]> {
+export async function getTools(args: ITransportContext): Promise<Tool[]> {
   const toolsOrFn = global.__MCP_PROJECT_DATA__.tools;
   const toolsArray: Tool[] = typeof toolsOrFn === 'function' ? await toolsOrFn(args) : (toolsOrFn as Tool[]);
   const { hideAnnotations } = appConfig.mcp.tools || {};

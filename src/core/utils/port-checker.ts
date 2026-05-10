@@ -12,7 +12,7 @@ const logger = lgr.getSubLogger({ name: chalk.bgCyan('port-checker') });
  * @param host - Host address (default: '0.0.0.0')
  * @returns Promise that resolves to true if port is available, false if occupied
  */
-export function isPortAvailable (port: number, host: string = '0.0.0.0'): Promise<boolean> {
+export function isPortAvailable(port: number, host: string = '0.0.0.0'): Promise<boolean> {
   return new Promise((resolve) => {
     const server = createServer();
 
@@ -39,7 +39,7 @@ export function isPortAvailable (port: number, host: string = '0.0.0.0'): Promis
  * @param host - Host address (default: '0.0.0.0')
  * @returns Promise that resolves to true if port is available, throws error if occupied
  */
-export async function checkPortAvailability (port: number, host: string = '0.0.0.0', exitOnError: boolean = true): Promise<void> {
+export async function checkPortAvailability(port: number, host: string = '0.0.0.0', exitOnError: boolean = true): Promise<void> {
   const isAvailable = await isPortAvailable(port, host);
 
   if (!isAvailable) {

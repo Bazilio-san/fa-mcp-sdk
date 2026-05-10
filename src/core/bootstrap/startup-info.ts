@@ -12,14 +12,9 @@ import { fileLogger, useFileLogger, logger as lgr } from '../logger.js';
 
 import { appConfig as cfg } from './init-config.js';
 
-
 const logger = lgr.getSubLogger({ name: chalk.cyan('config') });
 
-
-export const startupInfo = async (args: {
-  dotEnvResult: any,
-  customStartupInfo?: [string, string][] | undefined,
-}) => {
+export const startupInfo = async (args: { dotEnvResult: any; customStartupInfo?: [string, string][] | undefined }) => {
   const { dotEnvResult } = args;
 
   let consulInfoItem: string | [string, string] = '';
@@ -47,18 +42,14 @@ export const startupInfo = async (args: {
   const adminPanelConfig = cfg.adminPanel;
   const { configured: mcpAuthTypes, errors: authErrors } = detectAuthConfiguration();
 
-  const mcpAuthInfo = authConfig?.enabled
-    ? (mcpAuthTypes.length ? mcpAuthTypes.join(', ') : 'enabled but not configured')
-    : 'disabled';
+  const mcpAuthInfo = authConfig?.enabled ? (mcpAuthTypes.length ? mcpAuthTypes.join(', ') : 'enabled but not configured') : 'disabled';
 
   let adminPanelInfo: string;
   if (!adminPanelConfig?.enabled) {
     adminPanelInfo = 'disabled';
   } else {
     const raw = adminPanelConfig.authType;
-    const types = !raw || raw === 'none'
-      ? []
-      : (Array.isArray(raw) ? raw.filter((t) => t && t !== 'none') : [raw]);
+    const types = !raw || raw === 'none' ? [] : Array.isArray(raw) ? raw.filter((t) => t && t !== 'none') : [raw];
     adminPanelInfo = types.length === 0 ? 'open (no auth)' : types.join(', ');
   }
 
@@ -75,7 +66,7 @@ export const startupInfo = async (args: {
     ['NODE VERSION', process.version],
     ['NODE_ENV', process.env.NODE_ENV],
     ['Logging level', cfg.logger.level],
-    ['DEBUG', (process.env.DEBUG || '')],
+    ['DEBUG', process.env.DEBUG || ''],
     useFileLogger ? ['Logs dir', fileLogger?.logDir] : '',
     ...dbInfo,
     ['MCP Auth', mcpAuthInfo],

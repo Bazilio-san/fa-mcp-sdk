@@ -28,11 +28,7 @@ const loadDefaultLogo = (): string => {
 
 const etagS = (entity: string): string => {
   // compute hash of entity
-  const hash = crypto
-    .createHash('sha1')
-    .update(entity, 'utf8')
-    .digest('base64')
-    .substring(0, 27);
+  const hash = crypto.createHash('sha1').update(entity, 'utf8').digest('base64').substring(0, 27);
   return `"${Buffer.byteLength(entity, 'utf8').toString(16)}-${hash}"`;
 };
 
@@ -41,7 +37,6 @@ export const getLogoSvg = (): string => {
   let svg: string = assets?.logoSvg || loadDefaultLogo();
   return svg.replace('fill="currentColor"', `fill="${config.uiColor.primary}"`);
 };
-
 
 /**
  * Serves the favicon located by the given `path`.

@@ -18,7 +18,7 @@ import { getResource, getResourcesList } from './resources.js';
 /**
  * Create MCP Server instance with registered tool and prompt handlers
  */
-export function createMcpServer (): Server {
+export function createMcpServer(): Server {
   const server = new Server(
     {
       name: appConfig.name,
@@ -60,7 +60,7 @@ export function createMcpServer (): Server {
 
   // Handler for reading resource content
   server.setRequestHandler(ReadResourceRequestSchema, async (request: IReadResourceRequest) => {
-    return await getResource(request.params.uri, stdioArgs) as any;
+    return (await getResource(request.params.uri, stdioArgs)) as any;
   });
 
   return server;

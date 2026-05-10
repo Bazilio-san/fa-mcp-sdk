@@ -49,43 +49,53 @@ export class McpStreamableHttpClient extends BaseMcpClient {
   private abort: AbortController | undefined;
   private readLoopPromise: Promise<void> | undefined;
 
-    private pending = new Map<number, { resolve: (v: any) => void; reject: (e: any) => void; timer?: any }>();
+  private pending = new Map<number, { resolve: (v: any) => void; reject: (e: any) => void; timer?: any }>();
   private notifications = new Map<string, Set<(params: any) => void>>();
 
   public serverInfo?: { name: string; version: string };
   public capabilities?: any;
   public protocolVersion?: string;
 
-  constructor (baseURL: string, options?: {
-    endpointPath?: string; // e.g.: '/mcp'
-    headers?: Record<string, string>;
-    requestTimeoutMs?: number;
-  }) {
+  constructor(
+    baseURL: string,
+    options?: {
+      endpointPath?: string; // e.g.: '/mcp'
+      headers?: Record<string, string>;
+      requestTimeoutMs?: number;
+    },
+  ) {
     super(options?.headers ?? {});
     this.baseURL = baseURL.replace(/\/$/, '');
     this.endpointPath = options?.endpointPath ?? '/mcp';
     this.requestTimeoutMs = options?.requestTimeoutMs ?? 120_000;
   }
 
-  onNotification (method: string, handler: (params: any) => void) {
-    if (!this.notifications.has(method)) {this.notifications.set(method, new Set());}
+  onNotification(method: string, handler: (params: any) => void) {
+    if (!this.notifications.has(method)) {
+      this.notifications.set(method, new Set());
+    }
     this.notifications.get(method)!.add(handler);
     return () => this.notifications.get(method)!.delete(handler);
   }
 
-  private emitNotification (method: string, params: any) {
+  private emitNotification(method: string, params: any) {
     const set = this.notifications.get(method);
-    if (!set) {return;}
+    if (!set) {
+      return;
+    }
     for (const fn of set) {
       try {
         fn(params);
-      } catch { /* noop */
+      } catch {
+        /* noop */
       }
     }
   }
 
-  async connect () {
-    if (this.response) {return;} // already connected
+  async connect() {
+    if (this.response) {
+      return;
+    } // already connected
 
     this.abort = new AbortController();
     // create outgoing stream for writing NDJSON
@@ -93,13 +103,14 @@ export class McpStreamableHttpClient extends BaseMcpClient {
       start: (c) => {
         this.controller = c;
       },
-      cancel: () => { /* ignore */
+      cancel: () => {
+        /* ignore */
       },
     });
 
     const headers = {
       'Content-Type': 'application/json',
-      'Accept': 'application/json',
+      Accept: 'application/json',
       ...this.customHeaders,
     } as Record<string, string>;
 
@@ -122,11 +133,13 @@ export class McpStreamableHttpClient extends BaseMcpClient {
     this.readLoopPromise = this.readLoop();
   }
 
-  override async initialize (params: {
-    protocolVersion?: string;
-    capabilities?: any;
-    clientInfo?: { name: string; version: string };
-  } = {}) {
+  override async initialize(
+    params: {
+      protocolVersion?: string;
+      capabilities?: any;
+      clientInfo?: { name: string; version: string };
+    } = {},
+  ) {
     await this.connect();
     const res = await this.sendRpc('initialize', params);
     this.protocolVersion = res?.protocolVersion;
@@ -138,13 +151,12 @@ export class McpStreamableHttpClient extends BaseMcpClient {
     return res;
   }
 
-  override async close () {
+  override async close() {
     try {
       // attempt to gracefully finish writing
       try {
         this.controller?.close();
-      } catch {
-      }
+      } catch {}
       // reject all pending requests
       for (const [_id, p] of this.pending) {
         p.reject(new Error('Connection closed'));
@@ -153,48 +165,52 @@ export class McpStreamableHttpClient extends BaseMcpClient {
       // stop reading
       try {
         await this.reader?.cancel();
-      } catch {
-      }
+      } catch {}
       this.abort?.abort();
-      await this.readLoopPromise?.catch(() => {
-      });
+      await this.readLoopPromise?.catch(() => {});
     } finally {
       this.cleanup();
     }
   }
 
-  private cleanup () {
+  private cleanup() {
     this.response = undefined;
     this.reader = undefined;
     this.readLoopPromise = undefined;
     this.abort = undefined;
   }
 
-  private async readLoop () {
+  private async readLoop() {
     let buffer = '';
     while (true) {
       const { done, value } = await this.reader!.read();
-      if (done) {break;}
+      if (done) {
+        break;
+      }
       buffer += this.decoder.decode(value, { stream: true });
       let idx;
       while ((idx = buffer.indexOf('\n')) >= 0) {
         const line = buffer.slice(0, idx);
         buffer = buffer.slice(idx + 1);
         const trimmed = line.trim();
-        if (!trimmed) {continue;}
+        if (!trimmed) {
+          continue;
+        }
         let msg: JsonRpcMessage | undefined;
         try {
           msg = JSON.parse(trimmed);
         } catch {
           continue;
         }
-        if (!msg) { continue; }
+        if (!msg) {
+          continue;
+        }
         this.routeIncoming(msg);
       }
     }
   }
 
-  private routeIncoming (msg: JsonRpcMessage) {
+  private routeIncoming(msg: JsonRpcMessage) {
     // response success
     if ((msg as any).result !== undefined && typeof (msg as any).id === 'number') {
       const { id, result } = msg as JsonRpcSuccess;
@@ -231,17 +247,17 @@ export class McpStreamableHttpClient extends BaseMcpClient {
     }
   }
 
-  private writeNdjson (obj: object) {
+  private writeNdjson(obj: object) {
     const chunk = this.encoder.encode(JSON.stringify(obj) + '\n');
     this.controller.enqueue(chunk);
   }
 
-  notify (method: string, params?: Json) {
+  notify(method: string, params?: Json) {
     const req: JsonRpcRequest = { jsonrpc: '2.0', method, params };
     this.writeNdjson(req);
   }
 
-  async sendRpc<T = any> (method: string, params?: Json, timeoutMs = this.requestTimeoutMs): Promise<T> {
+  async sendRpc<T = any>(method: string, params?: Json, timeoutMs = this.requestTimeoutMs): Promise<T> {
     const id = this.nextId++;
     const req: JsonRpcRequest = { jsonrpc: '2.0', id, method, params };
     await this.connect();
@@ -257,7 +273,7 @@ export class McpStreamableHttpClient extends BaseMcpClient {
   }
 
   // Override sendRequest to use sendRpc for consistency
-  protected override async sendRequest (method: string, params: any): Promise<any> {
+  protected override async sendRequest(method: string, params: any): Promise<any> {
     return this.sendRpc(method, params);
   }
 }

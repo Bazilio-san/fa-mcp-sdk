@@ -54,7 +54,7 @@ export interface SwaggerUIConfig {
 /**
  * Generate OpenAPI specification on-demand using tsoa programmatic API
  */
-async function generateSpecOnDemand (specPath: string): Promise<void> {
+async function generateSpecOnDemand(specPath: string): Promise<void> {
   try {
     // Ensure directory exists
     const specDir = path.dirname(specPath);
@@ -127,7 +127,6 @@ async function generateSpecOnDemand (specPath: string): Promise<void> {
 
     // If tsoa didn't generate the file, create fallback
     throw new Error('tsoa did not generate specification file');
-
   } catch (error: any) {
     console.warn('tsoa spec generation failed, creating fallback spec:', error.message);
 
@@ -166,9 +165,7 @@ async function generateSpecOnDemand (specPath: string): Promise<void> {
           },
         },
       },
-      tags: [
-        { name: 'Server', description: 'Server management endpoints' },
-      ],
+      tags: [{ name: 'Server', description: 'Server management endpoints' }],
     };
 
     const { writeFileSync } = await import('fs');
@@ -189,7 +186,7 @@ async function generateSpecOnDemand (specPath: string): Promise<void> {
  * @param apiRouter - Express router with tsoa-decorated endpoints
  * @returns Object with swaggerSpecs and swaggerUi middleware, or null if apiRouter not provided
  */
-export async function configureOpenAPI (apiRouter?: Router | null): Promise<{
+export async function configureOpenAPI(apiRouter?: Router | null): Promise<{
   swaggerUi?: any;
   swaggerSpecs?: any;
 } | null> {
@@ -235,7 +232,6 @@ export async function configureOpenAPI (apiRouter?: Router | null): Promise<{
       swaggerUi: createSwaggerUIMiddleware(enhancedSpec),
       swaggerSpecs: enhancedSpec,
     };
-
   } catch (error) {
     console.error('Failed to configure OpenAPI documentation:', error);
     return null;
@@ -245,7 +241,7 @@ export async function configureOpenAPI (apiRouter?: Router | null): Promise<{
 /**
  * Enhances the OpenAPI specification with dynamic configuration
  */
-function enhanceOpenAPISpec (spec: OpenAPISpecResponse): OpenAPISpecResponse {
+function enhanceOpenAPISpec(spec: OpenAPISpecResponse): OpenAPISpecResponse {
   const enhanced = { ...spec };
 
   // Update info from app config
@@ -278,7 +274,7 @@ function enhanceOpenAPISpec (spec: OpenAPISpecResponse): OpenAPISpecResponse {
 /**
  * Builds servers array from configuration
  */
-function buildServersArray (): Array<{ url: string; description: string }> {
+function buildServersArray(): Array<{ url: string; description: string }> {
   const servers = [];
 
   // Use servers from config if available
@@ -303,7 +299,7 @@ function buildServersArray (): Array<{ url: string; description: string }> {
 /**
  * Creates OpenAPI documentation routes on the provided router
  */
-function createOpenAPIRoutes (router: Router, spec: OpenAPISpecResponse): void {
+function createOpenAPIRoutes(router: Router, spec: OpenAPISpecResponse): void {
   // OpenAPI specification endpoint
   router.get('/openapi.json', (req: Request, res: Response) => {
     res.json(spec);
@@ -317,7 +313,7 @@ function createOpenAPIRoutes (router: Router, spec: OpenAPISpecResponse): void {
 /**
  * Creates Swagger UI middleware function
  */
-function createSwaggerUIMiddleware (spec: OpenAPISpecResponse) {
+function createSwaggerUIMiddleware(spec: OpenAPISpecResponse) {
   const swaggerUiConfig: SwaggerUIConfig = {
     customSiteTitle: `${spec.info.title} Documentation`,
     customCss: '.swagger-ui .topbar { display: none }',
@@ -341,6 +337,6 @@ function createSwaggerUIMiddleware (spec: OpenAPISpecResponse) {
 /**
  * Serve Swagger UI static assets
  */
-export function createSwaggerUIAssetsMiddleware () {
+export function createSwaggerUIAssetsMiddleware() {
   return swaggerUiExpress.serve;
 }

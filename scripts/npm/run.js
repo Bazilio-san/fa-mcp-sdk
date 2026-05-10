@@ -1,8 +1,7 @@
-
 import { spawn } from 'child_process';
 import os from 'os';
 
-function runScript (command, args) {
+function runScript(command, args) {
   const process = spawn(command, args);
 
   process.stdout.on('data', (data) => {

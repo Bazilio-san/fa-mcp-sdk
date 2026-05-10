@@ -18,7 +18,7 @@ const __dirname = dirname(__filename);
 
 const serverPath = join(__dirname, '../../../dist/template/start.js');
 
-async function runTestGroup (title, tests, client) {
+async function runTestGroup(title, tests, client) {
   console.log(`\n${title}:`);
   let passed = 0;
   for (const test of tests) {
@@ -42,7 +42,7 @@ async function runTestGroup (title, tests, client) {
   return passed;
 }
 
-async function main () {
+async function main() {
   console.log('🧪 STDIO tests for template MCP server');
   console.log('='.repeat(60));
 
@@ -55,11 +55,13 @@ async function main () {
 
   try {
     // Initialize handshake (optional for stdio server; safe to send)
-    await client.send('initialize', {
-      protocolVersion: '2024-11-05',
-      capabilities: { tools: {} },
-      clientInfo: { name: 'stdio-test', version: '1.0.0' },
-    }).catch(() => undefined);
+    await client
+      .send('initialize', {
+        protocolVersion: '2024-11-05',
+        capabilities: { tools: {} },
+        clientInfo: { name: 'stdio-test', version: '1.0.0' },
+      })
+      .catch(() => undefined);
 
     const p1 = await runTestGroup('Prompts', TEMPLATE_TESTS.prompts, client);
     const p2 = await runTestGroup('Resources', TEMPLATE_TESTS.resources, client);
@@ -69,7 +71,9 @@ async function main () {
     const sum = p1 + p2 + p3;
     console.log(`\nSummary: ${sum}/${total} tests passed`);
   } finally {
-    try { proc.kill(); } catch {}
+    try {
+      proc.kill();
+    } catch {}
   }
 }
 

@@ -7,11 +7,7 @@ import { IToolInputSchema, IToolProperties } from '../../core/index.js';
  * Define your tools according to your server's functionality
  */
 
-
-const getGenericInputSchema = (
-  queryDescription?: string,
-  additionalProperties?: IToolProperties,
-): IToolInputSchema => {
+const getGenericInputSchema = (queryDescription?: string, additionalProperties?: IToolProperties): IToolInputSchema => {
   const properties = {
     query: {
       type: 'string',
@@ -80,10 +76,10 @@ export const tools: Tool[] = [
 
 // Helper to get tool by name
 export const getToolByName = (name: string): Tool | undefined => {
-  return tools.find(tool => tool.name === name);
+  return tools.find((tool) => tool.name === name);
 };
 
 // Helper to get all tool names
 export const getToolNames = (): string[] => {
-  return tools.map(tool => tool.name);
+  return tools.map((tool) => tool.name);
 };

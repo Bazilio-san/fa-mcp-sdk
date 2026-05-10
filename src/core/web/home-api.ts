@@ -15,7 +15,6 @@ import { getResourcesList } from '../mcp/resources.js';
 
 import { getLogoSvg } from './favicon-svg.js';
 
-
 const startTime = new Date();
 
 const getUptime = (): string => {
@@ -34,10 +33,13 @@ const getUptime = (): string => {
   }
 };
 
-export async function handleHomeInfo (_req: Request, res: Response): Promise<void> {
+export async function handleHomeInfo(_req: Request, res: Response): Promise<void> {
   try {
     const { version, repo } = appConfig;
-    const serviceTitle = appConfig.productName.replace(/MCP/i, '').replace(/\s{2,}/g, ' ').trim();
+    const serviceTitle = appConfig.productName
+      .replace(/MCP/i, '')
+      .replace(/\s{2,}/g, ' ')
+      .trim();
     const logoSvg = getLogoSvg();
     const httpArgs = { transport: 'http' as const };
     const { resources } = await getResourcesList(httpArgs);
@@ -95,19 +97,15 @@ export async function handleHomeInfo (_req: Request, res: Response): Promise<voi
     const adminPanelConfig = appConfig.adminPanel;
     const { configured: mcpAuthTypes } = detectAuthConfiguration();
 
-    const mcpAuth = authConfig?.enabled
-      ? (mcpAuthTypes.length ? mcpAuthTypes.join(', ') : 'enabled but not configured')
-      : 'disabled';
+    const mcpAuth = authConfig?.enabled ? (mcpAuthTypes.length ? mcpAuthTypes.join(', ') : 'enabled but not configured') : 'disabled';
 
     let adminPanel: string | AdminAuthType | AdminAuthType[];
     if (!adminPanelConfig?.enabled) {
       adminPanel = 'disabled';
     } else {
       const rawAuthType = adminPanelConfig.authType;
-      const types = !rawAuthType || rawAuthType === 'none'
-        ? []
-        : (Array.isArray(rawAuthType) ? rawAuthType.filter((t) => t && t !== 'none') : [rawAuthType]);
-      adminPanel = types.length === 0 ? 'open (no auth)' : (types.length === 1 ? types[0]! : types as AdminAuthType[]);
+      const types = !rawAuthType || rawAuthType === 'none' ? [] : Array.isArray(rawAuthType) ? rawAuthType.filter((t) => t && t !== 'none') : [rawAuthType];
+      adminPanel = types.length === 0 ? 'open (no auth)' : types.length === 1 ? types[0]! : (types as AdminAuthType[]);
     }
 
     const response = {

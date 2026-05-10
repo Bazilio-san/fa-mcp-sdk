@@ -11,7 +11,6 @@ import { appConfig } from '../bootstrap/init-config.js';
 import { addErrorMessage, toError } from '../errors/errors.js';
 import { logger as lgr } from '../logger.js';
 
-
 const logger = lgr.getSubLogger({ name: chalk.green('cache') });
 
 const DEFAULT_TTL_SECONDS = appConfig.cache.ttlSeconds || 300;
@@ -39,13 +38,8 @@ export class CacheManager {
     deletes: number;
   };
 
-  constructor (options?: CacheManagerConstructorOptions) {
-    const {
-      ttlSeconds = DEFAULT_TTL_SECONDS,
-      maxItems = DEFAULT_MAX_ITEMS,
-      checkPeriod = DEFAULT_CHECK_PERIOD,
-      verbose = false,
-    } = options || {};
+  constructor(options?: CacheManagerConstructorOptions) {
+    const { ttlSeconds = DEFAULT_TTL_SECONDS, maxItems = DEFAULT_MAX_ITEMS, checkPeriod = DEFAULT_CHECK_PERIOD, verbose = false } = options || {};
 
     this.defaultTtl = ttlSeconds;
     this.verbose = verbose;
@@ -73,7 +67,7 @@ export class CacheManager {
   /**
    * Setup cache event listeners for monitoring
    */
-  private setupEventListeners (): void {
+  private setupEventListeners(): void {
     if (this.verbose) {
       this.cache.on('set', (key, value) => {
         logger.debug(`Cache set: key: ${key} | hasValue: ${!!value}`);
@@ -96,7 +90,7 @@ export class CacheManager {
   /**
    * Get value from cache
    */
-  get<T> (key: string): T | undefined {
+  get<T>(key: string): T | undefined {
     const value = this.cache.get<T>(key);
 
     if (value !== undefined) {
@@ -117,7 +111,7 @@ export class CacheManager {
   /**
    * Set value in cache with optional TTL
    */
-  set<T> (key: string, value: T, ttlSeconds?: number): boolean {
+  set<T>(key: string, value: T, ttlSeconds?: number): boolean {
     const ttl = ttlSeconds || this.defaultTtl;
     const success = this.cache.set(key, value, ttl);
 
@@ -136,7 +130,7 @@ export class CacheManager {
   /**
    * Delete value from cache
    */
-  del (key: string): number {
+  del(key: string): number {
     const deleted = this.cache.del(key);
     this.stats.deletes += deleted;
     if (this.verbose) {
@@ -148,14 +142,14 @@ export class CacheManager {
   /**
    * Check if key exists in cache
    */
-  has (key: string): boolean {
+  has(key: string): boolean {
     return this.cache.has(key);
   }
 
   /**
    * Get value and delete key from cache (single use)
    */
-  take<T> (key: string): T | undefined {
+  take<T>(key: string): T | undefined {
     const value = this.cache.take<T>(key);
     if (value !== undefined) {
       this.stats.hits++;
@@ -172,7 +166,7 @@ export class CacheManager {
   /**
    * Get multiple values from cache
    */
-  mget<T> (keys: string[]): Record<string, T> {
+  mget<T>(keys: string[]): Record<string, T> {
     try {
       const result = this.cache.mget<T>(keys);
       // Update stats for mget
@@ -190,7 +184,7 @@ export class CacheManager {
   /**
    * Set multiple values in cache
    */
-  mset<T> (obj: Array<{ key: string; val: T; ttl?: number }>): boolean {
+  mset<T>(obj: Array<{ key: string; val: T; ttl?: number }>): boolean {
     try {
       const success = this.cache.mset(obj);
       if (success) {
@@ -206,7 +200,7 @@ export class CacheManager {
   /**
    * Get or set pattern - execute function if key doesn't exist
    */
-  async getOrSet<T> (key: string, factory: () => Promise<T>, ttlSeconds?: number): Promise<T> {
+  async getOrSet<T>(key: string, factory: () => Promise<T>, ttlSeconds?: number): Promise<T> {
     // Try to get from cache first (outside try-catch to separate cache errors from factory errors)
     try {
       const cached = this.get<T>(key);
@@ -243,7 +237,7 @@ export class CacheManager {
   /**
    * Get cache statistics
    */
-  getStats () {
+  getStats() {
     const cacheStats = this.cache.getStats();
 
     return {
@@ -258,14 +252,14 @@ export class CacheManager {
   /**
    * Get all keys in cache
    */
-  keys (): string[] {
+  keys(): string[] {
     return this.cache.keys();
   }
 
   /**
    * Clear all cache entries
    */
-  flush (): void {
+  flush(): void {
     this.cache.flushAll();
     this.resetStats();
     logger.info('Cache flushed');
@@ -274,7 +268,7 @@ export class CacheManager {
   /**
    * Reset cache statistics
    */
-  private resetStats (): void {
+  private resetStats(): void {
     this.stats = {
       hits: 0,
       misses: 0,
@@ -286,7 +280,7 @@ export class CacheManager {
   /**
    * Get cache entries with metadata
    */
-  getEntries<T> (): Array<{ key: string; value: T; ttl: number }> {
+  getEntries<T>(): Array<{ key: string; value: T; ttl: number }> {
     const keys = this.cache.keys();
     const entries: Array<{ key: string; value: T; ttl: number }> = [];
 
@@ -309,23 +303,22 @@ export class CacheManager {
   /**
    * Set TTL for existing key (wrapper for native ttl method)
    */
-  ttl (key: string, ttlSeconds: number): boolean {
+  ttl(key: string, ttlSeconds: number): boolean {
     return this.cache.ttl(key, ttlSeconds);
   }
 
   /**
    * Get TTL for key (wrapper for native getTtl method)
    */
-  getTtl (key: string): number | undefined {
+  getTtl(key: string): number | undefined {
     const ttl = this.cache.getTtl(key);
-    return ttl ? Math.floor((ttl - Date.now()) / 1000) : (ttl === 0 ? 0 : undefined);
+    return ttl ? Math.floor((ttl - Date.now()) / 1000) : ttl === 0 ? 0 : undefined;
   }
-
 
   /**
    * Close cache and cleanup resources
    */
-  close (): void {
+  close(): void {
     this.cache.close();
     logger.info('Cache manager closed');
   }
@@ -339,7 +332,7 @@ let globalCache: CacheManager | null = null;
 /**
  * Get or create global cache instance
  */
-export function getCache (options?: CacheManagerConstructorOptions): CacheManager {
+export function getCache(options?: CacheManagerConstructorOptions): CacheManager {
   if (!globalCache) {
     globalCache = new CacheManager(options);
   }

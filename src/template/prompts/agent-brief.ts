@@ -5,4 +5,3 @@
  */
 
 export const AGENT_BRIEF = 'Agent brief';
-

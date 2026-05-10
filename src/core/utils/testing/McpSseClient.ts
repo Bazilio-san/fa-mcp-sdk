@@ -4,7 +4,7 @@ import { BaseMcpClient } from './BaseMcpClient.js';
 
 // Global unhandled rejection handler setup for npm package usage
 // This prevents PromiseRejectionHandledWarning messages during error testing
-function setupGlobalRejectionHandler () {
+function setupGlobalRejectionHandler() {
   if (!global._faMcpSdkRejectionHandler) {
     global._faMcpSdkRejectionHandler = true;
 
@@ -14,12 +14,8 @@ function setupGlobalRejectionHandler () {
     // Override unhandledRejection to track MCP-related rejections
     process.on('unhandledRejection', (reason: any, promise: Promise<any>) => {
       // Check if this is an MCP-related error or network error from our client
-      const isMcpError = typeof reason === 'object' && (
-        reason?.message?.includes('MCP Error:') ||
-        reason?.message?.includes('SQL validation failed') ||
-        reason?.message?.includes('fetch failed') ||
-        reason?.method // Our custom method property
-      );
+      const isMcpError =
+        typeof reason === 'object' && (reason?.message?.includes('MCP Error:') || reason?.message?.includes('SQL validation failed') || reason?.message?.includes('fetch failed') || reason?.method); // Our custom method property
 
       if (isMcpError) {
         // Mark this promise as handled to prevent future warnings
@@ -59,7 +55,7 @@ function setupGlobalRejectionHandler () {
 // Auto-setup the handler when module is imported (for npm package usage)
 setupGlobalRejectionHandler();
 
-async function safeReadText (res: Response): Promise<string | undefined> {
+async function safeReadText(res: Response): Promise<string | undefined> {
   try {
     const text = await res.text();
     return text?.slice(0, 1000);
@@ -85,21 +81,24 @@ export class McpSseClient extends BaseMcpClient {
   private connected = false;
 
   // pending requests awaiting response by id
-  private pending = new Map<number, {
-    resolve: (value: any) => void,
-    reject: (reason?: any) => void,
-    timeout: any,
-    method: string,
-  }>();
+  private pending = new Map<
+    number,
+    {
+      resolve: (value: any) => void;
+      reject: (reason?: any) => void;
+      timeout: any;
+      method: string;
+    }
+  >();
 
-  constructor (baseURL: string, customHeaders: Record<string, string> = {}) {
+  constructor(baseURL: string, customHeaders: Record<string, string> = {}) {
     super(customHeaders);
     this.baseURL = baseURL.replace(/\/$/, '');
     this.requestId = 1;
   }
 
   /** Public API: close SSE and reject all pending */
-  override async close () {
+  override async close() {
     this.connected = false;
     if (this.sseAbort) {
       this.sseAbort.abort();
@@ -113,12 +112,11 @@ export class McpSseClient extends BaseMcpClient {
       this.pending.delete(id);
     }
     // Wait reader to finish
-    await this.sseReaderTask?.catch(() => {
-    });
+    await this.sseReaderTask?.catch(() => {});
   }
 
   /** Ensure SSE stream established */
-  private async ensureConnected () {
+  private async ensureConnected() {
     if (this.connected) {
       return;
     }
@@ -126,7 +124,7 @@ export class McpSseClient extends BaseMcpClient {
   }
 
   /** Open SSE stream via fetch and start reader loop */
-  private async connect () {
+  private async connect() {
     if (this.connected) {
       return;
     }
@@ -152,7 +150,7 @@ export class McpSseClient extends BaseMcpClient {
     this.connected = true;
     this.sseReaderTask = this.readSseLoop(res.body);
     // detach errors to console but keep state clean
-    this.sseReaderTask.catch(err => {
+    this.sseReaderTask.catch((err) => {
       this.connected = false;
       // Reject all pending on fatal SSE error
       for (const [id, entry] of this.pending.entries()) {
@@ -164,7 +162,7 @@ export class McpSseClient extends BaseMcpClient {
   }
 
   /** Parse SSE stream and dispatch messages by JSON-RPC id */
-  private async readSseLoop (body: ReadableStream<Uint8Array>) {
+  private async readSseLoop(body: ReadableStream<Uint8Array>) {
     const reader = body.getReader();
     const decoder = new TextDecoder('utf-8');
     let buffer = '';
@@ -197,7 +195,7 @@ export class McpSseClient extends BaseMcpClient {
   }
 
   /** Handle one SSE event block (multiple lines). Parse data: lines only */
-  private handleSseEvent (eventBlock: string) {
+  private handleSseEvent(eventBlock: string) {
     // eventBlock may contain comments ": ..." and other fields
     const lines = eventBlock.split(/\r?\n/);
     let dataLines: string[] = [];
@@ -272,7 +270,7 @@ export class McpSseClient extends BaseMcpClient {
   /**
    * Send JSON-RPC request over HTTP; await response via SSE stream
    */
-  protected override async sendRequest (method: string, params: Record<string, any> = {}): Promise<any> {
+  protected override async sendRequest(method: string, params: Record<string, any> = {}): Promise<any> {
     await this.ensureConnected();
 
     const id = this.requestId++;
@@ -333,7 +331,7 @@ export class McpSseClient extends BaseMcpClient {
     );
   }
 
-  async health () {
+  async health() {
     const response = await fetch(`${this.baseURL}/health`);
     return response.json();
   }

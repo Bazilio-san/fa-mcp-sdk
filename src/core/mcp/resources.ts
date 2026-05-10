@@ -19,7 +19,6 @@ try {
   console.error(err);
 }
 
-
 const createResources = async (args: ITransportContext): Promise<IResourceData[]> => {
   const { customResources, usedHttpHeaders: usedHttpHeadersRaw } = getProjectData();
 
@@ -67,16 +66,14 @@ This information is used by searching for this MCP server and its information in
   ];
   const usedHttpHeaders = (usedHttpHeadersRaw || []) as IUsedHttpHeader[];
 
-  resources.push(
-    {
-      uri: 'use://http-headers',
-      name: 'Used http headers',
-      description: 'Used http headers',
-      mimeType: 'application/json',
-      content: usedHttpHeaders,
-      requireAuth: false,
-    },
-  );
+  resources.push({
+    uri: 'use://http-headers',
+    name: 'Used http headers',
+    description: 'Used http headers',
+    mimeType: 'application/json',
+    content: usedHttpHeaders,
+    requireAuth: false,
+  });
   return [...resources, ...resolvedCustomResources];
 };
 

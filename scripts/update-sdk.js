@@ -18,41 +18,57 @@ const targets = [
 
 // A folder containing a direct file named `pin` is preserved untouched —
 // it is neither deleted nor overwritten with new content from the template.
-function findPinnedFolders (rootDir) {
+function findPinnedFolders(rootDir) {
   const pinned = new Set();
-  if (!existsSync(rootDir)) {return pinned;}
+  if (!existsSync(rootDir)) {
+    return pinned;
+  }
   const walk = (currentDir) => {
     const entries = readdirSync(currentDir, { withFileTypes: true });
     if (entries.some((e) => e.isFile() && e.name === 'pin')) {
       const rel = relative(rootDir, currentDir);
-      if (rel) {pinned.add(rel);}
+      if (rel) {
+        pinned.add(rel);
+      }
       return;
     }
     for (const entry of entries) {
-      if (entry.isDirectory()) {walk(join(currentDir, entry.name));}
+      if (entry.isDirectory()) {
+        walk(join(currentDir, entry.name));
+      }
     }
   };
   walk(rootDir);
   return pinned;
 }
 
-function isInsidePinned (relPath, pinned) {
-  if (!relPath) {return false;}
-  if (pinned.has(relPath)) {return true;}
+function isInsidePinned(relPath, pinned) {
+  if (!relPath) {
+    return false;
+  }
+  if (pinned.has(relPath)) {
+    return true;
+  }
   for (const p of pinned) {
-    if (relPath.startsWith(p + sep)) {return true;}
+    if (relPath.startsWith(p + sep)) {
+      return true;
+    }
   }
   return false;
 }
 
-function cleanExceptPinned (rootDir, pinned) {
-  if (!existsSync(rootDir)) {return;}
+function cleanExceptPinned(rootDir, pinned) {
+  if (!existsSync(rootDir)) {
+    return;
+  }
   const walk = (currentDir) => {
     const entries = readdirSync(currentDir, { withFileTypes: true });
     for (const entry of entries) {
       const full = join(currentDir, entry.name);
       const fullRel = relative(rootDir, full);
-      if (pinned.has(fullRel)) {continue;}
+      if (pinned.has(fullRel)) {
+        continue;
+      }
       const hasPinnedDescendant = [...pinned].some((p) => p.startsWith(fullRel + sep));
       if (entry.isDirectory() && hasPinnedDescendant) {
         walk(full);
@@ -72,7 +88,9 @@ for (const { name, src, dest, preserve = [], respectPin = false } of targets) {
   const saved = {};
   for (const file of preserve) {
     const p = join(dest, file);
-    if (existsSync(p)) {saved[file] = readFileSync(p);}
+    if (existsSync(p)) {
+      saved[file] = readFileSync(p);
+    }
   }
 
   const pinned = respectPin ? findPinnedFolders(dest) : new Set();
@@ -88,10 +106,14 @@ for (const { name, src, dest, preserve = [], respectPin = false } of targets) {
   cpSync(src, dest, {
     recursive: true,
     filter: (srcPath) => {
-      if (preserve.includes(basename(srcPath))) {return false;}
+      if (preserve.includes(basename(srcPath))) {
+        return false;
+      }
       if (respectPin && pinned.size > 0) {
         const rel = relative(src, srcPath);
-        if (isInsidePinned(rel, pinned)) {return false;}
+        if (isInsidePinned(rel, pinned)) {
+          return false;
+        }
       }
       return true;
     },

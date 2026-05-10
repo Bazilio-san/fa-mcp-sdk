@@ -68,7 +68,7 @@ export const generateToken = (user: string, liveTimeSec: number, payload?: any):
   if (!user) {
     throw new Error('generateToken: Username is empty');
   }
-  const expire = Date.now() + (liveTimeSec * 1000);
+  const expire = Date.now() + liveTimeSec * 1000;
   const issuedAt = new Date().toISOString();
   payload = isObject(payload) ? payload : {};
   payload.user = user;
@@ -83,12 +83,7 @@ export const generateToken = (user: string, liveTimeSec: number, payload?: any):
  * - the obsolescence time must not be expired
  * - If a user is transferred, it must match
  */
-export const checkJwtToken = (arg: {
-  token: string,
-  expectedUser?: string,
-  expectedService?: string,
-  clientIp?: string,
-}): ICheckTokenResult => {
+export const checkJwtToken = (arg: { token: string; expectedUser?: string; expectedService?: string; clientIp?: string }): ICheckTokenResult => {
   let { token, expectedUser, expectedService = appConfig.name, clientIp } = arg;
   token = (token || '').trim();
   if (!token) {

@@ -142,9 +142,9 @@ const logTryUpdate = (updateReason = '') => {
 /**
  * Execute command in NVM environment
  */
-function execCommand (command, options = {}, withSetupScript = false) {
+function execCommand(command, options = {}, withSetupScript = false) {
   // If we have NVM setup, wrap the command
-  const fullCommand = (setupScript && withSetupScript) ? `${setupScript} && ${command}` : command;
+  const fullCommand = setupScript && withSetupScript ? `${setupScript} && ${command}` : command;
   try {
     const result = execSync(fullCommand, {
       encoding: 'utf8',
@@ -158,14 +158,14 @@ function execCommand (command, options = {}, withSetupScript = false) {
   }
 }
 
-function execWithNODE (command, options = {}) {
+function execWithNODE(command, options = {}) {
   return execCommand(command, options, true);
 }
 
 /**
  * Load NVM environment and get Node.js version
  */
-function loadNVMEnvironment () {
+function loadNVMEnvironment() {
   try {
     if (fs.existsSync('.envrc')) {
       const envrcContent = fs.readFileSync('.envrc', 'utf8');
@@ -187,7 +187,7 @@ function loadNVMEnvironment () {
 /**
  * Parse command line arguments
  */
-function parseArgs () {
+function parseArgs() {
   const pArgs = process.argv.slice(2);
   const args = {
     expectedBranch: null,
@@ -219,7 +219,7 @@ function parseArgs () {
 /**
  * Show help information
  */
-function showHelp () {
+function showHelp() {
   console.log(`
 ================================================================================
     Project update and rebuild
@@ -244,7 +244,7 @@ function showHelp () {
 /**
  * Parse simple YAML content (key: value format)
  */
-function parseSimpleYAML (content) {
+function parseSimpleYAML(content) {
   const config = {};
   const lines = content.split('\n');
 
@@ -272,7 +272,7 @@ function parseSimpleYAML (content) {
 /**
  * Load configuration from YAML file
  */
-function loadConfig () {
+function loadConfig() {
   // Load NVM environment from .envrc
   loadNVMEnvironment();
 
@@ -301,7 +301,7 @@ function loadConfig () {
 /**
  * Get service name from package.json and .env
  */
-function getServiceName () {
+function getServiceName() {
   let serviceName = '';
   let serviceInstance = '';
   try {
@@ -334,7 +334,7 @@ function getServiceName () {
 /**
  * Check if systemctl service exists
  */
-function systemctlServiceExists (serviceName) {
+function systemctlServiceExists(serviceName) {
   try {
     execCommand(`systemctl list-unit-files "${serviceName}.service"`);
     return true;
@@ -343,7 +343,7 @@ function systemctlServiceExists (serviceName) {
   }
 }
 
-function pm2ServiceExists (serviceName) {
+function pm2ServiceExists(serviceName) {
   try {
     const res = execCommand(`pm2 id "${serviceName}"`);
     return /\[\s*\d\s*]/.test(res);
@@ -355,7 +355,7 @@ function pm2ServiceExists (serviceName) {
 /**
  * Get git repository information
  */
-function getRepoInfo () {
+function getRepoInfo() {
   try {
     const branch = execCommand('git rev-parse --abbrev-ref HEAD').trim();
     const headHash = execCommand('git rev-parse HEAD').trim();
@@ -376,27 +376,26 @@ function getRepoInfo () {
       upstreamHash,
     };
   } catch (error) {
-    const message = String(error.message).includes(error.stderr)
-      ? error.message
-      : [error.stderr, error.message].join('\n');
+    const message = String(error.message).includes(error.stderr) ? error.message : [error.stderr, error.message].join('\n');
 
     console.error('Error getting repo info:', message);
     return null;
   }
 }
 
-const colorizeHTML = (text) => text
-  .replace(/<red>/g, '<span style="color:#ff0000;">')
-  .replace(/<\/red>/g, '</span>')
-  .replace(/<y>/g, '<span style="background-color:#ffff00;">')
-  .replace(/<\/y>/g, '</span>')
-  .replace(/<g>/g, '<span style="background-color:#00ff00;">')
-  .replace(/<\/g>/g, '</span>')
-  .replace(/<r>/g, '<span style="background-color:#ff0000; color:#ffffff;">')
-  .replace(/<\/r>/g, '</span>')
-  .replace(/\[ERROR]/g, '<span style="color:#ffffff; background-color: #ff0000">[ERROR]</span>');
+const colorizeHTML = (text) =>
+  text
+    .replace(/<red>/g, '<span style="color:#ff0000;">')
+    .replace(/<\/red>/g, '</span>')
+    .replace(/<y>/g, '<span style="background-color:#ffff00;">')
+    .replace(/<\/y>/g, '</span>')
+    .replace(/<g>/g, '<span style="background-color:#00ff00;">')
+    .replace(/<\/g>/g, '</span>')
+    .replace(/<r>/g, '<span style="background-color:#ff0000; color:#ffffff;">')
+    .replace(/<\/r>/g, '</span>')
+    .replace(/\[ERROR]/g, '<span style="color:#ffffff; background-color: #ff0000">[ERROR]</span>');
 
-async function sendBuildNotification (emails, status, body, serviceName) {
+async function sendBuildNotification(emails, status, body, serviceName) {
   if (!emails) {
     return;
   }
@@ -423,7 +422,10 @@ ${colorizeHTML(clearColors(body))}
 </pre></body></html>`;
 
   // Send to each email address
-  const emailArray = emails.split(',').map((email) => email.trim()).filter((email) => email);
+  const emailArray = emails
+    .split(',')
+    .map((email) => email.trim())
+    .filter((email) => email);
 
   for (let i = 0; i < emailArray.length; i++) {
     const emailAddress = emailArray[i];
@@ -507,7 +509,7 @@ const restartService = (serviceNamePM) => {
 /**
  * Main update function
  */
-async function main () {
+async function main() {
   logTryUpdate();
   fs.writeFileSync(runTimeLogFile, '');
   const args = parseArgs();
@@ -603,9 +605,7 @@ async function main () {
       logIt('No changes detected. Update skipped.');
     }
   } catch (err) {
-    const message = String(err.message).includes(err.stderr)
-      ? err.message
-      : [err.stderr, err.message].join('\n');
+    const message = String(err.message).includes(err.stderr) ? err.message : [err.stderr, err.message].join('\n');
     logError(message);
     if (config.email) {
       await sendBuildNotification(config.email, 'FAIL', logBuffer, serviceName);
@@ -630,9 +630,11 @@ process.on('SIGTERM', () => {
   process.exit(1);
 });
 
-main().then(() => {
-  process.exit(0);
-}).catch((error) => {
-  console.error('Update failed:', error.message);
-  process.exit(1);
-});
+main()
+  .then(() => {
+    process.exit(0);
+  })
+  .catch((error) => {
+    console.error('Update failed:', error.message);
+    process.exit(1);
+  });
