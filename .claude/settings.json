@@ -68,7 +68,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node .claude/hooks/eslint-fix.cjs"
+            "command": "node .claude/hooks/oxlint-oxfmt-fix.cjs"
           }
         ]
       }
