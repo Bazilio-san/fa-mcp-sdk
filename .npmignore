@@ -24,7 +24,8 @@ __tests__/
 
 # Configuration files
 .editorconfig
-eslint.config.js
+.oxlintrc.json
+.oxfmtrc.json
 tsconfig.json
 tsconfig.*.json
 jest.config.*
