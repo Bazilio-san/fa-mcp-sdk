@@ -12,7 +12,7 @@ const { execSync } = require('child_process');
 const LOG_FILE = path.join(__dirname, 'log.log');
 const IS_LOG = process.env.CLAUDE_HOOK_LOG === 'true';
 
-function log (message) {
+function log(message) {
   if (IS_LOG) {
     const timestamp = new Date().toISOString();
     const line = `[${timestamp}] ${message}\n`;
@@ -20,7 +20,7 @@ function log (message) {
   }
 }
 
-function main () {
+function main() {
   let input = '';
 
   try {
@@ -45,12 +45,7 @@ function main () {
     }
 
     // Exclude files in node_modules, dist, coverage, etc.
-    const excludePatterns = [
-      /node_modules/,
-      /[/\\]dist[/\\]/,
-      /[/\\]coverage[/\\]/,
-      /\.d\.ts$/,
-    ];
+    const excludePatterns = [/node_modules/, /[/\\]dist[/\\]/, /[/\\]coverage[/\\]/, /\.d\.ts$/];
 
     for (const pattern of excludePatterns) {
       if (pattern.test(filePath)) {
@@ -103,7 +98,6 @@ function main () {
       log(`Oxfmt warnings/errors: ${oxfmtError.message}`);
       console.log(`⚠️ Oxfmt warnings/errors (file still saved)`);
     }
-
   } catch (error) {
     log(`Error: ${error.message}\nStack: ${error.stack}`);
   }

@@ -37,7 +37,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node .claude/hooks/oxlint-oxfmt-fix.cjs"
+            "command": "node scripts/cc-hook-oxlint-oxfmt-fix.cjs"
           }
         ]
       }

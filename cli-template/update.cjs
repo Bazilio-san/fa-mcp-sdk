@@ -146,6 +146,7 @@ function execCommand(command, options = {}, withSetupScript = false) {
   // If we have NVM setup, wrap the command
   const fullCommand = setupScript && withSetupScript ? `${setupScript} && ${command}` : command;
   try {
+    // noinspection UnnecessaryLocalVariableJS
     const result = execSync(fullCommand, {
       encoding: 'utf8',
       stdio: options.silent ? 'inherit' : 'pipe',

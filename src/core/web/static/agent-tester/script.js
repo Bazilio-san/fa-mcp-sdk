@@ -286,6 +286,7 @@ class McpAgentTester {
       const tagName = node.tagName.toLowerCase();
 
       if (!allowedTags.has(tagName)) {
+        // noinspection UnnecessaryLocalVariableJS
         const textNode = document.createTextNode(node.textContent || '');
         return textNode;
       }
