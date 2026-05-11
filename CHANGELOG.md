@@ -5,6 +5,23 @@ All notable changes to `fa-mcp-sdk` are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.87] - 2026-05-11
+
+### Added
+
+- `agentTester.tokenTTLSec` (env `AGENT_TESTER_TOKEN_TTL_SEC`, default 1800s) — TTL of Agent Tester auto-issued JWTs.
+- Agent Tester JWT refresh with self-authentication retries for headless clients via `/agent-tester/api/auth-token`.
+- Outbound webhook support in tools via the internal tools manager.
+- Resolve and propagate preferred client language for MCP responses.
+- New cli-template skills `mcp-app-create` and `mcp-app-add-to-server` to scaffold and wire up MCP apps.
+
+### Changed
+
+- Replace cli-template `update-doc.js` with `update-sdk.js`; preserves pinned folders during SDK template updates.
+- Rename cli-template `deploy-mcp` skill to `create-mcp-wizard`.
+- Switch CLI scaffolder/template tooling from ESLint to Oxlint + Oxfmt (`.oxlintrc.json`, `.oxfmtrc.json`).
+- Remove `NODE_ENV` handling from the `fa-mcp` CLI scaffolder and `cli-config.example.yaml`.
+
 ## [0.4.61] - 2026-04-21
 
 ### Breaking
