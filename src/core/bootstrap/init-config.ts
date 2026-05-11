@@ -1,7 +1,6 @@
 // noinspection UnnecessaryLocalVariableJS
 
 import './dotenv.js'; // Load environment variables first
-console.log(123)
 import configModule from 'config';
 import { AppConfig } from '../_types_/config.js';
 
