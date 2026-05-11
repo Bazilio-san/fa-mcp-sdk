@@ -15,7 +15,8 @@ filtered out.
 
 The CHANGELOG.md lives at the repo root and follows the
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) format with sections
-`Added` / `Changed` / `Fixed` / `Removed` / `Breaking`.
+`Breaking` / `Added` / `Changed` / `Deprecated` / `Removed` / `Fixed` / `Security`.
+`Breaking` is project-specific and takes precedence; the rest match Keep a Changelog verbatim.
 
 ## Argument Parsing
 
@@ -120,11 +121,14 @@ For each surviving commit, decide which CHANGELOG section it belongs to:
 | **Breaking** | Removed export from `src/core/index.ts`; removed/renamed config key in `config/default.yaml`; commit message contains `BREAKING CHANGE`, `BREAKING:`, or starts with `feat!:` / `fix!:` |
 | **Added** | New export in `src/core/index.ts`; new file in `src/core/**`; commit subject starts with `feat:` / `feat(...)` / `add:` |
 | **Changed** | Behavior change without API removal; modified config key with new default; commit subject starts with `refactor:`, `perf:`, `change:`, or describes a behavior change |
-| **Fixed** | Commit subject starts with `fix:` / `fix(...)`, or describes a bug fix |
+| **Deprecated** | Public API marked deprecated but still callable (e.g. JSDoc `@deprecated`, soft-removal notice in code or commit message). The actual removal lands later under **Removed** + **Breaking**. |
 | **Removed** | Deleted file in `src/core/**`; removed export (also goes under Breaking) |
+| **Fixed** | Commit subject starts with `fix:` / `fix(...)`, or describes a bug fix |
+| **Security** | Vulnerability patch in `auth/`, `jwt`, NTLM, AD, rate limiting, CORS, or token handling; commit references CVE, advisory, or "security" / "vuln" / "CVE-" keywords. Include severity and CVE ID when available, e.g. `Fix JWT signature bypass in admin auth (HIGH, CVE-2026-XXXXX)`. |
 
 A single commit may legitimately appear in more than one section if it does multiple things;
-prefer placing it in the **most impactful** section (Breaking > Removed > Added > Changed > Fixed).
+prefer placing it in the **most impactful** section
+(Breaking > Removed > Deprecated > Security > Added > Changed > Fixed).
 
 ### Step 7: Format the new entry
 
@@ -145,13 +149,21 @@ Use this template. Omit any section whose body would be empty.
 
 - <one-line description>
 
-### Fixed
+### Deprecated
 
-- <one-line description>
+- <one-line description, naming the API/config still callable but marked for future removal>
 
 ### Removed
 
 - <one-line description>
+
+### Fixed
+
+- <one-line description>
+
+### Security
+
+- <one-line description; include severity (LOW/MEDIUM/HIGH/CRITICAL) and CVE ID if assigned>
 ```
 
 Rules for bullets:
