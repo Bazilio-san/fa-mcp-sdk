@@ -115,7 +115,18 @@ interface ICacheConfig {
   };
 }
 
-export interface AppConfig extends IADConfig, ICacheConfig, ILoggerConfig, IAFDatabasesConfig, IWebServerConfig, IAdminPanelConfig, IMCPConfig, ISwaggerConfig, IAgentTesterConfig, IHomePageConfig {
+export interface AppConfig
+  extends
+    IADConfig,
+    ICacheConfig,
+    ILoggerConfig,
+    IAFDatabasesConfig,
+    IWebServerConfig,
+    IAdminPanelConfig,
+    IMCPConfig,
+    ISwaggerConfig,
+    IAgentTesterConfig,
+    IHomePageConfig {
   isMainDBUsed: boolean; // = !!appConfig.db.postgres?.dbs.main?.host
   // Package metadata (enriched from package.json)
   name: string; // env SERVICE_NAME | <package.json>.name

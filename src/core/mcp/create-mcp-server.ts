@@ -52,8 +52,11 @@ export function createMcpServer(): Server {
   server.setRequestHandler(ListPromptsRequestSchema, async () => getPromptsList(stdioArgs));
 
   // Handler for getting prompt content
-  // @ts-ignore
-  server.setRequestHandler(GetPromptRequestSchema, async (request: IGetPromptRequest) => await getPrompt(request, stdioArgs));
+  server.setRequestHandler(
+    GetPromptRequestSchema,
+    // @ts-ignore
+    async (request: IGetPromptRequest) => await getPrompt(request, stdioArgs),
+  );
 
   // Handler for listing available resources
   server.setRequestHandler(ListResourcesRequestSchema, async () => getResourcesList(stdioArgs));

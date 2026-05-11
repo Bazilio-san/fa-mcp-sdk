@@ -269,7 +269,11 @@ Output only the new Summary Memory.`;
           return str;
         }
 
-        return [str.slice(0, limitChars), '', `[TRUNCATED tool result: original_length=${str.length} chars, kept=${limitChars}]`].join('\n');
+        return [
+          str.slice(0, limitChars),
+          '',
+          `[TRUNCATED tool result: original_length=${str.length} chars, kept=${limitChars}]`,
+        ].join('\n');
       };
 
       const serializeForLog = (msgs: OpenAI.Chat.ChatCompletionMessageParam[]): string => {
@@ -393,7 +397,10 @@ Usage: ${response.usage ? `prompt=${response.usage.prompt_tokens}, completion=${
             const toolMsg = {
               role: 'tool' as const,
               tool_call_id: tc.id,
-              content: truncateForToolMessage({ ok: false, error: 'Invalid JSON arguments', raw: (functionArgs as { raw?: string }).raw }, toolLimitChars),
+              content: truncateForToolMessage(
+                { ok: false, error: 'Invalid JSON arguments', raw: (functionArgs as { raw?: string }).raw },
+                toolLimitChars,
+              ),
             };
             summarizedContext.push(toolMsg);
             openaiMessages.push(toolMsg);
@@ -479,11 +486,16 @@ Response Text: ${finalText}
       };
     } catch (error) {
       logger.error('Error processing message:', error);
-      throw new Error(`Failed to process message: ${error instanceof Error ? error.message : 'Unknown error'}`, { cause: error });
+      throw new Error(`Failed to process message: ${error instanceof Error ? error.message : 'Unknown error'}`, {
+        cause: error,
+      });
     }
   }
 
-  public async processMessageWithTrace(request: ITesterChatRequest, options: ITesterTestOptions = {}): Promise<ITesterTestResponse> {
+  public async processMessageWithTrace(
+    request: ITesterChatRequest,
+    options: ITesterTestOptions = {},
+  ): Promise<ITesterTestResponse> {
     const { verbose = false, maxTraceChars = 50000, maxResultChars = 4000 } = options;
     const startTime = Date.now();
     const sessionId = request.sessionId || uuidv4();
@@ -668,7 +680,9 @@ Response Text: ${finalText}
               event: 'llm_response',
               turn: turn + 1,
               finish_reason: choice.finish_reason,
-              tool_calls: (choice.message.tool_calls ?? []).filter((tc) => tc.type === 'function').map((tc) => tc.function.name),
+              tool_calls: (choice.message.tool_calls ?? [])
+                .filter((tc) => tc.type === 'function')
+                .map((tc) => tc.function.name),
               has_content: !!choice.message.content,
               timestamp: new Date().toISOString(),
             }),
@@ -711,7 +725,9 @@ Response Text: ${finalText}
           // Record tool call in trace
           traceTurn.tool_calls.push({
             name: functionName,
-            arguments: (functionArgs as { __parse_error?: boolean }).__parse_error ? ({ __parse_error: true } as any) : functionArgs,
+            arguments: (functionArgs as { __parse_error?: boolean }).__parse_error
+              ? ({ __parse_error: true } as any)
+              : functionArgs,
           });
 
           // Structured JSON logging for tool call
@@ -838,7 +854,9 @@ Response Text: ${finalText}
       return { message: finalText, sessionId, trace };
     } catch (error) {
       logger.error('Error processing message with trace:', error);
-      throw new Error(`Failed to process message: ${error instanceof Error ? error.message : 'Unknown error'}`, { cause: error });
+      throw new Error(`Failed to process message: ${error instanceof Error ? error.message : 'Unknown error'}`, {
+        cause: error,
+      });
     }
   }
 

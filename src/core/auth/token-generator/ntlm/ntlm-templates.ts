@@ -168,7 +168,12 @@ export const getLoginPageHTML = (username: string = ''): string => `<!DOCTYPE ht
 /**
  * Not authenticated page template (wrong login/password)
  */
-export const getNotAuthenticatedPageHTML = (title: string = 'NOT AUTHENTICATED', protocol: string = '', hostname: string = '', username: string = ''): string => `<!DOCTYPE html>
+export const getNotAuthenticatedPageHTML = (
+  title: string = 'NOT AUTHENTICATED',
+  protocol: string = '',
+  hostname: string = '',
+  username: string = '',
+): string => `<!DOCTYPE html>
 <html>
 <head>
   <meta charset="UTF-8">
@@ -212,7 +217,10 @@ export const getNotAuthenticatedPageHTML = (title: string = 'NOT AUTHENTICATED',
 /**
  * Not authorized page template (user doesn't have access)
  */
-export const getNotAuthorizedPageHTML = (title: string = 'NOT AUTHORIZED', username: string = ''): string => `<!DOCTYPE html>
+export const getNotAuthorizedPageHTML = (
+  title: string = 'NOT AUTHORIZED',
+  username: string = '',
+): string => `<!DOCTYPE html>
 <html>
 <head>
   <meta charset="UTF-8">

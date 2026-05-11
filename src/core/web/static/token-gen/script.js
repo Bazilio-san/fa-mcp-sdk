@@ -335,12 +335,15 @@ function addKeyValuePair(key = '', value = '', readonly = false, placeholder = '
   pairDiv.className = 'key-value-pair';
 
   const keyInput = readonly
-    ? '<input type="text" placeholder="Key" name="keys" value="' + key + '" readonly style="background-color: #f8f9fa;">'
+    ? '<input type="text" placeholder="Key" name="keys" value="' +
+      key +
+      '" readonly style="background-color: #f8f9fa;">'
     : '<input type="text" placeholder="Key" name="keys" value="' + key + '">';
 
   const valueInput = '<input type="text" placeholder="' + placeholder + '" name="values" value="' + value + '">';
 
-  pairDiv.innerHTML = keyInput + valueInput + '<button type="button" class="remove-btn" onclick="removeKeyValuePair(this)">×</button>';
+  pairDiv.innerHTML =
+    keyInput + valueInput + '<button type="button" class="remove-btn" onclick="removeKeyValuePair(this)">×</button>';
   container.appendChild(pairDiv);
   keyValuePairCount++;
 }

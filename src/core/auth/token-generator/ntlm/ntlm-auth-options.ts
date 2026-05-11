@@ -36,7 +36,9 @@ export const tokenGenNtlmOptions: IAuthNtlmOptions = {
   getDomainControllers: (rsn: IRsn) => {
     const domain = rsn?.req?.ntlm?.domain;
     const domainConfig = getDomainConfig(domain);
-    console.log(`[TOKEN-GEN] Using domain controllers for domain "${domain || 'default'}": ${domainConfig.controllers.join(', ')}`);
+    console.log(
+      `[TOKEN-GEN] Using domain controllers for domain "${domain || 'default'}": ${domainConfig.controllers.join(', ')}`,
+    );
     return domainConfig.controllers;
   },
 

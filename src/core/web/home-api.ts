@@ -97,14 +97,23 @@ export async function handleHomeInfo(_req: Request, res: Response): Promise<void
     const adminPanelConfig = appConfig.adminPanel;
     const { configured: mcpAuthTypes } = detectAuthConfiguration();
 
-    const mcpAuth = authConfig?.enabled ? (mcpAuthTypes.length ? mcpAuthTypes.join(', ') : 'enabled but not configured') : 'disabled';
+    const mcpAuth = authConfig?.enabled
+      ? mcpAuthTypes.length
+        ? mcpAuthTypes.join(', ')
+        : 'enabled but not configured'
+      : 'disabled';
 
     let adminPanel: string | AdminAuthType | AdminAuthType[];
     if (!adminPanelConfig?.enabled) {
       adminPanel = 'disabled';
     } else {
       const rawAuthType = adminPanelConfig.authType;
-      const types = !rawAuthType || rawAuthType === 'none' ? [] : Array.isArray(rawAuthType) ? rawAuthType.filter((t) => t && t !== 'none') : [rawAuthType];
+      const types =
+        !rawAuthType || rawAuthType === 'none'
+          ? []
+          : Array.isArray(rawAuthType)
+            ? rawAuthType.filter((t) => t && t !== 'none')
+            : [rawAuthType];
       adminPanel = types.length === 0 ? 'open (no auth)' : types.length === 1 ? types[0]! : (types as AdminAuthType[]);
     }
 

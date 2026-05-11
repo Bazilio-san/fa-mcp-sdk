@@ -14,7 +14,11 @@ export interface IQueryPgArgsCOptional extends Omit<IQueryPgArgs, 'connectionId'
 
 const connectionId = 'main';
 
-export const queryMAIN = async <R extends QueryResultRow = any>(arg: string | IQueryPgArgsCOptional, sqlValues?: any[], throwError = false): Promise<QueryResult<R> | undefined> => {
+export const queryMAIN = async <R extends QueryResultRow = any>(
+  arg: string | IQueryPgArgsCOptional,
+  sqlValues?: any[],
+  throwError = false,
+): Promise<QueryResult<R> | undefined> => {
   if (typeof arg === 'string') {
     arg = { sqlText: arg, connectionId, sqlValues, throwError } as IQueryPgArgs;
   }
@@ -62,10 +66,16 @@ export const execMAIN = async (arg: string | IQueryPgArgsCOptional): Promise<num
   }
   const res = await queryPg(arg as IQueryPgArgs);
   // If a batch of SQL statements is executed, recordset is returned
-  return Array.isArray(res) ? res.reduce((accum, item) => accum + (item?.rowCount ?? 0), 0) : (res?.rowCount ?? undefined);
+  return Array.isArray(res)
+    ? res.reduce((accum, item) => accum + (item?.rowCount ?? 0), 0)
+    : (res?.rowCount ?? undefined);
 };
 
-export const queryRsMAIN = async <R extends QueryResultRow = any>(arg: string | IQueryPgArgsCOptional, sqlValues?: any[], throwError = false): Promise<R[] | undefined> => {
+export const queryRsMAIN = async <R extends QueryResultRow = any>(
+  arg: string | IQueryPgArgsCOptional,
+  sqlValues?: any[],
+  throwError = false,
+): Promise<R[] | undefined> => {
   if (typeof arg === 'string') {
     arg = { sqlText: arg, connectionId, sqlValues, throwError } as IQueryPgArgs;
   } else {
@@ -75,7 +85,11 @@ export const queryRsMAIN = async <R extends QueryResultRow = any>(arg: string | 
   return res?.rows;
 };
 
-export const oneRowMAIN = async <R extends QueryResultRow = any>(arg: string | IQueryPgArgsCOptional, sqlValues?: any[], throwError = false): Promise<R | undefined> => {
+export const oneRowMAIN = async <R extends QueryResultRow = any>(
+  arg: string | IQueryPgArgsCOptional,
+  sqlValues?: any[],
+  throwError = false,
+): Promise<R | undefined> => {
   if (typeof arg === 'string') {
     arg = { sqlText: arg, connectionId, sqlValues, throwError } as IQueryPgArgs;
   } else {
@@ -120,7 +134,11 @@ export const getMergeSqlMAIN = async <U extends TDBRecord = TDBRecord>(arg: {
   returning?: string; // '*' | ' "anyFieldName1", "anyFieldName2"'
 }): Promise<string> => getMergeSqlPg({ ...arg, connectionId });
 
-export const mergeByBatch = async <U extends TDBRecord = TDBRecord>(arg: { recordset: TRecordSet<U>; getMergeSqlFn: Function; batchSize?: number }) => {
+export const mergeByBatch = async <U extends TDBRecord = TDBRecord>(arg: {
+  recordset: TRecordSet<U>;
+  getMergeSqlFn: Function;
+  batchSize?: number;
+}) => {
   const { recordset, getMergeSqlFn, batchSize = 999 } = arg;
   const results: any[] = [];
   while (recordset.length) {

@@ -40,7 +40,9 @@ export const setupNTLMAuthentication = () => {
 
       // Handle logout request
       if (req.path === '/logout') {
-        console.log(`[TOKEN-GEN] Logout requested by: ${req.ntlm?.domain || 'Unknown'}\\${req.ntlm?.username || 'Unknown'}`);
+        console.log(
+          `[TOKEN-GEN] Logout requested by: ${req.ntlm?.domain || 'Unknown'}\\${req.ntlm?.username || 'Unknown'}`,
+        );
         // Clear session and send 401 to trigger browser auth prompt
         res.setHeader('WWW-Authenticate', 'NTLM');
         res.setHeader('Clear-Site-Data', '"cookies", "storage"');
@@ -69,7 +71,9 @@ export const setupNTLMAuthentication = () => {
 
       // If user is already authenticated (from session), continue
       if (req.ntlm?.isAuthenticated) {
-        console.log(`[TOKEN-GEN] Request from authenticated user: ${req.ntlm.domain}\\${req.ntlm.username} -> ${req.method} ${req.path}`);
+        console.log(
+          `[TOKEN-GEN] Request from authenticated user: ${req.ntlm.domain}\\${req.ntlm.username} -> ${req.method} ${req.path}`,
+        );
         return next();
       }
 

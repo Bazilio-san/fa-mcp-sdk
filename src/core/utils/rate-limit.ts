@@ -58,5 +58,11 @@ export function formatRateLimitError(
  * Check if error is from rate-limiter-flexible
  */
 export function isRateLimitError(error: any): boolean {
-  return error && typeof error === 'object' && typeof error.remainingPoints === 'number' && typeof error.msBeforeNext === 'number' && typeof error.consumedPoints === 'number';
+  return (
+    error &&
+    typeof error === 'object' &&
+    typeof error.remainingPoints === 'number' &&
+    typeof error.msBeforeNext === 'number' &&
+    typeof error.consumedPoints === 'number'
+  );
 }

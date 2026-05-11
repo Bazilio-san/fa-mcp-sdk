@@ -176,7 +176,8 @@ function openModal(sectionName) {
   const tableBody = document.getElementById(sectionName + '-table').querySelector('tbody');
 
   // Show loading state
-  tableBody.innerHTML = '<tr><td colspan="100%" class="loading-cell"><div class="loading-spinner"></div> Loading...</td></tr>';
+  tableBody.innerHTML =
+    '<tr><td colspan="100%" class="loading-cell"><div class="loading-spinner"></div> Loading...</td></tr>';
   modal.style.display = 'flex';
 
   // Load data with small delay to show loading animation
@@ -431,7 +432,8 @@ async function togglePromptDetails(sectionName, index, displayType) {
       } catch (error) {
         loadingSpinner.style.display = 'none';
         promptContent.style.display = 'block';
-        promptContent.innerHTML = '<div class="error-message">Failed to load prompt: ' + escapeHtml(error.message) + '</div>';
+        promptContent.innerHTML =
+          '<div class="error-message">Failed to load prompt: ' + escapeHtml(error.message) + '</div>';
       }
     }
   } else {
@@ -536,7 +538,8 @@ async function toggleResourceDetails(sectionName, index, displayType) {
       } catch (error) {
         loadingSpinner.style.display = 'none';
         resourceContent.style.display = 'block';
-        resourceContent.innerHTML = '<div class="error-message">Failed to load resource: ' + escapeHtml(error.message) + '</div>';
+        resourceContent.innerHTML =
+          '<div class="error-message">Failed to load resource: ' + escapeHtml(error.message) + '</div>';
       }
     }
   } else {

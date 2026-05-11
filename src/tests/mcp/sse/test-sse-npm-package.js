@@ -49,7 +49,10 @@ async function testMcpClient() {
     console.log('4. Testing successful tool call...');
     try {
       const response = await client.callTool('example_tool', { query: 'ping' });
-      console.log('✅ Tool call successful:', response.result?.structuredContent?.message || response.result?.content?.[0]?.text);
+      console.log(
+        '✅ Tool call successful:',
+        response.result?.structuredContent?.message || response.result?.content?.[0]?.text,
+      );
     } catch (error) {
       console.log('❌ Tool call failed:', error.message);
     }

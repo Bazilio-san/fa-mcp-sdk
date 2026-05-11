@@ -362,7 +362,9 @@ function getRepoInfo() {
     const headHash = execCommand('git rev-parse HEAD').trim();
     // const headShortHash = execCommand('git rev-parse --short HEAD').trim();
     const headCommitMessage = execCommand(`git log -n 1 --pretty=format:%s ${headHash}`).trim();
-    const headDdate = execCommand(`git log -n 1 --format="%at" ${headHash} | xargs -I{} date -d @{} +%d.%m.%Y_%H:%M:%S`).trim();
+    const headDdate = execCommand(
+      `git log -n 1 --format="%at" ${headHash} | xargs -I{} date -d @{} +%d.%m.%Y_%H:%M:%S`,
+    ).trim();
     execCommand(`git fetch origin ${branch} --prune`);
 
     const upstreamHash = execCommand(`git rev-parse ${branch}@{upstream}`).trim();
@@ -377,7 +379,9 @@ function getRepoInfo() {
       upstreamHash,
     };
   } catch (error) {
-    const message = String(error.message).includes(error.stderr) ? error.message : [error.stderr, error.message].join('\n');
+    const message = String(error.message).includes(error.stderr)
+      ? error.message
+      : [error.stderr, error.message].join('\n');
 
     console.error('Error getting repo info:', message);
     return null;

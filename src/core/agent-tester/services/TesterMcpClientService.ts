@@ -8,7 +8,15 @@ import chalk from 'chalk';
 import { appConfig } from '../../bootstrap/init-config.js';
 import { generateToken } from '../../auth/jwt.js';
 import { logger as lgr } from '../../logger.js';
-import { TesterMcpConfig, ITesterCachedMcpClient, ITesterMcpTool, TesterMcpServerConfig, TesterMcpConnectionRequest, TesterMcpConnectionResponse, TesterHeaderRequirement } from '../types.js';
+import {
+  TesterMcpConfig,
+  ITesterCachedMcpClient,
+  ITesterMcpTool,
+  TesterMcpServerConfig,
+  TesterMcpConnectionRequest,
+  TesterMcpConnectionResponse,
+  TesterHeaderRequirement,
+} from '../types.js';
 
 const logger = lgr.getSubLogger({ name: chalk.cyan('agent-tester:mcp') });
 
@@ -186,11 +194,16 @@ export class TesterMcpClientService {
           return result;
         } catch (retryError) {
           logger.error(`Failed to call tool ${toolName} after retry:`, retryError);
-          throw new Error(`Tool execution failed: ${retryError instanceof Error ? retryError.message : 'Unknown error'}`, { cause: retryError });
+          throw new Error(
+            `Tool execution failed: ${retryError instanceof Error ? retryError.message : 'Unknown error'}`,
+            { cause: retryError },
+          );
         }
       }
       logger.error(`Failed to call tool ${toolName}:`, error);
-      throw new Error(`Tool execution failed: ${error instanceof Error ? error.message : 'Unknown error'}`, { cause: error });
+      throw new Error(`Tool execution failed: ${error instanceof Error ? error.message : 'Unknown error'}`, {
+        cause: error,
+      });
     }
   }
 
@@ -227,7 +240,8 @@ export class TesterMcpClientService {
       return false;
     }
     const headers = mcpConfig.headers || {};
-    const headerKey = 'Authorization' in headers ? 'Authorization' : 'authorization' in headers ? 'authorization' : null;
+    const headerKey =
+      'Authorization' in headers ? 'Authorization' : 'authorization' in headers ? 'authorization' : null;
     if (!headerKey) {
       return false;
     }
@@ -334,7 +348,11 @@ export class TesterMcpClientService {
     // 2) Fallback: MCP resource use://http-headers
     try {
       const resource: any = await (client as any).readResource({ uri: 'use://http-headers' });
-      const contents: any[] = Array.isArray(resource?.contents) ? resource.contents : Array.isArray(resource) ? resource : [];
+      const contents: any[] = Array.isArray(resource?.contents)
+        ? resource.contents
+        : Array.isArray(resource)
+          ? resource
+          : [];
 
       let parsed: any = undefined;
       for (const c of contents) {
@@ -541,7 +559,10 @@ export class TesterMcpClientService {
     }
   }
 
-  public async updateHeaders(serverName: string, headers: Record<string, string>): Promise<TesterMcpConnectionResponse> {
+  public async updateHeaders(
+    serverName: string,
+    headers: Record<string, string>,
+  ): Promise<TesterMcpConnectionResponse> {
     const config = this.servers.get(serverName);
     if (!config) {
       return { success: false, error: `Server ${serverName} not found` };

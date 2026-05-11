@@ -237,7 +237,9 @@ export function createAdminRouter(): Router {
       const liveTimeSec = timeValue * multiplier;
       const token = generateToken(user, liveTimeSec, payload || {});
 
-      logger.info(`Generated token for user: ${user}, duration: ${timeValue} ${timeUnit}, requested by: ${authenticatedUser}`);
+      logger.info(
+        `Generated token for user: ${user}, duration: ${timeValue} ${timeUnit}, requested by: ${authenticatedUser}`,
+      );
 
       return res.json({
         success: true,

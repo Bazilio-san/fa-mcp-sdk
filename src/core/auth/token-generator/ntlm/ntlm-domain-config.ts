@@ -5,7 +5,11 @@ import { IDcConfig } from '../../../_types_/active-directory-config.js';
 import { appConfig } from '../../../bootstrap/init-config.js';
 
 // Check if AD configuration is available
-export const isADEnabled: boolean = !!(appConfig.ad && isObject(appConfig.ad.domains) && Object.keys(appConfig.ad.domains).length);
+export const isADEnabled: boolean = !!(
+  appConfig.ad &&
+  isObject(appConfig.ad.domains) &&
+  Object.keys(appConfig.ad.domains).length
+);
 
 // If AD config is null or undefined, NTLM/AD-based authentication is disabled
 if (!isADEnabled) {
@@ -42,7 +46,9 @@ if (isADEnabled) {
 
     controllers.forEach((dc) => {
       if (!dc.startsWith('ldap')) {
-        throw new NTLMAuthError(`Domain controller must be an AD and start with ldap:// | ldaps:// . Host: domain "${domainName}", DC: ${dc}`);
+        throw new NTLMAuthError(
+          `Domain controller must be an AD and start with ldap:// | ldaps:// . Host: domain "${domainName}", DC: ${dc}`,
+        );
       }
     });
 

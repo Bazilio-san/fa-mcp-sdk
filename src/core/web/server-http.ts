@@ -2,7 +2,13 @@ import { dirname, join } from 'path';
 import { fileURLToPath } from 'url';
 
 import { SSEServerTransport } from '@modelcontextprotocol/sdk/server/sse.js';
-import { CallToolRequestSchema, ListToolsRequestSchema, ListPromptsRequestSchema, ListResourcesRequestSchema, ReadResourceRequestSchema } from '@modelcontextprotocol/sdk/types.js';
+import {
+  CallToolRequestSchema,
+  ListToolsRequestSchema,
+  ListPromptsRequestSchema,
+  ListResourcesRequestSchema,
+  ReadResourceRequestSchema,
+} from '@modelcontextprotocol/sdk/types.js';
 import chalk from 'chalk';
 import express from 'express';
 import helmet from 'helmet';
@@ -45,7 +51,14 @@ export const isAdminEnabled = appConfig.adminPanel?.enabled === true;
 /**
  * Handle rate limiting with consistent error response
  */
-async function handleRateLimit(rateLimiter: RateLimiterMemory, clientId: string, ip: string, context: string = '', res?: express.Response, id?: any): Promise<void> {
+async function handleRateLimit(
+  rateLimiter: RateLimiterMemory,
+  clientId: string,
+  ip: string,
+  context: string = '',
+  res?: express.Response,
+  id?: any,
+): Promise<void> {
   try {
     await rateLimiter.consume(clientId);
   } catch (rateLimitError) {
@@ -194,12 +207,16 @@ export async function startHttpServer(): Promise<void> {
           }
 
           if (!ttl || !ttl.trim()) {
-            return res.status(400).json({ success: false, error: 'ttl is required. Format: <N>s | <N>m | <N>d | <N>y' });
+            return res
+              .status(400)
+              .json({ success: false, error: 'ttl is required. Format: <N>s | <N>m | <N>d | <N>y' });
           }
 
           const ttlMatch = /^(\d+)([smdy])$/.exec(ttl.trim());
           if (!ttlMatch) {
-            return res.status(400).json({ success: false, error: `Invalid ttl format "${ttl}". Expected: <N>s | <N>m | <N>d | <N>y` });
+            return res
+              .status(400)
+              .json({ success: false, error: `Invalid ttl format "${ttl}". Expected: <N>s | <N>m | <N>d | <N>y` });
           }
 
           const ttlValue = parseInt(ttlMatch[1]!, 10);
@@ -286,7 +303,10 @@ export async function startHttpServer(): Promise<void> {
   >();
 
   // Create SSE server instance with preserved headers and auth payload from connection establishment
-  async function createSseServer(preservedHeaders: Record<string, string>, mcpAuthPayload?: { user: string; [key: string]: any }) {
+  async function createSseServer(
+    preservedHeaders: Record<string, string>,
+    mcpAuthPayload?: { user: string; [key: string]: any },
+  ) {
     const sseServer = createMcpServer();
 
     const sseArgs = { transport: 'sse' as const, headers: preservedHeaders, payload: mcpAuthPayload };
@@ -480,7 +500,9 @@ export async function startHttpServer(): Promise<void> {
       switch (method) {
         case 'initialize':
           const { protocolVersion, capabilities: clientCapabilities, clientInfo } = params || {};
-          logger.info(`MCP client initializing: protocolVersion: ${protocolVersion} | clientCapabilities: ${JSON.stringify(clientCapabilities)} | clientInfo: ${JSON.stringify(clientInfo)}`);
+          logger.info(
+            `MCP client initializing: protocolVersion: ${protocolVersion} | clientCapabilities: ${JSON.stringify(clientCapabilities)} | clientInfo: ${JSON.stringify(clientInfo)}`,
+          );
           result = {
             protocolVersion: '2024-11-05',
             capabilities: {
@@ -503,7 +525,14 @@ export async function startHttpServer(): Promise<void> {
         case 'tools/call':
           // Apply rate limiting for tool calls
           const toolCallClientId = `tool-${req.ip || 'unknown'}`;
-          await handleRateLimit(rateLimiter, toolCallClientId, req.ip || 'unknown', `tool call | tool: ${params?.name || 'unknown'}`, res, id);
+          await handleRateLimit(
+            rateLimiter,
+            toolCallClientId,
+            req.ip || 'unknown',
+            `tool call | tool: ${params?.name || 'unknown'}`,
+            res,
+            id,
+          );
           const { toolHandler } = getProjectData();
           result = await toolHandler({ ...params, ...httpArgs });
           break;

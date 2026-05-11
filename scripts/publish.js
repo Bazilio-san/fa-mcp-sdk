@@ -13,7 +13,6 @@
 
 import { spawnSync, execSync } from 'child_process';
 import { readFileSync, writeFileSync } from 'fs';
-import { createInterface } from 'readline';
 
 const EXPECTED_BRANCH = 'master';
 
@@ -35,14 +34,6 @@ if (args.includes('--help') || args.includes('-h')) {
   console.log('  --add-all, -a   Also stage untracked files (git add --all).');
   console.log('                  By default only modified tracked files are staged (git add -u).');
   process.exit(0);
-}
-
-function pause(msg = 'Press Enter to continue ...') {
-  const rl = createInterface({ input: process.stdin, output: process.stdout });
-  return new Promise((resolve) => rl.question(msg, () => {
-    rl.close();
-    resolve();
-  }));
 }
 
 async function abort(msg) {
@@ -101,7 +92,7 @@ async function main() {
 
   let version;
   if (noBump) {
-    version = JSON.parse(readFileSync('package.json', 'utf8')).version;
+    ({ version } = JSON.parse(readFileSync('package.json', 'utf8')));
     console.log(`${c.y}**** Skipping version bump, publishing current ${c.g}${version}${c.y} ****${c[0]}`);
   } else {
     version = bumpVersion();
@@ -110,12 +101,18 @@ async function main() {
   // -u stages modifications/deletions to tracked files (incl. the bumped package.json files),
   // but does NOT include untracked files. --add-all switches to `git add --all` (also untracked).
   const stageCmd = addAll ? 'git add --all' : 'git add -u';
-  if (run(stageCmd) !== 0) await abort();
+  if (run(stageCmd) !== 0) {
+    await abort();
+  }
 
   const staged = execSync('git diff --cached --name-only', { encoding: 'utf8' }).trim();
   if (staged) {
-    if (run(`git commit --no-verify -m "${version}"`) !== 0) await abort();
-    if (run(`git push origin refs/heads/${EXPECTED_BRANCH}:${EXPECTED_BRANCH}`) !== 0) await abort();
+    if (run(`git commit --no-verify -m "${version}"`) !== 0) {
+      await abort();
+    }
+    if (run(`git push origin refs/heads/${EXPECTED_BRANCH}:${EXPECTED_BRANCH}`) !== 0) {
+      await abort();
+    }
   } else {
     console.log(`${c.y}**** Nothing staged, skipping git commit/push ****${c[0]}`);
   }

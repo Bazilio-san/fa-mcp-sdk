@@ -15,7 +15,11 @@ function setupGlobalRejectionHandler() {
     process.on('unhandledRejection', (reason: any, promise: Promise<any>) => {
       // Check if this is an MCP-related error or network error from our client
       const isMcpError =
-        typeof reason === 'object' && (reason?.message?.includes('MCP Error:') || reason?.message?.includes('SQL validation failed') || reason?.message?.includes('fetch failed') || reason?.method); // Our custom method property
+        typeof reason === 'object' &&
+        (reason?.message?.includes('MCP Error:') ||
+          reason?.message?.includes('SQL validation failed') ||
+          reason?.message?.includes('fetch failed') ||
+          reason?.method); // Our custom method property
 
       if (isMcpError) {
         // Mark this promise as handled to prevent future warnings

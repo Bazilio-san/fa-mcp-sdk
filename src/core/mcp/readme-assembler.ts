@@ -70,7 +70,10 @@ export const assembleReadmeWithSatellites = (projectRoot: string): string => {
   // [text](./readme-docs/foo.md)         — no anchor
   // [text](readme-docs/foo.md#bar)       — relative, with anchor
   // [text](./readme-docs/foo.md#bar)     — full form
-  const linkRegex = new RegExp(`\\[([^\\]]+)\\]\\(\\.?\\/?${SATELLITE_DIR_NAME}\\/([^)#\\s]+\\.md)(#[^)\\s]*)?\\)`, 'g');
+  const linkRegex = new RegExp(
+    `\\[([^\\]]+)\\]\\(\\.?\\/?${SATELLITE_DIR_NAME}\\/([^)#\\s]+\\.md)(#[^)\\s]*)?\\)`,
+    'g',
+  );
 
   main = main.replace(linkRegex, (match, _text: string, filename: string, anchor?: string) => {
     const filePath = path.join(satelliteDir, filename);

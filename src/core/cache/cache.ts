@@ -39,7 +39,12 @@ export class CacheManager {
   };
 
   constructor(options?: CacheManagerConstructorOptions) {
-    const { ttlSeconds = DEFAULT_TTL_SECONDS, maxItems = DEFAULT_MAX_ITEMS, checkPeriod = DEFAULT_CHECK_PERIOD, verbose = false } = options || {};
+    const {
+      ttlSeconds = DEFAULT_TTL_SECONDS,
+      maxItems = DEFAULT_MAX_ITEMS,
+      checkPeriod = DEFAULT_CHECK_PERIOD,
+      verbose = false,
+    } = options || {};
 
     this.defaultTtl = ttlSeconds;
     this.verbose = verbose;
@@ -61,7 +66,9 @@ export class CacheManager {
     // Set up event listeners
     this.setupEventListeners();
 
-    logger.info(`Cache manager initialized: ttl: ${ttlSeconds} s | max items: ${maxItems} | check period: ${checkPeriod}`);
+    logger.info(
+      `Cache manager initialized: ttl: ${ttlSeconds} s | max items: ${maxItems} | check period: ${checkPeriod}`,
+    );
   }
 
   /**

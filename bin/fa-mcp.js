@@ -257,7 +257,8 @@ class MCPGenerator {
       {
         name: 'NODE_CONSUL_ENV',
         defaultValue: '',
-        title: 'Affects how the Consul service ID is formed - as a product or development ID. Valid values: "" | "development" | "production"',
+        title:
+          'Affects how the Consul service ID is formed - as a product or development ID. Valid values: "" | "development" | "production"',
       },
 
       {
@@ -361,7 +362,9 @@ certificate's public and private keys`,
         // Save to file asynchronously without blocking — only if project path is known
         const { lastConfigPath } = self;
         if (lastConfigPath) {
-          fs.writeFile(lastConfigPath, JSON.stringify(target, null, 2), 'utf8').catch((error) => console.warn(`⚠️  Warning: Could not save config to file ${lastConfigPath}:`, error.message));
+          fs.writeFile(lastConfigPath, JSON.stringify(target, null, 2), 'utf8').catch((error) =>
+            console.warn(`⚠️  Warning: Could not save config to file ${lastConfigPath}:`, error.message),
+          );
         }
         return result;
       },
@@ -451,7 +454,9 @@ certificate's public and private keys`,
 
       // If consul registration is enabled, collect consul parameters immediately
       if (!shouldSkipConsulRegisterParams) {
-        const consulParams = this.optionalParams.filter(({ name: n }) => n === 'consul.agent.reg.token' || n.startsWith('consul.envCode.'));
+        const consulParams = this.optionalParams.filter(
+          ({ name: n }) => n === 'consul.agent.reg.token' || n.startsWith('consul.envCode.'),
+        );
         for (const param of consulParams) {
           const { title, name } = param;
           const currentValue = config[name];
@@ -469,7 +474,9 @@ certificate's public and private keys`,
       }
     }
     // Other consul parameters
-    const consulParams = this.optionalParams.filter(({ name: n }) => n.startsWith('consul.agent.dev') || n.startsWith('consul.agent.prd'));
+    const consulParams = this.optionalParams.filter(
+      ({ name: n }) => n.startsWith('consul.agent.dev') || n.startsWith('consul.agent.prd'),
+    );
     for (const param of consulParams) {
       const { title, name } = param;
       const currentValue = config[name];
@@ -503,7 +510,9 @@ certificate's public and private keys`,
 
       // If authentication is enabled, collect auth parameters immediately
       if (!shouldSkipAuthParams) {
-        const authParams = this.optionalParams.filter((p) => p.name.startsWith('webServer.auth.') && p.name !== 'webServer.auth.enabled');
+        const authParams = this.optionalParams.filter(
+          (p) => p.name.startsWith('webServer.auth.') && p.name !== 'webServer.auth.enabled',
+        );
 
         for (const param of authParams) {
           const { title, name, skip } = param;
@@ -684,7 +693,9 @@ certificate's public and private keys`,
 
   async collectConfiguration() {
     const config = {};
-    const configFile = process.argv.find((arg) => arg.endsWith('.json') || arg.endsWith('.yaml') || arg.endsWith('.yml')) || process.argv.find((arg) => arg.startsWith('--config='))?.split('=')[1];
+    const configFile =
+      process.argv.find((arg) => arg.endsWith('.json') || arg.endsWith('.yaml') || arg.endsWith('.yml')) ||
+      process.argv.find((arg) => arg.startsWith('--config='))?.split('=')[1];
 
     if (configFile) {
       try {
@@ -811,7 +822,9 @@ certificate's public and private keys`,
 
   async handlePackageJson(content, config) {
     try {
-      content = content.replace(/"project\.name"/g, '"{{project.name}}"').replace(/"node \.\.\/scripts/g, '"node ./scripts');
+      content = content
+        .replace(/"project\.name"/g, '"{{project.name}}"')
+        .replace(/"node \.\.\/scripts/g, '"node ./scripts');
       // First replace all template parameters in the content string
       let updatedContent = content;
       for (const [param, value] of Object.entries(config)) {
@@ -960,8 +973,15 @@ certificate's public and private keys`,
       const c2 = ['jobs', 'npm start', 'unset http_proxy'];
       const c3 = ['./config/local.yaml', './node_modules/fa-mcp-sdk/config/_local.yaml'];
       const i = ' '.repeat(8);
-      const allowBashLines = [...c1.map((c) => `${i}"Bash(${c}:*)",`), ...c2.map((c) => `${i}"Bash(${c})",`), ...c3.map((c) => `${i}"Read(${c})",`)].join('\n');
-      const transformFn = (c) => c.replace('"acceptEdits"', '"bypassPermissions"').replace(/"allow": \[\s+"Edit",/, `"allow": [\n${allowBashLines}\n${i}"Edit",`);
+      const allowBashLines = [
+        ...c1.map((c) => `${i}"Bash(${c}:*)",`),
+        ...c2.map((c) => `${i}"Bash(${c})",`),
+        ...c3.map((c) => `${i}"Read(${c})",`),
+      ].join('\n');
+      const transformFn = (c) =>
+        c
+          .replace('"acceptEdits"', '"bypassPermissions"')
+          .replace(/"allow": \[\s+"Edit",/, `"allow": [\n${allowBashLines}\n${i}"Edit",`);
       await this.transformTargetFile(config, '.claude/settings.json', transformFn);
     }
   }
@@ -1038,7 +1058,10 @@ certificate's public and private keys`,
           const template = `{{${param.name}}}`;
           if (localYamlExampleModifiedContent.includes(template)) {
             const defaultValue = param.defaultValue || '';
-            localYamlExampleModifiedContent = localYamlExampleModifiedContent.replace(new RegExp(escapeRegExp(template), 'g'), defaultValue);
+            localYamlExampleModifiedContent = localYamlExampleModifiedContent.replace(
+              new RegExp(escapeRegExp(template), 'g'),
+              defaultValue,
+            );
           }
         }
 
@@ -1046,14 +1069,20 @@ certificate's public and private keys`,
         for (const [paramName, value] of Object.entries(config)) {
           const template = `{{${paramName}}}`;
           if (localYamlExampleModifiedContent.includes(template)) {
-            localYamlExampleModifiedContent = localYamlExampleModifiedContent.replace(new RegExp(escapeRegExp(template), 'g'), value);
+            localYamlExampleModifiedContent = localYamlExampleModifiedContent.replace(
+              new RegExp(escapeRegExp(template), 'g'),
+              value,
+            );
           }
           if (localYamlModifiedContent.includes(template)) {
             localYamlModifiedContent = localYamlModifiedContent.replace(new RegExp(escapeRegExp(template), 'g'), value);
           }
         }
         if (!config['consul.agent.reg.host']) {
-          localYamlModifiedContent = localYamlModifiedContent.replace(/(\n +)host: '[^']*'( # The host of the consul agent)/, "$1# host: ''$2");
+          localYamlModifiedContent = localYamlModifiedContent.replace(
+            /(\n +)host: '[^']*'( # The host of the consul agent)/,
+            "$1# host: ''$2",
+          );
         }
 
         await fs.writeFile(localYamlPath, localYamlModifiedContent, 'utf8');

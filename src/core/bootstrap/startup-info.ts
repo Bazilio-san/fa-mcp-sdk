@@ -42,7 +42,11 @@ export const startupInfo = async (args: { dotEnvResult: any; customStartupInfo?:
   const adminPanelConfig = cfg.adminPanel;
   const { configured: mcpAuthTypes, errors: authErrors } = detectAuthConfiguration();
 
-  const mcpAuthInfo = authConfig?.enabled ? (mcpAuthTypes.length ? mcpAuthTypes.join(', ') : 'enabled but not configured') : 'disabled';
+  const mcpAuthInfo = authConfig?.enabled
+    ? mcpAuthTypes.length
+      ? mcpAuthTypes.join(', ')
+      : 'enabled but not configured'
+    : 'disabled';
 
   let adminPanelInfo: string;
   if (!adminPanelConfig?.enabled) {

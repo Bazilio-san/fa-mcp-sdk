@@ -15,7 +15,8 @@ export const ppj = (v: any) => {
 
 export const isObject = (o: any): boolean => o && typeof o === 'object';
 
-export const isNonEmptyObject = (o: any): boolean => isObject(o) && !Array.isArray(o) && Object.values(o).some((v) => v !== undefined);
+export const isNonEmptyObject = (o: any): boolean =>
+  isObject(o) && !Array.isArray(o) && Object.values(o).some((v) => v !== undefined);
 
 export const isMainModule = (url: string) => {
   const modulePath = (process.argv[1] || '').replace(/\\/g, '/');

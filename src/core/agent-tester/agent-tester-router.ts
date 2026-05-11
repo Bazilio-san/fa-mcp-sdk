@@ -6,7 +6,15 @@ import { Router } from 'express';
 import express from 'express';
 
 import { generateToken } from '../auth/jwt.js';
-import { COOKIE_NAME, createSession, deleteSession, getAvailableAuthMethods, getSessionTtlMs, hasValidSession, validateLoginCredentials } from '../auth/agent-tester-auth.js';
+import {
+  COOKIE_NAME,
+  createSession,
+  deleteSession,
+  getAvailableAuthMethods,
+  getSessionTtlMs,
+  hasValidSession,
+  validateLoginCredentials,
+} from '../auth/agent-tester-auth.js';
 import { appConfig } from '../bootstrap/init-config.js';
 import { logger as lgr } from '../logger.js';
 
@@ -173,7 +181,11 @@ export function createAgentTesterRouter(
       const verbose = req.query.verbose === 'true';
       const maxTraceChars = parseInt(req.query.maxTraceChars as string) || 50000;
       const maxResultChars = parseInt(req.query.maxResultChars as string) || 4000;
-      const response = await agentService.processMessageWithTrace(chatRequest, { verbose, maxTraceChars, maxResultChars });
+      const response = await agentService.processMessageWithTrace(chatRequest, {
+        verbose,
+        maxTraceChars,
+        maxResultChars,
+      });
       res.json(response);
     } catch (error: any) {
       logger.error('Chat test error:', error);

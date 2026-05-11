@@ -136,7 +136,8 @@ async function generateSpecOnDemand(specPath: string): Promise<void> {
       info: {
         title: appConfig.productName || 'MCP Server API',
         version: appConfig.version || '1.0.0',
-        description: appConfig.description || 'REST API for your MCP Server. This specification is automatically generated.',
+        description:
+          appConfig.description || 'REST API for your MCP Server. This specification is automatically generated.',
       },
       servers: buildServersArray(),
       paths: {

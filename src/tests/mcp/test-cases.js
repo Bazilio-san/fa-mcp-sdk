@@ -121,7 +121,9 @@ export const TEMPLATE_TESTS = {
         // Both structuredContent and text are acceptable; check message echo
         const structured = r?.structuredContent;
         const text = r?.content?.[0]?.text;
-        const hasProcessed = (structured && structured.message?.includes('Processed query')) || (typeof text === 'string' && text.includes('Processed query'));
+        const hasProcessed =
+          (structured && structured.message?.includes('Processed query')) ||
+          (typeof text === 'string' && text.includes('Processed query'));
         return hasProcessed ? ok(name, { response: r }) : fail(name, { response: r });
       } catch (e) {
         return fail(name, { error: e?.message });

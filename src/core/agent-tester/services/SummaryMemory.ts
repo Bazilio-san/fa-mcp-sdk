@@ -98,9 +98,11 @@ export class SummaryMemory {
       return msg;
     }
 
-    const truncated = [msg.content.slice(0, this.config.maxToolPayloadChars), '', `[TRUNCATED tool result: original_length=${msg.content.length} chars, kept=${this.config.maxToolPayloadChars}]`].join(
-      '\n',
-    );
+    const truncated = [
+      msg.content.slice(0, this.config.maxToolPayloadChars),
+      '',
+      `[TRUNCATED tool result: original_length=${msg.content.length} chars, kept=${this.config.maxToolPayloadChars}]`,
+    ].join('\n');
 
     return { ...msg, content: truncated };
   }

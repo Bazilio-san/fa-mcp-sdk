@@ -19,7 +19,12 @@ import { AuthDetectionResult, AuthResult, AuthType } from './types.js';
 
 const logger = lgr.getSubLogger({ name: chalk.magenta('multi-auth') });
 
-const { enabled: authEnabled, permanentServerTokens: pt, basic: { username: bUsername, password: bPassword } = {}, jwtToken: { encryptKey } = {} } = appConfig.webServer?.auth || {};
+const {
+  enabled: authEnabled,
+  permanentServerTokens: pt,
+  basic: { username: bUsername, password: bPassword } = {},
+  jwtToken: { encryptKey } = {},
+} = appConfig.webServer?.auth || {};
 
 /**
  * Authentication check order in ascending CPU load
@@ -91,7 +96,9 @@ export function detectAuthConfiguration(): AuthDetectionResult {
     // Check JWT Token
     if (encryptKey?.length) {
       if (encryptKey.length < MIN_ENCRYPT_KEY_LENGTH) {
-        errors.jwtToken = [`JWT encryption key is too short (${encryptKey.length} chars) Must be at least ${MIN_ENCRYPT_KEY_LENGTH} chars long`];
+        errors.jwtToken = [
+          `JWT encryption key is too short (${encryptKey.length} chars) Must be at least ${MIN_ENCRYPT_KEY_LENGTH} chars long`,
+        ];
       } else {
         configured.push('jwtToken');
       }
@@ -221,10 +228,18 @@ export async function checkMultiAuth(req: Request): Promise<AuthResult> {
         errorResult = { success: false, error: `${E_PFX}Unknown auth type: ${authType}` };
     }
   } catch (error: Error | any) {
-    logger.warn(`Auth type ${authType} failed with exception:`, error instanceof Error ? E_PFX + error.message : 'Unknown error');
+    logger.warn(
+      `Auth type ${authType} failed with exception:`,
+      error instanceof Error ? E_PFX + error.message : 'Unknown error',
+    );
   }
 
-  return errorResult || { success: false, error: `${E_PFX}Authentication failed for all configured methods: ${configuredTypes}` };
+  return (
+    errorResult || {
+      success: false,
+      error: `${E_PFX}Authentication failed for all configured methods: ${configuredTypes}`,
+    }
+  );
 }
 
 /**

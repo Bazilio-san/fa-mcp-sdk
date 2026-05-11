@@ -8,7 +8,9 @@
     <node-interpreter value="project" />
     <node-options value="--dns-result-order=ipv4first --no-node-snapshot" />
     <package-manager value="npm" />
-    <envs />
+    <envs>
+      <env name="NODE_ENV" value="qqq" />
+    </envs>
     <method v="2" />
   </configuration>
 </component>

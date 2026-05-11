@@ -128,14 +128,20 @@ export function getAdminAuthMethods(): string[] {
  * Try authenticating a request against a single auth type.
  * Returns auth result or null if this type doesn't match the request.
  */
-function tryAuthType(authType: AdminAuthType, scheme: string, credentials: string): { success: boolean; error?: string; username?: string; payload?: any } | null {
+function tryAuthType(
+  authType: AdminAuthType,
+  scheme: string,
+  credentials: string,
+): { success: boolean; error?: string; username?: string; payload?: any } | null {
   switch (authType) {
     case 'permanentServerTokens': {
       if (scheme === 'basic') {
         return null;
       } // Not a bearer/token
       const result = checkPermanentToken(credentials);
-      return result.errorReason ? { success: false, error: result.errorReason } : { success: true, username: 'ServerToken' };
+      return result.errorReason
+        ? { success: false, error: result.errorReason }
+        : { success: true, username: 'ServerToken' };
     }
 
     case 'basic': {

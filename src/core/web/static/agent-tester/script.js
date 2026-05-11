@@ -524,7 +524,12 @@ class McpAgentTester {
     this.clearChatBtn.addEventListener('click', () => this.clearChat());
 
     document.addEventListener('click', (e) => {
-      if (window.innerWidth <= 768 && !this.sidebar.contains(e.target) && !this.sidebarToggleMobile.contains(e.target) && this.sidebar.classList.contains('open')) {
+      if (
+        window.innerWidth <= 768 &&
+        !this.sidebar.contains(e.target) &&
+        !this.sidebarToggleMobile.contains(e.target) &&
+        this.sidebar.classList.contains('open')
+      ) {
         this.toggleSidebar();
       }
     });
@@ -1472,7 +1477,10 @@ class McpAgentTester {
 
     const avatar = document.createElement('div');
     avatar.className = 'message-avatar';
-    avatar.innerHTML = sender === 'user' ? '<span class="material-icons-round">person</span>' : '<span class="material-icons-round">smart_toy</span>';
+    avatar.innerHTML =
+      sender === 'user'
+        ? '<span class="material-icons-round">person</span>'
+        : '<span class="material-icons-round">smart_toy</span>';
 
     const content = document.createElement('div');
     content.className = 'message-content';
@@ -1670,7 +1678,11 @@ class McpAgentTester {
         dirty = true;
       }
       // Legacy preset model (not 'other'): reuse if current model is still a default
-      if (legacy.model && legacy.model !== 'other' && (this.llmSettings.model === LLM_DEFAULTS.model || !this.llmSettings.model)) {
+      if (
+        legacy.model &&
+        legacy.model !== 'other' &&
+        (this.llmSettings.model === LLM_DEFAULTS.model || !this.llmSettings.model)
+      ) {
         this.llmSettings.model = legacy.model;
         dirty = true;
       }
