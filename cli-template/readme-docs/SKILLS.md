@@ -39,7 +39,7 @@ Generates a migration guide for upgrading the `fa-mcp-sdk` dependency in this pr
 - `config/*.yaml` — new/removed/changed keys and defaults (correlates `default.yaml`, `_local.yaml`, `local.yaml`)
 - `cli-template/` — `package.json` (new deps only), `tsconfig.json`, `.oxlintrc.json`, `.oxfmtrc.json`, `CLAUDE.md`, `deploy/`,
   `.claude/skills/`, `.run/` (from `r/`)
-- `scripts/` — new or updated SDK utilities (excluding SDK-internal `copy-static.js`, `publish.sh`)
+- `scripts/` — new or updated SDK utilities (excluding SDK-internal `copy-static.js`, `publish.js`, `scripts/publish-README.md`)
 - `dist/core/index.js` — added/removed/renamed exports and breaking type changes
 - project `src/` — imports and config keys affected by the upgrade
 

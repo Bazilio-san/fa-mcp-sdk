@@ -61,7 +61,8 @@ deploy/
 # Project-specific exclusions
 config/
 assets_data.json
-publish.sh
+publish.js
+publish-README.md
 
 # Keep only these essential files for publication
 !dist/

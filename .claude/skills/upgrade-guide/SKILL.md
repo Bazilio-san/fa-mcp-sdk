@@ -160,7 +160,8 @@ These are Claude Code skills the project owns a copy of. If the SDK ships an upd
 
 #### 3c. Scripts (`scripts/`)
 
-The CLI copies scripts from the SDK's **`scripts/`** directory (NOT from `cli-template/scripts/`) into the downstream project's `scripts/`, and removes `copy-static.js` and `publish.sh` (SDK-internal).
+The CLI copies scripts from the SDK's **`scripts/`** directory (NOT from `cli-template/scripts/`) into the downstream 
+project's `scripts/`, and removes `copy-static.js`, `publish.js`, `scripts/publish-README.md` (SDK-internal).
 
 ```bash
 git diff --name-only <FROM_REF> <TO_REF> -- scripts/
@@ -169,7 +170,7 @@ git diff --name-only <FROM_REF> <TO_REF> -- scripts/
 In the generated guide:
 - Canonical source: `node_modules/fa-mcp-sdk/scripts/<name>.js`
 - Project destination: `scripts/<name>.js`
-- Exclude from upgrade suggestions: `copy-static.js`, `publish.sh` (SDK-only, not shipped to downstream projects)
+- Exclude from upgrade suggestions: `copy-static.js`, `publish.js`, `scripts/publish-README.md` (SDK-only, not shipped to downstream projects)
 
 For each changed script, describe what changed and whether downstream projects need to copy/update it, using the `node_modules/fa-mcp-sdk/scripts/...` path as the source.
 

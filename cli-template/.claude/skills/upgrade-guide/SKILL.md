@@ -260,11 +260,11 @@ For any other changed template file, the generated guide must include:
 ### 4.4 Analyze changes in scripts
 
 The CLI copies scripts from `node_modules/fa-mcp-sdk/scripts/` (NOT from `cli-template/scripts/`) into the project's 
-`scripts/` directory, and then removes `copy-static.js` and `publish.sh` (SDK-internal, not needed in downstream projects).
+`scripts/` directory, and then removes `copy-static.js`, `publish.js`, `scripts/publish-README.md` (SDK-internal, not needed in downstream projects).
 
 - Canonical source: `node_modules/fa-mcp-sdk/scripts/<name>.js`
 - Project destination: `scripts/<name>.js`
-- Exclude from upgrade suggestions: `copy-static.js`, `publish.sh` (SDK-only)
+- Exclude from upgrade suggestions: `copy-static.js`, `publish.js`, `scripts/publish-README.md` (SDK-only)
 
 The generated guide must specify the exact source path under `node_modules/fa-mcp-sdk/scripts/...` for any script the 
 user should copy into their project's `scripts/` directory, and skip the excluded SDK-only scripts.
