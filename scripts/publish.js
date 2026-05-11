@@ -47,7 +47,6 @@ function pause(msg = 'Press Enter to continue ...') {
 
 async function abort(msg) {
   console.error(`${c.r}${msg || '**** ERROR ****'}${c[0]}`);
-  await pause();
   process.exit(0);
 }
 
@@ -93,7 +92,6 @@ async function main() {
     console.log(
       `${c.y}**** git branch should be ${c.m}{${EXPECTED_BRANCH}}${c.y}, current: ${c.m}${branchName}${c.y} ****${c[0]}`,
     );
-    await pause();
     process.exit(0);
   }
 
@@ -123,7 +121,7 @@ async function main() {
   }
 
   run('npm publish');
-  await pause();
+  process.exit(0);
 }
 
 main();
