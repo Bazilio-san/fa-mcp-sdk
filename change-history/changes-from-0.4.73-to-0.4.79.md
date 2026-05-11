@@ -1,7 +1,7 @@
 # Changes: 0.4.73 → 0.4.76
 
 - **From commit:** `b59ff46` (v0.4.73)
-- **To commit:** `2406106` (v0.4.76)
+- **To commit:** `2c1b257` (v0.4.79)
 - **Generated:** 2026-05-10
 - **Commits in range:** 11
 
@@ -57,3 +57,6 @@ None — no `config/` files changed in this range.
 - `afa6c3d` docs: switch ESLint references to Oxlint/Oxfmt across CLAUDE.md, README.md, skills
 - `f2d2b95` chore: apply oxfmt formatting
 - `2406106` chore: remove oxlint-oxfmt-fix hooks and update settings to reference new script path
+- `5bfd0ca` 0.4.77
+- `d802560` chore: printWidth -> 120
+- `2c1b257` 0.4.79
