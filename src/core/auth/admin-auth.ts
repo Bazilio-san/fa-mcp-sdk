@@ -125,6 +125,25 @@ export function getAdminAuthMethods(): string[] {
 }
 
 /**
+ * Build an actionable 401 message: when the caller's credential clearly doesn't match any
+ * configured auth type (e.g. a JWT into a permanentServerTokens-only panel), say so explicitly
+ * instead of returning a generic "Authentication failed". `scheme` here is what
+ * `getTokenFromHttpHeader` returned — already 'jwtToken' for the fa-mcp-sdk 2-segment format
+ * `<13+digits>.<32+hex>`, 'basic' for Basic auth, or 'permanentServerTokens' otherwise.
+ */
+function buildAuthFailureMessage(scheme: string, allowedTypes: AdminAuthType[]): string {
+  const allowed = allowedTypes.length > 0 ? allowedTypes.join(', ') : 'none';
+
+  if (scheme === 'jwtToken' && !allowedTypes.includes('jwtToken')) {
+    return `Authentication failed: token has fa-mcp-sdk JWT format (timestamp.hex), but 'jwtToken' is not enabled in adminPanel.authType (configured: ${allowed}).`;
+  }
+  if (scheme === 'basic' && !allowedTypes.includes('basic')) {
+    return `Authentication failed: Basic auth is not enabled in adminPanel.authType (configured: ${allowed}).`;
+  }
+  return `Authentication failed. Admin panel accepts: ${allowed}.`;
+}
+
+/**
  * Try authenticating a request against a single auth type.
  * Returns auth result or null if this type doesn't match the request.
  */
@@ -241,7 +260,7 @@ export function createAdminAuthMW(): RequestHandler[] {
       }
 
       logger.debug('Admin auth failed: no matching auth type');
-      return sendAuthRequired(res, standardTypes, 'Authentication failed');
+      return sendAuthRequired(res, standardTypes, buildAuthFailureMessage(scheme || '', standardTypes));
     },
   ];
 }
@@ -270,5 +289,6 @@ function sendAuthRequired(res: Response, authTypes: AdminAuthType[], message?: s
   res.status(401).json({
     success: false,
     error: errorMessage,
+    allowedAuthTypes: authTypes,
   });
 }
