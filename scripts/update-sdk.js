@@ -131,3 +131,19 @@ for (const { name, src, dest, preserve = [], respectPin = false } of targets) {
     console.log(`${name} updated`);
   }
 }
+
+const scriptsSrcDir = join(cwd, './node_modules/fa-mcp-sdk/scripts');
+const scriptsDestDir = join(cwd, 'scripts');
+const individualScripts = ['generate-jwt.js'];
+
+for (const file of individualScripts) {
+  const src = join(scriptsSrcDir, file);
+  const dest = join(scriptsDestDir, file);
+  if (!existsSync(src)) {
+    console.error('Source not found:', src);
+    process.exit(1);
+  }
+  mkdirSync(dirname(dest), { recursive: true });
+  cpSync(src, dest);
+  console.log(`scripts/${file} updated`);
+}
