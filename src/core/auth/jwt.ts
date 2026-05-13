@@ -176,16 +176,24 @@ function checkStandardJwt(
     return { errorReason: 'JWT Token: missing subject' };
   }
   const expSec = typeof decoded.exp === 'number' ? decoded.exp : 0;
+  if (!expSec) {
+    return { isTokenDecrypted: true, errorReason: 'JWT Token: missing expiration' };
+  }
   const iatSec = typeof decoded.iat === 'number' ? decoded.iat : 0;
-  const aud = Array.isArray(decoded.aud) ? decoded.aud[0] : decoded.aud;
-  const audStr = typeof aud === 'string' ? aud : undefined;
+  const audValues = Array.isArray(decoded.aud)
+    ? decoded.aud.filter((value): value is string => typeof value === 'string' && !!trim(value))
+    : typeof decoded.aud === 'string' && trim(decoded.aud)
+      ? [decoded.aud]
+      : [];
+  const expectedService = arg.expectedService ?? appConfig.name;
+  const normalizedService = expectedService && audValues.includes(expectedService) ? expectedService : audValues[0];
 
   const payload: ITokenPayload = { user: sub, expire: expSec * 1000 };
   if (iatSec) {
     payload.iat = new Date(iatSec * 1000).toISOString();
   }
-  if (audStr) {
-    payload.service = audStr;
+  if (normalizedService) {
+    payload.service = normalizedService;
   }
   if (typeof decoded.iss === 'string') {
     payload.iss = decoded.iss;
@@ -218,11 +226,11 @@ function checkStandardJwt(
   }
 
   if (checkMCPName) {
-    const expectedService = arg.expectedService ?? appConfig.name;
-    if (expectedService && payload.service !== expectedService) {
+    const obtainedService = audValues.length > 1 ? audValues.join(', ') : payload.service;
+    if (expectedService && !audValues.includes(expectedService)) {
       return {
         isTokenDecrypted: true,
-        errorReason: `JWT Token: service not match :: Expected  '${expectedService}' / obtained from the token: '${payload.service}'`,
+        errorReason: `JWT Token: service not match :: Expected  '${expectedService}' / obtained from the token: '${obtainedService}'`,
       };
     }
   }

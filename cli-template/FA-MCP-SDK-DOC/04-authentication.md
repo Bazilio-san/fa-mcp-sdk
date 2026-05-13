@@ -388,7 +388,7 @@ curl -X POST http://localhost:3000/gen-jwt \
 ```json
 {
   "success": true,
-  "token": "1718000000000.a1b2c3...",
+  "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ0ZXN0dXNlciJ9.signature",
   "user": "testuser",
   "expire": "2025-07-10T12:00:00.000Z",
   "ttlSeconds": 2592000

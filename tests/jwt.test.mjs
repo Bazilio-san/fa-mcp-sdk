@@ -9,6 +9,8 @@ import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
 
+import jwt from 'jsonwebtoken';
+
 import {
   generateToken,
   checkJwtToken,
@@ -23,6 +25,16 @@ const __dirname = dirname(__filename);
 const REPO_ROOT = resolve(__dirname, '..');
 
 const expectedAud = appConfig.name;
+const jwtSecret = String(appConfig.webServer?.auth?.jwtToken?.encryptKey || '11111111-7777-8888-9999-000000000000');
+const jwtIssuer = appConfig.webServer?.auth?.jwtToken?.issuer;
+
+function signFixtureJwt(payload, options = {}) {
+  return jwt.sign(payload, jwtSecret, {
+    algorithm: 'HS256',
+    ...(jwtIssuer ? { issuer: jwtIssuer } : {}),
+    ...options,
+  });
+}
 
 // ===== 1. Standard JWT: generate → check → ok =====
 
@@ -82,7 +94,42 @@ const expectedAud = appConfig.name;
   }
 }
 
-// ===== 5. Malformed token → "The token is not a JWT" =====
+// ===== 5. Multi-audience standard JWT → ok when expected service is present =====
+
+{
+  const token = signFixtureJwt(
+    { role: 'operator' },
+    {
+      subject: 'dave',
+      audience: ['unexpected-audience', expectedAud],
+      expiresIn: 60,
+      jwtid: 'multi-aud-fixture',
+    },
+  );
+  const result = checkJwtToken({ token });
+  assert.ok(!result.errorReason, `expected no error, got: ${result.errorReason}`);
+  assert.strictEqual(result.payload?.service, expectedAud);
+  console.log('  ✅  multi-audience standard JWT accepted when expected service is present');
+}
+
+// ===== 6. Standard JWT without exp → rejected =====
+
+{
+  const token = signFixtureJwt(
+    { role: 'operator' },
+    {
+      subject: 'frank',
+      audience: expectedAud,
+      jwtid: 'missing-exp-fixture',
+    },
+  );
+  const result = checkJwtToken({ token });
+  assert.ok(result.errorReason, 'token without exp must fail');
+  assert.match(result.errorReason, /missing expiration/i, `expected missing-exp error: ${result.errorReason}`);
+  console.log('  ✅  standard JWT without exp rejected');
+}
+
+// ===== 7. Malformed token → "The token is not a JWT" =====
 
 {
   const result = checkJwtToken({ token: 'definitely-not-a-jwt' });
@@ -91,7 +138,7 @@ const expectedAud = appConfig.name;
   console.log('  ✅  malformed token rejected');
 }
 
-// ===== 6. Legacy token fixture → ok =====
+// ===== 8. Legacy token fixture → ok =====
 
 {
   // Build a legacy token using the same algorithm `checkLegacyJwt` accepts
@@ -111,7 +158,7 @@ const expectedAud = appConfig.name;
   console.log('  ✅  legacy token fixture accepted');
 }
 
-// ===== 7-9. Revocation scenarios — run in subprocess so NODE_CONFIG injection takes effect =====
+// ===== 9-11. Revocation scenarios — run in subprocess so NODE_CONFIG injection takes effect =====
 
 function runSubprocess(name, scenario) {
   const result = spawnSync(process.execPath, ['--input-type=module', '-e', scenario.code], {
@@ -124,6 +171,9 @@ function runSubprocess(name, scenario) {
   });
   if (result.status !== 0) {
     console.error(`  ❌  ${name} — subprocess failed (exit ${result.status})`);
+    if (result.error) {
+      console.error('     error:', result.error);
+    }
     console.error('     stdout:', result.stdout);
     console.error('     stderr:', result.stderr);
     process.exit(1);
@@ -198,7 +248,7 @@ assert.match(r.errorReason, /revoked/i, 'expected "revoked": ' + r.errorReason);
 `,
 });
 
-// ===== 10. IP check — denied =====
+// ===== 12. IP check — denied =====
 
 {
   // We need a token whose payload carries an `ip` field AND a config with isCheckIP=true.
@@ -231,7 +281,7 @@ assert.strictEqual(r.payload?.user, 'ip-user');
   });
 }
 
-// ===== 11. Bearer auth detection — permanent token shaped like JWT must not auto-classify =====
+// ===== 13. Bearer auth detection — permanent token shaped like JWT must not auto-classify =====
 
 {
   // Smoke-test getTokenFromHttpHeader: a "a.b.c"-shaped credential returns scheme='bearer', not jwt-specific.
