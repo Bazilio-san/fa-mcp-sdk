@@ -29,7 +29,7 @@
       <form id="tokenAuthForm">
         <div class="form-group">
           <label for="authTokenInput">Access Token:</label>
-          <textarea id="authTokenInput" name="authToken" rows="3" required
+          <textarea id="authTokenInput" name="authToken" rows="9" required
                     placeholder="Paste your JWT or server token here..."></textarea>
         </div>
         <div id="tokenAuthError" class="result error" style="display: none; margin-top: 12px; margin-bottom: 12px;"></div>
@@ -105,6 +105,12 @@
               Comma, semicolon or space separated. Supports CIDR notation.
               Leave empty to allow any IP.
             </small>
+          </div>
+          <div class="form-group">
+            <label class="checkbox-label">
+              <input type="checkbox" id="allowAdminPanel" name="allowAdminPanel" checked>
+              <span>Allow admin panel access (adds <code>allow: gen-token</code> claim)</span>
+            </label>
           </div>
           <div class="form-group">
             <label>Additional data (key-value):</label>

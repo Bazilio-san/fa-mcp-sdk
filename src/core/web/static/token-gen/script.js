@@ -520,6 +520,11 @@ document.getElementById('generateForm').addEventListener('submit', async (e) => 
     payload.ip = ipValue;
   }
 
+  const allowAdminEl = document.getElementById('allowAdminPanel');
+  if (allowAdminEl && allowAdminEl.checked) {
+    payload.allow = 'gen-token';
+  }
+
   const requestData = {
     user: formData.get('user'),
     timeValue: parseInt(formData.get('timeValue')),

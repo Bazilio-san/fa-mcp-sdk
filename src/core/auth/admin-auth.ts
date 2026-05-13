@@ -242,10 +242,16 @@ export function createAdminAuthMW(): RequestHandler[] {
         return sendAuthRequired(res, standardTypes);
       }
 
-      // Try each configured auth type in order
+      // Try each configured auth type in order; collect per-type errors so the
+      // user sees the most relevant reason (JWT-specific for JWT-shaped tokens,
+      // Basic-specific for basic-scheme requests) instead of a generic 401.
+      const errors: Partial<Record<AdminAuthType, string>> = {};
       for (const authType of standardTypes) {
         const result = tryAuthType(authType, scheme || '', credentials);
-        if (result && result.success) {
+        if (!result) {
+          continue;
+        }
+        if (result.success) {
           req.ntlm = {
             isAuthenticated: true,
             username: result.username || 'Authenticated',
@@ -256,10 +262,25 @@ export function createAdminAuthMW(): RequestHandler[] {
           }
           return next();
         }
+        if (result.error) {
+          errors[authType] = result.error;
+        }
       }
 
-      logger.debug('Admin auth failed: no matching auth type');
-      return sendAuthRequired(res, standardTypes, buildAuthFailureMessage(scheme || '', !!looksLikeJwt, standardTypes));
+      // Pick the most relevant error: JWT error when token looks like JWT,
+      // basic error for basic scheme, otherwise fall back to a generic message.
+      let specificError: string | undefined;
+      if (looksLikeJwt && errors.jwtToken) {
+        specificError = errors.jwtToken;
+      } else if (scheme === 'basic' && errors.basic) {
+        specificError = errors.basic;
+      } else if (errors.permanentServerTokens) {
+        specificError = errors.permanentServerTokens;
+      }
+
+      logger.debug(`Admin auth failed: ${specificError || 'no matching auth type'}`);
+      const message = specificError || buildAuthFailureMessage(scheme || '', !!looksLikeJwt, standardTypes);
+      return sendAuthRequired(res, standardTypes, message);
     },
   ];
 }
