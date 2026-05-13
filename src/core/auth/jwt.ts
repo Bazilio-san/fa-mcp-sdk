@@ -2,13 +2,14 @@
 import crypto from 'crypto';
 
 import chalk from 'chalk';
+import jwt, { JwtPayload, SignOptions, VerifyOptions } from 'jsonwebtoken';
 
 import { appConfig } from '../bootstrap/init-config.js';
 import { logger as lgr } from '../logger.js';
 import { isObject, trim } from '../utils/utils.js';
 
 import { parseIpList, isIpAllowed } from './ip-check.js';
-import { isJwtTokenRevoked, isUserRevoked } from './revocation.js';
+import { isJtiRevoked, isJwtTokenRevoked, isUserRevoked } from './revocation.js';
 import { ICheckTokenResult, ITokenPayload } from './types.js';
 
 const logger = lgr.getSubLogger({ name: chalk.cyan('token-auth') });
@@ -16,72 +17,97 @@ const logger = lgr.getSubLogger({ name: chalk.cyan('token-auth') });
 const { jwtToken } = appConfig.webServer?.auth || {};
 const checkMCPName = jwtToken?.checkMCPName || false;
 const isCheckIP = jwtToken?.isCheckIP || false;
+const configuredIssuer = trim(jwtToken?.issuer);
 
 export const MIN_ENCRYPT_KEY_LENGTH = 8;
 
-const ALGORITHM = 'aes-256-ctr';
-const KEY = crypto
-  .createHash('sha256')
-  .update(String(jwtToken?.encryptKey || '11111111-7777-8888-9999-000000000000'))
-  .digest('base64')
-  .substring(0, 32);
+const ENCRYPT_KEY = String(jwtToken?.encryptKey || '11111111-7777-8888-9999-000000000000');
 
-export const jwtTokenRE = /^(\d{13,})\.([\da-fA-F]{32,})$/;
+// Legacy AES-256-CTR — used ONLY to read tokens issued before the migration to standard JWT.
+const LEGACY_ALGORITHM = 'aes-256-ctr';
+const LEGACY_KEY = crypto.createHash('sha256').update(ENCRYPT_KEY).digest('base64').substring(0, 32);
+
+export const legacyJwtRE = /^(\d{13,})\.([\da-fA-F]{32,})$/;
+export const standardJwtRE = /^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/;
+// "Looks like JWT" helper (either legacy or standard). Not used as the only criterion for auth routing.
+export const jwtTokenRE = /^(?:\d{13,}\.[\da-fA-F]{32,}|[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+)$/;
+
+const STANDARD_CLAIMS = new Set(['user', 'expire', 'iat', 'service', 'iss', 'sub', 'aud', 'exp', 'jti']);
 
 /**
- * Encrypts the transmitted text with a symmetric key taken from the config
+ * Legacy: encrypts text with the symmetric key from config.
+ * Retained ONLY for backward-compatible reading of pre-migration tokens.
  */
 export const encrypt = (text: string): string => {
   const buffer = Buffer.from(text);
-  // Create an initialization vector
   const iv = crypto.randomBytes(16);
-  // Create a new cipher using the algorithm, key, and iv
-  const cipher = crypto.createCipheriv(ALGORITHM, KEY, iv);
-  // Create the new (encrypted) buffer
+  const cipher = crypto.createCipheriv(LEGACY_ALGORITHM, LEGACY_KEY, iv);
   const encryptedBuf = Buffer.concat([iv, cipher.update(buffer), cipher.final()]);
   return encryptedBuf.toString('hex');
 };
 
 /**
- * Decrypts the transmitted text with a symmetric key taken from the config
+ * Legacy: decrypts text with the symmetric key from config.
+ * Retained ONLY for backward-compatible reading of pre-migration tokens.
  */
 export const decrypt = (encryptedStr: string) => {
   const encryptedByf = Buffer.from(encryptedStr, 'hex');
-  // Get the iv: the first 16 bytes
   const iv2 = encryptedByf.subarray(0, 16);
-  // Get the rest
   const restBuf = encryptedByf.subarray(16);
-  // Create decipher
-  const decipher = crypto.createDecipheriv(ALGORITHM, KEY, iv2);
-  // Actually decrypt it
+  const decipher = crypto.createDecipheriv(LEGACY_ALGORITHM, LEGACY_KEY, iv2);
   const decryptedBuf = Buffer.concat([decipher.update(restBuf), decipher.final()]);
   return decryptedBuf.toString();
 };
 
 /**
- * Creates a token by encrypting the username and expiration time.
- * To determine the expiration time in the JB form script, at the beginning of the token
- * deprecation timestamp is added
+ * Generates a standard signed JWT (HS256).
+ * - `user` becomes `sub`
+ * - `service` becomes `aud`
+ * - `expire` becomes `exp`
+ * - `jti` is auto-generated via crypto.randomUUID()
+ * - other payload keys are written as private claims
+ * - `iss` is added only when webServer.auth.jwtToken.issuer is configured
  */
 export const generateToken = (user: string, liveTimeSec: number, payload?: any): string => {
   user = trim(user).toLowerCase();
   if (!user) {
     throw new Error('generateToken: Username is empty');
   }
-  const expire = Date.now() + liveTimeSec * 1000;
-  const issuedAt = new Date().toISOString();
-  payload = isObject(payload) ? payload : {};
-  payload.user = user;
-  payload.expire = expire;
-  payload.iat = issuedAt;
-  return `${expire}.${encrypt(JSON.stringify(payload))}`;
+  const inputPayload = isObject(payload) ? { ...payload } : {};
+
+  // Extract reserved fields and drop them from the private claims
+  const service = trim(inputPayload.service) || undefined;
+  delete inputPayload.user;
+  delete inputPayload.expire;
+  delete inputPayload.iat;
+  delete inputPayload.service;
+  delete inputPayload.sub;
+  delete inputPayload.aud;
+  delete inputPayload.exp;
+  delete inputPayload.iss;
+  delete inputPayload.jti;
+
+  const signOptions: SignOptions = {
+    algorithm: 'HS256',
+    subject: user,
+    expiresIn: liveTimeSec,
+    jwtid: crypto.randomUUID(),
+  };
+  if (service) {
+    signOptions.audience = service;
+  }
+  if (configuredIssuer) {
+    signOptions.issuer = configuredIssuer;
+  }
+  return jwt.sign(inputPayload, ENCRYPT_KEY, signOptions);
 };
 
 /**
- * Checks the validity of the token:
- * - Token to be decrypted
- * - the obsolescence time must not be expired
- * - If a user is transferred, it must match
+ * Verifies a token.
+ * Routes by format:
+ *   - `header.payload.signature` → standard JWT verification
+ *   - `<expire_ms>.<hex>` → legacy AES-256-CTR fallback
+ * Returns a normalized `ITokenPayload`.
  */
 export const checkJwtToken = (arg: {
   token: string;
@@ -89,14 +115,136 @@ export const checkJwtToken = (arg: {
   expectedService?: string;
   clientIp?: string;
 }): ICheckTokenResult => {
-  let { token, expectedUser, expectedService = appConfig.name, clientIp } = arg;
-  token = (token || '').trim();
+  const token = trim(arg.token);
   if (!token) {
     return { errorReason: 'Token not passed' };
   }
+  if (standardJwtRE.test(token)) {
+    return checkStandardJwt(token, arg);
+  }
+  if (legacyJwtRE.test(token)) {
+    return checkLegacyJwt(token, arg);
+  }
+  return { errorReason: 'The token is not a JWT' };
+};
 
-  const [, expirePartStr, encryptedPayload] = jwtTokenRE.exec(token) || [];
+function checkStandardJwt(
+  token: string,
+  arg: { expectedUser?: string; expectedService?: string; clientIp?: string },
+): ICheckTokenResult {
+  // Exact-match revoke against the full token string (works for legacy revoke records too)
+  if (isJwtTokenRevoked(token)) {
+    return { errorReason: 'JWT Token has been revoked' };
+  }
 
+  let decoded: JwtPayload;
+  try {
+    const verifyOptions: VerifyOptions = { algorithms: ['HS256'] };
+    if (configuredIssuer) {
+      verifyOptions.issuer = configuredIssuer;
+    }
+    const result = jwt.verify(token, ENCRYPT_KEY, verifyOptions);
+    if (typeof result === 'string') {
+      return { errorReason: 'The token is not a JWT' };
+    }
+    decoded = result;
+  } catch (err: Error | any) {
+    if (err?.name === 'TokenExpiredError') {
+      const expiredAt = err.expiredAt instanceof Date ? err.expiredAt.getTime() : 0;
+      const expiredOn = expiredAt ? Date.now() - expiredAt : 0;
+      return {
+        isTokenDecrypted: true,
+        errorReason: expiredOn > 0 ? `JWT Token expired :: on ${expiredOn} mc` : 'JWT Token expired',
+      };
+    }
+    if (err?.name === 'JsonWebTokenError') {
+      if (typeof err.message === 'string' && err.message.toLowerCase().includes('signature')) {
+        return { errorReason: 'Invalid signature' };
+      }
+      if (typeof err.message === 'string' && err.message.toLowerCase().includes('issuer')) {
+        return { errorReason: `JWT Token: ${err.message}` };
+      }
+      return { errorReason: 'The token is not a JWT' };
+    }
+    logger.error(err);
+    return { errorReason: `Error verifying JWT token :: ${err?.message ?? 'unknown error'}` };
+  }
+
+  // Normalize to ITokenPayload shape
+  const sub = typeof decoded.sub === 'string' ? decoded.sub : '';
+  if (!sub) {
+    return { errorReason: 'JWT Token: missing subject' };
+  }
+  const expSec = typeof decoded.exp === 'number' ? decoded.exp : 0;
+  const iatSec = typeof decoded.iat === 'number' ? decoded.iat : 0;
+  const aud = Array.isArray(decoded.aud) ? decoded.aud[0] : decoded.aud;
+  const audStr = typeof aud === 'string' ? aud : undefined;
+
+  const payload: ITokenPayload = { user: sub, expire: expSec * 1000 };
+  if (iatSec) {
+    payload.iat = new Date(iatSec * 1000).toISOString();
+  }
+  if (audStr) {
+    payload.service = audStr;
+  }
+  if (typeof decoded.iss === 'string') {
+    payload.iss = decoded.iss;
+  }
+  if (typeof decoded.jti === 'string') {
+    payload.jti = decoded.jti;
+  }
+  // copy private claims (everything not in STANDARD_CLAIMS)
+  for (const [k, v] of Object.entries(decoded)) {
+    if (!STANDARD_CLAIMS.has(k)) {
+      payload[k] = v;
+    }
+  }
+
+  // Revoke by jti
+  if (payload.jti && isJtiRevoked(payload.jti)) {
+    return { isTokenDecrypted: true, errorReason: 'JWT Token has been revoked' };
+  }
+
+  if (isUserRevoked(payload.user)) {
+    return { isTokenDecrypted: true, errorReason: `JWT Token: user '${payload.user}' has been revoked` };
+  }
+
+  const expectedUser = trim(arg.expectedUser).toLowerCase();
+  if (expectedUser && payload.user !== expectedUser) {
+    return {
+      isTokenDecrypted: true,
+      errorReason: `JWT Token: user not match :: Expected  '${expectedUser}' / obtained from the token: '${payload.user}'`,
+    };
+  }
+
+  if (checkMCPName) {
+    const expectedService = arg.expectedService ?? appConfig.name;
+    if (expectedService && payload.service !== expectedService) {
+      return {
+        isTokenDecrypted: true,
+        errorReason: `JWT Token: service not match :: Expected  '${expectedService}' / obtained from the token: '${payload.service}'`,
+      };
+    }
+  }
+
+  if (isCheckIP && payload.ip && arg.clientIp) {
+    const allowedIps = parseIpList(payload.ip);
+    if (allowedIps.length > 0 && !isIpAllowed(arg.clientIp, allowedIps)) {
+      return {
+        isTokenDecrypted: true,
+        errorReason: `JWT Token: client IP ${arg.clientIp} is not in the allowed list`,
+      };
+    }
+  }
+
+  return { payload };
+}
+
+function checkLegacyJwt(
+  token: string,
+  arg: { expectedUser?: string; expectedService?: string; clientIp?: string },
+): ICheckTokenResult {
+  const [, expirePartStr, encryptedPayload] = legacyJwtRE.exec(token) || [];
   if (!expirePartStr || !encryptedPayload) {
     return { errorReason: 'The token is not a JWT' };
   }
@@ -130,7 +278,7 @@ export const checkJwtToken = (arg: {
     };
   }
 
-  expectedUser = trim(expectedUser).toLowerCase();
+  const expectedUser = trim(arg.expectedUser).toLowerCase();
   if (expectedUser && payload.user !== expectedUser) {
     return {
       isTokenDecrypted: true,
@@ -139,6 +287,7 @@ export const checkJwtToken = (arg: {
   }
 
   if (checkMCPName) {
+    const expectedService = arg.expectedService ?? appConfig.name;
     if (expectedService && payload.service !== expectedService) {
       return {
         isTokenDecrypted: true,
@@ -146,30 +295,25 @@ export const checkJwtToken = (arg: {
       };
     }
   }
-  let expire = Number(expirePartStr) || 0;
 
+  const expire = Number(expirePartStr) || 0;
   const expiredOn = Date.now() - expire;
   if (expiredOn > 0) {
-    // Token deprecated
     return {
       isTokenDecrypted: true,
       errorReason: `JWT Token expired :: on ${expiredOn} mc`,
     };
   }
 
-  // IP check (after all other validations pass)
-  if (isCheckIP && payload.ip) {
-    if (clientIp) {
-      const allowedIps = parseIpList(payload.ip);
-      if (allowedIps.length > 0 && !isIpAllowed(clientIp, allowedIps)) {
-        return {
-          isTokenDecrypted: true,
-          errorReason: `JWT Token: client IP ${clientIp} is not in the allowed list`,
-        };
-      }
+  if (isCheckIP && payload.ip && arg.clientIp) {
+    const allowedIps = parseIpList(payload.ip);
+    if (allowedIps.length > 0 && !isIpAllowed(arg.clientIp, allowedIps)) {
+      return {
+        isTokenDecrypted: true,
+        errorReason: `JWT Token: client IP ${arg.clientIp} is not in the allowed list`,
+      };
     }
   }
 
-  // OK!
   return { payload };
-};
+}

@@ -22,11 +22,12 @@ interface IWebServerConfig {
         encryptKey: string;
         checkMCPName: boolean;
         isCheckIP: boolean;
+        issuer?: string;
       };
       permanentServerTokens: string[];
       //> Revocation lists — never accepted by MCP, Admin or Agent Tester
       revoked?: {
-        //> Revoked JWT tokens. Each entry: { token, note? }
+        //> Revoked JWT entries. `token` may be a full token string (legacy or exact JWT) or a `jti` value.
         jwtTokens?: Array<{ token: string; note?: string }>;
         //> Revoked usernames matched against JWT payload.user (case-insensitive)
         users?: string[];

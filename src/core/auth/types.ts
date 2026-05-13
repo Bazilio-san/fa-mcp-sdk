@@ -6,7 +6,12 @@ export type TTokenType = 'permanent' | 'JWT';
 
 export interface ITokenPayload {
   user: string;
-  expire: number;
+  expire: number; // ms
+  iat?: string; // normalized ISO string for backward compatibility
+  service?: string; // normalized aud
+  jti?: string;
+  iss?: string;
+  ip?: string;
 
   [key: string]: any;
 }

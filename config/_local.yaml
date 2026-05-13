@@ -304,21 +304,25 @@ webServer:
     permanentServerTokens: [ ]
 
     #> ========================================================================
-    #> JWT TOKEN WITH SYMMETRIC ENCRYPTION
-    #> Custom JWT tokens with AES-256 encryption
-    #> CPU cost: Medium — decryption + JSON parsing
+    #> JWT TOKEN — standard signed JWT (HS256)
+    #> Tokens issued by this SDK are standard 3-segment JWTs `header.payload.signature`.
+    #> The verifier also temporarily accepts pre-migration legacy tokens
+    #> (`<expire_ms>.<hex>` AES-256-CTR format) for backward compatibility.
+    #> CPU cost: Medium — signature verification + JSON parsing
     #>
     #> To enable this authentication, you need to set auth.enabled = true and set
-    #> encryptKey to at least 20 characters
+    #> encryptKey to at least 8 characters (used as the HS256 signing secret).
     #> ========================================================================
     jwtToken:
-      #> Symmetric encryption key to generate a token for this MCP (minimum 8 chars)
+      #> HS256 signing secret used to sign/verify tokens for this MCP (minimum 8 chars)
       encryptKey: '{{webServer.auth.token.encryptKey}}'
       #> If webServer.auth.enabled and the parameter true, the service name and the service specified in the token will be checked
       checkMCPName: {{webServer.auth.token.checkMCPName}}
       #> If true and JWT token contains non-empty 'ip' field,
       #> the client IP will be checked against the allowed list in the token
       isCheckIP: false
+      #> Optional JWT `iss` claim. When non-empty, the generator stamps it and the verifier requires it.
+      issuer: ''
 
     #> ========================================================================
     #> Basic Authentication — Base64 encoded username:password
@@ -338,7 +342,10 @@ webServer:
     #> MCP endpoints, Admin panel, and Agent Tester.
     #> ========================================================================
     revoked:
-      #> Revoked JWT tokens. Each entry: { token: '<jwt>', note?: '<reason>' }
+      #> Revoked JWT entries. Each entry: { token: '<value>', note?: '<reason>' }.
+      #> `token` may be:
+      #>   - a full token string (legacy `<expire>.<hex>` or exact standard JWT `a.b.c`)
+      #>   - a standard JWT ID (`jti`) — preferred for revoking standard JWTs
       jwtTokens: [ ]
       #> Revoked usernames matched against JWT payload.user (case-insensitive)
       users: [ ]

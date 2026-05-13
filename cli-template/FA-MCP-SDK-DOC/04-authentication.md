@@ -74,8 +74,8 @@ For `ntlm` — uses AD configuration from `ad.domains` section.
 
 When `jwtToken` is used to authenticate into the admin panel (`/admin`), the decoded
 payload **must** contain `allow: 'gen-token'`. Any JWT without this claim is rejected
-with `401` even if it decrypts and is not expired. This prevents short-lived JWTs
-issued for other purposes (e.g. the Agent Tester page auto-fills a JWT into its
+with `401` even if its signature verifies and it is not expired. This prevents short-lived
+JWTs issued for other purposes (e.g. the Agent Tester page auto-fills a JWT into its
 `Authorization` header — TTL is configurable via `agentTester.tokenTTLSec`, default
 30 min) from being replayed against `/admin` to mint arbitrary long-lived tokens.
 
@@ -311,7 +311,7 @@ node scripts/generate-jwt.js -u <username> -ttl <duration> [-s <service>] [-p <p
 | `-s`, `--service-name` | `JWT_PAYLOAD_SERVICE_NAME` | Service name (optional) |
 | `-p`, `--params` | `JWT_PAYLOAD_PARAMS` | Extra payload `key=value;key=value` (optional) |
 
-The `encryptKey` is read from config `webServer.auth.jwtToken.encryptKey` (via `config/local.yaml` or ENV `WS_TOKEN_ENCRYPT_KEY`).
+The HS256 signing secret is read from config `webServer.auth.jwtToken.encryptKey` (via `config/local.yaml` or ENV `WS_TOKEN_ENCRYPT_KEY`). Generated tokens are standard 3-segment JWTs.
 
 **Examples:**
 

@@ -125,17 +125,16 @@ export function getAdminAuthMethods(): string[] {
 }
 
 /**
- * Build an actionable 401 message: when the caller's credential clearly doesn't match any
- * configured auth type (e.g. a JWT into a permanentServerTokens-only panel), say so explicitly
- * instead of returning a generic "Authentication failed". `scheme` here is what
- * `getTokenFromHttpHeader` returned — already 'jwtToken' for the fa-mcp-sdk 2-segment format
- * `<13+digits>.<32+hex>`, 'basic' for Basic auth, or 'permanentServerTokens' otherwise.
+ * Build an actionable 401 message. `scheme` here is what `getTokenFromHttpHeader` returned:
+ * 'basic' for Basic auth, 'bearer' for anything else. `looksLikeJwt` indicates the bearer
+ * credential matches a known JWT format (legacy `<expire>.<hex>` or standard `a.b.c`) — but
+ * since permanent tokens may also contain dots, this is only a hint for diagnostics.
  */
-function buildAuthFailureMessage(scheme: string, allowedTypes: AdminAuthType[]): string {
+function buildAuthFailureMessage(scheme: string, looksLikeJwt: boolean, allowedTypes: AdminAuthType[]): string {
   const allowed = allowedTypes.length > 0 ? allowedTypes.join(', ') : 'none';
 
-  if (scheme === 'jwtToken' && !allowedTypes.includes('jwtToken')) {
-    return `Authentication failed: token has fa-mcp-sdk JWT format (timestamp.hex), but 'jwtToken' is not enabled in adminPanel.authType (configured: ${allowed}).`;
+  if (scheme === 'bearer' && looksLikeJwt && !allowedTypes.includes('jwtToken')) {
+    return `Authentication failed: token looks like a JWT, but 'jwtToken' is not enabled in adminPanel.authType (configured: ${allowed}).`;
   }
   if (scheme === 'basic' && !allowedTypes.includes('basic')) {
     return `Authentication failed: Basic auth is not enabled in adminPanel.authType (configured: ${allowed}).`;
@@ -236,7 +235,7 @@ export function createAdminAuthMW(): RequestHandler[] {
         domain: 'Unknown',
       };
 
-      const { scheme, credentials } = getTokenFromHttpHeader(req);
+      const { scheme, credentials, looksLikeJwt } = getTokenFromHttpHeader(req);
 
       // If no credentials provided, request authentication
       if (!credentials) {
@@ -260,7 +259,7 @@ export function createAdminAuthMW(): RequestHandler[] {
       }
 
       logger.debug('Admin auth failed: no matching auth type');
-      return sendAuthRequired(res, standardTypes, buildAuthFailureMessage(scheme || '', standardTypes));
+      return sendAuthRequired(res, standardTypes, buildAuthFailureMessage(scheme || '', !!looksLikeJwt, standardTypes));
     },
   ];
 }

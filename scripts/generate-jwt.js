@@ -11,7 +11,8 @@
  *   -s,   --service-name   Service name (optional). ENV: JWT_PAYLOAD_SERVICE_NAME
  *   -p,   --params         Extra payload "key=value;key=value" (optional). ENV: JWT_PAYLOAD_PARAMS
  *
- * The encryptKey is read from config: webServer.auth.jwtToken.encryptKey
+ * The signing secret is read from config: webServer.auth.jwtToken.encryptKey
+ * Token format: standard signed JWT (HS256), 3 segments header.payload.signature.
  */
 
 import crypto from 'crypto';
@@ -19,6 +20,7 @@ import { readFileSync } from 'fs';
 import { fileURLToPath } from 'url';
 import { dirname, resolve } from 'path';
 import configModule from 'config';
+import jwt from 'jsonwebtoken';
 
 // ── CLI argument parsing ────────────────────────────────────────────
 
@@ -81,17 +83,11 @@ if (!encryptKey || String(encryptKey).trim() === '' || encryptKey === '***') {
   process.exit(1);
 }
 
-// ── Encryption (mirrors src/core/auth/jwt.ts) ───────────────────────
-
-const ALGORITHM = 'aes-256-ctr';
-const KEY = crypto.createHash('sha256').update(String(encryptKey)).digest('base64').substring(0, 32);
-
-function encrypt(text) {
-  const buffer = Buffer.from(text);
-  const iv = crypto.randomBytes(16);
-  const cipher = crypto.createCipheriv(ALGORITHM, KEY, iv);
-  const encryptedBuf = Buffer.concat([iv, cipher.update(buffer), cipher.final()]);
-  return encryptedBuf.toString('hex');
+let configuredIssuer = '';
+try {
+  configuredIssuer = String(configModule.get('webServer.auth.jwtToken.issuer') || '').trim();
+} catch {
+  // optional field, ignore
 }
 
 // ── Auto-detect service name if checkMCPName is enabled ─────────────
@@ -126,14 +122,9 @@ if (!effectiveService || !effectiveService.trim()) {
   }
 }
 
-// ── Build payload ───────────────────────────────────────────────────
+// ── Build payload (private claims only) ─────────────────────────────
 
-const payload = {};
-payload.user = username.trim().toLowerCase();
-
-if (effectiveService && effectiveService.trim()) {
-  payload.service = effectiveService.trim();
-}
+const privateClaims = {};
 
 // Parse extra params: "key1=value1;key2=value2"
 if (paramsRaw && paramsRaw.trim()) {
@@ -150,32 +141,67 @@ if (paramsRaw && paramsRaw.trim()) {
       console.error(`Error: empty key in param "${pair}"`);
       process.exit(1);
     }
-    payload[key] = value;
+    // Skip reserved fields if user accidentally passes them
+    if (['user', 'expire', 'iat', 'service', 'sub', 'aud', 'exp', 'iss', 'jti'].includes(key)) {
+      continue;
+    }
+    privateClaims[key] = value;
   }
 }
 
-const expire = Date.now() + liveTimeSec * 1000;
-payload.expire = expire;
-payload.iat = new Date().toISOString();
-
 // ── Generate token ──────────────────────────────────────────────────
 
-const token = `${expire}.${encrypt(JSON.stringify(payload))}`;
+const normalizedUser = username.trim().toLowerCase();
+const signOptions = {
+  algorithm: 'HS256',
+  subject: normalizedUser,
+  expiresIn: liveTimeSec,
+  jwtid: crypto.randomUUID(),
+};
+if (effectiveService && effectiveService.trim()) {
+  signOptions.audience = effectiveService.trim();
+}
+if (configuredIssuer) {
+  signOptions.issuer = configuredIssuer;
+}
+
+const token = jwt.sign(privateClaims, String(encryptKey), signOptions);
+
+// ── Decode for display (normalized payload, mirrors checkJwtToken) ──
+
+const decoded = jwt.decode(token, { json: true }) || {};
+const expireMs = (decoded.exp || 0) * 1000;
+const iatIso = decoded.iat ? new Date(decoded.iat * 1000).toISOString() : new Date().toISOString();
+
+const displayPayload = { user: normalizedUser };
+if (decoded.aud) {
+  displayPayload.service = Array.isArray(decoded.aud) ? decoded.aud[0] : decoded.aud;
+}
+displayPayload.expire = expireMs;
+displayPayload.iat = iatIso;
+if (decoded.jti) {
+  displayPayload.jti = decoded.jti;
+}
+if (decoded.iss) {
+  displayPayload.iss = decoded.iss;
+}
+for (const [k, v] of Object.entries(privateClaims)) {
+  displayPayload[k] = v;
+}
 
 console.log('');
 console.log('JWT Token generated successfully');
 console.log('─'.repeat(50));
-console.log(`  User:      ${payload.user}`);
-if (payload.service) {
-  console.log(`  Service:   ${payload.service}`);
+console.log(`  User:      ${displayPayload.user}`);
+if (displayPayload.service) {
+  console.log(`  Service:   ${displayPayload.service}`);
 }
 console.log(`  TTL:       ${ttlRaw} (${liveTimeSec} seconds)`);
-console.log(`  Expires:   ${new Date(expire).toISOString()}`);
-if (Object.keys(payload).filter((k) => !['user', 'service', 'expire', 'iat'].includes(k)).length) {
-  const extra = Object.entries(payload)
-    .filter(([k]) => !['user', 'service', 'expire', 'iat'].includes(k))
-    .map(([k, v]) => `${k}=${v}`)
-    .join('; ');
+console.log(`  Expires:   ${new Date(expireMs).toISOString()}`);
+console.log(`  JTI:       ${displayPayload.jti || ''}`);
+const extraEntries = Object.entries(privateClaims);
+if (extraEntries.length) {
+  const extra = extraEntries.map(([k, v]) => `${k}=${v}`).join('; ');
   console.log(`  Params:    ${extra}`);
 }
 console.log('─'.repeat(50));
@@ -183,5 +209,5 @@ console.log('');
 console.log(token);
 console.log('');
 console.log('__PAYLOAD_JSON__');
-console.log(JSON.stringify({ ...payload, ttl: ttlRaw, expire_iso: new Date(expire).toISOString() }));
+console.log(JSON.stringify({ ...displayPayload, ttl: ttlRaw, expire_iso: new Date(expireMs).toISOString() }));
 console.log('__END_PAYLOAD_JSON__');

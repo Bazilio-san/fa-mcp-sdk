@@ -36,8 +36,12 @@ const authOrder = {
   custom: 4,
 };
 
+export type AuthScheme = 'basic' | 'bearer';
+
 const schemaRe = /^([^ ]+) +(.+)$/;
-export const getTokenFromHttpHeader = (req: Request): { scheme?: AuthType; credentials?: string } => {
+export const getTokenFromHttpHeader = (
+  req: Request,
+): { scheme?: AuthScheme; credentials?: string; looksLikeJwt?: boolean } => {
   const a = trim(req.headers.authorization);
   if (!a) {
     return {};
@@ -50,10 +54,7 @@ export const getTokenFromHttpHeader = (req: Request): { scheme?: AuthType; crede
   if (scheme.toLowerCase() === 'basic') {
     return { scheme: 'basic', credentials };
   }
-  if (jwtTokenRE.test(credentials)) {
-    return { scheme: 'jwtToken', credentials };
-  }
-  return { scheme: 'permanentServerTokens', credentials };
+  return { scheme: 'bearer', credentials, looksLikeJwt: jwtTokenRE.test(credentials) };
 };
 
 /**
@@ -177,59 +178,70 @@ export async function checkMultiAuth(req: Request): Promise<AuthResult> {
     }
   }
 
-  const { scheme: authType, credentials } = getTokenFromHttpHeader(req);
+  const { scheme, credentials } = getTokenFromHttpHeader(req);
   if (!credentials) {
     return { success: false, error: `${E_PFX}credentials not provided` };
   }
-  if (!authType) {
-    return { success: false, error: `${E_PFX}Cannot detect auth type from Authorization header` };
+  if (!scheme) {
+    return { success: false, error: `${E_PFX}Cannot detect auth scheme from Authorization header` };
   }
   logger.debug(`Checking auth types: ${configuredTypes}`);
 
-  if (!configuredSet.has(authType)) {
-    return { success: false, error: `${E_PFX}Detected in Authorisation header auth type ${authType} not configured` };
-  }
-
   let errorResult: AuthResult | undefined = undefined;
   try {
-    switch (authType) {
-      case 'permanentServerTokens': {
+    if (scheme === 'basic') {
+      if (!configuredSet.has('basic')) {
+        return {
+          success: false,
+          error: `${E_PFX}Detected Basic auth in Authorization header, but 'basic' is not configured`,
+        };
+      }
+      const result = checkBasicAuth(credentials);
+      if (result.success) {
+        return { ...result, authType: 'basic', payload: { user: result.username! } };
+      }
+      errorResult = { ...result, authType: 'basic' };
+    } else {
+      // Bearer / non-Basic: try permanent tokens first (O(1)), then JWT.
+      // Permanent tokens can contain dots, so we never classify purely by shape.
+      let permError: string | undefined;
+      let jwtErrorResult: AuthResult | undefined;
+
+      if (configuredSet.has('permanentServerTokens')) {
         const { errorReason } = checkPermanentToken(credentials);
         if (!errorReason) {
-          return { success: true, authType };
+          return { success: true, authType: 'permanentServerTokens' };
         }
-        errorResult = { success: false, authType, error: `${E_PFX}${errorReason}` };
-        break;
+        permError = errorReason;
       }
 
-      case 'basic': {
-        const result = checkBasicAuth(credentials);
-        if (result.success) {
-          // For basic auth, create payload with user property
-          return { ...result, authType, payload: { user: result.username! } };
-        }
-        errorResult = { ...result, authType };
-        break;
-      }
-
-      case 'jwtToken': {
+      if (configuredSet.has('jwtToken')) {
         const xff = req.headers['x-forwarded-for'];
         const xffStr = (Array.isArray(xff) ? (xff[0] ?? '') : (xff ?? '')).split(',').shift() ?? '';
         const clientIp = req.ip ?? (xffStr.trim() || (req.socket?.remoteAddress ?? ''));
         const { errorReason, payload, isTokenDecrypted } = checkJwtToken({ token: credentials, clientIp });
         if (!errorReason) {
-          return { success: true, authType, payload };
+          return { success: true, authType: 'jwtToken', payload };
         }
-        errorResult = { success: false, error: `${E_PFX}${errorReason}`, authType, isTokenDecrypted };
-        break;
+        jwtErrorResult = { success: false, error: `${E_PFX}${errorReason}`, authType: 'jwtToken', isTokenDecrypted };
       }
 
-      default:
-        errorResult = { success: false, error: `${E_PFX}Unknown auth type: ${authType}` };
+      // Prefer the JWT-specific error (it's more informative for malformed/expired JWTs).
+      // Fall back to the permanent token error if JWT wasn't configured/attempted.
+      if (jwtErrorResult) {
+        errorResult = jwtErrorResult;
+      } else if (permError) {
+        errorResult = { success: false, authType: 'permanentServerTokens', error: `${E_PFX}${permError}` };
+      } else {
+        errorResult = {
+          success: false,
+          error: `${E_PFX}No bearer auth method is configured (need permanentServerTokens or jwtToken)`,
+        };
+      }
     }
   } catch (error: Error | any) {
     logger.warn(
-      `Auth type ${authType} failed with exception:`,
+      `Auth scheme ${scheme} failed with exception:`,
       error instanceof Error ? E_PFX + error.message : 'Unknown error',
     );
   }

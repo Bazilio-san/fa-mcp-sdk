@@ -130,7 +130,7 @@ When `useAuth` is `true`, a successful browser login creates a server-side sessi
 
 When the MCP server requires authentication (`webServer.auth.enabled: true`) and the chat UI is configured to send the `Authorization` header, the page does **not** ask the user to type a token — it issues one for itself by calling `GET /api/auth-token` on load. The endpoint returns a header value derived from the configured method, in priority order:
 
-1. **`jwtToken`** — `Bearer <encrypted JWT>` issued by the server with `sub: 'agentTester'`, `service: <appConfig.name>`, and TTL = `agentTester.tokenTTLSec` (default 1800 sec / 30 min). The response also includes `ttlSec` so the client can plan refresh.
+1. **`jwtToken`** — `Bearer <standard signed JWT>` issued by the server with `sub: 'agentTester'`, `aud: <appConfig.name>`, and TTL = `agentTester.tokenTTLSec` (default 1800 sec / 30 min). The response also includes `ttlSec` so the client can plan refresh.
 2. **`basic`** — `Basic <base64(user:password)>` from `webServer.auth.basic`.
 3. **`permanentServerTokens`** — `Bearer <first configured token>`.
 

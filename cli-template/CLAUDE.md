@@ -106,7 +106,7 @@ Priority: environment variables > local.yaml > {NODE_ENV}.yaml > default.yaml. A
 When multiple auth methods configured, detection from `Authorization` header:
 1. `permanentServerTokens` — static tokens (O(1) lookup)
 2. `basic` — base64 username:password
-3. `jwtToken` — encrypted JWT (optional IP restriction via `isCheckIP` + `ip` field in payload)
+3. `jwtToken` — standard signed JWT, HS256 (optional IP restriction via `isCheckIP` + `ip` field in payload; legacy `<expire>.<hex>` tokens still accepted for backward compatibility)
 4. `custom` — user-defined validator (fallback)
 
 ## Framework Documentation

@@ -30,7 +30,7 @@ Configured under `webServer.auth` in `config/*.yaml`. Supported methods:
 
 - **Permanent server tokens** — O(1) set lookup, for service-to-service callers
 - **Basic** — `Authorization: Basic base64(user:pass)`
-- **JWT** — `Authorization: Bearer <token>`; AES-256-CTR-encrypted payload; optional IP restriction
+- **JWT** — `Authorization: Bearer <token>`; standard signed JWT (HS256); optional IP restriction
 - **Custom validator** — project-defined fallback
 
 JWT tokens can be minted via:
