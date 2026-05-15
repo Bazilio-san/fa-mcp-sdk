@@ -340,13 +340,12 @@ export async function startHttpServer(): Promise<void> {
 
       // Execute the tool call with preserved headers and payload from SSE connection establishment
       const { toolHandler } = getProjectData();
-      const result = await toolHandler({
+      return await toolHandler({
         ...request.params,
         headers: preservedHeaders, // Use headers from when SSE connection was established
         payload: mcpAuthPayload, // Use auth payload from when SSE connection was established
         transport: 'sse',
       });
-      return { content: result.content };
     });
 
     return sseServer;

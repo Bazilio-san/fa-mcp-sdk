@@ -24,6 +24,9 @@ export type {
   CustomAuthValidator,
   TokenGenAuthHandler,
   TokenGenAuthInput,
+  TToolHandlerResponse,
+  IToolHandlerTextResponse,
+  IToolHandlerStructuredResponse,
 } from './_types_/types.js';
 
 export { appConfig, getProjectData, getSafeAppConfig } from './bootstrap/init-config.js';

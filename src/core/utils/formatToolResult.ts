@@ -1,6 +1,7 @@
 import { appConfig } from '../bootstrap/init-config.js';
 
 import { isObject, ppj } from './utils.js';
+import { IToolHandlerStructuredResponse, IToolHandlerTextResponse, TToolHandlerResponse } from '../_types_/types.js';
 
 const cleanUndefinedDeep = (value: any): void => {
   if (!isObject(value)) {
@@ -35,7 +36,7 @@ const cleanUndefinedDeep = (value: any): void => {
  * Format tool result based on configuration
  * Returns either structured content (JSON) or formatted text
  */
-export function asTextContent(text: string): { content: { type: 'text'; text: string }[] } {
+export function asTextContent(text: string): IToolHandlerTextResponse {
   return {
     content: [
       {
@@ -50,7 +51,7 @@ export function asTextContent(text: string): { content: { type: 'text'; text: st
  * Format tool result based on configuration
  * Returns either structured content (JSON) or formatted text
  */
-export function asJson<T = any>(json: T): { structuredContent: T } {
+export function asJson<T = any>(json: T): IToolHandlerStructuredResponse<T> {
   if (isObject(json)) {
     cleanUndefinedDeep(json);
   }
@@ -61,15 +62,15 @@ export function asJson<T = any>(json: T): { structuredContent: T } {
  * Format tool result based on configuration
  * Returns either structured content (JSON) or formatted text
  */
-export function formatToolResult(json: any): any {
+export function formatToolResult<T = any>(json: T): TToolHandlerResponse<T> {
   if (appConfig.mcp.tools.answerAs === 'structuredContent') {
-    return asJson(json);
+    return asJson<T>(json) as IToolHandlerStructuredResponse<T>;
   }
   if (isObject(json)) {
     cleanUndefinedDeep(json);
   }
   if (typeof json === 'string') {
-    return asTextContent(json);
+    return asTextContent(json) as IToolHandlerTextResponse;
   }
   return asTextContent(ppj(json));
 }

@@ -116,7 +116,7 @@ export interface IGetPromptRequest {
 export interface McpServerData {
   // MCP components
   tools: Tool[] | ((args: ITransportContext) => Promise<Tool[]>);
-  toolHandler: (params: IToolHandlerParams) => Promise<any>;
+  toolHandler: <T = TToolHandlerResponse>(params: IToolHandlerParams) => Promise<T>;
 
   // Prompts
   agentBrief: string;
@@ -184,3 +184,16 @@ export interface IToolInputSchema {
 
   [x: string]: unknown;
 }
+
+export interface IToolHandlerTextResponse {
+  content: {
+    type: 'text';
+    text: string;
+  }[];
+}
+
+export interface IToolHandlerStructuredResponse<T = any> {
+  structuredContent: T;
+}
+
+export type TToolHandlerResponse<T = any> = IToolHandlerTextResponse | IToolHandlerStructuredResponse<T>;

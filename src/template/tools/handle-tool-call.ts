@@ -1,6 +1,6 @@
 import chalk from 'chalk';
 
-import { logger as lgr, formatToolResult, ToolExecutionError } from '../../core/index.js';
+import { logger as lgr, formatToolResult, ToolExecutionError, TToolHandlerResponse } from '../../core/index.js';
 
 const logger = lgr.getSubLogger({ name: chalk.bgGrey('tools') });
 
@@ -33,7 +33,7 @@ export const handleToolCall = async (params: { name: string; arguments?: any }):
  * Example tool implementation
  * Replace this with your actual tool logic
  */
-async function handleExampleTool(args: any): Promise<string> {
+async function handleExampleTool(args: any): Promise<TToolHandlerResponse> {
   const { query } = args || {};
 
   if (!query) {
