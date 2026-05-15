@@ -76,19 +76,32 @@ const normalized = normalizeHeaders({
 ## Tool Utilities
 
 ```typescript
-import { getTools, formatToolResult, getJsonFromResult, asTextContent, asJson } from 'fa-mcp-sdk';
+import {
+  getTools, formatToolResult, getJsonFromResult, asTextContent, asJson,
+  TToolHandlerResponse, IToolHandlerTextResponse, IToolHandlerStructuredResponse,
+} from 'fa-mcp-sdk';
 
 const tools = await getTools();  // Get registered tools
 
-// Format based on appConfig.mcp.tools.answerAs
-const result = formatToolResult({ message: 'Done', data: {} });
+// Format based on appConfig.mcp.tools.answerAs.
+// Return type: TToolHandlerResponse<T> = IToolHandlerTextResponse | IToolHandlerStructuredResponse<T>
+const result = formatToolResult<{ message: string; data: object }>({ message: 'Done', data: {} });
 
 // Returns structuredContent or JSON from text depending on appConfig.mcp.tools.answerAs
 const original = getJsonFromResult<T>(result);
 
 // Direct formatting helpers (ignore tools.answerAs config):
-asTextContent('Hello');           // { content: [{ type: 'text', text: 'Hello' }] }
-asJson({ status: 'ok' });         // { structuredContent: { status: 'ok' } }
+asTextContent('Hello');           // IToolHandlerTextResponse: { content: [{ type: 'text', text: 'Hello' }] }
+asJson({ status: 'ok' });         // IToolHandlerStructuredResponse: { structuredContent: { status: 'ok' } }
+```
+
+### Return Type Signatures
+
+```typescript
+function formatToolResult<T = any>(json: T): TToolHandlerResponse<T>;
+function asTextContent(text: string): IToolHandlerTextResponse;
+function asJson<T = any>(json: T): IToolHandlerStructuredResponse<T>;
+function getJsonFromResult<T = any>(result: TToolHandlerResponse | any): T;
 ```
 
 ### When to Use Which

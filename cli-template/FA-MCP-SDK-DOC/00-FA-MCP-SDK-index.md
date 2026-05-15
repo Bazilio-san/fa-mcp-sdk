@@ -33,7 +33,11 @@ import { initMcpServer, McpServerData, appConfig, getProjectData, getSafeAppConf
 import { createAuthMW, generateToken, getAuthHeadersForTests, TTokenType, generateTokenApp } from 'fa-mcp-sdk';
 
 // Tools & Errors
-import { formatToolResult, ToolExecutionError, ServerError, BaseMcpError, ValidationError, getTools } from 'fa-mcp-sdk';
+import {
+  formatToolResult, asTextContent, asJson, getJsonFromResult,
+  TToolHandlerResponse, IToolHandlerTextResponse, IToolHandlerStructuredResponse,
+  ToolExecutionError, ServerError, BaseMcpError, ValidationError, getTools,
+} from 'fa-mcp-sdk';
 
 // Database & Cache
 import {
@@ -118,9 +122,11 @@ export const tools: Tool[] = [{
 
 **`src/tools/handle-tool-call.ts`:**
 ```typescript
-import { formatToolResult, ToolExecutionError } from 'fa-mcp-sdk';
+import { formatToolResult, ToolExecutionError, TToolHandlerResponse } from 'fa-mcp-sdk';
 
-export const handleToolCall = async (params: { name: string; arguments?: any }): Promise<any> => {
+export const handleToolCall = async (
+  params: { name: string; arguments?: any },
+): Promise<TToolHandlerResponse> => {
   const { name, arguments: args } = params;
   switch (name) {
     case 'hello':

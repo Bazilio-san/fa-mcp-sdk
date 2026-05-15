@@ -27,7 +27,7 @@ await initMcpServer(serverData);
 ```typescript
 interface McpServerData {
   tools: Tool[] | (() => Promise<Tool[]>);           // Tool definitions
-  toolHandler: (params: IToolHandlerParams) => Promise<any>;
+  toolHandler: <T = TToolHandlerResponse>(params: IToolHandlerParams) => Promise<T>;
   agentBrief: string;                                 // Brief description
   agentPrompt: string;                                // System prompt
   customPrompts?: IPromptData[];                      // Additional prompts
@@ -47,7 +47,22 @@ interface IToolHandlerParams {
   payload?: { user: string; [key: string]: any };     // JWT payload if authenticated
   transport?: 'stdio' | 'sse' | 'http';
 }
+
+// Tool handler response — discriminated union, MCP SDK accepts either shape
+interface IToolHandlerTextResponse {
+  content: { type: 'text'; text: string }[];
+}
+interface IToolHandlerStructuredResponse<T = any> {
+  structuredContent: T;
+}
+type TToolHandlerResponse<T = any> = IToolHandlerTextResponse | IToolHandlerStructuredResponse<T>;
 ```
+
+The handler must return one of the two shapes above. The choice is controlled globally
+by `appConfig.mcp.tools.answerAs` (`text` | `structuredContent`); use the
+`formatToolResult()` helper to produce the correct shape automatically. STDIO, SSE,
+and HTTP transports all forward the handler's return value to the MCP client without
+re-wrapping, so `structuredContent` is preserved end-to-end.
 
 ### IPromptData
 

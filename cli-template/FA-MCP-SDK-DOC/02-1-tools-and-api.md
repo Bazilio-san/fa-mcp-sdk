@@ -24,9 +24,12 @@ export const tools: Tool[] = [{
 ### Tool Handler (`src/tools/handle-tool-call.ts`)
 
 ```typescript
-import { formatToolResult, ToolExecutionError, logger, IToolHandlerParams } from 'fa-mcp-sdk';
+import {
+  formatToolResult, ToolExecutionError, logger,
+  IToolHandlerParams, TToolHandlerResponse,
+} from 'fa-mcp-sdk';
 
-export const handleToolCall = async (params: IToolHandlerParams): Promise<any> => {
+export const handleToolCall = async (params: IToolHandlerParams): Promise<TToolHandlerResponse> => {
   const { name, arguments: args, headers, payload, transport } = params;
   // payload: { user: string, ... } if JWT auth enabled
   // transport: 'stdio' | 'sse' | 'http'
@@ -46,6 +49,12 @@ export const handleToolCall = async (params: IToolHandlerParams): Promise<any> =
   }
 };
 ```
+
+The handler must return `TToolHandlerResponse` — a discriminated union of
+`IToolHandlerTextResponse` (`{ content: [{ type: 'text', text }] }`) and
+`IToolHandlerStructuredResponse<T>` (`{ structuredContent: T }`). The SDK forwards
+the value as-is to the MCP client over STDIO, SSE, and HTTP. Use `formatToolResult()`
+to pick the right shape based on `appConfig.mcp.tools.answerAs`.
 
 ### Headers Access
 
@@ -170,7 +179,9 @@ Rules:
 the result is returned:
 
 ```typescript
-export const handleToolCall = async (params: IToolHandlerParams): Promise<any> => {
+export const handleToolCall = async (
+  params: IToolHandlerParams,
+): Promise<TToolHandlerResponse> => {
   const { name: toolName, arguments: args, headers: mcpRequestHeaders = {} } = params;
 
   const tool = (await getTools(mcpRequestHeaders)).get(toolName);
