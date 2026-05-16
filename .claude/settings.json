@@ -1,6 +1,6 @@
 {
   "permissions": {
-    "defaultMode": "bypassPermissions",
+    "defaultMode": "acceptEdits",
     "allow": [
       "Bash(sudo cp:*)",
       "Bash(sudo:*)",
