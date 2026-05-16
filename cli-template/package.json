@@ -24,6 +24,9 @@
     "quality:fix": "npm run lint:fix && npm run format:fix",
     "lint-fix-build": "oxlint --fix . && oxfmt . && rimraf dist && tsc",
     "generate-token": "node node_modules/fa-mcp-sdk/dist/core/auth/token-generator/server.js",
+    "agents:link": "node scripts/setup-agent-links.js setup",
+    "agents:link:status": "node scripts/setup-agent-links.js status",
+    "agents:link:remove": "node scripts/setup-agent-links.js remove",
     "dead:exports": "ts-prune",
     "dead:files": "knip",
     "update-sdk-docs": "node ../scripts/update-sdk.js",
@@ -54,7 +57,7 @@
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.29.0",
     "dotenv": "^17.4.1",
-    "fa-mcp-sdk": "^0.4.101"
+    "fa-mcp-sdk": "^0.4.102"
   },
   "devDependencies": {
     "@types/express": "^5.0.6",

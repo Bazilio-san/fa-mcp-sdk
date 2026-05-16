@@ -173,6 +173,23 @@ The project ships with custom skills in `.claude/skills/`:
 
 Details, launch modes, and examples: [SKILLS](readme-docs/SKILLS.md)
 
+### Sharing Skills with OpenAI Codex
+
+The skills in `.claude/skills/` can also be used from [OpenAI Codex](https://developers.openai.com/codex/) —
+Codex officially reads project Skills from `.agents/skills/` and supports symlinked skill folders. Run the
+bundled helper once to create the link (junction on Windows, relative symlink on macOS/Linux):
+
+```bash
+npm run agents:link          # create .agents/skills -> .claude/skills
+npm run agents:link:status   # inspect current link state
+npm run agents:link:remove   # remove the link
+```
+
+Only skills are linked. Other Claude Code entities (`.claude/agents/`, `.claude/commands/`, hooks, MCP config)
+use formats incompatible with Codex (TOML agents in `.codex/agents/`, MCP servers in `.codex/config.toml`) and
+must be configured separately. For project guidance, this template already keeps a single `AGENTS.md` and
+imports it from `CLAUDE.md` via `@AGENTS.md`, so the same instructions feed both tools.
+
 ## Security
 
 ### Admin panel JWT requirement

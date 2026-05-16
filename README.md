@@ -217,6 +217,9 @@ Note: The `dist/` directory (compiled JavaScript) is created after running `npm 
 | `node scripts/generate-jwt.js` | Generate JWT token (CLI) |
 | `/gen-jwt` | Generate JWT token (Claude Code skill) |
 | `/upgrade-guide` | Generate upgrade guide for downstream projects (Claude Code skill) |
+| `npm run agents:link` | Share `.claude/skills` with OpenAI Codex (creates `.agents/skills` symlink) |
+| `npm run agents:link:status` | Show current state of the Codex skills link |
+| `npm run agents:link:remove` | Remove the Codex skills link |
 | `npm run consul:unreg` | Deregister from Consul |
 
 
@@ -273,6 +276,24 @@ Analyzes git diff between two versions/commits and produces an MD file covering 
 Output language is English by default. Add a natural-language hint (e.g., "на русском", "in German") to change it.
 
 Skill location: `.claude/skills/upgrade-guide/SKILL.md`
+
+## Sharing Skills with OpenAI Codex
+
+Claude Code skills (`.claude/skills/*`) can be reused from [OpenAI Codex](https://developers.openai.com/codex/)
+without duplication. Codex officially reads project Skills from `.agents/skills/` and supports symlinked skill
+folders. The bundled `scripts/setup-agent-links.js` creates the symlink (junction on Windows, relative symlink
+on macOS/Linux) so both tools share the same canonical storage in `.claude/skills/`.
+
+```bash
+npm run agents:link          # create .agents/skills -> .claude/skills
+npm run agents:link:status   # inspect current link state
+npm run agents:link:remove   # remove the link
+```
+
+Only **skills** are linked — other Claude Code entities (`.claude/agents/`, `.claude/commands/`, hooks, MCP
+config) use formats that are not compatible with Codex (TOML agents in `.codex/agents/`, MCP servers in
+`.codex/config.toml`) and must be configured separately. For Claude Code's `CLAUDE.md` and Codex's `AGENTS.md`,
+keep a single `AGENTS.md` and import it from `CLAUDE.md` via `@AGENTS.md`.
 
 ## Directory Requirements
 
