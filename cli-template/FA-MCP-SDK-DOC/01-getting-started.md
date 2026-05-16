@@ -27,7 +27,7 @@ await initMcpServer(serverData);
 ```typescript
 interface McpServerData {
   tools: Tool[] | (() => Promise<Tool[]>);           // Tool definitions
-  toolHandler: <T = TToolHandlerResponse>(params: IToolHandlerParams) => Promise<T>;
+  toolHandler: <T = unknown>(params: IToolHandlerParams) => Promise<TToolHandlerResponse<T>>;
   agentBrief: string;                                 // Brief description
   agentPrompt: string;                                // System prompt
   customPrompts?: IPromptData[];                      // Additional prompts

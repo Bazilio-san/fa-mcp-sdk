@@ -116,7 +116,7 @@ export interface IGetPromptRequest {
 export interface McpServerData {
   // MCP components
   tools: Tool[] | ((args: ITransportContext) => Promise<Tool[]>);
-  toolHandler: <T = TToolHandlerResponse>(params: IToolHandlerParams) => Promise<T>;
+  toolHandler: <T = unknown>(params: IToolHandlerParams) => Promise<TToolHandlerResponse<T>>;
 
   // Prompts
   agentBrief: string;

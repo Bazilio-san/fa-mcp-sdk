@@ -44,7 +44,7 @@ export function createMcpServer(): Server {
   // Handler for tool execution
   server.setRequestHandler(CallToolRequestSchema, async (request) => {
     const { toolHandler } = getProjectData();
-    return await toolHandler({ ...request.params, ...stdioArgs });
+    return (await toolHandler({ ...request.params, ...stdioArgs })) as any;
   });
 
   // Handler for listing available prompts
