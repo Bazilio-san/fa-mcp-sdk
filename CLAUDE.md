@@ -122,6 +122,21 @@ Any edit or new file under `.claude/**` (SKILL.md, scripts, hooks, agents, `sett
 by `settings.json` — direct `Write`/`Edit` will fail. Invoke the `/edit-claude-files` skill, which
 describes the required `scripts/fcp.js` temp-copy protocol.
 
+## MCP Apps Spec Digest (Skill /update-mcp-apps-spec)
+
+Regenerates `cli-template/FA-MCP-SDK-DOC/10-mcp-apps.md` — the self-contained digest of the MCP Apps
+protocol + SDK (`@modelcontextprotocol/ext-apps`). The skill clones the latest released tag of the
+upstream `modelcontextprotocol/ext-apps` repository, reads the normative spec
+(`specification/2026-01-26/apps.mdx`), the SDK surface (`src/app.ts`, `src/server/index.ts`,
+`src/spec.types.ts`, React hooks), and supporting docs, then rewrites the digest with the canonical
+lifecycle diagrams (verbatim mermaid), protocol contract, API reference, patterns, and a reference
+index. Also refreshes the matching rows in `cli-template/FA-MCP-SDK-DOC/00-FA-MCP-SDK-index.md` and
+`cli-template/CLAUDE.md`.
+
+Triggers: user asks to "update MCP apps doc", "refresh MCP apps spec", "regenerate
+10-mcp-apps.md", or notes that the MCP Apps specification has changed upstream. The skill only
+touches the digest + two index files — it does NOT modify `src/core/**` or scaffold MCP App tools.
+
 ## Formatting
 
 MD lines ≤120 chars. Break at 120. Target 100-120. No short lines (60-80). Fill to ~120.

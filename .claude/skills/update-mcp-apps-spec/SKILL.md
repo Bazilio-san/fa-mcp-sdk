@@ -1,12 +1,12 @@
 ---
 name: update-mcp-apps-spec
-description: Regenerate the cli-template/FA-MCP-SDK-DOC/09-mcp-apps.md MCP Apps spec digest from the upstream modelcontextprotocol/ext-apps repository (latest released tag of @modelcontextprotocol/ext-apps). Use when the user asks to "update MCP apps doc", "refresh MCP apps spec", "regenerate 09-mcp-apps.md", or notes that the MCP Apps specification has changed upstream.
+description: Regenerate the cli-template/FA-MCP-SDK-DOC/10-mcp-apps.md MCP Apps spec digest from the upstream modelcontextprotocol/ext-apps repository (latest released tag of @modelcontextprotocol/ext-apps). Use when the user asks to "update MCP apps doc", "refresh MCP apps spec", "regenerate 10-mcp-apps.md", or notes that the MCP Apps specification has changed upstream.
 ---
 
 # Update MCP Apps Spec Digest
 
 Pull the upstream MCP Apps protocol + SDK material from `modelcontextprotocol/ext-apps` and rewrite
-`cli-template/FA-MCP-SDK-DOC/09-mcp-apps.md` so it stays a single self-contained digest of MCP Apps
+`cli-template/FA-MCP-SDK-DOC/10-mcp-apps.md` so it stays a single self-contained digest of MCP Apps
 that an LLM can read end-to-end without going back to the repo for routine work. The repo is
 consulted only as the reference point for source-of-truth lookups.
 
@@ -19,9 +19,9 @@ themselves.
 
 | Path | Action |
 |------|--------|
-| `cli-template/FA-MCP-SDK-DOC/09-mcp-apps.md` | Rewrite (create on first run) — the digest |
-| `cli-template/FA-MCP-SDK-DOC/00-FA-MCP-SDK-index.md` | Edit — add/refresh the entry for 09-mcp-apps.md |
-| `cli-template/CLAUDE.md` | Edit — add/refresh the row for 09-mcp-apps.md in the "Framework Documentation" table |
+| `cli-template/FA-MCP-SDK-DOC/10-mcp-apps.md` | Rewrite (create on first run) — the digest |
+| `cli-template/FA-MCP-SDK-DOC/00-FA-MCP-SDK-index.md` | Edit — add/refresh the entry for 10-mcp-apps.md |
+| `cli-template/CLAUDE.md` | Edit — add/refresh the row for 10-mcp-apps.md in the "Framework Documentation" table |
 
 Nothing else is touched. The digest's header records the pinned ext-apps tag and the spec date so
 future runs can detect drift.
@@ -101,7 +101,7 @@ Use them to sanity-check that the patterns described in the digest match real wo
 
 ## Step 3: Write the Digest
 
-Target file: `cli-template/FA-MCP-SDK-DOC/09-mcp-apps.md`.
+Target file: `cli-template/FA-MCP-SDK-DOC/10-mcp-apps.md`.
 
 ### Required structure (linear, top → bottom, mandatory → optional)
 
@@ -178,20 +178,58 @@ below is what makes the digest self-sufficient.
     fallback, `_meta.ui.csp` / `_meta.ui.domain` in the wrong object, hardcoded theme colors,
     missing `vite-plugin-singlefile`, version numbers written from memory.
 
-12. **Reference Index** — table mapping every aspect of the digest back to its upstream source:
+12. **Examples — When to Consult Which** — curated map of upstream `examples/` by use case, so the
+    LLM consuming the digest can pick the right reference server without re-discovery. Build the
+    section by walking every directory under `examples/` in the cloned tag, reading each example's
+    `package.json` (`description` field) and `README.md` (first heading + opening paragraph), and
+    classifying it into one of these subsections:
 
-    | Aspect | Upstream path | Why look here |
-    |--------|---------------|---------------|
-    | Wire protocol | `specification/2026-01-26/apps.mdx` § N | Normative MUST/SHOULD/MAY |
-    | Lifecycle diagrams | `specification/2026-01-26/apps.mdx` § Lifecycle | Canonical message order (verbatim mermaid) |
-    | `App` handlers | `src/app.ts` | Signatures + JSDoc |
-    | Server helpers | `src/server/index.ts` | `registerAppTool` etc. |
-    | Type-level contract | `src/spec.types.ts` | `McpUiHostContext`, CSP types |
-    | React surface | `src/react/*.tsx` | Hook contracts |
-    | Pattern catalog | `docs/patterns.md` | Authoritative recipes |
-    | CSP / CORS rules | `docs/csp-cors.md` | Where the keys go |
-    | Mixed tool servers | `examples/{map,pdf,system-monitor}-server/` | App tool + plain + app-only patterns |
-    | Domain examples | `examples/{scenario-modeler,cohort-heatmap,threejs,shadertoy,wiki-explorer,sheet-music,say,transcript,video-resource,debug}-server/` | Domain-specific working code |
+    - **12.1 Smallest end-to-end skeleton** — `examples/quickstart/` (single tool + minimal vanilla
+      View) and `examples/basic-host/` (reference host harness — local testing only, NOT a
+      production host).
+    - **12.2 Mixed tool patterns** — servers combining App-augmented tools, plain tools, and
+      app-only tools in one server (canonical: `map-server`, `pdf-server`, `system-monitor-server`).
+      Spell out the actual tool composition per row, e.g. `display_pdf` (App tool) + `list_pdfs`
+      (plain tool) + `read_pdf_bytes` (app-only chunked).
+    - **12.3 Per-framework starter templates** — every `examples/basic-server-{framework}/`
+      directory found in the tag. One row per framework.
+    - **12.4 Domain references — pick by use case** — every remaining example under `examples/`,
+      one row per server. Each row is `Domain | Example link | What it shows`. The "What it shows"
+      cell MUST be grounded in the example's own `README.md` / `package.json` "description" field
+      and SHOULD name the concrete libraries / patterns the example demonstrates (e.g. "Three.js +
+      streaming tool input into canvas, OrbitControls, post-processing"). Group hint by domain
+      (Charts, Analytics drill-down, 3D visualization, WebGL/shaders, Graph visualization,
+      Audio/music, Streaming + audio, Browser APIs, Binary/media resources, Image generation,
+      SDK surface reference, Full SDK API exercise, etc.). When new examples appear upstream they
+      MUST be added here even if their domain doesn't match the existing buckets — invent a new
+      bucket label rather than dropping the example.
+
+    All example links in this section MUST use the tag-pinned form
+    `https://github.com/modelcontextprotocol/ext-apps/tree/v<X.Y.Z>/examples/<name>` (note `tree`,
+    not `blob`, since these target directories). The whole section is regenerable from upstream
+    sources alone — never inline contents of an example's `README.md` or copy its source.
+
+13. **Reference Index** — table mapping every aspect of the digest back to its upstream source.
+    Every "Upstream source" cell MUST be a markdown link of the form
+    `[<display path>](https://github.com/modelcontextprotocol/ext-apps/blob/v<X.Y.Z>/<path>)` —
+    pinned to the **same** `v<X.Y.Z>` recorded in the digest header so future readers (and the LLM
+    consuming the digest) can fetch the exact code corresponding to the digest. Never link to `main`
+    or to an unpinned ref. For directory targets (e.g. example servers) use
+    `https://github.com/modelcontextprotocol/ext-apps/tree/v<X.Y.Z>/<path>`. For deep links to
+    spec sections, append the appropriate `#anchor` (e.g. `#lifecycle`).
+
+    | Aspect | Upstream source (tag-pinned) | Why look here |
+    |--------|------------------------------|---------------|
+    | Wire protocol | [`specification/2026-01-26/apps.mdx`](https://github.com/modelcontextprotocol/ext-apps/blob/v<X.Y.Z>/specification/2026-01-26/apps.mdx) § N | Normative MUST/SHOULD/MAY |
+    | Lifecycle diagrams | [`specification/2026-01-26/apps.mdx` § Lifecycle](https://github.com/modelcontextprotocol/ext-apps/blob/v<X.Y.Z>/specification/2026-01-26/apps.mdx#lifecycle) | Canonical message order (verbatim mermaid) |
+    | `App` handlers | [`src/app.ts`](https://github.com/modelcontextprotocol/ext-apps/blob/v<X.Y.Z>/src/app.ts) | Signatures + JSDoc |
+    | Server helpers | [`src/server/index.ts`](https://github.com/modelcontextprotocol/ext-apps/blob/v<X.Y.Z>/src/server/index.ts) | `registerAppTool` etc. |
+    | Type-level contract | [`src/spec.types.ts`](https://github.com/modelcontextprotocol/ext-apps/blob/v<X.Y.Z>/src/spec.types.ts) | `McpUiHostContext`, CSP types |
+    | React surface | [`src/react/`](https://github.com/modelcontextprotocol/ext-apps/tree/v<X.Y.Z>/src/react) | Hook contracts |
+    | Pattern catalog | [`docs/patterns.md`](https://github.com/modelcontextprotocol/ext-apps/blob/v<X.Y.Z>/docs/patterns.md) | Authoritative recipes |
+    | CSP / CORS rules | [`docs/csp-cors.md`](https://github.com/modelcontextprotocol/ext-apps/blob/v<X.Y.Z>/docs/csp-cors.md) | Where the keys go |
+    | Mixed tool servers | [`examples/map-server/`](https://github.com/modelcontextprotocol/ext-apps/tree/v<X.Y.Z>/examples/map-server), [`pdf-server/`](https://github.com/modelcontextprotocol/ext-apps/tree/v<X.Y.Z>/examples/pdf-server), [`system-monitor-server/`](https://github.com/modelcontextprotocol/ext-apps/tree/v<X.Y.Z>/examples/system-monitor-server) | App tool + plain + app-only patterns |
+    | Domain examples | linked individually per server under [`examples/`](https://github.com/modelcontextprotocol/ext-apps/tree/v<X.Y.Z>/examples) | Domain-specific working code |
 
 ### Style rules (must match siblings in FA-MCP-SDK-DOC/)
 
@@ -223,6 +261,13 @@ Before saving the digest, verify:
    Initialization, Interactive Phase, Cleanup) appear in the digest verbatim, inside ```mermaid
    fenced blocks. Diff the diagram text against the cloned tag character-by-character — message
    names like `ui/notifications/tool-input-partial` must match exactly.
+7. Every URL in the Reference Index AND in the "Examples — When to Consult Which" section is
+   pinned to the same `v<X.Y.Z>` tag recorded in the digest header. Grep for `/blob/main/`,
+   `/tree/main/`, or any other version string — there must be zero matches besides the pinned tag.
+8. Every directory under `examples/` in the cloned tag (excluding `run-all.ts` and any non-server
+   helper files) is represented in exactly one row of section 12. Diff `ls examples/` against the
+   section's row count — drift indicates a new upstream example that the digest hasn't classified
+   yet.
 
 If the file already exists, diff the new digest against the old one and surface the deltas to the
 user before overwriting — that's how the user sees what changed upstream.
@@ -231,7 +276,7 @@ user before overwriting — that's how the user sees what changed upstream.
 
 ### `cli-template/FA-MCP-SDK-DOC/00-FA-MCP-SDK-index.md`
 
-Add (or refresh) a one-line entry that points at `09-mcp-apps.md`. Match the bullet/table style
+Add (or refresh) a one-line entry that points at `10-mcp-apps.md`. Match the bullet/table style
 already used in that file for the other 0X documents. The entry should say what the file owns:
 "Self-contained digest of the MCP Apps protocol + SDK pinned to `@modelcontextprotocol/ext-apps
 v<X.Y.Z>`."
@@ -243,7 +288,7 @@ In the "Framework Documentation" table (the section listing every `0X-*.md` file
 
 | File | When to Read |
 |------|--------------|
-| `09-mcp-apps.md` | Building / extending MCP Apps (UI-augmented tools) — protocol contract, SDK surface, patterns, pitfalls |
+| `10-mcp-apps.md` | Building / extending MCP Apps (UI-augmented tools) — protocol contract, SDK surface, patterns, pitfalls |
 
 Use the same single-line format as the other rows. Do not introduce sub-headings or bullets in this
 table.

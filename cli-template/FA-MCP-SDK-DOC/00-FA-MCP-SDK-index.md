@@ -22,6 +22,7 @@ npm install fa-mcp-sdk
 | [07-testing-and-operations](07-testing-and-operations.md) | Test clients (STDIO, HTTP, SSE, Streamable HTTP) | Testing, deployment |
 | [08-agent-tester-and-headless-api](08-agent-tester-and-headless-api.md) | Agent Tester, Headless API, structured logging, automated testing, UI `data-testid` reference | Agent-driven tool development, CLI automation, UI E2E tests |
 | [09-database](09-database.md) | PostgreSQL sugar layer (`queryMAIN`, `execMAIN`, `getInsertSqlMAIN`, `getMergeSqlMAIN`, `mergeByBatch`), `pgvector`, secondary DBs | Database access, upserts, batching |
+| [10-mcp-apps](10-mcp-apps.md) | Self-contained digest of the MCP Apps protocol + SDK pinned to `@modelcontextprotocol/ext-apps v1.7.2` (spec 2026-01-26): `ui://` resources, `_meta.ui`, JSON-RPC messages, `App` class, host context, patterns, pitfalls | Building / extending MCP Apps (UI-augmented tools) |
 
 ## Key Exports
 
