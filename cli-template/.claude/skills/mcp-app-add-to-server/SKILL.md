@@ -13,13 +13,19 @@ Existing tools get paired with HTML resources that render inline in the host's c
 
 ## Getting Reference Code
 
-Clone the MCP Apps SDK repository (`@modelcontextprotocol/ext-apps`) for working examples and API documentation:
+Clone or update the MCP Apps SDK repository (`@modelcontextprotocol/ext-apps`) using the bundled
+helper. The folder `./mcp-ext-apps/` is already in `.gitignore` and is intentionally persistent —
+it serves as the long-lived reference checkout that this skill (and the `mcp-app-create` skill)
+read from. Do not delete it after use.
 
 ```bash
-git clone --branch "v$(npm view @modelcontextprotocol/ext-apps version)" --depth 1 https://github.com/modelcontextprotocol/ext-apps.git ./mcp-ext-apps
+node scripts/clone-mcp-ext-apps.js --tag latest
 ```
 
-> Add `mcp-ext-apps/` to the project's `.gitignore` — it's a reference clone, not part of the project.
+The script clones into `./mcp-ext-apps/` on first run, pulls the default branch on subsequent
+runs, and (with `--tag latest`) checks out the latest released npm tag so the cloned tree
+matches the published `@modelcontextprotocol/ext-apps` version. Add `--json` to capture machine-
+readable metadata (path, ref, commit) for downstream automation.
 
 ### Protocol Specification
 

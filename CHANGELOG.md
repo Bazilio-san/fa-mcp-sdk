@@ -5,16 +5,21 @@ All notable changes to `fa-mcp-sdk` are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.4.100] - 2026-05-16
+## [0.4.101] - 2026-05-16
 
 ### Added
 
 - New maintainer skill `/update-mcp-apps-spec` (`.claude/skills/update-mcp-apps-spec/`) — regenerates `cli-template/FA-MCP-SDK-DOC/10-mcp-apps.md` from the upstream `modelcontextprotocol/ext-apps` repository pinned to the latest released tag of `@modelcontextprotocol/ext-apps`. Walks the normative spec (`apps.mdx`), SDK source (`src/app.ts`, `src/server/index.ts`, `src/spec.types.ts`, React hooks, transport, styles), supporting docs, and the full `examples/` tree, then produces a self-contained digest with verbatim lifecycle mermaid diagrams, the protocol contract (MUST/SHOULD/MAY), the SDK API surface, host context schema, recipes, common pitfalls, an examples-by-use-case map, and a reference index. Every external link is pinned to the same upstream tag as the digest header, so the LLM consuming the digest can fetch the exact corresponding source. The skill also refreshes matching rows in `00-FA-MCP-SDK-index.md` and `cli-template/CLAUDE.md` automatically and explicitly does not modify `src/core/**` or scaffold MCP App tools.
 - `cli-template/FA-MCP-SDK-DOC/10-mcp-apps.md` — first generation of the MCP Apps digest, pinned to `@modelcontextprotocol/ext-apps` v1.7.2 (spec 2026-01-26, commit `9a37ad7`). 13 sections covering: protocol contract (`ui://` URIs, `_meta.ui` location matrix, capability negotiation, CSP rules, all Host↔View JSON-RPC messages including the `ui/notifications/sandbox-*` proxy reservation), the four canonical lifecycle diagrams reproduced verbatim from the spec, the full `App` class API including every `on*` event handler and host-bound method, server helpers (`registerAppTool`, `registerAppResource`, `getUiCapability`), the React hook surface, every `McpUiHostContext` field and the standardized CSS-variable list, 13 worked recipes, an authorization section (per-server, per-tool, UI-initiated step-up), a testing section centred on `basic-host`, a common-pitfalls list, an examples-by-use-case classification (smallest skeleton, mixed tool patterns, per-framework starters, 13 domain references with per-server "what it shows" descriptions), and a reference index with 22 tag-pinned GitHub URLs.
+- `scripts/clone-mcp-ext-apps.js` — shared helper that clones or refreshes `modelcontextprotocol/ext-apps` into a persistent `./mcp-ext-apps/` checkout at the project root (gitignored, never deleted by the script). On first run it clones the default branch; on subsequent runs it pulls main and re-fetches tags. `--tag latest` resolves the latest published `@modelcontextprotocol/ext-apps` version via `npm view` and checks out `v<version>`; `--tag v1.7.2` checks out a specific tag. `--json` emits machine-readable metadata (`path`, `ref`, `refType`, `commit`, `latestNpmVersion`). `--list-examples` adds an `examples[]` array with `{ name, relativePath, description, readmeHeading, readmeOpening }` for each `examples/*` directory, pre-collected from `package.json` and `README.md` so downstream skills can classify examples in one JSON walk instead of dozens of sequential reads. The script is copied verbatim into projects scaffolded by `fa-mcp`, so the relative path is identical in the SDK repo and in any generated MCP server.
+- JetBrains IDE project codestyle now tracked in version control (`.idea/codeStyles/Project.xml`, `.idea/codeStyles/codeStyleConfig.xml`, `.idea/inspectionProfiles/Project_Default.xml`, `.idea/misc.xml`, `.idea/modules.xml`, `.idea/vcs.xml`, `.idea/fa-mcp-sdk.iml`, `.idea/.gitignore`) so WebStorm / IDEA users get the project-specific formatting rules on clone.
 
 ### Changed
 
 - `McpServerData.toolHandler` signature tightened from `<T = TToolHandlerResponse>(params) => Promise<T>` to `<T = unknown>(params) => Promise<TToolHandlerResponse<T>>`. Previously `T` sat in return position, letting bidirectional inference silently coerce `T` into whatever shape the caller expected — a latent typing hole. The return shape is now fixed as `IToolHandlerTextResponse | IToolHandlerStructuredResponse<T>`, and `T` narrows only `structuredContent`.
+- MCP Apps skills (`/update-mcp-apps-spec` in the SDK; `/mcp-app-create` and `/mcp-app-add-to-server` in `cli-template/`) now delegate cloning to `scripts/clone-mcp-ext-apps.js` instead of running an inline `git clone --depth 1 --branch v<ver>` into a throwaway `mktemp -d`. The reference checkout is reused across skill runs and across sibling skills, so an `/update-mcp-apps-spec` run leaves the same `./mcp-ext-apps/` available for `/mcp-app-create` without re-cloning.
+- `/update-mcp-apps-spec` skill: `Step 5: Cleanup` (which deleted the temp dir) replaced with `Step 5: Keep the Clone` — the folder is intentionally persistent now. Sections 12.1–12.4 of the digest are built from the helper's `examples[]` JSON (one walk) instead of `ls examples/` + per-directory `package.json` / `README.md` reads. Cross-checks #4 and #8 also diff against the JSON array. The tool-composition row in section 12.2 still requires reading the example's `server.ts` directly, since `package.json` / `README.md` rarely list tool names verbatim.
+- `.gitignore`: `.idea/` removed (IDE config files are now tracked — see Added above), `/mcp-ext-apps/` added (helper's persistent checkout must never be committed). `cli-template/gitignore` mirrors the `/mcp-ext-apps/` addition.
 
 ### Fixed
 
@@ -24,12 +29,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - `cli-template/FA-MCP-SDK-DOC/01-getting-started.md` — updated the `McpServerData.toolHandler` signature in the Core Types section to match the new declaration.
 - `cli-template/FA-MCP-SDK-DOC/00-FA-MCP-SDK-index.md` — added the entry pointing at `10-mcp-apps.md` (MCP Apps digest, pinned to `@modelcontextprotocol/ext-apps` v1.7.2).
-- `cli-template/CLAUDE.md` — added rows for `09-database.md` (previously missing from the Framework Documentation table) and `10-mcp-apps.md`.
-- `CLAUDE.md` (root SDK) — new section "MCP Apps Spec Digest (Skill /update-mcp-apps-spec)" documenting the maintainer skill: triggers, what it touches (digest + two index files only — never `src/core/**`), and what it produces.
-
-## [0.4.99] - 2026-05-15
-
-No functional changes (technical version bump after the 0.4.98 release).
+- `cli-template/CLAUDE.md` — added rows for `09-database.md` (previously missing from the Framework Documentation table) and `10-mcp-apps.md`; new section "MCP Apps Reference Clone (`scripts/clone-mcp-ext-apps.js`)" documenting the helper available in generated projects and listing all CLI flags.
+- `CLAUDE.md` (root SDK) — new section "MCP Apps Spec Digest (Skill /update-mcp-apps-spec)" documenting the maintainer skill: triggers, what it touches (digest + two index files only — never `src/core/**`), and what it produces. Adjacent new section "MCP Apps Reference Clone (`scripts/clone-mcp-ext-apps.js`)" introduces the shared helper used by every MCP Apps skill and shows all CLI flags; the spec-digest description now references the helper invocation explicitly (`scripts/clone-mcp-ext-apps.js --tag latest --json --list-examples`) instead of vague "clones the latest released tag".
 
 ## [0.4.98] - 2026-05-15
 

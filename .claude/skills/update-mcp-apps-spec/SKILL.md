@@ -26,34 +26,42 @@ themselves.
 Nothing else is touched. The digest's header records the pinned ext-apps tag and the spec date so
 future runs can detect drift.
 
-## Step 1: Pin and Clone Upstream
+## Step 1: Clone or Update Upstream
 
-Pin to the latest released version of `@modelcontextprotocol/ext-apps` and clone the matching tag
-into a temp dir **outside** the repo so it is never accidentally committed:
+Use the bundled helper to clone or refresh `mcp-ext-apps/` at the project root and pin it to the
+latest released `@modelcontextprotocol/ext-apps` tag. The folder is gitignored and persistent —
+the same checkout is reused by other MCP Apps skills, so do not delete it after the run.
 
 ```bash
-# Resolve the latest published tag
-EXT_APPS_VERSION="$(npm view @modelcontextprotocol/ext-apps version)"
-
-# Clone the matching tag into a sibling temp dir (NOT inside this repo)
-TMP_DIR="$(mktemp -d)/mcp-ext-apps"
-git clone --branch "v${EXT_APPS_VERSION}" --depth 1 \
-  https://github.com/modelcontextprotocol/ext-apps.git "${TMP_DIR}"
-
-# Record the commit SHA for the digest header
-EXT_APPS_SHA="$(git -C "${TMP_DIR}" rev-parse --short HEAD)"
+node scripts/clone-mcp-ext-apps.js --tag latest --json --list-examples
 ```
 
-If `npm view` fails (offline / registry hiccup), fall back to the default branch but record `(HEAD)`
-instead of a version tag in the digest header.
+The script:
+- clones into `./mcp-ext-apps/` on first run, or pulls the default branch and re-fetches tags on
+  subsequent runs;
+- runs `npm view @modelcontextprotocol/ext-apps version`, then checks out `v<version>` (when
+  `--tag latest` is passed) so the working tree matches the pinned digest header;
+- emits a single JSON document on stdout. Parse it once and reuse the fields throughout this run.
 
-> Note for Windows: `mktemp -d` works under git-bash / WSL. Under cmd, use `%TEMP%\mcp-ext-apps`.
+Fields emitted (relevant subset):
+
+| Field | Use |
+|-------|-----|
+| `path` | Absolute path to the local clone — prefix every file read below with this |
+| `ref` / `refType` | e.g. `v1.7.2` / `tag` — record verbatim in the digest header |
+| `commit` | Short SHA — record in the digest header |
+| `latestNpmVersion` | Published npm version (mirrors `ref` when `--tag latest` succeeded) |
+| `examples[]` | Array of `{ name, relativePath, description, readmeHeading, readmeOpening }` for each `examples/*` directory — pre-collected so you do not need to re-read `package.json` / `README.md` of every example just to populate sections 12.1–12.4 |
+
+If `latestNpmVersion` is `null` (offline / registry hiccup), the helper stays on the default
+branch — record `(HEAD)` in the digest header instead of a version tag, and note the registry
+miss in the report to the user.
 
 ## Step 2: Read the Source Material
 
-Read everything below from the cloned repo. Treat the spec file as normative; everything else
-illustrates it. **Do not skim.** The digest's accuracy depends on the LLM having actually read
-each file in full.
+Read everything below from the cloned repo (`./mcp-ext-apps/`). Treat the spec file as normative;
+everything else illustrates it. **Do not skim.** The digest's accuracy depends on the LLM having
+actually read each file in full.
 
 ### Normative — protocol contract
 
@@ -92,7 +100,11 @@ each file in full.
 ### Examples (used to verify patterns, NOT inlined verbatim)
 
 The digest references these by path in its Reference Index — it must NOT copy whole example files in.
-Use them to sanity-check that the patterns described in the digest match real working code:
+Use them to sanity-check that the patterns described in the digest match real working code. The
+`examples[]` array from Step 1 already lists every server with its `package.json` description and
+the first heading + opening paragraph of its `README.md`, so most classification work is one
+JSON-walk away. Only read the full `README.md` when the snippet is ambiguous (e.g. when
+`readmeOpening` is just an image link).
 
 - `examples/basic-server-{vanillajs,react,vue,svelte,preact,solid}/` — minimal complete servers per framework
 - `examples/basic-host/` — reference host implementation
@@ -180,9 +192,8 @@ below is what makes the digest self-sufficient.
 
 12. **Examples — When to Consult Which** — curated map of upstream `examples/` by use case, so the
     LLM consuming the digest can pick the right reference server without re-discovery. Build the
-    section by walking every directory under `examples/` in the cloned tag, reading each example's
-    `package.json` (`description` field) and `README.md` (first heading + opening paragraph), and
-    classifying it into one of these subsections:
+    section by walking the `examples[]` array emitted in Step 1 (no extra file reads needed for
+    most rows) and classifying each entry into one of these subsections:
 
     - **12.1 Smallest end-to-end skeleton** — `examples/quickstart/` (single tool + minimal vanilla
       View) and `examples/basic-host/` (reference host harness — local testing only, NOT a
@@ -190,19 +201,22 @@ below is what makes the digest self-sufficient.
     - **12.2 Mixed tool patterns** — servers combining App-augmented tools, plain tools, and
       app-only tools in one server (canonical: `map-server`, `pdf-server`, `system-monitor-server`).
       Spell out the actual tool composition per row, e.g. `display_pdf` (App tool) + `list_pdfs`
-      (plain tool) + `read_pdf_bytes` (app-only chunked).
+      (plain tool) + `read_pdf_bytes` (app-only chunked). The tool-composition detail is the one
+      place where you MUST read the example's `server.ts` (or equivalent) directly, because
+      `package.json` / `README.md` rarely list tool names verbatim.
     - **12.3 Per-framework starter templates** — every `examples/basic-server-{framework}/`
       directory found in the tag. One row per framework.
     - **12.4 Domain references — pick by use case** — every remaining example under `examples/`,
       one row per server. Each row is `Domain | Example link | What it shows`. The "What it shows"
       cell MUST be grounded in the example's own `README.md` / `package.json` "description" field
-      and SHOULD name the concrete libraries / patterns the example demonstrates (e.g. "Three.js +
-      streaming tool input into canvas, OrbitControls, post-processing"). Group hint by domain
-      (Charts, Analytics drill-down, 3D visualization, WebGL/shaders, Graph visualization,
-      Audio/music, Streaming + audio, Browser APIs, Binary/media resources, Image generation,
-      SDK surface reference, Full SDK API exercise, etc.). When new examples appear upstream they
-      MUST be added here even if their domain doesn't match the existing buckets — invent a new
-      bucket label rather than dropping the example.
+      (the Step 1 JSON already exposes both as `description` and `readmeOpening`) and SHOULD name
+      the concrete libraries / patterns the example demonstrates (e.g. "Three.js + streaming tool
+      input into canvas, OrbitControls, post-processing"). Group hint by domain (Charts, Analytics
+      drill-down, 3D visualization, WebGL/shaders, Graph visualization, Audio/music, Streaming +
+      audio, Browser APIs, Binary/media resources, Image generation, SDK surface reference, Full
+      SDK API exercise, etc.). When new examples appear upstream they MUST be added here even if
+      their domain doesn't match the existing buckets — invent a new bucket label rather than
+      dropping the example.
 
     All example links in this section MUST use the tag-pinned form
     `https://github.com/modelcontextprotocol/ext-apps/tree/v<X.Y.Z>/examples/<name>` (note `tree`,
@@ -253,7 +267,8 @@ Before saving the digest, verify:
 2. Every JSON-RPC message name in the Protocol Contract section matches the spec verbatim.
 3. Every CSS variable group in the Host Context section is grounded in `src/spec.types.ts`
    (`McpUiStyleVariableKey`).
-4. Every example path in the Reference Index actually exists under `examples/` in the cloned tag.
+4. Every example path in the Reference Index actually exists under `examples/` in the cloned tag —
+   diff against the `examples[]` array from Step 1.
 5. The Common Pitfalls list is grounded in the upstream sources read in Step 2 — typically issues
    highlighted across `docs/patterns.md`, `docs/csp-cors.md`, `docs/testing-mcp-apps.md`, and the
    JSDoc warnings in `src/app.ts` and `src/server/index.ts`.
@@ -264,10 +279,10 @@ Before saving the digest, verify:
 7. Every URL in the Reference Index AND in the "Examples — When to Consult Which" section is
    pinned to the same `v<X.Y.Z>` tag recorded in the digest header. Grep for `/blob/main/`,
    `/tree/main/`, or any other version string — there must be zero matches besides the pinned tag.
-8. Every directory under `examples/` in the cloned tag (excluding `run-all.ts` and any non-server
-   helper files) is represented in exactly one row of section 12. Diff `ls examples/` against the
-   section's row count — drift indicates a new upstream example that the digest hasn't classified
-   yet.
+8. Every directory listed in `examples[]` from Step 1 (excluding non-server helper files at the
+   root of `examples/`) is represented in exactly one row of section 12. Diff `examples[].name`
+   against the section's row count — drift indicates a new upstream example that the digest
+   hasn't classified yet.
 
 If the file already exists, diff the new digest against the old one and surface the deltas to the
 user before overwriting — that's how the user sees what changed upstream.
@@ -293,16 +308,15 @@ In the "Framework Documentation" table (the section listing every `0X-*.md` file
 Use the same single-line format as the other rows. Do not introduce sub-headings or bullets in this
 table.
 
-## Step 5: Cleanup
+## Step 5: Keep the Clone
 
-Remove the cloned temp dir:
+Do NOT delete `./mcp-ext-apps/`. The folder is gitignored and intentionally persistent — sibling
+skills (`mcp-app-create`, `mcp-app-add-to-server`) reuse the same checkout, and keeping it on disk
+means the next `node scripts/clone-mcp-ext-apps.js` run is a fast `git pull` instead of a fresh
+clone.
 
-```bash
-rm -rf "${TMP_DIR%/mcp-ext-apps}"
-```
-
-If the run is interrupted mid-way, the temp dir is harmless (it's outside the repo and gitignored
-by being outside) but should still be removed on the next run.
+If a previous run was interrupted and the folder exists but is not a git repo, the helper will
+refuse to proceed — move or remove that folder manually and rerun Step 1.
 
 ## Output Summary (what to report to the user)
 

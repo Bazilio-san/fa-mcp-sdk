@@ -91,3 +91,4 @@ glm.sh
 /.playwright-mcp/
 /claudedocs/
 preferred-language.txt
+/mcp-ext-apps/

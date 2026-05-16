@@ -30,7 +30,6 @@ coverage/
 .nyc_output/
 
 # IDE / editors
-.idea/
 .vscode/
 *.swp
 *.swo
@@ -95,3 +94,4 @@ glm.sh
 /claudedocs/
 preferred-language.txt
 /change-history/
+/mcp-ext-apps/

@@ -357,6 +357,23 @@ Any edit or new file under `.claude/**` (SKILL.md, scripts, hooks, agents, `sett
 by `settings.json` — direct `Write`/`Edit` will fail. Invoke the `/edit-claude-files` skill, which
 describes the required `scripts/fcp.js` temp-copy protocol.
 
+## MCP Apps Reference Clone (`scripts/clone-mcp-ext-apps.js`)
+
+Shared helper used by the `/mcp-app-create` and `/mcp-app-add-to-server` skills. Clones or refreshes
+`https://github.com/modelcontextprotocol/ext-apps.git` into `./mcp-ext-apps/` at the project root
+(already in `.gitignore`, intentionally persistent so the same checkout is reused across runs).
+
+```bash
+node scripts/clone-mcp-ext-apps.js                    # clone on first run, pull main otherwise
+node scripts/clone-mcp-ext-apps.js --tag latest       # also checkout the latest npm tag
+node scripts/clone-mcp-ext-apps.js --tag v1.7.2       # checkout a specific tag
+node scripts/clone-mcp-ext-apps.js --json             # JSON output (path, ref, commit, version)
+node scripts/clone-mcp-ext-apps.js --list-examples    # include examples/* metadata in JSON
+```
+
+The script never deletes `mcp-ext-apps/`. The two skills above call it before reading sources from
+the cloned tree, so make sure it has run successfully before troubleshooting their behavior.
+
 
 ## Formatting
 
