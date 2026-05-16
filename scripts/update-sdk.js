@@ -134,7 +134,17 @@ for (const { name, src, dest, preserve = [], respectPin = false } of targets) {
 
 const scriptsSrcDir = join(cwd, './node_modules/fa-mcp-sdk/scripts');
 const scriptsDestDir = join(cwd, 'scripts');
-const individualScripts = ['generate-jwt.js', 'setup-agent-links.js'];
+const individualScripts = [
+  'cc-hook-oxlint-oxfmt-fix.cjs',
+  'clone-mcp-ext-apps.js',
+  'fcp.js',
+  'generate-jwt.js',
+  'kill-port.js',
+  'pre-commit',
+  'remove-nul.js',
+  'setup-agent-links.js',
+  'update-sdk.js',
+];
 
 for (const file of individualScripts) {
   const src = join(scriptsSrcDir, file);
