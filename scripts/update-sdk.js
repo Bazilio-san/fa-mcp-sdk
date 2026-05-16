@@ -134,7 +134,7 @@ for (const { name, src, dest, preserve = [], respectPin = false } of targets) {
 
 const scriptsSrcDir = join(cwd, './node_modules/fa-mcp-sdk/scripts');
 const scriptsDestDir = join(cwd, 'scripts');
-const individualScripts = ['generate-jwt.js'];
+const individualScripts = ['generate-jwt.js', 'setup-agent-links.js'];
 
 for (const file of individualScripts) {
   const src = join(scriptsSrcDir, file);
