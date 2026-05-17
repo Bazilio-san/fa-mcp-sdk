@@ -1,4 +1,5 @@
 import { Tool } from '@modelcontextprotocol/sdk/types.js';
+import { ILoggerSettings } from 'af-logger-ts';
 import { Router } from 'express';
 
 import { AuthResult } from '../auth/types.js';
@@ -149,6 +150,11 @@ export interface McpServerData {
   // Array of [key, value] pairs to be shown in the startup info block
   // Example: [['Admin Auth', 'JWT'], ['Custom param', 'any value']]
   customStartupInfo?: [string, string][];
+
+  // Optional logger settings overrides applied on top of built-in defaults.
+  // Only specified fields override defaults — merge is shallow (Object.assign semantics).
+  // Example: { level: 'silly', maskValuesRegEx: [] }
+  loggerSettings?: Partial<ILoggerSettings>;
 }
 
 export type TPromptContentFunction = (request: IGetPromptRequest) => string | Promise<string>;

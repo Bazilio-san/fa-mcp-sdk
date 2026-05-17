@@ -135,9 +135,94 @@ await fileLogger.asyncFinish();  // Flush before shutdown
 
 // Logger type for typing custom logger references
 const myLogger: Logger = logger;
+
+// Named sublogger — pick this up anywhere in your code
+const subLogger = logger.getSubLogger({ name: 'payments' });
+subLogger.info('Charge captured');
 ```
 
 **`Logger`** — The logger type from 'af-logger-ts' is used to type variables and function parameters.
+
+### Built-in Defaults
+
+The SDK initializes `af-logger-ts` with these defaults:
+
+- `level` — from `config.logger.level` (in STDIO transport it is forced to `error` and console output
+  is redirected to `stderr` to keep stdout clean for the JSON-RPC stream).
+- `filePrefix` — from `appConfig.name`.
+- File logger — enabled when `config.logger.useFileLogger: true`, writes to `config.logger.dir`.
+- `maskValuesRegEx` — a built-in list that masks tokens, API keys, secrets, passwords,
+  `Authorization` headers (Basic/Bearer), email addresses, and HTTP-URL credentials.
+
+### Disabling the Built-in Secret Masking
+
+Set `logger.noMaskValues: true` in any YAML config — `maskValuesRegEx` becomes `[]` and nothing is
+masked. Useful when you want raw payloads in dev logs.
+
+```yaml
+# config/local.yaml
+logger:
+  level: debug
+  noMaskValues: true   # log secrets/emails/URLs verbatim (DEV ONLY)
+```
+
+Or via env:
+
+```bash
+LOGGER_NO_MASK_VALUES=true yarn start
+```
+
+> ⚠️ Never enable `noMaskValues` in production — emails, bearer tokens, and basic credentials will
+> leak into log files and console output.
+
+### Overriding Logger Settings at Startup
+
+Pass `loggerSettings: Partial<ILoggerSettings>` in `McpServerData` to override individual fields
+on top of the built-in defaults. The merge is shallow — only the fields you specify are replaced;
+everything else (`prettyLogTemplate`, `filePrefix`, `maskValuesRegEx`, file-logger config, etc.) is
+kept.
+
+```typescript
+// src/start.ts
+import { initMcpServer, McpServerData } from 'fa-mcp-sdk';
+
+const serverData: McpServerData = {
+  tools,
+  toolHandler: handleToolCall,
+  // ...
+
+  loggerSettings: {
+    level: 'silly',          // bump verbosity for one run without touching YAML
+    maskValuesRegEx: [],     // ad-hoc: drop all secret masking (same effect as logger.noMaskValues)
+  },
+};
+
+await initMcpServer(serverData);
+```
+
+`initMcpServer` applies these overrides before any further logging. Existing top-level
+`const logger = lgr.getSubLogger(...)` bindings transparently pick up the new settings on next
+use — no need to re-import.
+
+### Reapplying Settings After Startup
+
+`applyLoggerSettings(overrides)` is also exported directly. Call it whenever you want to change
+logger configuration on the fly (e.g. raise verbosity from an admin endpoint). The cached main
+logger and the sub-logger cache are reset, so subsequent log calls pick up the new settings
+immediately.
+
+```typescript
+import { applyLoggerSettings } from 'fa-mcp-sdk';
+
+// Temporarily switch to silly-level logging for a debugging window
+applyLoggerSettings({ level: 'silly' });
+
+// Restore later
+applyLoggerSettings({ level: 'info' });
+```
+
+> Note: in STDIO transport the logger is a stub (writes to `stderr`) and `applyLoggerSettings` is a
+> no-op — `console.log` etc. would otherwise corrupt the JSON-RPC framing on stdout.
 
 ## Event System
 

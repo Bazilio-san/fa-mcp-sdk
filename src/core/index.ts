@@ -108,7 +108,7 @@ export { isPortAvailable, checkPortAvailability } from './utils/port-checker.js'
 
 export { ROOT_PROJECT_DIR } from './constants.js';
 export { eventEmitter } from './ee.js';
-export { logger, fileLogger } from './logger.js';
+export { logger, fileLogger, applyLoggerSettings } from './logger.js';
 
 export { getCache, CacheManager } from './cache/cache.js';
 

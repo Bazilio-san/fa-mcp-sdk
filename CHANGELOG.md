@@ -5,6 +5,23 @@ All notable changes to `fa-mcp-sdk` are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.108] - 2026-05-17
+
+### Added
+
+- New public export `applyLoggerSettings(overrides: Partial<ILoggerSettings>)` from `src/core/index.ts` — applies a shallow merge of user-supplied logger settings on top of the built-in defaults. Specified fields override defaults; the cached logger and all sub-loggers are reset so subsequent log calls pick up the new settings. No-op in STDIO mode.
+- `McpServerData.loggerSettings?: Partial<ILoggerSettings>` — pass overrides from `start.ts` via `initMcpServer({ ..., loggerSettings: { level: 'silly', maskValuesRegEx: [] } })`. Applied automatically at the top of `initMcpServer` before any further logging.
+- New config key `logger.noMaskValues: boolean` (default `false`) — when `true`, disables the built-in secret/email/URL masking by setting `maskValuesRegEx = []`. Override via env `LOGGER_NO_MASK_VALUES=true`. Mirrored in `config/default.yaml`, `_local.yaml`, `local.yaml`, `test.yaml`, and `custom-environment-variables.yaml`.
+- `appConfig.sdkVersion: string` — version of the `fa-mcp-sdk` package itself (resolved from the SDK's own `package.json`, not the consumer project's). Exposed alongside `appConfig.version`.
+- Agent Tester UI: info button (ⓘ) next to the `MCP Agent Tester` header. Click toggles a tooltip showing the SDK version (`fa-mcp-sdk v<X.Y.Z>`); clicking outside or on the icon again hides it. The version is served by `GET /agent-tester/api/config` as `sdkVersion`.
+- New `.claude/settings.local-example.json` template (Claude Code `defaultMode: bypassPermissions` + notification env defaults) shipped at the SDK root and in `cli-template/.claude/`. Copy to `settings.local.json` as a starting point; `settings.local.json` is preserved by `/upgrade-sdk`.
+
+### Changed
+
+- `src/core/logger.ts` rewritten with lazy proxy-based initialization. The exported `logger` is now a `Proxy` that resolves the real `af-logger-ts` logger on first access; `logger.getSubLogger(opts)` returns a per-key cached sub-logger proxy. Calling `applyLoggerSettings()` clears the cache so existing top-level `const logger = lgr.getSubLogger(...)` bindings transparently pick up the new settings on next use — no need to re-import. `fileLogger` is also proxied and remains compatible with the existing `fileLogger?.asyncFinish` / `fileLogger?.logDir` access patterns.
+- Agent Tester UI: `#systemPrompt` (Agent Prompt) textarea grown from `rows="3"` to `rows="8"` (~170 px initial height). `#messageInput` (chat input) grown from `rows="1"` / `min-height: 56 px` / `max-height: 120 px` to `rows="2"` / `min-height: 112 px` / `max-height: 240 px`; the auto-resize ceiling in `script.js` updated to match.
+- `scripts/update-sdk.js`: `preserve` list for `.claude/` now includes `settings.local.json` so a local-only override is never overwritten by `/upgrade-sdk`. The `individualScripts` list refreshed by `/upgrade-sdk` expanded to also pull `cc-hook-oxlint-oxfmt-fix.cjs`, `clone-mcp-ext-apps.js`, `fcp.js`, `kill-port.js`, `pre-commit`, `remove-nul.js`, and `update-sdk.js` itself — generated projects now receive the full helper script set on upgrade.
+
 ## [0.4.102] - 2026-05-16
 
 ### Added

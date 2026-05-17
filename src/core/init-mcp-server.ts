@@ -9,7 +9,7 @@ import { startupInfo } from './bootstrap/startup-info.js';
 import { accessPointUpdater } from './consul/access-points-updater.js';
 import { registerCyclic } from './consul/register.js';
 import { checkMainDB } from './db/pg-db.js';
-import { fileLogger, logger as lgr } from './logger.js';
+import { applyLoggerSettings, fileLogger, logger as lgr } from './logger.js';
 
 // Imports to modify _core functions
 import { startStdioServer } from './mcp/server-stdio.js';
@@ -77,6 +77,13 @@ export async function gracefulShutdown(signal: string, exitCode: number = 0) {
  * Accepts all design data and starts the server
  */
 export async function initMcpServer(data: McpServerData): Promise<void> {
+  // Apply user-provided logger overrides before any further logger usage in this call.
+  // Subloggers created at module-import time will pick up the new settings on next access
+  // because they are resolved lazily through proxies in logger.ts.
+  if (data.loggerSettings) {
+    applyLoggerSettings(data.loggerSettings);
+  }
+
   const needCheckDb = process.env.NODE_ENV !== 'test' && appConfig.isMainDBUsed;
 
   // Handle graceful shutdown

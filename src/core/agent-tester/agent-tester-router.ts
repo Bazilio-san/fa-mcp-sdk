@@ -101,6 +101,7 @@ export function createAgentTesterRouter(
       defaultMcpUrl: options.defaultMcpUrl || null,
       authEnabled: !!appConfig.webServer?.auth?.enabled,
       httpHeaders: appConfig.agentTester?.httpHeaders || {},
+      sdkVersion: appConfig.sdkVersion || '',
       llmDefaults: {
         baseURL: expose ? openAi?.baseURL || '' : '',
         apiKey: expose ? openAi?.apiKey || '' : '',

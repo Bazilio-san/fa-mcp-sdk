@@ -38,6 +38,8 @@ interface McpServerData {
   httpComponents?: { apiRouter?: Router | null };     // Express router
   assets?: { logoSvg?: string };
   getConsulUIAddress?: (serviceId: string) => string;
+  customStartupInfo?: [string, string][];             // Extra [key, value] rows in startup banner
+  loggerSettings?: Partial<ILoggerSettings>;          // Override af-logger-ts settings (shallow merge over defaults)
 }
 
 interface IToolHandlerParams {

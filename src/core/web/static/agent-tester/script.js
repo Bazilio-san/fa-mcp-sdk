@@ -523,6 +523,11 @@ class McpAgentTester {
     this.sendButton.addEventListener('click', () => this.sendMessage());
     this.clearChatBtn.addEventListener('click', () => this.clearChat());
 
+    const sdkVersionBtn = document.getElementById('sdkVersionBtn');
+    if (sdkVersionBtn) {
+      sdkVersionBtn.addEventListener('click', (e) => this.toggleSdkVersionTooltip(e));
+    }
+
     document.addEventListener('click', (e) => {
       if (
         window.innerWidth <= 768 &&
@@ -602,7 +607,7 @@ class McpAgentTester {
   setupAutoResize() {
     this.messageInput.addEventListener('input', function () {
       this.style.height = 'auto';
-      this.style.height = Math.min(this.scrollHeight, 120) + 'px';
+      this.style.height = Math.min(this.scrollHeight, 240) + 'px';
     });
   }
 
@@ -711,6 +716,7 @@ class McpAgentTester {
       this.authEnabled = !!config.authEnabled;
       this.configHttpHeaders = config.httpHeaders || {};
       this.llmDefaults = config.llmDefaults || {};
+      this.sdkVersion = config.sdkVersion || '';
       if (config.defaultMcpUrl) {
         const serverUrlInput = document.getElementById('serverUrl');
         if (!this.mcpConfig.url && !serverUrlInput.value) {
@@ -939,6 +945,32 @@ class McpAgentTester {
     const tip = document.getElementById('headerTooltip');
     tip.classList.remove('visible');
     tip._sourceEl = null;
+  }
+
+  toggleSdkVersionTooltip(e) {
+    e.stopPropagation();
+    const tip = document.getElementById('headerTooltip');
+    const btn = e.currentTarget;
+    if (tip._sourceEl === btn && tip.classList.contains('visible')) {
+      this.hideHeaderTooltip();
+      return;
+    }
+    const text = this.sdkVersion ? `fa-mcp-sdk v${this.sdkVersion}` : 'fa-mcp-sdk (version unknown)';
+    tip._sourceEl = btn;
+    tip.textContent = text;
+    const rect = btn.getBoundingClientRect();
+    tip.style.left = rect.left + rect.width / 2 + 'px';
+    tip.style.top = rect.bottom + 6 + 'px';
+    tip.style.transform = 'translateX(-50%)';
+    tip.classList.add('visible');
+    if (!this._sdkTooltipOutsideHandler) {
+      this._sdkTooltipOutsideHandler = (ev) => {
+        if (ev.target !== btn && !btn.contains(ev.target)) {
+          this.hideHeaderTooltip();
+        }
+      };
+      document.addEventListener('click', this._sdkTooltipOutsideHandler);
+    }
   }
 
   copyToClipboard(text) {

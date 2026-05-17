@@ -724,6 +724,29 @@ body {
   color: var(--text);
 }
 
+.sdk-version-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  padding: 2px;
+  margin-left: 2px;
+  color: var(--text-muted);
+  cursor: pointer;
+  border-radius: 50%;
+  transition: color 0.15s, background 0.15s;
+}
+
+.sdk-version-btn:hover {
+  color: var(--primary);
+  background: var(--primary-glow);
+}
+
+.sdk-version-btn .material-icons-round {
+  font-size: 18px;
+}
+
 .status {
   font-size: 0.8rem;
   color: var(--text-muted);
@@ -1060,8 +1083,8 @@ body {
   font-size: 0.9rem;
   font-family: inherit;
   padding: 14px 120px 14px 18px;
-  min-height: 56px;
-  max-height: 120px;
+  min-height: 112px;
+  max-height: 240px;
   line-height: 1.4;
 }
 

@@ -53,6 +53,7 @@ interface ILoggerConfig {
     level: TFileLogLevel;
     useFileLogger: boolean;
     dir?: string; // Directory for log files (if useFileLogger is true)
+    noMaskValues?: boolean; // If true, disable built-in secret/email/URL masking (maskValuesRegEx = [])
   };
 }
 
@@ -134,6 +135,7 @@ export interface AppConfig
   shortName: string; // name without 'mcp'
   repo: string;
   version: string;
+  sdkVersion: string; // fa-mcp-sdk package version (read from SDK's own package.json)
   productName: string; // env PRODUCT_NAME | <package.json>.productName
   description: string; // <package.json>.description
 

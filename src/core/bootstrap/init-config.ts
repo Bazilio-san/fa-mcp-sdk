@@ -8,6 +8,7 @@ export const config: AppConfig = configModule.util.toObject();
 
 import { readFileSync } from 'fs';
 import * as path from 'path';
+import { fileURLToPath } from 'url';
 import { trim } from '../utils/utils.js';
 import { McpServerData } from '../_types_/types.js';
 
@@ -15,6 +16,17 @@ const pj = JSON.parse(readFileSync(path.join(process.cwd(), 'package.json'), 'ut
 const { version, description, keywords, repository, homepage } = pj;
 const name = process.env.SERVICE_NAME || pj.name;
 const productName = process.env.PRODUCT_NAME || pj.productName;
+
+// Read fa-mcp-sdk's own package.json (resolved relative to this compiled file's location).
+// Compiled path: <sdk-root>/dist/core/bootstrap/init-config.js → SDK root is three levels up.
+const sdkRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..', '..');
+const sdkVersion: string = (() => {
+  try {
+    return JSON.parse(readFileSync(path.join(sdkRoot, 'package.json'), 'utf-8')).version || '';
+  } catch {
+    return '';
+  }
+})();
 
 /**
  * Build application configuration from YAML and environment variables
@@ -29,6 +41,7 @@ function buildConfig(): AppConfig {
     shortName,
     productName,
     version,
+    sdkVersion,
     description,
   };
 
