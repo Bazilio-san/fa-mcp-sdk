@@ -5,6 +5,20 @@ All notable changes to `fa-mcp-sdk` are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.109] - 2026-05-17
+
+### Added
+
+- New **Tool Tester** tab in the Agent Tester UI (`/agent-tester`) — invokes MCP tools directly without involving an LLM. Shares the connection panel (URL, transport, headers, status, tool count) with the Chat tab. Layout: tool dropdown + JSON request editor on the left, response on the right; an optional parameter-schema panel can be toggled to give a 3-column view (schema | request | response).
+- Tool Tester request editor: `Generate JSON` button builds a skeleton from the selected tool's `inputSchema` (honours `required`, `default`, `enum`, `examples`); `Validate` button runs a client-side JSON-Schema validator (`type` incl. `integer⊂number`, `required`, `properties`, `additionalProperties`, `enum`, `minimum`/`maximum`/`exclusiveMinimum`/`exclusiveMaximum`, `minLength`/`maxLength`/`pattern`, `items`/`minItems`/`maxItems`). Request JSON is persisted in `localStorage` under `mcpAgentTesterToolJson_<toolName>` with a 600 ms debounce and restored when the tool is reselected.
+- Tool Tester response viewer: toggle button extracts the first `content[].text` entry into a light-blue panel; if the text parses as JSON, it is rendered as pretty-printed JSON (otherwise plain text). Status line shows `Success in Nms` / `Error in Nms`.
+- New HTTP endpoint `POST /agent-tester/api/mcp/call-tool` — body `{ serverName, toolName, parameters }`, returns `{ success, result, durationMs }`. Reuses the cached MCP client via `TesterMcpClientService.callToolWithConfig`; auto-reissues the agent-tester JWT on 401 when targeting the SDK's own server.
+- New static asset `src/core/web/static/agent-tester/pretty-print-json.js` — browser port of `prettyPrintJson` from `af-tools-ts` (extended variant: deserializes JSON escape sequences, wraps strings longer than `maxTextLength` in a scrollable `.json-long-text-content` container). Exposed as `window.prettyPrintJson`; used to syntax-highlight both the parameter schema and the response.
+
+### Changed
+
+- Agent Tester UI: tab navigation bar added at the top of the main content area (`Chat` / `Tool Tester`). The existing chat workflow is unchanged and lives under the `Chat` tab. Connecting to an MCP server now also populates the Tool Tester's tool dropdown automatically.
+
 ## [0.4.108] - 2026-05-17
 
 ### Added

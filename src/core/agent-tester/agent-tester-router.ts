@@ -20,7 +20,7 @@ import { logger as lgr } from '../logger.js';
 
 import { TesterAgentService } from './services/TesterAgentService.js';
 import { TesterMcpClientService } from './services/TesterMcpClientService.js';
-import { ITesterChatRequest, TesterMcpConnectionRequest } from './types.js';
+import { ITesterChatRequest, TesterMcpConfig, TesterMcpConnectionRequest } from './types.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -285,6 +285,36 @@ export function createAgentTesterRouter(
   // GET /api/mcp/servers
   router.get('/api/mcp/servers', (req, res) => {
     res.json(mcpClientService.getAllServerConfigs());
+  });
+
+  // POST /api/mcp/call-tool — direct MCP tool invocation (no LLM involved)
+  router.post('/api/mcp/call-tool', async (req, res): Promise<void> => {
+    try {
+      const { serverName, toolName, parameters } = req.body || {};
+      if (!serverName || !toolName) {
+        res.status(400).json({ error: 'serverName and toolName are required' });
+        return;
+      }
+      const server = mcpClientService.getAllServerConfigs().find((s) => s.name === serverName);
+      if (!server || !server.isConnected) {
+        res.status(404).json({ error: `Server ${serverName} is not connected` });
+        return;
+      }
+      const mcpConfig: TesterMcpConfig = {
+        url: server.url,
+        transport: server.transport as 'http' | 'sse',
+        name: server.name,
+      };
+      if (server.headers) {
+        mcpConfig.headers = server.headers;
+      }
+      const startedAt = Date.now();
+      const result = await mcpClientService.callToolWithConfig(mcpConfig, toolName, parameters || {});
+      res.json({ success: true, result, durationMs: Date.now() - startedAt });
+    } catch (error: any) {
+      logger.error('MCP call-tool error:', error);
+      res.status(500).json({ success: false, error: error.message || 'Tool execution failed' });
+    }
   });
 
   // GET /api/mcp/used-headers

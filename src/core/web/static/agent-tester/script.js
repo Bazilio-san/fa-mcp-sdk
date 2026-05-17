@@ -453,6 +453,29 @@ class McpAgentTester {
 
     this.themeToggle = document.getElementById('themeToggle');
     this.defaultFormatSelect = document.getElementById('defaultDisplayFormat');
+
+    // Tool Tester tab elements
+    this.tabsBar = document.querySelector('.tabs-bar');
+    this.tabPaneChat = document.getElementById('tabPaneChat');
+    this.tabPaneToolTester = document.getElementById('tabPaneToolTester');
+    this.ttLayout = document.getElementById('ttLayout');
+    this.ttToolSelect = document.getElementById('ttToolSelect');
+    this.ttToolDescription = document.getElementById('ttToolDescription');
+    this.ttSchemaToggle = document.getElementById('ttSchemaToggle');
+    this.ttSchemaPanel = document.getElementById('ttSchemaPanel');
+    this.ttSchemaContent = document.getElementById('ttSchemaContent');
+    this.ttSchemaClose = document.getElementById('ttSchemaClose');
+    this.ttGenerateJson = document.getElementById('ttGenerateJson');
+    this.ttValidateJson = document.getElementById('ttValidateJson');
+    this.ttRequestJson = document.getElementById('ttRequestJson');
+    this.ttSendBtn = document.getElementById('ttSendBtn');
+    this.ttRequestStatus = document.getElementById('ttRequestStatus');
+    this.ttResponseContent = document.getElementById('ttResponseContent');
+    this.ttResponseClear = document.getElementById('ttResponseClear');
+    this.ttResponseTextView = document.getElementById('ttResponseTextView');
+    this.ttLastResult = null;
+    this.ttResponseTextMode = false;
+    this.activeTab = 'chat';
   }
 
   bindEvents() {
@@ -544,6 +567,40 @@ class McpAgentTester {
         this.sidebar.classList.remove('open');
       }
     });
+
+    // --- Tool Tester tab events ---
+    if (this.tabsBar) {
+      this.tabsBar.querySelectorAll('.tab-btn').forEach((btn) => {
+        btn.addEventListener('click', () => this.switchTab(btn.dataset.tab));
+      });
+    }
+    if (this.ttToolSelect) {
+      this.ttToolSelect.addEventListener('change', () => this.handleToolSelectionChange());
+    }
+    if (this.ttSchemaToggle) {
+      this.ttSchemaToggle.addEventListener('click', () => this.toggleSchemaPanel());
+    }
+    if (this.ttSchemaClose) {
+      this.ttSchemaClose.addEventListener('click', () => this.toggleSchemaPanel(false));
+    }
+    if (this.ttGenerateJson) {
+      this.ttGenerateJson.addEventListener('click', () => this.generateJsonSkeleton());
+    }
+    if (this.ttValidateJson) {
+      this.ttValidateJson.addEventListener('click', () => this.validateRequestJson());
+    }
+    if (this.ttRequestJson) {
+      this.ttRequestJson.addEventListener('input', () => this.handleRequestJsonInput());
+    }
+    if (this.ttSendBtn) {
+      this.ttSendBtn.addEventListener('click', () => this.sendToolRequest());
+    }
+    if (this.ttResponseClear) {
+      this.ttResponseClear.addEventListener('click', () => this.clearToolResponse());
+    }
+    if (this.ttResponseTextView) {
+      this.ttResponseTextView.addEventListener('click', () => this.toggleResponseTextMode());
+    }
   }
 
   initTheme() {
@@ -1290,6 +1347,7 @@ class McpAgentTester {
   }
 
   renderServerInfo() {
+    this.refreshToolList();
     if (!this.currentServer) {
       this.connectedServersContainer.innerHTML = '';
       return;
@@ -2154,6 +2212,522 @@ class McpAgentTester {
     if (!container) {
       this.closeUrlDropdown();
     }
+  }
+
+  // ===== Tool Tester Tab =====
+
+  switchTab(tabName) {
+    if (!tabName || tabName === this.activeTab) {
+      return;
+    }
+    this.activeTab = tabName;
+
+    this.tabsBar.querySelectorAll('.tab-btn').forEach((btn) => {
+      btn.classList.toggle('active', btn.dataset.tab === tabName);
+    });
+
+    if (tabName === 'chat') {
+      this.tabPaneChat.style.display = '';
+      this.tabPaneChat.classList.add('active');
+      this.tabPaneToolTester.style.display = 'none';
+      this.tabPaneToolTester.classList.remove('active');
+    } else if (tabName === 'tool-tester') {
+      this.tabPaneChat.style.display = 'none';
+      this.tabPaneChat.classList.remove('active');
+      this.tabPaneToolTester.style.display = '';
+      this.tabPaneToolTester.classList.add('active');
+      this.refreshToolList();
+    }
+  }
+
+  refreshToolList() {
+    if (!this.ttToolSelect) {
+      return;
+    }
+    const tools =
+      this.currentServer && this.currentServer.isConnected && Array.isArray(this.currentServer.tools)
+        ? this.currentServer.tools
+        : [];
+    this.ttTools = tools;
+
+    const previousValue = this.ttToolSelect.value;
+    this.ttToolSelect.innerHTML = '<option value="">— select a tool —</option>';
+    tools.forEach((tool) => {
+      const opt = document.createElement('option');
+      opt.value = tool.name;
+      opt.textContent = tool.name;
+      this.ttToolSelect.appendChild(opt);
+    });
+
+    const stillExists = tools.some((t) => t.name === previousValue);
+    this.ttToolSelect.value = stillExists ? previousValue : '';
+    this.handleToolSelectionChange();
+  }
+
+  getSelectedTool() {
+    const name = this.ttToolSelect?.value;
+    if (!name || !Array.isArray(this.ttTools)) {
+      return null;
+    }
+    return this.ttTools.find((t) => t.name === name) || null;
+  }
+
+  handleToolSelectionChange() {
+    const tool = this.getSelectedTool();
+    const hasTool = !!tool;
+    const connected = !!(this.currentServer && this.currentServer.isConnected);
+
+    this.ttSchemaToggle.disabled = !hasTool;
+    this.ttGenerateJson.disabled = !hasTool;
+    this.ttValidateJson.disabled = !hasTool;
+    this.ttSendBtn.disabled = !hasTool || !connected;
+
+    if (tool && tool.description) {
+      this.ttToolDescription.textContent = tool.description;
+      this.ttToolDescription.style.display = '';
+    } else {
+      this.ttToolDescription.textContent = '';
+      this.ttToolDescription.style.display = 'none';
+    }
+
+    if (this.ttSchemaPanel.style.display !== 'none') {
+      this.renderSchema(tool);
+    }
+    this.loadRequestJsonForTool(tool);
+    this.ttRequestStatus.textContent = '';
+    this.ttRequestStatus.className = 'tt-status';
+  }
+
+  getToolJsonStorageKey(toolName) {
+    return `mcpAgentTesterToolJson_${toolName}`;
+  }
+
+  loadRequestJsonForTool(tool) {
+    if (!tool) {
+      return;
+    }
+    try {
+      const saved = localStorage.getItem(this.getToolJsonStorageKey(tool.name));
+      if (saved !== null) {
+        this.ttRequestJson.value = saved;
+        return;
+      }
+    } catch {
+      /* ignore */
+    }
+    this.ttRequestJson.value = '{}';
+  }
+
+  saveRequestJsonForTool() {
+    const tool = this.getSelectedTool();
+    if (!tool) {
+      return;
+    }
+    try {
+      localStorage.setItem(this.getToolJsonStorageKey(tool.name), this.ttRequestJson.value);
+    } catch {
+      /* ignore */
+    }
+  }
+
+  handleRequestJsonInput() {
+    if (this._ttJsonSaveTimer) {
+      clearTimeout(this._ttJsonSaveTimer);
+    }
+    this._ttJsonSaveTimer = setTimeout(() => this.saveRequestJsonForTool(), 600);
+  }
+
+  toggleSchemaPanel(forceState) {
+    const isOpen = this.ttSchemaPanel.style.display !== 'none';
+    const next = typeof forceState === 'boolean' ? forceState : !isOpen;
+
+    this.ttSchemaPanel.style.display = next ? '' : 'none';
+    this.ttLayout.dataset.showSchema = next ? 'true' : 'false';
+
+    if (next) {
+      this.renderSchema(this.getSelectedTool());
+    }
+  }
+
+  renderSchema(tool) {
+    if (!tool) {
+      this.ttSchemaContent.innerHTML = '';
+      return;
+    }
+    const schema = tool.inputSchema || {};
+    if (window.prettyPrintJson && typeof window.prettyPrintJson.toHtml === 'function') {
+      try {
+        this.ttSchemaContent.innerHTML = window.prettyPrintJson.toHtml(schema, { indent: 2 });
+        return;
+      } catch {
+        /* fall back to plain text */
+      }
+    }
+    try {
+      this.ttSchemaContent.textContent = JSON.stringify(schema, null, 2);
+    } catch {
+      this.ttSchemaContent.textContent = String(schema);
+    }
+  }
+
+  generateJsonSkeleton() {
+    const tool = this.getSelectedTool();
+    if (!tool) {
+      return;
+    }
+    const skeleton = this.buildSkeletonFromSchema(tool.inputSchema);
+    try {
+      this.ttRequestJson.value = JSON.stringify(skeleton, null, 2);
+    } catch {
+      this.ttRequestJson.value = '{}';
+    }
+    this.saveRequestJsonForTool();
+  }
+
+  validateRequestJson() {
+    const tool = this.getSelectedTool();
+    if (!tool) {
+      return;
+    }
+    const raw = this.ttRequestJson.value.trim();
+    let parsed;
+    try {
+      parsed = raw ? JSON.parse(raw) : {};
+    } catch (e) {
+      this.ttRequestStatus.textContent = 'Invalid JSON: ' + e.message;
+      this.ttRequestStatus.className = 'tt-status tt-status-error';
+      return;
+    }
+    const errors = this.validateAgainstSchema(parsed, tool.inputSchema || {}, '$');
+    if (errors.length === 0) {
+      this.ttRequestStatus.textContent = '✓ JSON matches schema';
+      this.ttRequestStatus.className = 'tt-status tt-status-success';
+    } else {
+      const preview = errors.slice(0, 5).join('; ');
+      const more = errors.length > 5 ? ` (+${errors.length - 5} more)` : '';
+      this.ttRequestStatus.textContent = `${errors.length} validation error${errors.length === 1 ? '' : 's'}: ${preview}${more}`;
+      this.ttRequestStatus.className = 'tt-status tt-status-error';
+    }
+  }
+
+  validateAgainstSchema(value, schema, path) {
+    const errors = [];
+    if (!schema || typeof schema !== 'object') {
+      return errors;
+    }
+    if (schema.type) {
+      const types = Array.isArray(schema.type) ? schema.type : [schema.type];
+      const actual = this.jsonTypeOf(value);
+      const numericMatch = actual === 'integer' && types.includes('number');
+      if (!types.includes(actual) && !numericMatch) {
+        errors.push(`${path}: expected ${types.join('|')} but got ${actual}`);
+        return errors;
+      }
+    }
+    if (Array.isArray(schema.enum)) {
+      const ok = schema.enum.some((e) => JSON.stringify(e) === JSON.stringify(value));
+      if (!ok) {
+        errors.push(`${path}: must be one of ${JSON.stringify(schema.enum)}`);
+      }
+    }
+    if (typeof value === 'number') {
+      if (schema.minimum !== undefined && value < schema.minimum) {
+        errors.push(`${path}: must be >= ${schema.minimum}`);
+      }
+      if (schema.maximum !== undefined && value > schema.maximum) {
+        errors.push(`${path}: must be <= ${schema.maximum}`);
+      }
+      if (schema.exclusiveMinimum !== undefined && value <= schema.exclusiveMinimum) {
+        errors.push(`${path}: must be > ${schema.exclusiveMinimum}`);
+      }
+      if (schema.exclusiveMaximum !== undefined && value >= schema.exclusiveMaximum) {
+        errors.push(`${path}: must be < ${schema.exclusiveMaximum}`);
+      }
+    }
+    if (typeof value === 'string') {
+      if (schema.minLength !== undefined && value.length < schema.minLength) {
+        errors.push(`${path}: minLength ${schema.minLength}`);
+      }
+      if (schema.maxLength !== undefined && value.length > schema.maxLength) {
+        errors.push(`${path}: maxLength ${schema.maxLength}`);
+      }
+      if (schema.pattern) {
+        try {
+          if (!new RegExp(schema.pattern).test(value)) {
+            errors.push(`${path}: pattern mismatch`);
+          }
+        } catch {
+          /* ignore invalid pattern */
+        }
+      }
+    }
+    if (value && typeof value === 'object' && !Array.isArray(value)) {
+      if (Array.isArray(schema.required)) {
+        for (const req of schema.required) {
+          if (!Object.prototype.hasOwnProperty.call(value, req)) {
+            errors.push(`${path}.${req}: required`);
+          }
+        }
+      }
+      const props = schema.properties || {};
+      for (const [k, v] of Object.entries(value)) {
+        if (props[k]) {
+          errors.push(...this.validateAgainstSchema(v, props[k], `${path}.${k}`));
+        } else if (schema.additionalProperties === false) {
+          errors.push(`${path}.${k}: additional property not allowed`);
+        }
+      }
+    }
+    if (Array.isArray(value)) {
+      if (schema.minItems !== undefined && value.length < schema.minItems) {
+        errors.push(`${path}: minItems ${schema.minItems}`);
+      }
+      if (schema.maxItems !== undefined && value.length > schema.maxItems) {
+        errors.push(`${path}: maxItems ${schema.maxItems}`);
+      }
+      if (schema.items) {
+        value.forEach((item, i) => {
+          errors.push(...this.validateAgainstSchema(item, schema.items, `${path}[${i}]`));
+        });
+      }
+    }
+    return errors;
+  }
+
+  jsonTypeOf(v) {
+    if (v === null) {
+      return 'null';
+    }
+    if (Array.isArray(v)) {
+      return 'array';
+    }
+    if (typeof v === 'number') {
+      return Number.isInteger(v) ? 'integer' : 'number';
+    }
+    return typeof v;
+  }
+
+  buildSkeletonFromSchema(schema) {
+    if (!schema || typeof schema !== 'object') {
+      return {};
+    }
+    const { type } = schema;
+
+    if (type === 'object' || schema.properties) {
+      const props = schema.properties || {};
+      const required = new Set(Array.isArray(schema.required) ? schema.required : Object.keys(props));
+      const out = {};
+      for (const [key, propSchema] of Object.entries(props)) {
+        if (required.has(key) || !schema.required) {
+          out[key] = this.skeletonValue(propSchema);
+        }
+      }
+      return out;
+    }
+    return this.skeletonValue(schema);
+  }
+
+  skeletonValue(schema) {
+    if (!schema || typeof schema !== 'object') {
+      return null;
+    }
+    if (schema.default !== undefined) {
+      return schema.default;
+    }
+    if (Array.isArray(schema.examples) && schema.examples.length) {
+      return schema.examples[0];
+    }
+    if (schema.example !== undefined) {
+      return schema.example;
+    }
+    if (Array.isArray(schema.enum) && schema.enum.length) {
+      return schema.enum[0];
+    }
+    const type = Array.isArray(schema.type) ? schema.type[0] : schema.type;
+    switch (type) {
+      case 'string':
+        return '';
+      case 'number':
+      case 'integer':
+        return 0;
+      case 'boolean':
+        return false;
+      case 'array': {
+        const itemSkeleton = schema.items ? this.skeletonValue(schema.items) : null;
+        return itemSkeleton === null || itemSkeleton === undefined ? [] : [itemSkeleton];
+      }
+      case 'object':
+        return this.buildSkeletonFromSchema(schema);
+      case 'null':
+        return null;
+      default:
+        if (schema.properties) {
+          return this.buildSkeletonFromSchema(schema);
+        }
+        return null;
+    }
+  }
+
+  async sendToolRequest() {
+    const tool = this.getSelectedTool();
+    if (!tool) {
+      return;
+    }
+    if (!this.currentServer || !this.currentServer.isConnected) {
+      this.showToast('Not connected to an MCP server', 'error');
+      return;
+    }
+
+    let parameters;
+    const raw = this.ttRequestJson.value.trim();
+    if (!raw) {
+      parameters = {};
+    } else {
+      try {
+        parameters = JSON.parse(raw);
+      } catch (e) {
+        this.ttRequestStatus.textContent = 'Invalid JSON: ' + e.message;
+        this.ttRequestStatus.className = 'tt-status tt-status-error';
+        return;
+      }
+    }
+
+    this.ttSendBtn.disabled = true;
+    this.ttRequestStatus.textContent = 'Sending request…';
+    this.ttRequestStatus.className = 'tt-status tt-status-progress';
+    this.ttResponseContent.innerHTML = '';
+    this.ttResponseContent.textContent = '⏳ Waiting for response…';
+
+    const startedAt = performance.now();
+    try {
+      const response = await apiFetch(`${API_BASE}/api/mcp/call-tool`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          serverName: this.currentServer.name,
+          toolName: tool.name,
+          parameters,
+        }),
+      });
+      const data = await response.json();
+      const elapsedMs = Math.round(performance.now() - startedAt);
+
+      if (!response.ok || !data.success) {
+        const errMsg = data.error || `HTTP ${response.status}`;
+        this.ttRequestStatus.textContent = `Error in ${elapsedMs} ms`;
+        this.ttRequestStatus.className = 'tt-status tt-status-error';
+        this.renderToolResponse({ error: errMsg }, true);
+        return;
+      }
+
+      this.ttRequestStatus.textContent = `Success in ${data.durationMs ?? elapsedMs} ms`;
+      this.ttRequestStatus.className = 'tt-status tt-status-success';
+      this.renderToolResponse(data.result, false);
+    } catch (error) {
+      const elapsedMs = Math.round(performance.now() - startedAt);
+      this.ttRequestStatus.textContent = `Error in ${elapsedMs} ms`;
+      this.ttRequestStatus.className = 'tt-status tt-status-error';
+      this.renderToolResponse({ error: error.message || String(error) }, true);
+    } finally {
+      this.ttSendBtn.disabled = false;
+    }
+  }
+
+  renderToolResponse(result, isError) {
+    this.ttLastResult = result;
+    this.ttResponseContent.classList.toggle('tt-response-error', !!isError);
+    if (isError) {
+      this.ttResponseTextMode = false;
+    }
+    this.renderToolResponseBody();
+  }
+
+  renderToolResponseBody() {
+    const result = this.ttLastResult;
+    this.ttResponseContent.classList.toggle('tt-response-text-mode', this.ttResponseTextMode);
+    if (this.ttResponseTextView) {
+      this.ttResponseTextView.classList.toggle('active', this.ttResponseTextMode);
+    }
+    if (result === null || result === undefined) {
+      this.ttResponseContent.textContent = '';
+      return;
+    }
+    if (this.ttResponseTextMode) {
+      const firstText = this.extractFirstText(result);
+      if (firstText === null) {
+        this.ttResponseContent.textContent = '(no text field found in content[])';
+        return;
+      }
+      const parsed = this.tryParseJson(firstText);
+      if (parsed.ok) {
+        this.renderPrettyJson(parsed.value);
+      } else {
+        this.ttResponseContent.textContent = firstText;
+      }
+      return;
+    }
+    this.renderPrettyJson(result);
+  }
+
+  renderPrettyJson(value) {
+    if (window.prettyPrintJson && typeof window.prettyPrintJson.toHtml === 'function') {
+      try {
+        this.ttResponseContent.innerHTML = window.prettyPrintJson.toHtml(value, { indent: 2 });
+        return;
+      } catch {
+        /* fall back to plain text */
+      }
+    }
+    try {
+      this.ttResponseContent.textContent = JSON.stringify(value, null, 2);
+    } catch {
+      this.ttResponseContent.textContent = String(value);
+    }
+  }
+
+  extractFirstText(result) {
+    if (!result || typeof result !== 'object') {
+      return null;
+    }
+    const content = Array.isArray(result.content) ? result.content : null;
+    if (!content) {
+      return null;
+    }
+    const first = content.find((c) => c && typeof c.text === 'string');
+    return first ? first.text : null;
+  }
+
+  tryParseJson(text) {
+    const trimmed = text.trim();
+    if ((trimmed.startsWith('{') && trimmed.endsWith('}')) || (trimmed.startsWith('[') && trimmed.endsWith(']'))) {
+      try {
+        return { ok: true, value: JSON.parse(trimmed) };
+      } catch {
+        /* fall through */
+      }
+    }
+    return { ok: false };
+  }
+
+  toggleResponseTextMode() {
+    if (this.ttLastResult === null || this.ttLastResult === undefined) {
+      return;
+    }
+    this.ttResponseTextMode = !this.ttResponseTextMode;
+    this.renderToolResponseBody();
+  }
+
+  clearToolResponse() {
+    this.ttLastResult = null;
+    this.ttResponseTextMode = false;
+    this.ttResponseContent.classList.remove('tt-response-error', 'tt-response-text-mode');
+    if (this.ttResponseTextView) {
+      this.ttResponseTextView.classList.remove('active');
+    }
+    this.ttResponseContent.innerHTML =
+      '<span class="tt-placeholder">No response yet. Connect to a server, select a tool, and send a request.</span>';
+    this.ttRequestStatus.textContent = '';
+    this.ttRequestStatus.className = 'tt-status';
   }
 }
 

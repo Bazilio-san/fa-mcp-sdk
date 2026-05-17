@@ -184,6 +184,20 @@
                 </div>
             </header>
 
+            <!-- Tab Bar -->
+            <div class="tabs-bar" data-testid="at-tabs-bar">
+                <button type="button" class="tab-btn active" data-tab="chat" data-testid="at-tab-chat">
+                    <span class="material-icons-round">chat</span>
+                    Chat
+                </button>
+                <button type="button" class="tab-btn" data-tab="tool-tester" data-testid="at-tab-tool-tester">
+                    <span class="material-icons-round">build</span>
+                    Tool Tester
+                </button>
+            </div>
+
+            <!-- Tab: Chat -->
+            <div class="tab-pane active" id="tabPaneChat" data-testid="at-tab-pane-chat">
             <!-- Chat Messages -->
             <div class="chat-container">
                 <div id="chatMessages" class="chat-messages" data-testid="at-chat-messages">
@@ -227,6 +241,75 @@
                             <span class="material-icons-round">send</span>
                         </button>
                     </div>
+                </div>
+            </div>
+            </div><!-- /tabPaneChat -->
+
+            <!-- Tab: Tool Tester -->
+            <div class="tab-pane tool-tester-pane" id="tabPaneToolTester" style="display: none;" data-testid="at-tab-pane-tool-tester">
+                <div class="tt-layout" id="ttLayout" data-show-schema="false">
+                    <!-- Schema Panel (hidden by default) -->
+                    <section class="tt-panel tt-schema-panel" id="ttSchemaPanel" style="display: none;" data-testid="at-tt-schema-panel">
+                        <header class="tt-panel-header">
+                            <h3>Parameter Schema</h3>
+                            <button type="button" class="btn-icon" id="ttSchemaClose" title="Hide schema" data-testid="at-tt-schema-close">
+                                <span class="material-icons-round">close</span>
+                            </button>
+                        </header>
+                        <pre class="tt-schema-content" id="ttSchemaContent" data-testid="at-tt-schema-content"></pre>
+                    </section>
+
+                    <!-- Request Panel -->
+                    <section class="tt-panel tt-request-panel" data-testid="at-tt-request-panel">
+                        <header class="tt-panel-header tt-request-header">
+                            <div class="form-group tt-tool-group">
+                                <label for="ttToolSelect">MCP Tool</label>
+                                <select id="ttToolSelect" data-testid="at-tt-tool-select">
+                                    <option value="">— select a tool —</option>
+                                </select>
+                            </div>
+                            <div class="tt-request-actions">
+                                <button type="button" class="btn-icon" id="ttSchemaToggle" title="Show parameter schema" disabled data-testid="at-tt-schema-toggle">
+                                    <span class="material-icons-round">data_object</span>
+                                </button>
+                                <button type="button" class="btn btn-secondary" id="ttGenerateJson" title="Generate JSON skeleton from schema" disabled data-testid="at-tt-generate-json">
+                                    <span class="material-icons-round">auto_fix_high</span>
+                                    Generate JSON
+                                </button>
+                                <button type="button" class="btn btn-secondary" id="ttValidateJson" title="Validate request JSON against parameter schema" disabled data-testid="at-tt-validate-json">
+                                    <span class="material-icons-round">rule</span>
+                                    Validate
+                                </button>
+                            </div>
+                        </header>
+                        <div class="tt-tool-description" id="ttToolDescription" style="display: none;" data-testid="at-tt-tool-description"></div>
+                        <div class="tt-panel-body">
+                            <textarea id="ttRequestJson" class="tt-json-editor" placeholder='{ "param": "value" }' spellcheck="false" data-testid="at-tt-request-json">{}</textarea>
+                        </div>
+                        <footer class="tt-panel-footer">
+                            <button type="button" class="btn btn-primary" id="ttSendBtn" disabled data-testid="at-tt-send-btn">
+                                <span class="material-icons-round">send</span>
+                                Send Request
+                            </button>
+                            <span id="ttRequestStatus" class="tt-status" data-testid="at-tt-request-status"></span>
+                        </footer>
+                    </section>
+
+                    <!-- Response Panel -->
+                    <section class="tt-panel tt-response-panel" data-testid="at-tt-response-panel">
+                        <header class="tt-panel-header">
+                            <h3>Response</h3>
+                            <div class="tt-response-actions">
+                                <button type="button" class="btn-icon" id="ttResponseTextView" title="Show first content[].text (parsed as JSON if possible)" data-testid="at-tt-response-text-view">
+                                    <span class="material-icons-round">subject</span>
+                                </button>
+                                <button type="button" class="btn-icon" id="ttResponseClear" title="Clear response" data-testid="at-tt-response-clear">
+                                    <span class="material-icons-round">delete_outline</span>
+                                </button>
+                            </div>
+                        </header>
+                        <pre class="tt-response-content" id="ttResponseContent" data-testid="at-tt-response-content"><span class="tt-placeholder">No response yet. Connect to a server, select a tool, and send a request.</span></pre>
+                    </section>
                 </div>
             </div>
         </main>
@@ -321,6 +404,7 @@
     <!-- Toast Notifications -->
     <div id="toastContainer" class="toast-container" data-testid="at-toast-container"></div>
 
+    <script src="/agent-tester/static/pretty-print-json.js"></script>
     <script src="/agent-tester/static/script.js"></script>
 </body>
 </html>
