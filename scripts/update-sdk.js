@@ -11,7 +11,7 @@ const targets = [
     name: '.claude',
     src: join(templateDir, '.claude'),
     dest: join(cwd, '.claude'),
-    preserve: ['settings.json'],
+    preserve: ['settings.json', 'settings.local.json'],
     respectPin: true,
   },
 ];
