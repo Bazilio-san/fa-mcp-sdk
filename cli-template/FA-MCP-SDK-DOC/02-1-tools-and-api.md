@@ -68,8 +68,17 @@ const clientIP = headers?.['x-real-ip'] || headers?.['x-forwarded-for'];
 
 ### Transport-Based Credentials
 
-`IToolHandlerParams` includes `ITransportContext` fields (`transport`, `headers`, `payload`).
-See [ITransportContext](./02-2-prompts-and-resources.md#itransportcontext).
+`IToolHandlerParams` includes `ITransportContext` fields (`transport`, `headers`, `payload`,
+`clientCapabilities`). See
+[ITransportContext](./02-2-prompts-and-resources.md#itransportcontext).
+
+### MCP Apps — Reading Client Capabilities
+
+`params.clientCapabilities` carries the client's `initialize`-time capabilities (including the
+open-ended `extensions` map). Use it to branch a tool between UI-augmented and text-only
+output. See [10-mcp-apps.md → "Reading client capabilities from fa-mcp-sdk"](./10-mcp-apps.md)
+for the full helper surface (`getUiCapability`, `hostSupportsMcpApps`,
+`MCP_APPS_EXTENSION_ID`, `MCP_APPS_RESOURCE_MIME_TYPE`).
 
 ### Outbound Webhooks (`x-web-hook`)
 

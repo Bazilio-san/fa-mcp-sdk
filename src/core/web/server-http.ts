@@ -14,7 +14,7 @@ import express from 'express';
 import helmet from 'helmet';
 import { RateLimiterMemory } from 'rate-limiter-flexible';
 
-import { IGetPromptRequest } from '../_types_/types.js';
+import { IClientCapabilities, IGetPromptRequest } from '../_types_/types.js';
 import { createAgentTesterRouter } from '../agent-tester/agent-tester-router.js';
 import { validateAdminAuthConfig } from '../auth/admin-auth.js';
 import { createAgentTesterSessionMW } from '../auth/agent-tester-auth.js';
@@ -302,34 +302,44 @@ export async function startHttpServer(): Promise<void> {
     }
   >();
 
-  // Create SSE server instance with preserved headers and auth payload from connection establishment
+  // Create SSE server instance with preserved headers and auth payload from connection establishment.
+  // Client capabilities are read lazily on every call via `sseServer.getClientCapabilities()` so the
+  // value reflects the post-handshake state for every list/read/call.
   async function createSseServer(
     preservedHeaders: Record<string, string>,
     mcpAuthPayload?: { user: string; [key: string]: any },
   ) {
     const sseServer = createMcpServer();
 
-    const sseArgs = { transport: 'sse' as const, headers: preservedHeaders, payload: mcpAuthPayload };
+    const sseCtx = () => {
+      const caps = sseServer.getClientCapabilities() as IClientCapabilities | undefined;
+      return {
+        transport: 'sse' as const,
+        headers: preservedHeaders,
+        payload: mcpAuthPayload,
+        ...(caps ? { clientCapabilities: caps } : {}),
+      };
+    };
 
     // Override tools/list to pass correct transport and context
     sseServer.setRequestHandler(ListToolsRequestSchema, async () => {
-      const tools = await getTools(sseArgs);
+      const tools = await getTools(sseCtx());
       return { tools };
     });
 
     // Override prompts/list to pass correct transport and context
     sseServer.setRequestHandler(ListPromptsRequestSchema, async () => {
-      return await getPromptsList(sseArgs);
+      return await getPromptsList(sseCtx());
     });
 
     // Override resources/list to pass correct transport and context
     sseServer.setRequestHandler(ListResourcesRequestSchema, async () => {
-      return await getResourcesList(sseArgs);
+      return await getResourcesList(sseCtx());
     });
 
     // Override resources/read to pass correct transport and context
     sseServer.setRequestHandler(ReadResourceRequestSchema, async (request: any) => {
-      return (await getResource(request.params.uri, sseArgs)) as any;
+      return (await getResource(request.params.uri, sseCtx())) as any;
     });
 
     // Override the tool call handler to include rate limiting, preserved headers and auth payload
@@ -342,9 +352,7 @@ export async function startHttpServer(): Promise<void> {
       const { toolHandler } = getProjectData();
       return (await toolHandler({
         ...request.params,
-        headers: preservedHeaders, // Use headers from when SSE connection was established
-        payload: mcpAuthPayload, // Use auth payload from when SSE connection was established
-        transport: 'sse',
+        ...sseCtx(),
       })) as any;
     });
 
@@ -478,6 +486,26 @@ export async function startHttpServer(): Promise<void> {
     }
   });
 
+  // Streamable HTTP is stateless per request — there is no per-connection MCP server holding
+  // capabilities after the handshake. We instead key the capabilities reported on `initialize`
+  // by the `Mcp-Session-Id` header the client SHOULD send on subsequent requests. When the
+  // header is missing (e.g. one-shot clients that don't observe sessions), `clientCapabilities`
+  // stays `undefined` and handlers MUST fall back to text-only output.
+  const httpClientCapabilitiesBySession = new Map<string, IClientCapabilities>();
+  const HTTP_SESSION_HEADER = 'mcp-session-id';
+  // Soft cap to bound memory; oldest session entry is evicted (FIFO via Map insertion order).
+  const MAX_HTTP_SESSIONS = 4096;
+  const getSessionId = (headers: Record<string, string>): string | undefined => headers[HTTP_SESSION_HEADER];
+  const cacheClientCapabilities = (sessionId: string, capabilities: IClientCapabilities) => {
+    if (httpClientCapabilitiesBySession.size >= MAX_HTTP_SESSIONS) {
+      const oldestKey = httpClientCapabilitiesBySession.keys().next().value;
+      if (oldestKey) {
+        httpClientCapabilitiesBySession.delete(oldestKey);
+      }
+    }
+    httpClientCapabilitiesBySession.set(sessionId, capabilities);
+  };
+
   // POST endpoint for MCP requests
   app.post('/mcp', authMW, async (req, res) => {
     try {
@@ -492,7 +520,14 @@ export async function startHttpServer(): Promise<void> {
 
       const mcpAuthPayload = (req as any).authInfo?.payload;
       const preservedHeaders = normalizeHeaders(req.headers);
-      const httpArgs = { transport: 'http' as const, headers: preservedHeaders, payload: mcpAuthPayload };
+      const sessionId = getSessionId(preservedHeaders);
+      const cachedCapabilities = sessionId ? httpClientCapabilitiesBySession.get(sessionId) : undefined;
+      const httpArgs = {
+        transport: 'http' as const,
+        headers: preservedHeaders,
+        payload: mcpAuthPayload,
+        ...(cachedCapabilities ? { clientCapabilities: cachedCapabilities } : {}),
+      };
 
       let result;
 
@@ -502,6 +537,11 @@ export async function startHttpServer(): Promise<void> {
           logger.info(
             `MCP client initializing: protocolVersion: ${protocolVersion} | clientCapabilities: ${JSON.stringify(clientCapabilities)} | clientInfo: ${JSON.stringify(clientInfo)}`,
           );
+          // Cache reported capabilities so subsequent stateless POSTs from the same session can
+          // surface them through `IToolHandlerParams.clientCapabilities`.
+          if (sessionId && clientCapabilities && typeof clientCapabilities === 'object') {
+            cacheClientCapabilities(sessionId, clientCapabilities as IClientCapabilities);
+          }
           result = {
             protocolVersion: '2024-11-05',
             capabilities: {

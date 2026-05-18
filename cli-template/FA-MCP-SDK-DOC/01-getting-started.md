@@ -48,7 +48,12 @@ interface IToolHandlerParams {
   headers?: Record<string, string>;
   payload?: { user: string; [key: string]: any };     // JWT payload if authenticated
   transport?: 'stdio' | 'sse' | 'http';
+  clientCapabilities?: IClientCapabilities;           // From MCP `initialize` handshake; see 10-mcp-apps.md
 }
+
+// Client capabilities reported during initialize, extended with the open-ended
+// `extensions` map MCP Apps and future SEPs publish.
+type IClientCapabilities = ClientCapabilities & { extensions?: Record<string, unknown> };
 
 // Tool handler response — discriminated union, MCP SDK accepts either shape
 interface IToolHandlerTextResponse {

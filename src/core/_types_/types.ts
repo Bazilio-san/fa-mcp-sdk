@@ -1,8 +1,20 @@
-import { Tool } from '@modelcontextprotocol/sdk/types.js';
+import { ClientCapabilities, Tool } from '@modelcontextprotocol/sdk/types.js';
 import { ILoggerSettings } from 'af-logger-ts';
 import { Router } from 'express';
 
 import { AuthResult } from '../auth/types.js';
+
+/**
+ * Client capabilities surfaced from the MCP initialize handshake, extended with
+ * the open-ended `extensions` map that the MCP Apps spec (SEP-1865) and other
+ * future extensions advertise alongside the standard fields.
+ *
+ * Hosts that support MCP Apps publish their extension settings as:
+ *   capabilities.extensions["io.modelcontextprotocol/ui"]: { mimeTypes: [...] }
+ *
+ * Use {@link getUiCapability} from the SDK to read the UI extension specifically.
+ */
+export type IClientCapabilities = ClientCapabilities & { extensions?: Record<string, unknown> };
 
 /**
  * Input data for Token Generator authorization handler
@@ -97,12 +109,22 @@ export interface IToolHandlerParams {
   transport: TTransportType;
   headers?: Record<string, string>;
   payload?: { user: string; [key: string]: any } | undefined;
+  /**
+   * Client capabilities reported during the MCP initialize handshake.
+   * Populated for STDIO/SSE on every call; for Streamable HTTP only when the
+   * client sends an `Mcp-Session-Id` header (cached from the initialize call).
+   * `undefined` means "unknown" — the handler MUST treat absence as "no extra
+   * capabilities" and fall back to the plain text `content[]` contract.
+   */
+  clientCapabilities?: IClientCapabilities;
 }
 
 export interface ITransportContext {
   transport: TTransportType;
   headers?: Record<string, string>;
   payload?: { user: string; [key: string]: any } | undefined;
+  /** See {@link IToolHandlerParams.clientCapabilities}. */
+  clientCapabilities?: IClientCapabilities;
 }
 
 export interface IGetPromptRequest {

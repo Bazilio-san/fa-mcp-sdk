@@ -2,6 +2,7 @@ export type { Tool } from '@modelcontextprotocol/sdk/types.js';
 export type { AppConfig } from './_types_/config.js';
 export type { IADConfig, IDcConfig } from './_types_/active-directory-config.js';
 export type {
+  IClientCapabilities,
   McpServerData,
   IToolHandlerParams,
   ITransportContext,
@@ -28,6 +29,14 @@ export type {
   IToolHandlerTextResponse,
   IToolHandlerStructuredResponse,
 } from './_types_/types.js';
+
+export {
+  getUiCapability,
+  hostSupportsMcpApps,
+  MCP_APPS_EXTENSION_ID,
+  MCP_APPS_RESOURCE_MIME_TYPE,
+} from './mcp/mcp-apps.js';
+export type { IMcpUiClientCapabilities } from './mcp/mcp-apps.js';
 
 export { appConfig, getProjectData, getSafeAppConfig } from './bootstrap/init-config.js';
 

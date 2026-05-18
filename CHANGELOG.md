@@ -5,6 +5,21 @@ All notable changes to `fa-mcp-sdk` are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.110] - 2026-05-17
+
+### Added
+
+- **MCP Apps support — client capability propagation** (SEP-1865). `IToolHandlerParams.clientCapabilities` and `ITransportContext.clientCapabilities` are now populated on every call so handlers can branch UI-augmented vs. text-only output without giving up the upstream MCP Apps text-fallback contract.
+  - STDIO: `Server.getClientCapabilities()` is read inside every `tools/list`, `tools/call`, `prompts/list`, `prompts/get`, `resources/list`, `resources/read` handler in `createMcpServer()`.
+  - SSE: `sseServer.getClientCapabilities()` is read on every dispatched call (lazy via the new `sseCtx()` closure) — the per-connection MCP server already holds capabilities after handshake.
+  - Streamable HTTP: capabilities reported on `initialize` are cached in an in-memory `Map` keyed by the `Mcp-Session-Id` header (soft FIFO cap of 4096 sessions, oldest evicted first). Subsequent stateless POSTs from the same session receive the cached value; sessions without the header get `undefined` (handler MUST fall back to text-only).
+- New type `IClientCapabilities = ClientCapabilities & { extensions?: Record<string, unknown> }` re-exported from `fa-mcp-sdk` — covers the open-ended `extensions` envelope MCP Apps and future SEPs publish alongside the standard fields.
+- New helpers `getUiCapability(clientCapabilities)`, `hostSupportsMcpApps(clientCapabilities)`, `MCP_APPS_EXTENSION_ID`, `MCP_APPS_RESOURCE_MIME_TYPE`, and type `IMcpUiClientCapabilities` exported from `fa-mcp-sdk` (`src/core/mcp/mcp-apps.ts`). Mirror of `@modelcontextprotocol/ext-apps/server`'s `getUiCapability` / `RESOURCE_MIME_TYPE` / `EXTENSION_ID` — implemented inline so the SDK doesn't take a hard runtime dependency on ext-apps.
+
+### Changed
+
+- `ITransportContext` and `IToolHandlerParams` gained the optional `clientCapabilities?: IClientCapabilities` field. Backward compatible — existing handlers ignoring the field continue to work.
+
 ## [0.4.109] - 2026-05-17
 
 ### Added

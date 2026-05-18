@@ -60,6 +60,13 @@ import { initADGroupChecker, IADConfig, IDcConfig } from 'fa-mcp-sdk';
 
 // OpenAPI
 import { configureOpenAPI, OpenAPISpecResponse, SwaggerUIConfig } from 'fa-mcp-sdk';
+
+// MCP Apps (SEP-1865) — read client capabilities, decide UI vs. text
+import {
+  getUiCapability, hostSupportsMcpApps,
+  MCP_APPS_EXTENSION_ID, MCP_APPS_RESOURCE_MIME_TYPE,
+  IClientCapabilities, IMcpUiClientCapabilities,
+} from 'fa-mcp-sdk';
 ```
 
 ## Project Structure

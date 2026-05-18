@@ -54,8 +54,9 @@ Universal type for dynamic tools/prompts/resources functions:
 ```typescript
 interface ITransportContext {
   transport: 'stdio' | 'sse' | 'http';
-  headers?: Record<string, string>;  // HTTP headers (HTTP/SSE only)
+  headers?: Record<string, string>;            // HTTP headers (HTTP/SSE only)
   payload?: { user: string; [key: string]: any };  // Auth payload (if authenticated HTTP/SSE only)
+  clientCapabilities?: IClientCapabilities;    // From MCP `initialize` handshake (see 10-mcp-apps.md)
 }
 ```
 
@@ -66,6 +67,9 @@ function getApiKey(ctx: ITransportContext): string {
   return ctx.headers?.['x-api-key'] || '';
 }
 ```
+
+Use `clientCapabilities` to branch UI-augmented vs. text-only output (see
+[10-mcp-apps.md → "Reading client capabilities from fa-mcp-sdk"](./10-mcp-apps.md)).
 
 ### Dynamic Prompts (Function)
 

@@ -422,6 +422,62 @@ gate which tool variant to register.
 `RESOURCE_MIME_TYPE === "text/html;profile=mcp-app"`. `RESOURCE_URI_META_KEY === "ui/resourceUri"`
 (legacy flat key, prefer the nested `_meta.ui.resourceUri` form).
 
+### 6.1.1 Reading client capabilities from fa-mcp-sdk
+
+`fa-mcp-sdk` re-implements the read side of MCP Apps capability negotiation inline so the SDK does
+**not** take a hard runtime dependency on `@modelcontextprotocol/ext-apps`. Consumers who only need
+to branch tool behavior on UI support (and don't register `ui://` resources directly through
+ext-apps helpers) can stay on the SDK exports alone.
+
+```ts
+import {
+  getUiCapability, hostSupportsMcpApps,
+  MCP_APPS_EXTENSION_ID, MCP_APPS_RESOURCE_MIME_TYPE,
+  IClientCapabilities, IMcpUiClientCapabilities,
+  IToolHandlerParams,
+} from 'fa-mcp-sdk';
+```
+
+| Export | Equivalent in `@modelcontextprotocol/ext-apps/server` | Notes |
+|--------|--------------------------------------------------------|-------|
+| `getUiCapability(caps)` | `getUiCapability` | Returns `IMcpUiClientCapabilities \| undefined`. |
+| `hostSupportsMcpApps(caps)` | — (convenience predicate on top of `getUiCapability`) | `true` ⇔ host advertised `text/html;profile=mcp-app` in `mimeTypes`. |
+| `MCP_APPS_EXTENSION_ID` | `EXTENSION_ID` (`"io.modelcontextprotocol/ui"`) | Key under `capabilities.extensions`. |
+| `MCP_APPS_RESOURCE_MIME_TYPE` | `RESOURCE_MIME_TYPE` (`"text/html;profile=mcp-app"`) | MIME the host MUST receive for `ui://` resources. |
+| `IClientCapabilities` | — | `ClientCapabilities & { extensions?: Record<string, unknown> }`. |
+| `IMcpUiClientCapabilities` | `McpUiClientCapabilities` | `{ mimeTypes?: string[]; [k: string]: unknown }`. |
+
+`params.clientCapabilities` is populated automatically on every tool / prompt / resource call:
+
+| Transport | Source | Availability |
+|-----------|--------|--------------|
+| STDIO | `Server.getClientCapabilities()` (low-level SDK) read inside every handler in `createMcpServer()`. | Every call. |
+| SSE | Same as STDIO, but resolved per-connection (each SSE session owns its own `Server`). | Every call. |
+| Streamable HTTP | Cached on `initialize` keyed by `Mcp-Session-Id` (in-memory `Map`, soft FIFO cap of 4096 sessions). | Subsequent calls only when the client sends the `Mcp-Session-Id` header. `undefined` otherwise — handlers MUST fall back to text-only. |
+
+```ts
+export const handleToolCall = async (params: IToolHandlerParams) => {
+  const uiCap = getUiCapability(params.clientCapabilities);
+  const supportsUi = !!uiCap?.mimeTypes?.includes(MCP_APPS_RESOURCE_MIME_TYPE);
+  //                                ^ or: hostSupportsMcpApps(params.clientCapabilities)
+
+  if (supportsUi) {
+    return {
+      content: [{ type: 'text', text: renderTextSummary() }],   // text fallback is MANDATORY
+      _meta: { ui: { resourceUri: 'ui://my/view.html' } },
+    };
+  }
+  return formatToolResult({ message: renderTextSummary() });    // pure text path
+};
+```
+
+The `ITransportContext` passed to dynamic `customPrompts(ctx)` / `customResources(ctx)` carries the
+same `clientCapabilities` field — use it to filter which prompts/resources to advertise per host.
+
+When you also need to **register** `ui://` resources with ext-apps' helper conventions (preferred
+for new MCP Apps), keep using `@modelcontextprotocol/ext-apps/server` directly — the SDK exports
+above only cover the capability-read path.
+
 ### 6.2 `App` class (View side)
 
 Constructor: `new App(appInfo, capabilities = {}, options = { autoResize: true })`.
@@ -860,6 +916,7 @@ the digest itself does not answer a specific question.
 
 | Aspect | Upstream source (pinned to v1.7.2) | Why look here |
 |--------|------------------------------------|---------------|
+| SDK-side capability helpers | `src/core/mcp/mcp-apps.ts` (in this repo) — exports `getUiCapability`, `hostSupportsMcpApps`, `MCP_APPS_EXTENSION_ID`, `MCP_APPS_RESOURCE_MIME_TYPE`, `IMcpUiClientCapabilities` | Read-side only — mirrors `EXTENSION_ID` / `RESOURCE_MIME_TYPE` / `getUiCapability` from ext-apps without a runtime dep. See § 6.1.1. |
 | Wire protocol (normative) | [`specification/2026-01-26/apps.mdx`](https://github.com/modelcontextprotocol/ext-apps/blob/v1.7.2/specification/2026-01-26/apps.mdx) | MUST / SHOULD / MAY contract |
 | Lifecycle diagrams | [`apps.mdx` § Lifecycle](https://github.com/modelcontextprotocol/ext-apps/blob/v1.7.2/specification/2026-01-26/apps.mdx#lifecycle) | Canonical message order (verbatim mermaid) |
 | Draft delta tracking | [`specification/draft/apps.mdx`](https://github.com/modelcontextprotocol/ext-apps/blob/v1.7.2/specification/draft/apps.mdx) | Pre-stable additions (metadata-location clarification, sandbox MUST → SHOULD softening) |
