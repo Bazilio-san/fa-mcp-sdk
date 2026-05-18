@@ -30,7 +30,7 @@ with concrete next-step options (retry, fix, roll back, leave-as-is) — never s
 1. Parse arguments           → resolve FROM/TO refs
 2. Validate refs             → fail fast on bogus versions
 3. Preflight safety          → branch + uncommitted-changes check
-4. Install TO into project   → `yarn add fa-mcp-sdk@<TO>` (first mutation)
+4. Install TO into project   → run `install-target-sdk.mjs` (yarn add + copy update-sdk.js + run it)
 5. Analyze diff              → categorize every change as Auto / Needs-Input / Manual
 6. Build execution plan
 7. PRESENT PLAN + CONFIRM    ← blocking gate; nothing else mutates until user says go
@@ -154,25 +154,28 @@ This is the last point before mutating the project. Run these checks and **ask t
 
 This is the first mutating action. From here on, we're committed to either finishing the upgrade or rolling back.
 
-If TO is a published version:
+Run the bundled wrapper from the project root — it performs all three sub-steps in one go:
+
 ```bash
-yarn add fa-mcp-sdk@<TO-version>
+node .claude/skills/upgrade-sdk/scripts/install-target-sdk.mjs <TO>
 ```
 
-If TO is a commit hash:
-```bash
-yarn add fa-mcp-sdk@https://github.com/Bazilio-san/fa-mcp-sdk#<TO-commit>
-```
+where `<TO>` is either:
+- a published version (e.g. `0.4.108`), or
+- a git URL with a commit hash (e.g. `https://github.com/Bazilio-san/fa-mcp-sdk#<TO-commit>`).
 
-Wait for completion. If `yarn add` fails, show the error verbatim and ask the user how to proceed (retry, switch to a
-different TO ref, or abort).
+The wrapper sequentially:
+1. runs `yarn add fa-mcp-sdk@<TO>`;
+2. copies `node_modules/fa-mcp-sdk/scripts/update-sdk.js` over the project's `scripts/update-sdk.js` (overwriting
+   the existing file so the project always uses the updater shipped with the target SDK version);
+3. runs `node scripts/update-sdk.js` from the project root.
 
-Then run:
-```bash
-node ./node_modules/fa-mcp-sdk/scripts/update-sdk.js
-```
-This copies the latest `FA-MCP-SDK-DOC/` and `.claude/` content from the SDK into the project. Pinned folders (any
-folder under the project's `.claude/` containing a direct file named `pin`) are preserved by the script as-is.
+`update-sdk.js` then copies the latest `FA-MCP-SDK-DOC/` and `.claude/` content from the SDK into the project.
+Pinned folders (any folder under the project's `.claude/` containing a direct file named `pin`) are preserved by
+the script as-is.
+
+If any sub-step fails, the wrapper exits non-zero with the error. Show it verbatim and ask the user how to proceed
+(retry, switch to a different TO ref, or abort).
 
 ## Step 5: Analyze the diff
 
@@ -230,6 +233,10 @@ structure with override values. If `default.yaml` changed but `_local.yaml` did 
 After `yarn add fa-mcp-sdk@<TO>`, the SDK ships its template at `node_modules/fa-mcp-sdk/cli-template/`. This is the
 canonical source for any template files in the project.
 
+**Scope:** the table below lists ONLY files that `scripts/update-sdk.js` (already executed in Step 4) does NOT
+copy. Anything inside `cli-template/FA-MCP-SDK-DOC/`, `cli-template/.claude/`, and the individual scripts under
+`node_modules/fa-mcp-sdk/scripts/` is refreshed by `update-sdk.js` automatically — do NOT re-process it here.
+
 | Template (source of truth)                                       | Project (destination)         | Notes |
 |------------------------------------------------------------------|-------------------------------|-------|
 | `node_modules/fa-mcp-sdk/cli-template/package.json`              | `package.json`                | **Merge carefully** — see rule below |
@@ -239,10 +246,8 @@ canonical source for any template files in the project.
 | `node_modules/fa-mcp-sdk/cli-template/CLAUDE.md`                 | `CLAUDE.md`                   | Merge — project may add custom sections |
 | `node_modules/fa-mcp-sdk/cli-template/jest.config.js`            | `jest.config.js`              | Overwrite unless customized |
 | `node_modules/fa-mcp-sdk/cli-template/deploy/`                   | `deploy/`                     | Merge per file |
-| `node_modules/fa-mcp-sdk/cli-template/.claude/skills/<skill>/`   | `.claude/skills/<skill>/`     | Overwrite unless locally customized |
 | `node_modules/fa-mcp-sdk/cli-template/r/<name>.xml`              | `.run/<name>.run.xml`         | **Renamed** — see rule below |
 | `node_modules/fa-mcp-sdk/cli-template/gitignore`                 | `.gitignore`                  | Source has no leading dot |
-| `node_modules/fa-mcp-sdk/cli-template/FA-MCP-SDK-DOC/`           | `FA-MCP-SDK-DOC/`             | Auto-updated by `update-sdk.js` in Step 4 |
 
 #### Rule: `package.json` — ADD ONLY new dependencies
 
@@ -267,27 +272,18 @@ The project has no `r/` directory — it was renamed to `.run/` at generation, a
   local customizations, treat as Needs-Input (ask the user: overwrite / merge / skip).
 - REMOVED file → informational only; do not delete the project's `.run/<name>.run.xml`.
 
-#### Rule: `.claude/` files — use fcp.js
+#### Editing `.claude/` files outside the auto-refresh
 
-`.claude/**` is denied for direct `Write`/`Edit` in the project's `settings.json`. To update any file under
-`.claude/` (skills, scripts, hooks, agents, settings.json) use the project's `scripts/fcp.js` workflow described in
-the `edit-claude-files` skill — write the new content to a temp file, then
-`node scripts/fcp.js .claude/<path> <temp-file>` to install it atomically. This applies to every cli-template
-`.claude/` entry being copied into the project.
+If during Step 8 you need to write or merge an individual file under the project's `.claude/` (e.g. a custom
+non-template skill that `update-sdk.js` does NOT touch because its folder contains a `pin` marker), direct
+`Write`/`Edit` is denied by the project's `settings.json`. Use the project's `scripts/fcp.js` workflow described in
+the `edit-claude-files` skill: write the new content to a temp file, then
+`node scripts/fcp.js .claude/<path> <temp-file>` to install it atomically.
 
 For any other changed template file: source path under `node_modules/fa-mcp-sdk/cli-template/...`, destination in the
 project, action = overwrite or merge (depending on local customization).
 
-### 5.4 Scripts
-
-The CLI copies scripts from `node_modules/fa-mcp-sdk/scripts/` (NOT from `cli-template/scripts/`) into the project's
-`scripts/`, then removes `copy-static.js`, `publish.js`, and `scripts/publish-README.md` (SDK-internal, not shipped).
-
-- Canonical source: `node_modules/fa-mcp-sdk/scripts/<name>.js`
-- Project destination: `scripts/<name>.js`
-- Exclude: `copy-static.js`, `publish.js`, `publish-README.md`
-
-### 5.5 Core library exports
+### 5.4 Core library exports
 
 **Prefer the TypeScript source over compiled output.** Fetch `src/core/index.ts` (and any re-exported `_types_/`
 files it references) at both FROM and TO via GitHub raw:
@@ -307,10 +303,49 @@ Why source over `dist/`:
 State explicitly in the report that analysis was made from compiled artifacts and double-check via the GitHub source
 viewer for any flagged change.
 
-### 5.6 Project code scan
+#### Type / interface changes (not just renames)
+
+Renaming an export is the obvious case — the harder one is a **shape change** to a type/interface the project
+consumes. These break compilation in ways that don't show up as "removed export":
+
+- A new **required** field added to an interface (e.g. `IToolHandlerParams`) — every place that constructs or
+  destructures that interface needs the new field.
+- A previously required field made optional, OR an optional field made required.
+- A field's **type** changed (e.g. `string` → `string | undefined`, `Foo` → `Foo[]`, a string-union narrowed).
+- Generic signatures changed (added/removed type parameters, added constraints).
+- Return-type changes on a function/method the project imports.
+- Function parameters reordered, added, removed, or changed type.
+
+For each such change, classify per consumer:
+1. **Project does NOT consume the changed type/symbol** → informational only, no action.
+2. **Project consumes it AND the migration is mechanical** (one obvious code edit, e.g. add a field with a known
+   default, rename a parameter) → Auto in Step 6.
+3. **Project consumes it AND the migration requires a judgment call** (where does the new required value come from?
+   how should the new generic be parameterized? does the narrower type still cover the project's usage?) →
+   Needs-Input in Step 6.
+
+For every consumer site, capture file:line and the exact migration plan. This list is the primary reference when
+`tsc` fails in Step 9 — consult it before debugging blindly.
+
+#### Optional new features
+
+Not every SDK change is a breaking one. The TO version may add **new** exports, methods, hook params, config
+options, or capabilities the project could adopt but isn't forced to:
+
+- New helper functions / utilities re-exported from `fa-mcp-sdk`.
+- New optional parameters on existing handlers (existing call sites keep working).
+- New `appConfig` sections / options with sensible defaults.
+- New transport / auth / DB capabilities the project's domain might benefit from.
+
+These do NOT break the build, so they go on a separate **Optional improvements** list (see Step 6). The skill
+should surface them, but never apply them silently — the user decides per item whether they're relevant.
+
+### 5.5 Project code scan
 
 Scan the project's `src/`, `config/`, and `tests/` for:
 - Imports from `fa-mcp-sdk` referencing removed/renamed exports
+- Consumers of types/interfaces whose **shape** changed in 5.4 (added required field, changed field type,
+  changed generic signature, changed function parameter/return type) — even if the import path is unchanged
 - Usage of deprecated APIs
 - Config keys that were renamed or restructured
 
@@ -318,18 +353,20 @@ For each hit, capture file:line and the exact replacement plan — needed for St
 
 ## Step 6: Categorize and build the execution plan
 
-For every change found in Step 5, assign one of three categories:
+For every change found in Step 5, assign one of four categories:
 
 ### Auto — LLM applies without asking
-- `yarn add fa-mcp-sdk@<TO>` (already done in Step 4)
-- `node ./node_modules/fa-mcp-sdk/scripts/update-sdk.js` (already done in Step 4)
+- `node .claude/skills/upgrade-sdk/scripts/install-target-sdk.mjs <TO>` (already done in Step 4 — installs SDK,
+  refreshes `scripts/update-sdk.js`, and runs it)
 - Adding a brand-new config key to `config/default.yaml` when the project doesn't override it
 - Adding new env var mappings to `config/custom-environment-variables.yaml`
 - Adding a missing dependency to `package.json` under `dependencies`/`devDependencies`
-- Copying a new template file the project doesn't have yet (scripts, `.run/` entries, new skill folders)
+- Copying a new template file the project doesn't have yet (`.run/` entries from `cli-template/r/`, etc. — note that
+  `FA-MCP-SDK-DOC/`, `.claude/`, and individual SDK scripts are refreshed automatically by `update-sdk.js`, not here)
 - Applying a mechanical rename of a renamed SDK export across the project's `src/` when there's exactly one
   unambiguous replacement
-- Updating SDK-shipped skill files via the `.claude/` fcp.js protocol when the project hasn't customized them
+- Applying a mechanical type/interface migration when the fix is unambiguous (e.g. a newly required field has a
+  single obvious source, a renamed parameter where call sites use the same value)
 
 ### Needs-Input — LLM applies, but needs user input
 - A locally-customized file conflicts with the new template — ask: overwrite / merge / skip
@@ -338,6 +375,19 @@ For every change found in Step 5, assign one of three categories:
 - A `BREAKING CHANGE:` marker that the LLM can apply mechanically but wants explicit confirmation
 - The project's `config/local.yaml` has stale overrides for keys that changed structure — ask whether to drop them,
   port to the new structure, or leave them and warn
+- A type/interface shape change where the project's consumer needs a non-obvious value (where does the new required
+  field come from? how should a new generic be parameterized?)
+
+### 💡 Optional improvements — LLM proposes per item, applies only on per-item confirmation
+Non-breaking SDK additions the project COULD adopt but isn't forced to. List each as a discrete `yes/no` question
+in Step 7. Examples:
+- A new helper now exported from `fa-mcp-sdk` that could replace a hand-rolled utility in the project
+- A new optional parameter on an existing API that would let the project remove a workaround
+- A new `appConfig` section that enables a capability the project may want (caching, AD auth, Consul, etc.)
+- A new transport option / DB feature relevant to the project's domain
+
+Default for every Optional item is **NO** — the user must explicitly opt in per item. Skipped items go to the
+final report under "Optional improvements not adopted (FYI)".
 
 ### Manual — LLM cannot perform
 Reserve this only for things the LLM truly cannot do in this session. Examples:
@@ -347,7 +397,7 @@ Reserve this only for things the LLM truly cannot do in this session. Examples:
 
 **If a step could be automated in principle but requires human judgment, prefer Needs-Input over Manual.**
 
-Build the plan as three lists with item counts and concrete actions.
+Build the plan as four lists (Auto / Needs-Input / Optional / Manual) with item counts and concrete actions.
 
 ## Step 7: Present the plan and ASK FOR CONFIRMATION
 
@@ -357,13 +407,13 @@ Render the plan in the conversation in the detected language:
 ## Upgrade plan: fa-mcp-sdk v<FROM> → v<TO>
 
 ### 🤖 I will do automatically (N items)
-1. ✅ yarn add fa-mcp-sdk@<TO>                     [already done]
-2. ✅ node ./node_modules/fa-mcp-sdk/scripts/update-sdk.js  [already done]
-3. Add new key `webServer.foo` (default `bar`) to `config/default.yaml`
-4. Copy new template file `.run/new-task.run.xml` (renamed from `r/new-task.xml`)
-5. Add dep `some-pkg@^1.2.3` to package.json `dependencies`
-6. Apply rename `oldFn` → `newFn` in src/foo.ts:42, src/bar.ts:17, src/baz.ts:55
-7. Run verification: `oxlint --fix . && oxfmt . && rimraf dist && tsc` + project tests + clean startup
+1. ✅ node .claude/skills/upgrade-sdk/scripts/install-target-sdk.mjs <TO>   [already done]
+   (yarn add + refresh `scripts/update-sdk.js` + run `node scripts/update-sdk.js`)
+2. Add new key `webServer.foo` (default `bar`) to `config/default.yaml`
+3. Copy new template file `.run/new-task.run.xml` (renamed from `r/new-task.xml`)
+4. Add dep `some-pkg@^1.2.3` to package.json `dependencies`
+5. Apply rename `oldFn` → `newFn` in src/foo.ts:42, src/bar.ts:17, src/baz.ts:55
+6. Run verification: `oxlint --fix . && oxfmt . && rimraf dist && tsc` + project tests + clean startup
 
 ### ❓ I need your input on (M items)
 1. `config/local.yaml` overrides `webServer.auth` which restructured in v<TO>. Options:
@@ -371,9 +421,16 @@ Render the plan in the conversation in the detected language:
 2. New config key `someService.apiKey` has no default. What value should I set?
 3. Project's `.claude/skills/upgrade-sdk/SKILL.md` is locally customized. Overwrite with new template,
    merge non-conflicting parts only, or skip?
+4. `IToolHandlerParams` gained required field `transport`. Project consumers at src/tools/handle-tool-call.ts:12
+   need it — should I derive it from `params.transport ?? 'http'` or expose it as a new tool argument?
+
+### 💡 Optional improvements available (L items) — default NO per item
+1. v<TO> adds `appConfig.cache.redis` — project currently uses in-memory cache. Adopt Redis cache? (no/yes)
+2. v<TO> exports `mergeByBatch()` helper — project has a hand-rolled batch-merge in src/db/repo.ts:88. Replace? (no/yes)
+3. v<TO> adds optional `agentTester.openAi.proxy` — project doesn't need a proxy today. Add scaffolding? (no/yes)
 
 ### 👋 You'll need to do manually (K items)
-- [empty if everything is in Auto or Needs-Input]
+- [empty if everything is in Auto / Needs-Input / Optional]
 
 ### Rollback info
 - Pre-upgrade commit: <hash>
@@ -383,7 +440,8 @@ Render the plan in the conversation in the detected language:
 
 Then ask **explicitly**:
 
-> "Confirm — apply the Auto items now and prompt you inline for the Needs-Input items as I reach them? (yes/no)"
+> "Confirm — apply the Auto items now and prompt you inline for the Needs-Input + Optional items as I reach them?
+> (yes/no)"
 
 Wait for explicit confirmation. If the user declines, stop and leave the project as it is after Step 4 (note this in
 the final report). If the user confirms, proceed to Step 8.
@@ -391,13 +449,15 @@ the final report). If the user confirms, proceed to Step 8.
 ## Step 8: Execute
 
 Apply each Auto item in order. For each Needs-Input item, ask the user **at the moment you reach it** (one question
-at a time so the user can reason — don't batch). Apply with the answer, then move on.
+at a time so the user can reason — don't batch). Apply with the answer, then move on. After Auto + Needs-Input,
+walk through Optional items one-by-one (default NO) — apply only those the user explicitly accepts.
 
 Be transparent about state — after each item is applied, output a one-line acknowledgment so the user can follow
 along, e.g. `✓ Added webServer.foo to config/default.yaml`.
 
-When touching files under `.claude/`, always use the project's `scripts/fcp.js` workflow (see Step 5.3 → "Rule:
-`.claude/` files — use fcp.js" and the project's `edit-claude-files` skill).
+When touching files under `.claude/` that `update-sdk.js` did not just refresh (e.g. pinned custom skills), always
+use the project's `scripts/fcp.js` workflow — see Step 5.3 → "Editing `.claude/` files outside the auto-refresh"
+and the project's `edit-claude-files` skill.
 
 Maintain an in-memory execution log so the final report can list exactly what was done and what required input.
 
@@ -463,10 +523,14 @@ the likely-causing file(s), then ask the user to choose:
 
 Apply the user's choice:
 - **fix** → diagnose, apply a fix (asking inline for any info needed), re-run verification. Loop if it fails again.
+  **When `tsc` is the failing step, consult Step 5.4 (Core library exports → Type / interface changes) FIRST**
+  — most TS errors after an SDK upgrade trace back to a shape change you already cataloged there. Match the error
+  to the relevant 5.4 entry and apply the migration plan, instead of debugging the error in isolation.
 - **retry** → rerun the failing step once. If it fails again, present the same four options.
-- **rollback** → run `yarn add fa-mcp-sdk@<FROM>` (or git-URL form), `git checkout <pre-upgrade-hash> -- .`,
-  `node ./node_modules/fa-mcp-sdk/scripts/update-sdk.js` if needed. If the user stashed changes in Step 3, restore
-  them with `git stash pop`. Report what was rolled back.
+- **rollback** → re-run the wrapper with the previous ref:
+  `node .claude/skills/upgrade-sdk/scripts/install-target-sdk.mjs <FROM>` (uses a git URL form for commit hashes,
+  e.g. `https://github.com/Bazilio-san/fa-mcp-sdk#<FROM-commit>`), then `git checkout <pre-upgrade-hash> -- .`.
+  If the user stashed changes in Step 3, restore them with `git stash pop`. Report what was rolled back.
 - **leave-as-is** → no further changes. Final report will clearly mark the failure and what remains unverified.
 
 ## Step 10: Report
@@ -504,7 +568,22 @@ Pre-upgrade commit: <hash>
 - `config/local.yaml`: chose (a) port to new structure — applied N keys
 - `someService.apiKey`: set to `<value-you-provided>`
 - `oldFn` → `newFn` rename: applied to src/foo.ts:42, src/bar.ts:17, src/baz.ts:55
+- `IToolHandlerParams.transport`: derived from `params.transport ?? 'http'` per your choice — applied at
+  src/tools/handle-tool-call.ts:12
 - ...
+
+## 💡 Optional improvements adopted
+
+- Redis cache: enabled (`appConfig.cache.redis` populated, dep `ioredis@^5.4.1` added)
+- ...
+- [empty if user declined all Optional items]
+
+## 💡 Optional improvements NOT adopted (FYI)
+
+- `mergeByBatch()` helper now available — project keeps hand-rolled version in src/db/repo.ts:88
+- `agentTester.openAi.proxy` option available — not adopted (project doesn't need a proxy)
+- ...
+- [empty if no Optional items existed, or all were adopted]
 
 ## 👋 Still on your plate
 
@@ -525,9 +604,8 @@ Pre-upgrade commit: <hash>
 - Prior SDK version: `v<FROM>`
 - To roll back manually:
   ```bash
-  yarn add fa-mcp-sdk@<FROM>
+  node .claude/skills/upgrade-sdk/scripts/install-target-sdk.mjs <FROM>
   git checkout <hash> -- .
-  node ./node_modules/fa-mcp-sdk/scripts/update-sdk.js
   ```
 
 ## Notes
