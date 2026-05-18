@@ -42,7 +42,10 @@ adminPanel:
   #> For ntlm — uses AD configuration from ad.domains section.
   #> When multiple types are set (e.g. ['jwtToken', 'basic']), the login page shows tabs
   #> to choose between Token and Login (username/password) authentication.
-  authType: 'basic'
+  authType:
+    - permanentServerTokens
+    - jwtToken
+
 
 #> Active Directory / LDAP settings.
 #> Used for authentication/authorization (e.g., NTLM in admin panel) and checking user membership in AD groups.
@@ -303,7 +306,7 @@ webServer:
     #> and set one token of at least 20 characters in length
     #> ========================================================================
     #> Add your server tokens here: ['token1', 'token2']
-    permanentServerTokens: [ ]
+    permanentServerTokens: [ 'token' ]
 
     #> ========================================================================
     #> JWT TOKEN — standard signed JWT (HS256)
@@ -317,7 +320,7 @@ webServer:
     #> ========================================================================
     jwtToken:
       #> HS256 signing secret used to sign/verify tokens for this MCP (minimum 8 chars)
-      encryptKey: '{{webServer.auth.token.encryptKey}}'
+      encryptKey: {{webServer.auth.token.encryptKey}}
       #> If webServer.auth.enabled and the parameter true, the service name and the service specified in the token will be checked
       checkMCPName: {{webServer.auth.token.checkMCPName}}
       #> If true and JWT token contains non-empty 'ip' field,

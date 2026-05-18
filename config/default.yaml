@@ -40,7 +40,9 @@ adminPanel:
   #> For ntlm — uses AD configuration from ad.domains section.
   #> When multiple types are set (e.g. ['jwtToken', 'basic']), the login page shows tabs
   #> to choose between Token and Login (username/password) authentication.
-  authType: 'basic'
+  authType:
+    - permanentServerTokens
+    - jwtToken
 
 #> Active Directory / LDAP settings.
 #> Used for authentication/authorization (e.g., NTLM in admin panel) and checking user membership in AD groups.
@@ -301,7 +303,7 @@ webServer:
     #> and set one token of at least 20 characters in length
     #> ========================================================================
     #> Add your server tokens here: ['token1', 'token2']
-    permanentServerTokens: [ ]
+    permanentServerTokens: [ 'token' ]
 
     #> ========================================================================
     #> JWT TOKEN — standard signed JWT (HS256)
