@@ -135,6 +135,7 @@ for (const { name, src, dest, preserve = [], respectPin = false } of targets) {
 const scriptsSrcDir = join(cwd, './node_modules/fa-mcp-sdk/scripts');
 const scriptsDestDir = join(cwd, 'scripts');
 const individualScripts = [
+  '+x.js',
   'cc-hook-oxlint-oxfmt-fix.cjs',
   'clone-mcp-ext-apps.js',
   'fcp.js',
