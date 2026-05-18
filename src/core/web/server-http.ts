@@ -518,6 +518,19 @@ export async function startHttpServer(): Promise<void> {
 
       logger.info(`HTTP MCP request received: ${method} | id: ${id}`);
 
+      // JSON-RPC notifications (no `id`) MUST NOT receive a response. MCP clients legitimately
+      // emit a variety of `notifications/*` events (initialized, cancelled, progress,
+      // roots/list_changed, message, …) and we acknowledge them with 204 instead of erroring out
+      // on unknown ones — matching MCP/JSON-RPC semantics and keeping the log clean.
+      if (typeof method === 'string' && method.startsWith('notifications/')) {
+        if (method === 'notifications/initialized') {
+          logger.info('MCP client initialization completed');
+        } else {
+          logger.debug(`MCP notification received: ${method}`);
+        }
+        return res.status(204).send();
+      }
+
       const mcpAuthPayload = (req as any).authInfo?.payload;
       const preservedHeaders = normalizeHeaders(req.headers);
       const sessionId = getSessionId(preservedHeaders);
@@ -593,10 +606,6 @@ export async function startHttpServer(): Promise<void> {
           result = await getResource(params.uri, httpArgs);
           break;
         }
-
-        case 'notifications/initialized':
-          logger.info('MCP client initialization completed');
-          return res.status(204).send();
 
         case 'ping':
           result = { pong: true };
