@@ -281,7 +281,7 @@ Skill location: `.claude/skills/upgrade-guide/SKILL.md`
 
 Claude Code skills (`.claude/skills/*`) can be reused from [OpenAI Codex](https://developers.openai.com/codex/)
 without duplication. Codex officially reads project Skills from `.agents/skills/` and supports symlinked skill
-folders. The bundled `scripts/setup-agent-links.js` creates the symlink (junction on Windows, relative symlink
+folders. The bundled `scripts/claude-2-agents-symlink.js` creates the symlink (junction on Windows, relative symlink
 on macOS/Linux) so both tools share the same canonical storage in `.claude/skills/`.
 
 ```bash

@@ -142,7 +142,7 @@ const individualScripts = [
   'kill-port.js',
   'pre-commit',
   'remove-nul.js',
-  'setup-agent-links.js',
+  'claude-2-agents-symlink.js',
   'update-sdk.js',
 ];
 
