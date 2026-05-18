@@ -137,13 +137,13 @@ const scriptsDestDir = join(cwd, 'scripts');
 const individualScripts = [
   '+x.js',
   'cc-hook-oxlint-oxfmt-fix.cjs',
+  'claude-2-agents-symlink.js',
   'clone-mcp-ext-apps.js',
   'fcp.js',
   'generate-jwt.js',
   'kill-port.js',
   'pre-commit',
   'remove-nul.js',
-  'claude-2-agents-symlink.js',
   'update-sdk.js',
 ];
 
@@ -152,7 +152,6 @@ for (const file of individualScripts) {
   const dest = join(scriptsDestDir, file);
   if (!existsSync(src)) {
     console.error('Source not found:', src);
-    process.exit(1);
   }
   mkdirSync(dirname(dest), { recursive: true });
   cpSync(src, dest);
