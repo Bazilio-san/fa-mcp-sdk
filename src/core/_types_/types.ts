@@ -66,6 +66,38 @@ export interface IUsedHttpHeader {
   isOptional?: boolean;
 }
 
+/**
+ * Optional MCP Apps UI metadata that a `ui://...` resource can declare so the
+ * host knows how to sandbox the iframe (SEP-1865 / ext-apps spec).
+ *
+ * Only meaningful for resources with `mimeType: 'text/html;profile=mcp-app'`.
+ * For single-file widgets with all assets inlined, every field stays
+ * `undefined` and the host applies a deny-by-default CSP.
+ */
+export interface IUiResourceMeta {
+  /**
+   * Per-directive CSP overrides for the sandboxed iframe. Each value is the
+   * list of allowed sources for that directive (e.g.
+   * `{ 'script-src': ["'self'", 'https://cdn.example.com'] }`). Hosts merge
+   * these with their own defaults — only declare sources the widget actually
+   * needs.
+   */
+  csp?: Record<string, string[]>;
+  /**
+   * Sandbox permissions the widget requests (e.g. `['microphone', 'camera',
+   * 'clipboard-read']`). The host decides whether to grant them; users may be
+   * prompted. Leave empty when the widget needs nothing beyond DOM access.
+   */
+  permissions?: string[];
+  /**
+   * Hint for the host on the initial iframe size, as a `[width, height]`
+   * tuple. Each entry may be a CSS dimension (`'100%'`, `'600px'`) or a number
+   * of pixels. Hosts may ignore this on small viewports.
+   */
+  preferredFrameSize?: [string | number, string | number];
+  [key: string]: unknown;
+}
+
 export interface IResourceInfo {
   uri: string;
   name: string;
@@ -73,6 +105,12 @@ export interface IResourceInfo {
   description: string;
   mimeType: string;
   requireAuth?: boolean;
+  /**
+   * Optional `_meta` block surfaced on `resources/list` and `resources/read`.
+   * For MCP Apps resources (`ui://...`) populate `_meta.ui` with
+   * {@link IUiResourceMeta}. Other extensions may add their own keys here.
+   */
+  _meta?: { ui?: IUiResourceMeta; [key: string]: unknown };
 }
 
 export interface IResourceData extends IResourceInfo {
@@ -88,6 +126,8 @@ export interface IResource {
       uri: string;
       mimeType: string;
       text: string | object;
+      /** Mirrors `_meta` from the resource definition; see {@link IResourceInfo._meta}. */
+      _meta?: { ui?: IUiResourceMeta; [key: string]: unknown };
     },
   ];
 }

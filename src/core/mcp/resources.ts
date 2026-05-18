@@ -101,6 +101,7 @@ export const getResource = async (uri: string, args: ITransportContext): Promise
         uri: resource.uri,
         mimeType: resource.mimeType,
         text: content,
+        ...(resource._meta ? { _meta: resource._meta } : {}),
       },
     ],
   };

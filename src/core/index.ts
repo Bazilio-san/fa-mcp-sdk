@@ -18,6 +18,7 @@ export type {
   IReadResourceRequest,
   IResourceInfo,
   IResourceData,
+  IUiResourceMeta,
   IEndpointsOn404,
   IUsedHttpHeader,
   IToolProperties,
