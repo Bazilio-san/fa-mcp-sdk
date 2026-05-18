@@ -2515,12 +2515,9 @@ class McpAgentTester {
 
     if (type === 'object' || schema.properties) {
       const props = schema.properties || {};
-      const required = new Set(Array.isArray(schema.required) ? schema.required : Object.keys(props));
       const out = {};
       for (const [key, propSchema] of Object.entries(props)) {
-        if (required.has(key) || !schema.required) {
-          out[key] = this.skeletonValue(propSchema);
-        }
+        out[key] = this.skeletonValue(propSchema);
       }
       return out;
     }
