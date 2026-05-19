@@ -31,6 +31,8 @@ export type {
   IToolHandlerStructuredResponse,
 } from './_types_/types.js';
 
+export { appConfig, getProjectData, getSafeAppConfig } from './bootstrap/init-config.js';
+
 export {
   getUiCapability,
   hostSupportsMcpApps,
@@ -38,8 +40,6 @@ export {
   MCP_APPS_RESOURCE_MIME_TYPE,
 } from './mcp/mcp-apps.js';
 export type { IMcpUiClientCapabilities } from './mcp/mcp-apps.js';
-
-export { appConfig, getProjectData, getSafeAppConfig } from './bootstrap/init-config.js';
 
 export { accessPointUpdater } from './consul/access-points-updater.js';
 export { deregisterServiceFromConsul } from './consul/deregister.js';

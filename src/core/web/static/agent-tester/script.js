@@ -393,13 +393,10 @@ class McpAgentTester {
   }
 
   initializeElements() {
-    this.sidebar = document.getElementById('sidebar');
-    this.sidebarToggle = document.getElementById('sidebarToggle');
-    this.sidebarToggleMobile = document.getElementById('sidebarToggleMobile');
-
     this.mcpConnectionForm = document.getElementById('mcpConnectionForm');
     this.serverUrlInput = document.getElementById('serverUrl');
     this.transportSelect = document.getElementById('transport');
+    this.connectionToggleBtn = document.getElementById('connectionToggleBtn');
 
     this.serverUrlDropdown = document.getElementById('serverUrlDropdown');
     this.serverUrlDropdownList = document.getElementById('serverUrlDropdownList');
@@ -409,6 +406,11 @@ class McpAgentTester {
 
     this.headersSection = document.getElementById('headersSection');
     this.dynamicHeaders = document.getElementById('dynamicHeaders');
+
+    // Settings modal (former sidebar)
+    this.settingsModal = document.getElementById('settingsModal');
+    this.settingsBtn = document.getElementById('settingsBtn');
+    this.settingsModalClose = document.getElementById('settingsModalClose');
 
     // LLM settings — collapsed view + modal
     this.modelDisplay = document.getElementById('modelDisplay');
@@ -437,8 +439,6 @@ class McpAgentTester {
     this.btnViewOriginalPrompt = document.getElementById('btnViewOriginalPrompt');
     this.promptModifiedBadge = document.getElementById('promptModifiedBadge');
     this.originalAgentPrompt = null;
-
-    this.connectedServersContainer = document.getElementById('connectedServers');
 
     this.chatMessages = document.getElementById('chatMessages');
     this.messageInput = document.getElementById('messageInput');
@@ -479,13 +479,6 @@ class McpAgentTester {
   }
 
   bindEvents() {
-    if (this.sidebarToggle) {
-      this.sidebarToggle.addEventListener('click', () => this.toggleSidebar());
-    }
-    if (this.sidebarToggleMobile) {
-      this.sidebarToggleMobile.addEventListener('click', () => this.toggleSidebar());
-    }
-
     if (this.themeToggle) {
       this.themeToggle.addEventListener('click', () => this.toggleTheme());
     }
@@ -551,20 +544,23 @@ class McpAgentTester {
       sdkVersionBtn.addEventListener('click', (e) => this.toggleSdkVersionTooltip(e));
     }
 
-    document.addEventListener('click', (e) => {
-      if (
-        window.innerWidth <= 768 &&
-        !this.sidebar.contains(e.target) &&
-        !this.sidebarToggleMobile.contains(e.target) &&
-        this.sidebar.classList.contains('open')
-      ) {
-        this.toggleSidebar();
-      }
-    });
-
-    window.addEventListener('resize', () => {
-      if (window.innerWidth > 768) {
-        this.sidebar.classList.remove('open');
+    // --- Settings modal (former sidebar) ---
+    if (this.settingsBtn) {
+      this.settingsBtn.addEventListener('click', () => this.openSettingsModal());
+    }
+    if (this.settingsModalClose) {
+      this.settingsModalClose.addEventListener('click', () => this.closeSettingsModal());
+    }
+    if (this.settingsModal) {
+      this.settingsModal.addEventListener('click', (e) => {
+        if (e.target === this.settingsModal) {
+          this.closeSettingsModal();
+        }
+      });
+    }
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && this.settingsModal && this.settingsModal.style.display === 'flex') {
+        this.closeSettingsModal();
       }
     });
 
@@ -668,8 +664,18 @@ class McpAgentTester {
     });
   }
 
-  toggleSidebar() {
-    this.sidebar.classList.toggle('open');
+  openSettingsModal() {
+    if (!this.settingsModal) {
+      return;
+    }
+    this.settingsModal.style.display = 'flex';
+  }
+
+  closeSettingsModal() {
+    if (!this.settingsModal) {
+      return;
+    }
+    this.settingsModal.style.display = 'none';
   }
 
   async loadInitialData() {
@@ -787,6 +793,12 @@ class McpAgentTester {
 
   async handleMcpConnection(event) {
     event.preventDefault();
+
+    // Combined Connect/Disconnect button: disconnect when already connected
+    if (this.currentServer && this.currentServer.isConnected) {
+      await this.disconnectServer();
+      return;
+    }
 
     const serverUrl = this.serverUrlInput.value.trim();
     const transport = this.transportSelect.value;
@@ -1348,35 +1360,42 @@ class McpAgentTester {
 
   renderServerInfo() {
     this.refreshToolList();
-    if (!this.currentServer) {
-      this.connectedServersContainer.innerHTML = '';
+    this.updateConnectionToggleBtn();
+  }
+
+  updateConnectionToggleBtn() {
+    const btn = this.connectionToggleBtn;
+    if (!btn) {
       return;
     }
+    const iconEl = btn.querySelector('.connect-icon');
+    const countEl = btn.querySelector('.tools-count');
+    const connected = !!(this.currentServer && this.currentServer.isConnected);
 
-    const server = this.currentServer;
-    const toolCount = server.tools ? server.tools.length : 0;
-
-    if (server.isConnected) {
-      this.connectedServersContainer.innerHTML = `
-        <div class="server-status-row" data-testid="at-server-status-row">
-          <span class="server-status connected" data-testid="at-server-status-connected">${toolCount} tools <span class="material-icons-round">check_circle</span> connected</span>
-          <button type="button" class="btn btn-danger disconnect-btn" data-testid="at-disconnect-btn"><span class="material-icons-round">link_off</span>Disconnect</button>
-        </div>`;
+    if (connected) {
+      const toolCount = Array.isArray(this.currentServer.tools) ? this.currentServer.tools.length : 0;
+      btn.classList.add('connected');
+      btn.classList.remove('disconnected');
+      btn.title = `Disconnect (${toolCount} tools)`;
+      btn.setAttribute('aria-label', 'Disconnect');
+      if (iconEl) {
+        iconEl.textContent = 'stop';
+      }
+      if (countEl) {
+        countEl.textContent = `${toolCount} tools`;
+      }
     } else {
-      this.connectedServersContainer.innerHTML = `
-        <div class="server-status-row" data-testid="at-server-status-row">
-          <span class="server-status disconnected" data-testid="at-server-status-disconnected"><span class="material-icons-round">cancel</span>Disconnected</span>
-          <button type="button" class="btn btn-secondary reconnect-btn" data-testid="at-reconnect-btn"><span class="material-icons-round">refresh</span>Reconnect</button>
-        </div>`;
+      btn.classList.add('disconnected');
+      btn.classList.remove('connected');
+      btn.title = 'Connect';
+      btn.setAttribute('aria-label', 'Connect');
+      if (iconEl) {
+        iconEl.textContent = 'play_arrow';
+      }
+      if (countEl) {
+        countEl.textContent = '';
+      }
     }
-
-    this.connectedServersContainer.querySelector('.disconnect-btn')?.addEventListener('click', () => {
-      this.disconnectServer();
-    });
-
-    this.connectedServersContainer.querySelector('.reconnect-btn')?.addEventListener('click', () => {
-      this.handleReconnect();
-    });
   }
 
   async disconnectServer() {
@@ -2225,6 +2244,11 @@ class McpAgentTester {
     this.tabsBar.querySelectorAll('.tab-btn').forEach((btn) => {
       btn.classList.toggle('active', btn.dataset.tab === tabName);
     });
+
+    const appEl = document.querySelector('.app');
+    if (appEl) {
+      appEl.setAttribute('data-active-tab', tabName);
+    }
 
     if (tabName === 'chat') {
       this.tabPaneChat.style.display = '';

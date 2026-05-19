@@ -1,4 +1,5 @@
 import { IClientCapabilities } from '../_types_/types.js';
+import { isObject } from '../utils/utils.js';
 
 /**
  * Helpers for MCP Apps (UI-augmented MCP tools, SEP-1865).
@@ -59,10 +60,7 @@ export const getUiCapability = (
   clientCapabilities: IClientCapabilities | null | undefined,
 ): IMcpUiClientCapabilities | undefined => {
   const ext = clientCapabilities?.extensions?.[MCP_APPS_EXTENSION_ID];
-  if (!ext || typeof ext !== 'object') {
-    return undefined;
-  }
-  return ext as IMcpUiClientCapabilities;
+  return isObject(ext) ? (ext as IMcpUiClientCapabilities) : undefined;
 };
 
 /**
