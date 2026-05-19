@@ -2567,6 +2567,8 @@ textarea.prompt-modified {
   border-bottom: 1px solid var(--border);
   white-space: pre-wrap;
   word-break: break-word;
+  max-height: 150px;
+  overflow: auto;
 }
 
 .tt-panel-body {
