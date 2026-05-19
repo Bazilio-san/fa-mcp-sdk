@@ -291,6 +291,120 @@ the category is off. The four built-in `debugMcpTool`/`debugMcpResource`/`debugM
 them from your own code (e.g. emit a custom line inside `handle-tool-call.ts` whenever
 `debugMcpTool.enabled` is true).
 
+## JSON-lines Sink (`mcp.debug.logFile`)
+
+`DEBUG=mcp:*` writes ANSI-coloured human-readable text to stderr — perfect for live development,
+useless for post-mortem (colours, interleaved process output, no structured fields). Set
+`mcp.debug.logFile` to an absolute path and the SDK additionally mirrors every `mcp:tool`,
+`mcp:resource`, `mcp:prompt` event as one JSON object per line. The stderr stream is unchanged —
+the sink is purely additive.
+
+```yaml
+# config/default.yaml — or any environment override
+mcp:
+  debug:
+    logFile: /var/log/mcp/server-debug.jsonl   # absolute path; parent dir is created on first event
+    builtinTools: false                         # see next section
+```
+
+Or via env (mapped through `config/custom-environment-variables.yaml`):
+
+```bash
+MCP_DEBUG_LOG_FILE=/var/log/mcp/server.jsonl yarn start
+```
+
+### Event Shape
+
+Each line is a self-contained JSON object. `ts` (ISO timestamp) and `ch` (channel) are always
+present; remaining fields depend on the channel and `kind`.
+
+```jsonl
+{"ts":"2026-05-19T12:34:56.124Z","ch":"mcp:tool","kind":"req","name":"get_rate","args":{"from":"EUR"},"corr":"a3f1c0d2"}
+{"ts":"2026-05-19T12:34:56.171Z","ch":"mcp:tool","kind":"res","name":"get_rate","ms":47,"corr":"a3f1c0d2","ok":true}
+{"ts":"2026-05-19T12:34:57.012Z","ch":"mcp:tool","kind":"err","name":"get_rate","ms":2998,"corr":"b9c20f3a","error":"Connection timeout"}
+{"ts":"2026-05-19T12:34:57.045Z","ch":"mcp:resource","kind":"read-res","uri":"ui://weather/view.html","ms":3}
+{"ts":"2026-05-19T12:34:57.090Z","ch":"mcp:prompt","kind":"get-res","name":"agent_prompt","ms":1}
+```
+
+| Channel         | `kind` values                                                  | Useful fields                |
+|-----------------|----------------------------------------------------------------|------------------------------|
+| `mcp:tool`      | `req` / `res` / `err`                                          | `name`, `args`, `ms`, `corr` |
+| `mcp:resource`  | `list-req` / `list-res` / `read-req` / `read-res` / `read-err` | `uri`, `count`, `ms`         |
+| `mcp:prompt`    | `list-req` / `list-res` / `get-req` / `get-res` / `get-err`    | `name`, `count`, `ms`        |
+| `app:view-log`  | `log` (emitted by built-in `mcp-debug-log` tool)               | `type`, `payload`            |
+
+`corr` is an 8-char hex correlation ID — pair `req` ↔ `res`/`err` for one tool call.
+
+### Working With The File
+
+Standard JSON toolchain works as-is:
+
+```bash
+# p95 latency by tool
+jq -r 'select(.ch=="mcp:tool" and .kind=="res") | "\(.name)\t\(.ms)"' /var/log/mcp/*.jsonl \
+  | sort | datamash -g 1 perc:95 2
+
+# all errors of the last hour
+jq 'select((.kind|test("err$")) and (.ts > "2026-05-19T11:00:00"))' /var/log/mcp/*.jsonl
+
+# events pushed by widgets via mcp-debug-log
+jq 'select(.ch=="app:view-log")' /var/log/mcp/*.jsonl
+```
+
+### Programmatic Access
+
+If you need to write into the same channel from your own code (e.g. tag a domain event so it shows
+up alongside MCP traffic), use the helpers directly:
+
+```typescript
+import { emitTrace, configureDebugSink } from 'fa-mcp-sdk';
+
+// At startup the SDK already calls configureDebugSink(appConfig.mcp.debug.logFile);
+// re-configure on the fly only in tests.
+configureDebugSink('/tmp/mcp-test.jsonl');
+
+emitTrace('app:billing', { kind: 'charge', userId, amountCents });
+// → {"ts":"…","ch":"app:billing","kind":"charge","userId":"…","amountCents":1299}
+```
+
+`emitTrace` is a no-op when no sink is configured — the guard is cheap, leave the calls in.
+
+## Built-in Debug Tools (`mcp.debug.builtinTools`)
+
+A single flag registers three SDK-provided tools that exist to be called from widget code or
+integration tests, never by the LLM. All three are marked `_meta.ui.visibility: ['app']`, so MCP App
+hosts (Agent Tester, Claude Desktop with apps support, etc.) hide them from the agent's tool list.
+
+```yaml
+mcp:
+  debug:
+    builtinTools: true     # or MCP_DEBUG_BUILTIN_TOOLS=true
+```
+
+| Tool name           | Caller         | Purpose                                                                     |
+|---------------------|----------------|-----------------------------------------------------------------------------|
+| `mcp-debug-log`     | Widget         | Push a structured event into the same channel as `DEBUG=mcp:*` / JSON-lines |
+| `mcp-debug-refresh` | Widget         | Read back lightweight server state (timestamp + counter) without the LLM    |
+| `debug-tool`        | Test client    | Universal CallToolResult fixture — see [07-testing-and-operations](07-testing-and-operations.md) → "Universal `debug-tool` for Integration Tests" |
+
+The widget-facing tools are covered in [10-mcp-apps](10-mcp-apps.md) → "Widget-side debug helpers"
+(the canonical example calls them through `app.callServerTool(...)`). Names and constants are
+exported when you need to reference them in test code:
+
+```typescript
+import {
+  MCP_DEBUG_LOG_TOOL_NAME,       // 'mcp-debug-log'
+  MCP_DEBUG_REFRESH_TOOL_NAME,   // 'mcp-debug-refresh'
+  DEBUG_TOOL_NAME,               // 'debug-tool'
+  BUILTIN_MCP_DEBUG_TOOLS,       // Tool[] descriptors for the two widget tools
+  DEBUG_TOOL,                    // Tool descriptor for the test fixture
+} from 'fa-mcp-sdk';
+```
+
+> Leave `builtinTools: false` in production unless a widget genuinely needs `mcp-debug-log` /
+> `mcp-debug-refresh` at runtime. The tools are inert to the LLM, but they still occupy space in the
+> `tools/list` payload and add a small amount of routing overhead per call.
+
 ## Event System
 
 ```typescript

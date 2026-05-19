@@ -258,6 +258,21 @@ mcp:
     #> When true, strips `annotations` from tool listings returned to clients
     #> (hides hints like readOnlyHint / destructiveHint). Default: false.
     hideAnnotations: false
+  #> Debug & diagnostics. All keys optional. The stderr `DEBUG=mcp:*` stream
+  #> is independent of this section — these flags only add file logging and
+  #> built-in helper tools.
+  debug:
+    #> Absolute path to a JSON-lines file that mirrors mcp:tool / mcp:resource /
+    #> mcp:prompt events for post-mortem analysis (jq, p95 latency, error mining).
+    #> Empty = file logging disabled (only stderr DEBUG output is produced).
+    #> Example: /var/log/mcp/server-debug.jsonl
+    logFile: ''
+    #> When true, registers SDK-provided MCP tools for widgets and integration
+    #> tests: mcp-debug-log, mcp-debug-refresh, debug-tool. All are marked
+    #> _meta.ui.visibility: ['app'] and stay hidden from the LLM — they are
+    #> only callable from MCP App widgets (app.callServerTool(...)) or test
+    #> clients. Default: false.
+    builtinTools: false
 
 #> Swagger / OpenAPI documentation settings
 swagger:

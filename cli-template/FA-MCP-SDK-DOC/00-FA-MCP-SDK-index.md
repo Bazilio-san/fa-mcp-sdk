@@ -18,11 +18,11 @@ npm install fa-mcp-sdk
 | [03-configuration](03-configuration.md) | `appConfig`, YAML config, access points for external services, cache | Server configuration, external services |
 | [04-authentication](04-authentication.md) | JWT, Basic auth, server tokens, `createAuthMW()`, Token Generator, CLI Token Generator, JWT Generation API | Authentication setup |
 | [05-ad-authorization](05-ad-authorization.md) | AD group authorization at HTTP/tool levels | AD group restrictions |
-| [06-utilities](06-utilities.md) | `ServerError`, `normalizeHeaders`, logging, MCP debug switches (`DEBUG=mcp:*`), Consul, graceful shutdown | Error handling, utilities, request tracing |
-| [07-testing-and-operations](07-testing-and-operations.md) | Test clients (STDIO, HTTP, SSE, Streamable HTTP) | Testing, deployment |
+| [06-utilities](06-utilities.md) | `ServerError`, `normalizeHeaders`, logging, MCP debug switches (`DEBUG=mcp:*`), JSON-lines sink (`mcp.debug.logFile` → `emitTrace`), built-in debug tools (`mcp.debug.builtinTools`), Consul, graceful shutdown | Error handling, utilities, request tracing, post-mortem analysis |
+| [07-testing-and-operations](07-testing-and-operations.md) | Test clients (STDIO, HTTP, SSE, Streamable HTTP); universal `debug-tool` fixture covering every `CallToolResult` shape | Testing, deployment, exercising client code against image/audio/resource/error/delay variants |
 | [08-agent-tester-and-headless-api](08-agent-tester-and-headless-api.md) | Agent Tester, Headless API, structured logging, automated testing, UI `data-testid` reference. **MCP Apps mode**: capability negotiation, `appCalls[]` / `app_calls[]`, widget iframe bridge, App Inspector tab | Agent-driven tool development, CLI automation, UI E2E tests, MCP Apps host for development |
 | [09-database](09-database.md) | PostgreSQL sugar layer (`queryMAIN`, `execMAIN`, `getInsertSqlMAIN`, `getMergeSqlMAIN`, `mergeByBatch`), `pgvector`, secondary DBs | Database access, upserts, batching |
-| [10-mcp-apps](10-mcp-apps.md) | Self-contained digest of the MCP Apps protocol + SDK pinned to `@modelcontextprotocol/ext-apps v1.7.2` (spec 2026-01-26): `ui://` resources, `_meta.ui`, JSON-RPC messages, `App` class, host context, patterns, pitfalls. Cross-links to Agent Tester as a dev-host (doc 08) | Building / extending MCP Apps (UI-augmented tools) |
+| [10-mcp-apps](10-mcp-apps.md) | Self-contained digest of the MCP Apps protocol + SDK pinned to `@modelcontextprotocol/ext-apps v1.7.2` (spec 2026-01-26): `ui://` resources, `_meta.ui`, JSON-RPC messages, `App` class, host context, patterns, pitfalls. **Canonical example** (`examples/mcp-apps-canonical/`, `npm run example:mcp-apps`) and widget-side debug helpers (`mcp-debug-log`, `mcp-debug-refresh`). Cross-links to Agent Tester as a dev-host (doc 08) | Building / extending MCP Apps (UI-augmented tools) |
 
 ## Key Exports
 
@@ -54,6 +54,18 @@ import { logger, fileLogger, Logger, applyLoggerSettings, trim, ppj, toError, to
 
 // MCP debug switches (DEBUG=mcp:tool|mcp:resource|mcp:prompt|mcp:notification or DEBUG=mcp:*)
 import { debugMcpTool, debugMcpResource, debugMcpPrompt, debugMcpNotification, debugTokenAuth } from 'fa-mcp-sdk';
+
+// JSON-lines debug sink (mcp.debug.logFile) — see 06-utilities → "JSON-lines Sink"
+import { emitTrace, configureDebugSink, initDebugTraceFromConfig } from 'fa-mcp-sdk';
+
+// Built-in debug tools (enabled by mcp.debug.builtinTools=true)
+// — see 06-utilities → "Built-in Debug Tools", 07-testing → "Universal debug-tool", 10-mcp-apps § 8.14
+import {
+  BUILTIN_MCP_DEBUG_TOOLS, BUILTIN_MCP_DEBUG_TOOL_NAMES,
+  MCP_DEBUG_LOG_TOOL_NAME, MCP_DEBUG_REFRESH_TOOL_NAME,
+  isBuiltinDebugTool, handleBuiltinDebugTool,
+  DEBUG_TOOL, DEBUG_TOOL_NAME, handleDebugTool, registerDebugTool,
+} from 'fa-mcp-sdk';
 
 // Test Clients
 import { McpHttpClient, McpStdioClient, McpSseClient, McpStreamableHttpClient } from 'fa-mcp-sdk';

@@ -9,6 +9,7 @@ import { IUsedHttpHeader, IResource, IResourceData, IResourceInfo, ITransportCon
 import { appConfig, getProjectData } from '../bootstrap/init-config.js';
 import { ROOT_PROJECT_DIR } from '../constants.js';
 import { debugMcpResource } from '../debug.js';
+import { emitTrace } from './debug-trace.js';
 import { assembleReadmeWithSatellites } from './readme-assembler.js';
 
 let readme = assembleReadmeWithSatellites(ROOT_PROJECT_DIR);
@@ -79,24 +80,31 @@ This information is used by searching for this MCP server and its information in
 };
 
 export const getResourcesList = async (args: ITransportContext): Promise<{ resources: IResourceInfo[] }> => {
+  const startedAt = Date.now();
   if (debugMcpResource.enabled) {
     debugMcpResource('→ resources/list');
   }
+  emitTrace('mcp:resource', { kind: 'list-req' });
   const resources: IResourceData[] = await createResources(args);
   const result = { resources: resources.map(({ content, ...rest }) => ({ ...rest })) };
+  const ms = Date.now() - startedAt;
   if (debugMcpResource.enabled) {
     debugMcpResource(`← resources/list (${result.resources.length})\n${JSON.stringify(result, null, 2)}`);
   }
+  emitTrace('mcp:resource', { kind: 'list-res', count: result.resources.length, ms });
   return result;
 };
 
 export const getResource = async (uri: string, args: ITransportContext): Promise<IResource> => {
+  const startedAt = Date.now();
   if (debugMcpResource.enabled) {
     debugMcpResource(`→ resources/read ${uri}`);
   }
+  emitTrace('mcp:resource', { kind: 'read-req', uri });
   const resources = await createResources(args);
   const resource = resources.find((r) => r.uri === uri);
   if (!resource) {
+    emitTrace('mcp:resource', { kind: 'read-err', uri, ms: Date.now() - startedAt, error: 'unknown-resource' });
     throw new Error(`Unknown resource: ${uri}`);
   }
   let { content } = resource;
@@ -104,6 +112,7 @@ export const getResource = async (uri: string, args: ITransportContext): Promise
     content = await content(uri);
   }
   if (!content) {
+    emitTrace('mcp:resource', { kind: 'read-err', uri, ms: Date.now() - startedAt, error: 'no-content' });
     throw new Error(`Can not get content of resource '${uri}' by custom handler`);
   }
   const result: IResource = {
@@ -116,9 +125,11 @@ export const getResource = async (uri: string, args: ITransportContext): Promise
       },
     ],
   };
+  const ms = Date.now() - startedAt;
   if (debugMcpResource.enabled) {
     const body = typeof content === 'string' ? content : JSON.stringify(content, null, 2);
     debugMcpResource(`← resources/read ${uri}\n${body}`);
   }
+  emitTrace('mcp:resource', { kind: 'read-res', uri, ms });
   return result;
 };

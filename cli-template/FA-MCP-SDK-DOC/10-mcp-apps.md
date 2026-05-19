@@ -44,6 +44,23 @@ Mode" for the full surface (capability negotiation, `appCalls[]` / `app_calls[]`
 This is intentionally a **dev-tool host** — for production MCP App rendering use Claude Desktop,
 Claude.ai, or another spec-compliant host listed below.
 
+### Canonical example
+
+A minimal, runnable reference lives at `examples/mcp-apps-canonical/`:
+
+```bash
+npm run example:mcp-apps     # starts on :7080
+# then open http://localhost:7080/agent-tester, toggle Apps, ask "what time is it?"
+```
+
+The example is the smallest possible MCP Apps server (one tool, one widget, no
+build step) and is the canonical reference for the `mcp-app-create` and
+`mcp-app-add-to-server` skills. Copy the three patterns documented in its
+README when wiring MCP Apps into your own project. The structure intentionally
+uses `fa-mcp-sdk`'s `initMcpServer` + `customResources` instead of
+`registerAppTool`/`registerAppResource` so it shares the same auth, transport,
+and logging plumbing as every other tool you ship.
+
 ## 3. Architecture
 
 Three entities cooperate over two transports:
@@ -779,6 +796,64 @@ app.sendLog({ level: "info", logger: "WeatherApp", data: "Refreshed forecast" })
 ```
 
 `basic-host` surfaces these in the console panel; production hosts MAY route them to telemetry.
+
+### 8.14 Widget-side debug helpers (`mcp-debug-log` / `mcp-debug-refresh`)
+
+`app.sendLog` (above) is a host-side concern — what reaches your server logs depends on the host's
+telemetry settings. When you need the widget to push events **into the same channel as your server
+debug stream** (so they show up in `DEBUG=mcp:*` and the JSON-lines file from
+[06-utilities](06-utilities.md) → "JSON-lines Sink"), enable the SDK's built-in helper tools:
+
+```yaml
+# config/default.yaml
+mcp:
+  debug:
+    builtinTools: true
+```
+
+This registers two app-only tools (hidden from the LLM via `_meta.ui.visibility: ['app']`):
+
+```ts
+// from inside widget JS — replace `host.postMessage` with whatever JSON-RPC bridge you use
+await app.callServerTool({
+  name: 'mcp-debug-log',
+  arguments: {
+    type: 'render-error',
+    payload: { stack: err.stack, viewState: snapshot },
+  },
+});
+// → server-side: emits {"ch":"app:view-log","kind":"log","type":"render-error","payload":{...}}
+
+const fresh = await app.callServerTool({ name: 'mcp-debug-refresh', arguments: {} });
+// fresh.structuredContent === { timestamp: '2026-05-19T08:34:12.115Z', counter: 47 }
+```
+
+Use `mcp-debug-log` to capture client-side errors, user-action breadcrumbs, or view-state snapshots
+without owning a logger, fetch client, or JWT in the widget. Use `mcp-debug-refresh` for polling /
+heartbeat scenarios where the widget needs lightweight server state but you don't want the LLM to
+see the call.
+
+### 8.15 Canonical example
+
+The smallest working server lives at `examples/mcp-apps-canonical/` (added to your project by the
+CLI template). Run it with:
+
+```bash
+npm run example:mcp-apps    # starts on :7080
+# then open http://localhost:7080/agent-tester, toggle Apps, ask "what time is it?"
+```
+
+The example demonstrates exactly the three patterns above:
+
+- `tools[i]._meta.ui.resourceUri` linking a tool to its widget (server.ts).
+- `customResources[i]` serving the `ui://` HTML with the right MIME type (server.ts).
+- The `ui/initialize` → `ui/notifications/initialized` → `ui/notifications/tool-result` handshake
+  inside an inlined-CSP widget (widget/index.html).
+
+The example uses `fa-mcp-sdk`'s `initMcpServer` + `customResources` rather than
+`registerAppTool`/`registerAppResource` so it inherits the same auth, transport, debug, and logging
+plumbing as the rest of your server. Use it as the copy-paste starting point — the `mcp-app-create`
+and `mcp-app-add-to-server` skills both point here.
 
 ## 9. Authorization
 

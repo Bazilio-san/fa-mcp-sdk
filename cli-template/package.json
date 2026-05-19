@@ -37,7 +37,8 @@
     "test:mcp": "node tests/mcp/test-stdio.js",
     "test:mcp-http": "node tests/mcp/test-http.js",
     "test:mcp-sse": "node tests/mcp/test-sse.js",
-    "test:mcp-stdio": "node tests/mcp/test-stdio.js"
+    "test:mcp-stdio": "node tests/mcp/test-stdio.js",
+    "example:mcp-apps": "cross-env WS_PORT=7080 tsx examples/mcp-apps-canonical/server.ts"
   },
   "keywords": [
     "mcp",

@@ -261,6 +261,12 @@ mcp:
     #> When true, strips `annotations` from tool listings returned to clients
     #> (hides hints like readOnlyHint / destructiveHint). Default: false.
     hideAnnotations: false
+  #> Debug & diagnostics. See default.yaml for full documentation.
+  debug:
+    #> Absolute path to a JSON-lines log file. Empty = file logging disabled.
+    logFile: ''
+    #> Register built-in MCP App / test helper tools. Default: false.
+    builtinTools: false
 
 #> Swagger / OpenAPI documentation settings
 swagger:

@@ -68,6 +68,26 @@ interface IMCPConfig {
       answerAs: 'text' | 'structuredContent';
       hideAnnotations: boolean;
     };
+    /**
+     * Debug & diagnostics. All keys are optional and disabled by default — the
+     * stderr `DEBUG=mcp:*` stream keeps working independently of this section.
+     */
+    debug?: {
+      /**
+       * Absolute path to a JSON-lines file that mirrors `DEBUG=mcp:*` events
+       * in a machine-parseable form. Empty / unset — file logging disabled.
+       * The parent directory is created lazily on the first event.
+       */
+      logFile?: string;
+      /**
+       * When true, registers SDK-provided built-in MCP tools intended for
+       * widgets and integration tests (`mcp-debug-log`, `mcp-debug-refresh`,
+       * `debug-tool`). All are marked `_meta.ui.visibility: ['app']` and stay
+       * hidden from the LLM — they're only callable from MCP App widgets
+       * (`app.callServerTool(...)`) or from test clients. Default: false.
+       */
+      builtinTools?: boolean;
+    };
   };
 }
 

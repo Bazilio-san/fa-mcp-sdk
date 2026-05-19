@@ -139,6 +139,19 @@ export {
 
 export { debugTokenAuth, debugMcpTool, debugMcpResource, debugMcpPrompt, debugMcpNotification } from './debug.js';
 
+export { configureDebugSink, emitTrace, initDebugTraceFromConfig } from './mcp/debug-trace.js';
+
+export {
+  BUILTIN_MCP_DEBUG_TOOLS,
+  BUILTIN_MCP_DEBUG_TOOL_NAMES,
+  MCP_DEBUG_LOG_TOOL_NAME,
+  MCP_DEBUG_REFRESH_TOOL_NAME,
+  handleBuiltinDebugTool,
+  isBuiltinDebugTool,
+} from './mcp/builtin-debug-tools.js';
+
+export { DEBUG_TOOL, DEBUG_TOOL_NAME, handleDebugTool, registerDebugTool } from './utils/testing/debug-tool.js';
+
 export { Logger } from 'af-logger-ts';
 
 export { createAgentTesterRouter } from './agent-tester/agent-tester-router.js';

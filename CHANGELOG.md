@@ -5,6 +5,26 @@ All notable changes to `fa-mcp-sdk` are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.129]
+
+### Added
+
+- **Tool-level error helpers (`isError: true`).** New exports `formatToolError()`, `asTextError()`,
+  `asJsonError()` mirror `formatToolResult()` / `asTextContent()` / `asJson()` but set
+  `isError: true` on the MCP `tools/call` result. This is the spec-recommended way to surface
+  recoverable failures (resource not found, business validation, upstream 4xx) — the LLM sees the
+  error text inside the conversation and can self-correct, instead of receiving a JSON-RPC
+  protocol error that most clients treat as a hard sandbox failure. `IToolHandlerTextResponse`
+  and `IToolHandlerStructuredResponse` now carry an optional `isError?: boolean` field.
+
+### Documentation
+
+- New "Returning errors — `isError: true` vs `throw`" section in
+  `cli-template/FA-MCP-SDK-DOC/02-1-tools-and-api.md` explains when to return a tool-level error
+  vs throw `ToolExecutionError`, with a side-by-side table and a migration tip.
+- `06-utilities.md` lists the new helpers in the Tool Utilities block; `00-FA-MCP-SDK-index.md`
+  surfaces them in the key-exports import example.
+
 ## [0.4.122]
 
 ### Added

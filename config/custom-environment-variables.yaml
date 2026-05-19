@@ -46,6 +46,11 @@ mcp:
   tools:
     answerAs: MCP_TOOLS_ANSWER_AS
     hideAnnotations: MCP_TOOLS_HIDE_ANNOTATIONS
+  debug:
+    logFile: MCP_DEBUG_LOG_FILE
+    builtinTools:
+      __name: MCP_DEBUG_BUILTIN_TOOLS
+      __format: boolean
 
 uiColor:
   primary: UI_COLOR_PRIMARY

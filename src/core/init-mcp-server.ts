@@ -2,7 +2,9 @@ import { closeAllPgConnectionsPg } from 'af-db-ts';
 import chalk from 'chalk';
 import { AccessPoints, IAccessPoints, IRegisterCyclic, IAccessPoint } from 'fa-consul';
 
-import { IToolHandlerParams, McpServerData, TToolHandlerResponse } from './_types_/types.js';
+import { Tool } from '@modelcontextprotocol/sdk/types.js';
+
+import { ITransportContext, IToolHandlerParams, McpServerData, TToolHandlerResponse } from './_types_/types.js';
 import { dotEnvResult } from './bootstrap/dotenv.js';
 import { appConfig } from './bootstrap/init-config.js';
 import { startupInfo } from './bootstrap/startup-info.js';
@@ -13,8 +15,11 @@ import { checkMainDB } from './db/pg-db.js';
 import { applyLoggerSettings, fileLogger, logger as lgr } from './logger.js';
 
 // Imports to modify _core functions
+import { BUILTIN_MCP_DEBUG_TOOLS, handleBuiltinDebugTool, isBuiltinDebugTool } from './mcp/builtin-debug-tools.js';
+import { emitTrace, initDebugTraceFromConfig, makeCorr } from './mcp/debug-trace.js';
 import { startStdioServer } from './mcp/server-stdio.js';
 import { checkPortAvailability } from './utils/port-checker.js';
+import { DEBUG_TOOL, DEBUG_TOOL_NAME, handleDebugTool } from './utils/testing/debug-tool.js';
 import { isNonEmptyObject } from './utils/utils.js';
 import { startHttpServer } from './web/server-http.js';
 
@@ -38,28 +43,63 @@ function formatToolResponseForDebug(res: any): string {
  * Decorate `data.toolHandler` so every tool call emits a request/response pair on the
  * DEBUG=mcp:tool stream. Both HTTP and STDIO transports resolve the handler through the
  * same `global.__MCP_PROJECT_DATA__`, so wrapping here covers all transports at once.
+ *
+ * When `appConfig.mcp.debug.builtinTools` is true, SDK-provided helper tools
+ * (`mcp-debug-log`, `mcp-debug-refresh`, `debug-tool`) are appended to the
+ * tool list and routed to their built-in handlers — never delegated to the
+ * user-supplied `toolHandler`. They carry `_meta.ui.visibility: ['app']` so
+ * MCP App hosts hide them from the LLM.
  */
 function wrapProjectDataWithDebug(data: McpServerData): McpServerData {
+  const builtinEnabled = appConfig.mcp?.debug?.builtinTools === true;
   const originalToolHandler = data.toolHandler;
   const wrappedToolHandler = async <T = unknown>(params: IToolHandlerParams): Promise<TToolHandlerResponse<T>> => {
+    const { name, arguments: args } = params;
+    const corr = makeCorr();
+    const startedAt = Date.now();
     if (debugMcpTool.enabled) {
-      const { name, arguments: args } = params;
       debugMcpTool(`→ tool/call ${name}\n${JSON.stringify(args ?? {}, null, 2)}`);
     }
+    emitTrace('mcp:tool', { kind: 'req', name, args: args ?? {}, corr });
     try {
-      const result = await originalToolHandler<T>(params);
-      if (debugMcpTool.enabled) {
-        debugMcpTool(`← tool/call ${params.name}\n${formatToolResponseForDebug(result)}`);
+      let result: TToolHandlerResponse<T>;
+      if (builtinEnabled && isBuiltinDebugTool(name)) {
+        result = (await handleBuiltinDebugTool(params)) as TToolHandlerResponse<T>;
+      } else if (builtinEnabled && name === DEBUG_TOOL_NAME) {
+        result = (await handleDebugTool(params)) as TToolHandlerResponse<T>;
+      } else {
+        result = await originalToolHandler<T>(params);
       }
+      const ms = Date.now() - startedAt;
+      if (debugMcpTool.enabled) {
+        debugMcpTool(`← tool/call ${name}\n${formatToolResponseForDebug(result)}`);
+      }
+      emitTrace('mcp:tool', { kind: 'res', name, ms, corr, ok: true });
       return result;
     } catch (error: any) {
+      const ms = Date.now() - startedAt;
+      const errMsg = error?.message || String(error);
       if (debugMcpTool.enabled) {
-        debugMcpTool(`✗ tool/call ${params.name} threw: ${error?.message || String(error)}`);
+        debugMcpTool(`✗ tool/call ${name} threw: ${errMsg}`);
       }
+      emitTrace('mcp:tool', { kind: 'err', name, ms, corr, error: errMsg });
       throw error;
     }
   };
-  return { ...data, toolHandler: wrappedToolHandler };
+
+  // Append built-in tools to the user's tool list (preserving array vs. function form).
+  let wrappedTools: McpServerData['tools'] = data.tools;
+  if (builtinEnabled) {
+    const builtins: Tool[] = [...BUILTIN_MCP_DEBUG_TOOLS, DEBUG_TOOL];
+    const original = data.tools;
+    if (typeof original === 'function') {
+      wrappedTools = async (ctx: ITransportContext) => [...(await original(ctx)), ...builtins];
+    } else {
+      wrappedTools = [...(original as Tool[]), ...builtins];
+    }
+  }
+
+  return { ...data, tools: wrappedTools, toolHandler: wrappedToolHandler };
 }
 
 let cyclicRegisterServiceInConsul: IRegisterCyclic;
@@ -134,6 +174,9 @@ export async function initMcpServer(data: McpServerData): Promise<void> {
   // Handle graceful shutdown
   process.on('SIGINT', () => gracefulShutdown('SIGINT'));
   process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
+
+  // Open the JSON-lines debug sink before any traffic flows (no-op when unset)
+  initDebugTraceFromConfig();
 
   // Temporarily store data in a global context for access from _core functions
   global.__MCP_PROJECT_DATA__ = wrapProjectDataWithDebug(data);
