@@ -5,7 +5,92 @@ All notable changes to `fa-mcp-sdk` are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.4.129]
+## [0.4.131] - 2026-05-19
+
+### Added
+
+- **JSON-lines debug sink (`mcp.debug.logFile`).** Set the config key (or
+  `MCP_DEBUG_LOG_FILE` env) to an absolute path and every `mcp:tool` /
+  `mcp:resource` / `mcp:prompt` event is additionally appended as one JSON
+  object per line — `{ts, ch, kind, ...}`. The existing `DEBUG=mcp:*` stderr
+  stream is unchanged; the sink is purely additive and designed for
+  post-mortem analysis (`jq` for p95 latency, error mining, widget-event
+  filtering). Each `mcp:tool` line carries an 8-char `corr` ID that pairs
+  `req` with its matching `res`/`err`, plus per-call `ms` latency. New public
+  exports: `emitTrace()`, `configureDebugSink()`, `initDebugTraceFromConfig()`
+  so user code (handlers, background jobs) can write into the same channel.
+- **Built-in MCP debug tools (`mcp.debug.builtinTools`).** New flag registers
+  three SDK-provided tools, all marked `_meta.ui.visibility: ['app']` so MCP
+  App hosts hide them from the LLM:
+  - `mcp-debug-log` — widget pushes a structured event into the JSON-lines
+    sink (and `DEBUG=mcp:*` stream) via `app.callServerTool(...)`, removing
+    the need to ship a logger / fetch client / JWT inside the View.
+  - `mcp-debug-refresh` — widget reads back lightweight server state
+    (`{ timestamp, counter }`) without involving the LLM, for polling /
+    heartbeat scenarios.
+  - `debug-tool` — universal test fixture that produces every variation of
+    `CallToolResult` (text / image / audio / resource / resourceLink / mixed,
+    single vs. multi-block, `structuredContent` and `_meta` toggles,
+    `isError: true`, `delayMs` for timeout tests, `largeInput` for
+    truncate/streaming tests). Removes the need to write bespoke fake
+    servers for client-side integration tests (Agent Tester, custom MCP
+    hosts, CI smoke tests).
+
+  New exports: `BUILTIN_MCP_DEBUG_TOOLS`, `BUILTIN_MCP_DEBUG_TOOL_NAMES`,
+  `MCP_DEBUG_LOG_TOOL_NAME`, `MCP_DEBUG_REFRESH_TOOL_NAME`,
+  `handleBuiltinDebugTool`, `isBuiltinDebugTool`, `DEBUG_TOOL`,
+  `DEBUG_TOOL_NAME`, `handleDebugTool`, `registerDebugTool` (structural
+  helper that attaches `debug-tool` to any `McpServer` with a
+  `registerTool(name, def, handler)` method, so the SDK does not pull in a
+  hard dependency on `@modelcontextprotocol/sdk/server/mcp.js`).
+- **Canonical MCP Apps example.** New `cli-template/examples/mcp-apps-canonical/`
+  with `server.ts` + single-file widget + README is now part of every
+  generated project; `npm run example:mcp-apps` (added to `cli-template/
+  package.json`, runs via `cross-env WS_PORT=7080 tsx`) starts the example
+  server on port 7080 and is the documented reference for the
+  `mcp-app-create` and `mcp-app-add-to-server` skills. Demonstrates the three
+  patterns to copy: `tools[i]._meta.ui.resourceUri`, `customResources[i]`
+  with `mimeType: MCP_APPS_RESOURCE_MIME_TYPE`, and the `ui/initialize` →
+  `ui/notifications/initialized` → `ui/notifications/tool-result` widget
+  handshake. Uses `fa-mcp-sdk`'s `initMcpServer` + `customResources`
+  pipeline (not `registerAppTool` from `@modelcontextprotocol/ext-apps`) so
+  it inherits the same auth, transport, logging, and debug plumbing as the
+  rest of the server.
+
+### Changed
+
+- `wrapProjectDataWithDebug()` in `init-mcp-server.ts` now generates a `corr`
+  ID at call entry and emits `{kind: 'req'|'res'|'err', name, args?, ms?,
+  corr}` events into the JSON-lines sink in addition to the existing
+  `debugMcpTool` stderr writes. When `mcp.debug.builtinTools=true`, the
+  wrapper also routes calls to `mcp-debug-log` / `mcp-debug-refresh` /
+  `debug-tool` to their SDK-internal handlers before falling back to the
+  user-supplied `toolHandler`. Same `emitTrace` hooks landed in
+  `mcp/resources.ts` (`list-req` / `list-res` / `read-req` / `read-res` /
+  `read-err`) and `mcp/prompts.ts` (`list-req` / `list-res` / `get-req` /
+  `get-res` / `get-err`). All hooks are no-ops when neither `DEBUG=mcp:*`
+  is set nor `mcp.debug.logFile` is configured.
+
+### Documentation
+
+- `cli-template/FA-MCP-SDK-DOC/06-utilities.md` — new sections "JSON-lines
+  Sink (`mcp.debug.logFile`)" (per-channel event shape table, `corr`
+  pairing explained, `jq` recipes for p95 latency / error filtering /
+  widget logs, programmatic `emitTrace` example) and "Built-in Debug Tools
+  (`mcp.debug.builtinTools`)".
+- `cli-template/FA-MCP-SDK-DOC/07-testing-and-operations.md` — new section
+  "Universal `debug-tool` for Integration Tests" with the full input schema
+  table, jest examples covering mixed content / `isError` / `delayMs` /
+  large payload, and standalone `registerDebugTool(server)` usage.
+- `cli-template/FA-MCP-SDK-DOC/10-mcp-apps.md` — new "Canonical example"
+  block under "Hosts that ship with this SDK", and two new pattern
+  subsections: `§ 8.14 Widget-side debug helpers
+  (mcp-debug-log / mcp-debug-refresh)` and `§ 8.15 Canonical example`.
+- `cli-template/FA-MCP-SDK-DOC/00-FA-MCP-SDK-index.md` — doc-structure rows
+  06 / 07 / 10 expanded to mention the new surface; Key Exports block lists
+  the JSON-lines sink helpers and every built-in tool export.
+
+## [0.4.130]
 
 ### Added
 

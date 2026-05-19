@@ -77,7 +77,8 @@ const normalized = normalizeHeaders({
 
 ```typescript
 import {
-  getTools, formatToolResult, getJsonFromResult, asTextContent, asJson,
+  getTools, formatToolResult, formatToolError, getJsonFromResult,
+  asTextContent, asTextError, asJson, asJsonError,
   TToolHandlerResponse, IToolHandlerTextResponse, IToolHandlerStructuredResponse,
 } from 'fa-mcp-sdk';
 
@@ -87,27 +88,40 @@ const tools = await getTools();  // Get registered tools
 // Return type: TToolHandlerResponse<T> = IToolHandlerTextResponse | IToolHandlerStructuredResponse<T>
 const result = formatToolResult<{ message: string; data: object }>({ message: 'Done', data: {} });
 
+// Tool-level error — `isError: true` so the LLM sees it in conversation
+// and can self-correct instead of treating it as a protocol failure.
+const fail = formatToolError(`Issue ${key} not found`);
+
 // Returns structuredContent or JSON from text depending on appConfig.mcp.tools.answerAs
 const original = getJsonFromResult<T>(result);
 
 // Direct formatting helpers (ignore tools.answerAs config):
-asTextContent('Hello');           // IToolHandlerTextResponse: { content: [{ type: 'text', text: 'Hello' }] }
-asJson({ status: 'ok' });         // IToolHandlerStructuredResponse: { structuredContent: { status: 'ok' } }
+asTextContent('Hello');            // { content: [{ type: 'text', text: 'Hello' }] }
+asJson({ status: 'ok' });          // { structuredContent: { status: 'ok' } }
+asTextError('Not found');          // { content: [{ type: 'text', text: 'Not found' }], isError: true }
+asJsonError({ code: 'NOT_FOUND' }); // { structuredContent: { code: 'NOT_FOUND' },       isError: true }
 ```
 
 ### Return Type Signatures
 
 ```typescript
 function formatToolResult<T = any>(json: T): TToolHandlerResponse<T>;
+function formatToolError<T = any>(json: T): TToolHandlerResponse<T>;     // sets isError: true
 function asTextContent(text: string): IToolHandlerTextResponse;
+function asTextError(text: string): IToolHandlerTextResponse;            // sets isError: true
 function asJson<T = any>(json: T): IToolHandlerStructuredResponse<T>;
+function asJsonError<T = any>(json: T): IToolHandlerStructuredResponse<T>; // sets isError: true
 function getJsonFromResult<T = any>(result: TToolHandlerResponse | any): T;
 ```
 
 ### When to Use Which
 
-- **`formatToolResult()`** — Primary choice in tool handlers. Respects `appConfig.mcp.tools.answerAs` config.
-- **`asTextContent()` / `asJson()`** — Direct formatting, ignores `tools.answerAs`. Use when specific format needed.
+- **`formatToolResult()` / `formatToolError()`** — Primary choices in tool handlers. Respect
+  `appConfig.mcp.tools.answerAs`. Use `formatToolError()` for *tool-level* failures (not found,
+  validation, upstream 4xx) so the LLM sees them in conversation. See
+  [02-1-tools-and-api.md → "Returning errors"](./02-1-tools-and-api.md) for the full guide.
+- **`asTextContent()` / `asTextError()` / `asJson()` / `asJsonError()`** — Direct formatting,
+  ignore `tools.answerAs`. Use when a specific shape is required.
 - **`getJsonFromResult()`** — Inverse of `formatToolResult()`. Extracts JSON from either format. Use in tests.
 
 ## Network Utilities

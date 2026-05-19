@@ -35,7 +35,9 @@ import { createAuthMW, generateToken, getAuthHeadersForTests, TTokenType, genera
 
 // Tools & Errors
 import {
-  formatToolResult, asTextContent, asJson, getJsonFromResult,
+  formatToolResult, formatToolError,                  // formatToolError → sets isError: true
+  asTextContent, asTextError, asJson, asJsonError,    // direct-shape helpers (text + structured, ok + error)
+  getJsonFromResult,
   TToolHandlerResponse, IToolHandlerTextResponse, IToolHandlerStructuredResponse,
   ToolExecutionError, ServerError, BaseMcpError, ValidationError, getTools,
 } from 'fa-mcp-sdk';

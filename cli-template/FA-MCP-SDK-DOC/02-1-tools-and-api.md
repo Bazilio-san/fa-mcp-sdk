@@ -56,6 +56,69 @@ The handler must return `TToolHandlerResponse` — a discriminated union of
 the value as-is to the MCP client over STDIO, SSE, and HTTP. Use `formatToolResult()`
 to pick the right shape based on `appConfig.mcp.tools.answerAs`.
 
+### Returning errors — `isError: true` vs `throw`
+
+The MCP spec distinguishes two error classes, and the LLM behaves very differently for each:
+
+| Error class            | How to return                                            | What the LLM sees                                  |
+|------------------------|----------------------------------------------------------|----------------------------------------------------|
+| **Tool-level**         | `return formatToolError(msg)` (`isError: true` in result) | Error text inside the conversation — can self-correct, retry, ask the user |
+| **Protocol-level**     | `throw new ToolExecutionError(name, msg)`                | JSON-RPC `error` envelope — most clients surface this as a hard sandbox failure the model cannot react to |
+
+**Use `formatToolError()` for:**
+
+- resource not found (`Issue AITECH-1 not found`)
+- business validation (`Date must be in the past`)
+- upstream API returned a recoverable error (404, 422, "rate limited, retry later")
+- partial success the LLM should explain to the user
+
+**Throw for:**
+
+- unknown tool name (`switch` default branch)
+- missing required transport feature (e.g. no `Mcp-Session-Id` for stateful clients)
+- genuine infrastructure failure (DB connection dead, secret missing) that the LLM cannot work around
+
+```typescript
+import {
+  formatToolResult, formatToolError, ToolExecutionError,
+  IToolHandlerParams, TToolHandlerResponse,
+} from 'fa-mcp-sdk';
+
+export const handleToolCall = async (
+  params: IToolHandlerParams,
+): Promise<TToolHandlerResponse> => {
+  const { name, arguments: args } = params;
+
+  switch (name) {
+    case 'get_issue': {
+      const issue = await jira.findIssue(args.key);
+      if (!issue) {
+        // Tool-level: LLM sees "Issue X not found" and can ask the user to clarify.
+        return formatToolError(`Issue ${args.key} not found`);
+      }
+      return formatToolResult(issue);
+    }
+
+    default:
+      // Protocol-level: client routing problem, not something the LLM should retry.
+      throw new ToolExecutionError(name, `Unknown tool: ${name}`);
+  }
+};
+```
+
+Direct-shape helpers (ignore `tools.answerAs`):
+
+```typescript
+import { asTextError, asJsonError } from 'fa-mcp-sdk';
+
+asTextError('Not found');                      // { content: [{type:'text', text:'Not found'}], isError: true }
+asJsonError({ code: 'NOT_FOUND', key: 'X' });  // { structuredContent: {...},                  isError: true }
+```
+
+> **Migration tip.** If your current handler does `throw new ToolExecutionError(name, 'Not found: ...')`
+> for missing resources, convert those branches to `return formatToolError('Not found: ...')`. The
+> LLM will start surfacing "Such an issue does not exist" to the user instead of failing the call.
+
 ### Headers Access
 
 Headers are normalized to lowercase. Available in HTTP/SSE transports:

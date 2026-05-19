@@ -102,7 +102,15 @@ export type {
 
 export { initMcpServer, gracefulShutdown } from './init-mcp-server.js';
 
-export { formatToolResult, getJsonFromResult, asJson, asTextContent } from './utils/formatToolResult.js';
+export {
+  formatToolResult,
+  formatToolError,
+  getJsonFromResult,
+  asJson,
+  asJsonError,
+  asTextContent,
+  asTextError,
+} from './utils/formatToolResult.js';
 export {
   trim,
   isMainModule,

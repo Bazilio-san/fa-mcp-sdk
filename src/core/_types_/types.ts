@@ -258,10 +258,23 @@ export interface IToolHandlerTextResponse {
     type: 'text';
     text: string;
   }[];
+  /**
+   * MCP `tools/call` result flag. Set to `true` to mark the call as a tool-level
+   * error so the LLM sees the failure inside the conversation and can react,
+   * instead of throwing a JSON-RPC protocol error which most clients surface as
+   * a hard sandbox-level failure.
+   *
+   * Per MCP spec: errors that originate from the tool SHOULD be reported in the
+   * result with `isError: true`. Only "tool not found", "method not supported",
+   * and similar protocol issues should throw.
+   */
+  isError?: boolean;
 }
 
 export interface IToolHandlerStructuredResponse<T = any> {
   structuredContent: T;
+  /** See {@link IToolHandlerTextResponse.isError}. */
+  isError?: boolean;
 }
 
 export type TToolHandlerResponse<T = any> = IToolHandlerTextResponse | IToolHandlerStructuredResponse<T>;

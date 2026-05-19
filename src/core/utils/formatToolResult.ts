@@ -75,6 +75,67 @@ export function formatToolResult<T = any>(json: T): TToolHandlerResponse<T> {
   return asTextContent(ppj(json));
 }
 
+/**
+ * Text response with `isError: true`. Use for tool-level errors that the LLM
+ * should see and react to (resource not found, business validation failed,
+ * upstream API returned 404, etc.). Per MCP spec these MUST NOT be thrown as
+ * JSON-RPC errors — throwing turns them into protocol-level failures the LLM
+ * cannot self-correct from.
+ *
+ * @example
+ * if (!issue) {
+ *   return asTextError(`Issue ${key} not found`);
+ * }
+ */
+export function asTextError(text: string): IToolHandlerTextResponse {
+  return {
+    content: [{ type: 'text', text }],
+    isError: true,
+  };
+}
+
+/**
+ * Structured (`structuredContent`) response with `isError: true`. See
+ * {@link asTextError} for when to use error responses vs throwing.
+ */
+export function asJsonError<T = any>(json: T): IToolHandlerStructuredResponse<T> {
+  if (isObject(json)) {
+    cleanUndefinedDeep(json);
+  }
+  return { structuredContent: json, isError: true };
+}
+
+/**
+ * Config-aware tool error formatter — mirror of {@link formatToolResult} but
+ * sets `isError: true`. Honors `appConfig.mcp.tools.answerAs` so error
+ * responses follow the same shape as success responses for the same MCP.
+ *
+ * Use this for tool-level errors the LLM should see (not-found, validation,
+ * upstream failure). Reserve `throw new ToolExecutionError(...)` for protocol
+ * issues: unknown tool, malformed call, missing transport feature.
+ *
+ * @example
+ * try {
+ *   const data = await fetchIssue(key);
+ *   return formatToolResult(data);
+ * } catch (err) {
+ *   if (err.code === 'NOT_FOUND') {
+ *     return formatToolError(`Issue ${key} not found`);
+ *   }
+ *   throw err; // genuine infra failure → JSON-RPC error is appropriate
+ * }
+ */
+export function formatToolError<T = any>(json: T): TToolHandlerResponse<T> {
+  if (appConfig.mcp.tools.answerAs === 'structuredContent') {
+    return asJsonError<T>(json);
+  }
+  if (isObject(json)) {
+    cleanUndefinedDeep(json);
+  }
+  const text = typeof json === 'string' ? json : ppj(json);
+  return asTextError(text);
+}
+
 export const getJsonFromResult = <T = any>(result: any): T => {
   if (appConfig.mcp.tools.answerAs === 'structuredContent') {
     return result?.structuredContent as T;
