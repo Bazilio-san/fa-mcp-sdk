@@ -6,7 +6,7 @@ import { getAFLogger, Logger, FileLogger, ILogObj, ILoggerSettings } from 'af-lo
 
 import { appConfig } from './bootstrap/init-config.js';
 
-const { level, useFileLogger, dir: logDir, noMaskValues } = appConfig.logger;
+const { level, useFileLogger, dir: logDir, disableMasking } = appConfig.logger;
 
 const isStdioMode = appConfig.mcp.transportType === 'stdio';
 
@@ -34,7 +34,7 @@ function buildBaseSettings(): ILoggerSettings {
     minErrorLogSize: 0,
     prettyLogTemplate: '[{{hh}}:{{MM}}:{{ss}}]: {{logLevelName}} [{{name}}] ',
     prettyErrorTemplate: `${red}{{errorMessage}}${reset}\n{{errorStack}}`,
-    maskValuesRegEx: noMaskValues ? [] : DEFAULT_MASK_VALUES_REG_EX,
+    maskValuesRegEx: disableMasking ? [] : DEFAULT_MASK_VALUES_REG_EX,
     noFileLogger: !useFileLogger,
   };
   if (useFileLogger && logDir) {

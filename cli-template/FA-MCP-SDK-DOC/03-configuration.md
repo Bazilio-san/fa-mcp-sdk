@@ -106,7 +106,7 @@ logger:
   level: info
   useFileLogger: {{logger.useFileLogger}}
   dir: '{{logger.dir}}'
-  noMaskValues: false   # true — disable built-in secret/email/URL masking (maskValuesRegEx = [])
+  disableMasking: false   # true — disable built-in secret/email/URL masking (maskValuesRegEx = [])
 
 mcp:
   transportType: http  # stdio | http

@@ -156,14 +156,14 @@ The SDK initializes `af-logger-ts` with these defaults:
 
 ### Disabling the Built-in Secret Masking
 
-Set `logger.noMaskValues: true` in any YAML config — `maskValuesRegEx` becomes `[]` and nothing is
+Set `logger.disableMasking: true` in any YAML config — `maskValuesRegEx` becomes `[]` and nothing is
 masked. Useful when you want raw payloads in dev logs.
 
 ```yaml
 # config/local.yaml
 logger:
   level: debug
-  noMaskValues: true   # log secrets/emails/URLs verbatim (DEV ONLY)
+  disableMasking: true   # log secrets/emails/URLs verbatim (DEV ONLY)
 ```
 
 Or via env:
@@ -172,7 +172,7 @@ Or via env:
 LOGGER_NO_MASK_VALUES=true yarn start
 ```
 
-> ⚠️ Never enable `noMaskValues` in production — emails, bearer tokens, and basic credentials will
+> ⚠️ Never enable `disableMasking` in production — emails, bearer tokens, and basic credentials will
 > leak into log files and console output.
 
 ### Overriding Logger Settings at Startup
@@ -193,7 +193,7 @@ const serverData: McpServerData = {
 
   loggerSettings: {
     level: 'silly',          // bump verbosity for one run without touching YAML
-    maskValuesRegEx: [],     // ad-hoc: drop all secret masking (same effect as logger.noMaskValues)
+    maskValuesRegEx: [],     // ad-hoc: drop all secret masking (same effect as logger.disableMasking)
   },
 };
 

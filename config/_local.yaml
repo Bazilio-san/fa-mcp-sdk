@@ -240,7 +240,7 @@ logger:
   #> Absolute path to the folder where logs will be written. Default <proj_root>/../logs
   dir: '{{logger.dir}}'
   #> Disable built-in secret/email/URL masking (maskValuesRegEx becomes []). Default: false.
-  noMaskValues: false
+  disableMasking: false
 
 #> MCP (Model Context Protocol) server settings
 mcp:

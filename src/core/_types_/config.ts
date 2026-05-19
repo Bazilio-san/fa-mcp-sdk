@@ -53,7 +53,7 @@ interface ILoggerConfig {
     level: TFileLogLevel;
     useFileLogger: boolean;
     dir?: string; // Directory for log files (if useFileLogger is true)
-    noMaskValues?: boolean; // If true, disable built-in secret/email/URL masking (maskValuesRegEx = [])
+    disableMasking?: boolean; // If true, disable built-in secret/email/URL masking (maskValuesRegEx = [])
   };
 }
 

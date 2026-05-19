@@ -34,7 +34,7 @@ logger:
   level: LOGGER_LEVEL
   useFileLogger: LOGGER_USE_FILE_LOGGER
   dir: LOGGER_DIR
-  noMaskValues:
+  disableMasking:
     __name: LOGGER_NO_MASK_VALUES
     __format: boolean
 
