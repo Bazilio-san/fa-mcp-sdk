@@ -20,7 +20,12 @@ import { logger as lgr } from '../logger.js';
 
 import { TesterAgentService } from './services/TesterAgentService.js';
 import { TesterMcpClientService } from './services/TesterMcpClientService.js';
-import { ITesterChatRequest, TesterMcpConfig, TesterMcpConnectionRequest } from './types.js';
+import {
+  findEmbeddedAppResource,
+  getToolUiResourceUri,
+  readUiResource,
+} from './services/mcp-apps-utils.js';
+import { ITesterChatRequest, TesterMcpConfig, TesterMcpConnectionRequest, ITesterMcpTool } from './types.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -231,7 +236,13 @@ export function createAgentTesterRouter(
         name: s.name,
         url: s.url,
         transport: s.transport,
-        tools: (s.tools || []).map((t) => ({ name: t.name, description: t.description, inputSchema: t.inputSchema })),
+        appMode: !!s.appMode,
+        tools: (s.tools || []).map((t) => ({
+          name: t.name,
+          description: t.description,
+          inputSchema: t.inputSchema,
+          ...(t._meta ? { _meta: t._meta } : {}),
+        })),
         toolCount: s.tools?.length || 0,
       })),
       totalTools: connected.reduce((sum, s) => sum + (s.tools?.length || 0), 0),
@@ -308,12 +319,82 @@ export function createAgentTesterRouter(
       if (server.headers) {
         mcpConfig.headers = server.headers;
       }
+      if (server.appMode) {
+        mcpConfig.appMode = true;
+      }
       const startedAt = Date.now();
       const result = await mcpClientService.callToolWithConfig(mcpConfig, toolName, parameters || {});
-      res.json({ success: true, result, durationMs: Date.now() - startedAt });
+
+      // When the connected session advertised MCP Apps support, also surface
+      // the UI resource (embedded in result OR fetched via the tool's
+      // `_meta.ui.resourceUri`) so the Tool Tester split-view can render the
+      // widget without a second roundtrip from the frontend.
+      let uiResource;
+      if (server.appMode) {
+        uiResource = findEmbeddedAppResource(result);
+        if (!uiResource) {
+          const tool: ITesterMcpTool | undefined = (server.tools || []).find((t) => t.name === toolName);
+          const uri = getToolUiResourceUri(tool);
+          if (uri) {
+            try {
+              const cached = await mcpClientService.getOrCreateClient(mcpConfig);
+              uiResource = await readUiResource(cached.client, uri);
+            } catch (e) {
+              logger.warn(`Failed to read UI resource ${uri} for tool ${toolName}:`, e);
+            }
+          }
+        }
+      }
+
+      const response: Record<string, unknown> = { success: true, result, durationMs: Date.now() - startedAt };
+      if (uiResource) {
+        response.uiResource = uiResource;
+      }
+      res.json(response);
     } catch (error: any) {
       logger.error('MCP call-tool error:', error);
       res.status(500).json({ success: false, error: error.message || 'Tool execution failed' });
+    }
+  });
+
+  // GET /api/mcp/ui-resources — list UI-flavored resources for the App Inspector
+  router.get('/api/mcp/ui-resources', async (req, res): Promise<void> => {
+    try {
+      const serverName = req.query.serverName as string;
+      if (!serverName) {
+        res.status(400).json({ error: 'serverName is required' });
+        return;
+      }
+      const server = mcpClientService.getAllServerConfigs().find((s) => s.name === serverName);
+      if (!server || !server.isConnected) {
+        res.status(404).json({ error: `Server ${serverName} is not connected` });
+        return;
+      }
+      const mcpConfig: TesterMcpConfig = {
+        url: server.url,
+        transport: server.transport as 'http' | 'sse',
+        name: server.name,
+      };
+      if (server.headers) {
+        mcpConfig.headers = server.headers;
+      }
+      if (server.appMode) {
+        mcpConfig.appMode = true;
+      }
+      const cached = await mcpClientService.getOrCreateClient(mcpConfig);
+      try {
+        const list = await (cached.client as any).listResources();
+        const all = Array.isArray(list?.resources) ? list.resources : [];
+        const uiOnly = all.filter((r: any) => {
+          const m = r?.mimeType || r?.mime_type;
+          return m === 'text/html;profile=mcp-app' || (typeof r?.uri === 'string' && r.uri.startsWith('ui://'));
+        });
+        res.json({ resources: uiOnly });
+      } catch (e: any) {
+        res.status(500).json({ error: e.message || 'listResources failed' });
+      }
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
     }
   });
 

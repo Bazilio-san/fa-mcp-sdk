@@ -8,6 +8,7 @@ import chalk from 'chalk';
 import { appConfig } from '../../bootstrap/init-config.js';
 import { generateToken } from '../../auth/jwt.js';
 import { logger as lgr } from '../../logger.js';
+import { MCP_APPS_EXTENSION_ID, MCP_APPS_RESOURCE_MIME_TYPE } from '../../mcp/mcp-apps.js';
 import {
   TesterMcpConfig,
   ITesterCachedMcpClient,
@@ -36,7 +37,21 @@ export class TesterMcpClientService {
 
   public getConnectionKey(config: TesterMcpConfig): string {
     const headersHash = this.hashObject(config.headers || {});
-    return `${config.url}:${config.transport}:${headersHash}`;
+    const appFlag = config.appMode ? 'app' : 'plain';
+    return `${config.url}:${config.transport}:${headersHash}:${appFlag}`;
+  }
+
+  private buildClientCapabilities(appMode: boolean | undefined): Record<string, any> {
+    if (!appMode) {
+      return {};
+    }
+    return {
+      capabilities: {
+        extensions: {
+          [MCP_APPS_EXTENSION_ID]: { mimeTypes: [MCP_APPS_RESOURCE_MIME_TYPE] },
+        },
+      },
+    };
   }
 
   private hashObject(obj: Record<string, string>): string {
@@ -94,11 +109,18 @@ export class TesterMcpClientService {
     const client = await this.createMcpClientFromConfig(mcpConfig);
 
     const toolsList = await client.listTools();
-    const tools: ITesterMcpTool[] = toolsList.tools.map((tool) => ({
-      name: tool.name,
-      description: tool.description || '',
-      inputSchema: tool.inputSchema,
-    }));
+    const tools: ITesterMcpTool[] = toolsList.tools.map((tool) => {
+      const t: ITesterMcpTool = {
+        name: tool.name,
+        description: tool.description || '',
+        inputSchema: tool.inputSchema,
+      };
+      const meta = (tool as any)._meta;
+      if (meta && typeof meta === 'object') {
+        t._meta = meta;
+      }
+      return t;
+    });
 
     let agentPrompt: string | undefined;
     try {
@@ -135,10 +157,10 @@ export class TesterMcpClientService {
   }
 
   private async createMcpClientFromConfig(mcpConfig: TesterMcpConfig): Promise<Client> {
-    const client = new Client({
-      name: 'agent-tester',
-      version: '1.0.0',
-    });
+    const client = new Client(
+      { name: 'agent-tester', version: '1.0.0' },
+      this.buildClientCapabilities(mcpConfig.appMode),
+    );
 
     const baseURL = new URL(mcpConfig.url);
 
@@ -408,11 +430,18 @@ export class TesterMcpClientService {
         client = await this.createMcpClient(request);
 
         const toolsList = await client.listTools();
-        const tools = toolsList.tools.map((tool) => ({
-          name: tool.name,
-          description: tool.description || '',
-          inputSchema: tool.inputSchema,
-        }));
+        const tools: ITesterMcpTool[] = toolsList.tools.map((tool) => {
+          const t: ITesterMcpTool = {
+            name: tool.name,
+            description: tool.description || '',
+            inputSchema: tool.inputSchema,
+          };
+          const meta = (tool as any)._meta;
+          if (meta && typeof meta === 'object') {
+            t._meta = meta;
+          }
+          return t;
+        });
 
         let agentPrompt: string | undefined;
         try {
@@ -445,6 +474,9 @@ export class TesterMcpClientService {
         if (request.headers) {
           serverConfig.headers = request.headers;
         }
+        if (request.appMode) {
+          serverConfig.appMode = true;
+        }
 
         this.clients.set(request.name, client);
         this.servers.set(request.name, serverConfig);
@@ -453,6 +485,7 @@ export class TesterMcpClientService {
           toolCount: tools.length,
           hasAgentPrompt: !!agentPrompt,
           transport: request.transport,
+          appMode: !!request.appMode,
         });
 
         return {
@@ -507,10 +540,10 @@ export class TesterMcpClientService {
   }
 
   private async createMcpClient(request: TesterMcpConnectionRequest): Promise<Client> {
-    const client = new Client({
-      name: 'agent-tester',
-      version: '1.0.0',
-    });
+    const client = new Client(
+      { name: 'agent-tester', version: '1.0.0' },
+      this.buildClientCapabilities(request.appMode),
+    );
 
     const baseURL = new URL(request.url);
 
@@ -580,6 +613,7 @@ export class TesterMcpClientService {
         url: config.url,
         transport: config.transport as 'http' | 'sse',
         headers: config.headers,
+        ...(config.appMode ? { appMode: true } : {}),
       });
 
       return response;

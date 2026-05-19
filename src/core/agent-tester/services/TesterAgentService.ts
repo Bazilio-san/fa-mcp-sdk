@@ -14,7 +14,11 @@ import {
   ITesterTestOptions,
   ITesterTraceData,
   ITesterTraceTurn,
+  TesterMcpConfig,
+  IMcpAppCall,
 } from '../types.js';
+
+import { findEmbeddedAppResource, getToolUiResourceUri, readUiResource } from './mcp-apps-utils.js';
 
 import { SummaryMemory, SummaryState } from './SummaryMemory.js';
 import { TesterMcpClientService } from './TesterMcpClientService.js';
@@ -85,6 +89,70 @@ export class TesterAgentService {
     this.summaryMemory.clear();
   }
 
+  /**
+   * Returns the system-prompt addendum sent to the LLM when the user toggled
+   * MCP Apps mode in the UI. The block names the tools that ship a UI
+   * resource so the model can prefer them when visualization helps.
+   */
+  private buildAppModeSystemPrompt(tools: ITesterMcpTool[]): string {
+    const appTools = tools.filter((t) => {
+      const uri = t._meta?.ui?.resourceUri ?? t._meta?.['ui/resourceUri'];
+      return typeof uri === 'string' && uri.length > 0;
+    });
+
+    const lines = [
+      'The user is interacting through an MCP Apps host that renders tool UI resources as interactive widgets.',
+      'Tools whose definition carries `_meta.ui.resourceUri` produce a widget the user can see — prefer them when visualization (maps, tables, forms, charts) is more useful than prose.',
+      'Do not describe the widget in text; the user already sees it. Summarize only what the widget does NOT show.',
+    ];
+    if (appTools.length > 0) {
+      lines.push('Tools with UI widgets in this session: ' + appTools.map((t) => t.name).join(', '));
+    }
+    return lines.join('\n');
+  }
+
+  /**
+   * Extract MCP Apps UI resource for a tool invocation. Two delivery paths are
+   * supported per the spec: (a) tool definition exposes `_meta.ui.resourceUri`
+   * — the host reads the resource separately, (b) the tool result embeds an
+   * `mcp-app` resource directly in `content[]`. Returns an `IMcpAppCall` for
+   * every invocation (even without UI) so the host can inspect raw results.
+   */
+  private async extractAppCall(
+    tool: ITesterMcpTool | undefined,
+    callId: string,
+    toolName: string,
+    args: Record<string, unknown> | undefined,
+    result: unknown,
+    mcpConfig: TesterMcpConfig,
+  ): Promise<IMcpAppCall> {
+    const call: IMcpAppCall = { callId, toolName, result };
+    if (args && Object.keys(args).length > 0) {
+      call.arguments = args;
+    }
+
+    const embedded = findEmbeddedAppResource(result);
+    if (embedded) {
+      call.uiResource = embedded;
+      return call;
+    }
+
+    const resourceUri = getToolUiResourceUri(tool);
+    if (resourceUri) {
+      try {
+        const cached = await this.mcpClientService.getOrCreateClient(mcpConfig);
+        const ui = await readUiResource(cached.client, resourceUri);
+        if (ui) {
+          call.uiResource = ui;
+        }
+      } catch (e) {
+        logger.warn(`Failed to read UI resource ${resourceUri} for tool ${toolName}:`, e);
+      }
+    }
+
+    return call;
+  }
+
   private buildSummaryPrompt(): string {
     return `You are a dialog history compression module. Compress the history into a brief "memory" without losing meaning.
 
@@ -140,6 +208,14 @@ Output only the new Summary Memory.`;
     try {
       const { mcpConfig } = request;
       const mcpServerUrl = mcpConfig?.url || request.mcpServerUrl;
+      // request.appMode is the convenience top-level flag (used by headless API
+      // callers); mcpConfig.appMode is the durable per-connection flag. We keep
+      // them in sync so downstream code reads one field.
+      const appMode = !!(request.appMode || mcpConfig?.appMode);
+      if (appMode && mcpConfig && !mcpConfig.appMode) {
+        mcpConfig.appMode = true;
+      }
+      const appCalls: IMcpAppCall[] = [];
 
       // Get or create session
       let session = this.sessions.get(sessionId);
@@ -177,6 +253,10 @@ Output only the new Summary Memory.`;
 
       if (request.customPrompt && request.customPrompt.trim()) {
         systemPrompt += '\n\n' + request.customPrompt.trim();
+      }
+
+      if (appMode) {
+        systemPrompt += '\n\n' + this.buildAppModeSystemPrompt(agentTools);
       }
 
       // Get model configuration
@@ -415,14 +495,33 @@ Arguments: ${JSON.stringify(functionArgs, null, 2).substring(0, 1000)}
           );
 
           let toolResult: unknown;
+          let toolFailed = false;
           try {
             toolResult = await this.mcpClientService.callToolWithConfig(mcpConfig, functionName, functionArgs);
           } catch (error) {
             logger.error(`Error executing MCP tool ${functionName}:`, error);
+            toolFailed = true;
             toolResult = {
               ok: false,
               error: error instanceof Error ? error.message : String(error),
             };
+          }
+
+          if (appMode && mcpConfig && !toolFailed) {
+            const toolDef = agentTools.find((t) => t.name === functionName);
+            try {
+              const appCall = await this.extractAppCall(
+                toolDef,
+                tc.id,
+                functionName,
+                functionArgs,
+                toolResult,
+                mcpConfig,
+              );
+              appCalls.push(appCall);
+            } catch (e) {
+              logger.warn(`Failed to build appCall for ${functionName}:`, e);
+            }
           }
 
           const toolResultStr = truncateForToolMessage(toolResult, 2000);
@@ -474,7 +573,7 @@ Response Text: ${finalText}
       session.messages.push(assistantMessage);
       session.updatedAt = new Date();
 
-      return {
+      const response: ITesterChatResponse = {
         id: assistantMessage.id,
         message: finalText,
         sessionId: sessionId,
@@ -484,6 +583,10 @@ Response Text: ${finalText}
           ...(mcpServerUrl && { mcp_server: mcpServerUrl }),
         },
       };
+      if (appMode) {
+        response.appCalls = appCalls;
+      }
+      return response;
     } catch (error) {
       logger.error('Error processing message:', error);
       throw new Error(`Failed to process message: ${error instanceof Error ? error.message : 'Unknown error'}`, {
@@ -503,6 +606,10 @@ Response Text: ${finalText}
     try {
       const { mcpConfig } = request;
       const mcpServerUrl = mcpConfig?.url || request.mcpServerUrl;
+      const appMode = !!(request.appMode || mcpConfig?.appMode);
+      if (appMode && mcpConfig && !mcpConfig.appMode) {
+        mcpConfig.appMode = true;
+      }
 
       // Get or create session
       let session = this.sessions.get(sessionId);
@@ -538,6 +645,9 @@ Response Text: ${finalText}
 
       if (request.customPrompt?.trim()) {
         systemPrompt += '\n\n' + request.customPrompt.trim();
+      }
+      if (appMode) {
+        systemPrompt += '\n\n' + this.buildAppModeSystemPrompt(agentTools);
       }
       const systemPromptSent = systemPrompt;
 
@@ -758,13 +868,33 @@ Response Text: ${finalText}
 
           const toolStartTime = Date.now();
           let toolResult: unknown;
+          let toolFailed = false;
           try {
             toolResult = await this.mcpClientService.callToolWithConfig(mcpConfig, functionName, functionArgs);
           } catch (error) {
             logger.error(`Error executing MCP tool ${functionName}:`, error);
+            toolFailed = true;
             toolResult = { ok: false, error: error instanceof Error ? error.message : String(error) };
           }
           const toolDuration = Date.now() - toolStartTime;
+
+          if (appMode && mcpConfig && !toolFailed) {
+            const toolDef = agentTools.find((t) => t.name === functionName);
+            try {
+              const appCall = await this.extractAppCall(
+                toolDef,
+                tc.id,
+                functionName,
+                functionArgs,
+                toolResult,
+                mcpConfig,
+              );
+              traceTurn.app_calls = traceTurn.app_calls || [];
+              traceTurn.app_calls.push(appCall);
+            } catch (e) {
+              logger.warn(`Failed to build appCall for ${functionName}:`, e);
+            }
+          }
 
           // Record tool result in trace (truncated for trace output)
           const truncatedResult = truncateStr(toolResult, maxResultChars);
