@@ -77,6 +77,10 @@
                         <span class="material-icons-round">build</span>
                         Tool Tester
                     </button>
+                    <button type="button" class="tab-btn app-only-tab" data-tab="inspector" data-testid="at-tab-inspector" title="MCP Apps inspector (visible in MCP Apps mode)">
+                        <span class="material-icons-round">grid_view</span>
+                        Inspector
+                    </button>
                 </div>
 
                 <!-- Connection bar in header -->
@@ -107,6 +111,13 @@
                 </form>
 
                 <div class="chat-actions">
+                    <label id="appModeToggleLabel" class="app-mode-toggle" title="MCP Apps mode: advertises UI capability and renders widgets" data-testid="at-app-mode-toggle-label">
+                        <input type="checkbox" id="appModeToggle" data-testid="at-app-mode-toggle">
+                        <span class="app-mode-toggle-text">
+                            <span class="material-icons-round app-mode-icon">grid_view</span>
+                            <span class="app-mode-label">Apps</span>
+                        </span>
+                    </label>
                     <select id="defaultDisplayFormat" class="header-format-select chat-only" title="Default display format" data-testid="at-default-format">
                         <option value="HTML">HTML</option>
                         <option value="MD">MD</option>
@@ -239,6 +250,50 @@
                             </div>
                         </header>
                         <pre class="tt-response-content" id="ttResponseContent" data-testid="at-tt-response-content"><span class="tt-placeholder">No response yet. Connect to a server, select a tool, and send a request.</span></pre>
+                    </section>
+                </div>
+            </div>
+
+            <!-- Tab: App Inspector -->
+            <div class="tab-pane inspector-pane" id="tabPaneInspector" style="display: none;" data-testid="at-tab-pane-inspector">
+                <div class="inspector-layout">
+                    <section class="inspector-panel inspector-tools" data-testid="at-inspector-tools-panel">
+                        <header class="tt-panel-header">
+                            <h3>UI Tools &amp; Resources</h3>
+                            <button type="button" class="btn-icon" id="inspectorRefreshBtn" title="Refresh" data-testid="at-inspector-refresh">
+                                <span class="material-icons-round">refresh</span>
+                            </button>
+                        </header>
+                        <div class="inspector-section">
+                            <h4>App Tools</h4>
+                            <ul class="inspector-list" id="inspectorToolsList" data-testid="at-inspector-tools-list">
+                                <li class="inspector-empty">No connected server</li>
+                            </ul>
+                        </div>
+                        <div class="inspector-section">
+                            <h4>UI Resources</h4>
+                            <ul class="inspector-list" id="inspectorResourcesList" data-testid="at-inspector-resources-list">
+                                <li class="inspector-empty">No UI resources</li>
+                            </ul>
+                        </div>
+                    </section>
+
+                    <section class="inspector-panel inspector-log-panel" data-testid="at-inspector-log-panel">
+                        <header class="tt-panel-header">
+                            <h3>UI Message Log</h3>
+                            <div class="inspector-log-actions">
+                                <select id="inspectorLogFilter" data-testid="at-inspector-log-filter" title="Filter by direction">
+                                    <option value="">All directions</option>
+                                    <option value="view→host">view → host</option>
+                                    <option value="host→view">host → view</option>
+                                    <option value="view→host:call-tool">view→host tool-call</option>
+                                </select>
+                                <button type="button" class="btn-icon" id="inspectorLogClear" title="Clear log" data-testid="at-inspector-log-clear">
+                                    <span class="material-icons-round">delete_outline</span>
+                                </button>
+                            </div>
+                        </header>
+                        <pre class="inspector-log" id="inspectorLog" data-testid="at-inspector-log"></pre>
                     </section>
                 </div>
             </div>

@@ -867,6 +867,394 @@ body {
   cursor: pointer;
 }
 
+/* MCP Apps toggle — global, visible on every tab */
+.app-mode-toggle {
+  display: inline-flex;
+  align-items: center;
+  font-size: 12px;
+  user-select: none;
+  cursor: pointer;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 0 6px;
+  background: var(--bg-surface);
+  color: var(--text-secondary);
+  height: 28px;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+
+.app-mode-toggle input[type="checkbox"] {
+  appearance: none;
+  width: 14px;
+  height: 14px;
+  margin: 0 6px 0 0;
+  border: 1.5px solid var(--border-strong, var(--border));
+  border-radius: 3px;
+  background: var(--bg-elevated, var(--bg-surface));
+  cursor: pointer;
+  position: relative;
+  flex-shrink: 0;
+}
+
+.app-mode-toggle input[type="checkbox"]:checked {
+  background: var(--accent, #7c5cff);
+  border-color: var(--accent, #7c5cff);
+}
+
+.app-mode-toggle input[type="checkbox"]:checked::after {
+  content: '';
+  position: absolute;
+  left: 3px;
+  top: 0px;
+  width: 4px;
+  height: 8px;
+  border: solid #fff;
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
+}
+
+.app-mode-toggle:has(input:checked) {
+  border-color: var(--accent, #7c5cff);
+  color: var(--accent, #7c5cff);
+  background: color-mix(in srgb, var(--accent, #7c5cff) 10%, transparent);
+}
+
+.app-mode-toggle-text {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-weight: 500;
+}
+
+.app-mode-icon {
+  font-size: 16px !important;
+}
+
+/* Disabled state when transport is STDIO (not supported) */
+.app-mode-toggle.is-disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.app-mode-toggle.is-disabled input {
+  pointer-events: none;
+}
+
+/* MCP Apps widget — embedded iframe shell inside an assistant message */
+.app-widget-container {
+  margin-top: 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  background: var(--bg-surface);
+}
+
+.app-widget-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px 6px 12px;
+  background: var(--bg-elevated, var(--bg-surface));
+  border-bottom: 1px solid var(--border);
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-secondary);
+}
+
+.app-widget-icon {
+  font-size: 16px !important;
+  color: var(--accent, #7c5cff);
+}
+
+.app-widget-title {
+  flex: 1;
+  font-family: 'Fira Code', monospace;
+}
+
+.app-widget-collapse {
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.app-widget-collapse .material-icons-round {
+  font-size: 18px;
+}
+
+.app-widget-body {
+  display: block;
+  min-height: 180px;
+  background: var(--bg-base, #fff);
+}
+
+.app-widget-container.is-collapsed .app-widget-body {
+  display: none;
+}
+
+.app-widget-iframe {
+  display: block;
+  width: 100%;
+  border: none;
+  background: var(--bg-base, #fff);
+}
+
+.app-widget-container.is-poster {
+  opacity: 0.7;
+}
+
+.app-widget-poster {
+  padding: 16px;
+  font-size: 12px;
+  color: var(--text-secondary);
+  text-align: center;
+  font-style: italic;
+}
+
+.app-widget-confirm-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1100;
+  background: rgba(0, 0, 0, 0.42);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.app-widget-confirm {
+  background: var(--bg-surface);
+  color: var(--text-primary);
+  padding: 18px 22px 16px;
+  border-radius: var(--radius-lg, 8px);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.25);
+  max-width: 440px;
+  width: 92%;
+  border-top: 4px solid #d9534f;
+}
+
+.app-widget-confirm h3 {
+  margin: 0 0 8px;
+  font-size: 16px;
+  color: #d9534f;
+}
+
+.app-widget-confirm p {
+  font-size: 13px;
+  line-height: 1.5;
+  margin: 0 0 12px;
+}
+
+.app-widget-confirm code {
+  background: var(--bg-elevated, rgba(0, 0, 0, 0.06));
+  padding: 1px 5px;
+  border-radius: 3px;
+  font-family: 'Fira Code', monospace;
+  font-size: 12px;
+}
+
+.app-widget-remember {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--text-secondary);
+  margin-bottom: 14px;
+  cursor: pointer;
+}
+
+.app-widget-confirm-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+/* App Inspector tab */
+.inspector-pane {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  padding: 16px;
+  gap: 16px;
+  overflow: hidden;
+}
+
+.inspector-layout {
+  display: grid;
+  grid-template-columns: minmax(280px, 360px) 1fr;
+  gap: 16px;
+  flex: 1;
+  min-height: 0;
+}
+
+.inspector-panel {
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg, 8px);
+  overflow: hidden;
+  min-height: 0;
+}
+
+.inspector-section {
+  padding: 8px 14px 14px;
+  border-bottom: 1px solid var(--border);
+}
+
+.inspector-section h4 {
+  margin: 4px 0 8px;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--text-secondary);
+}
+
+.inspector-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.inspector-list li {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 8px 10px;
+  background: var(--bg-elevated, var(--bg-surface));
+}
+
+.inspector-tool.has-ui {
+  border-left: 3px solid var(--accent, #7c5cff);
+}
+
+.inspector-tool-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-family: 'Fira Code', monospace;
+  font-size: 12px;
+}
+
+.inspector-tool-icon {
+  font-size: 18px !important;
+  color: var(--accent, #7c5cff);
+}
+
+.inspector-tool-flag {
+  font-size: 10px;
+  font-weight: 600;
+  padding: 1px 6px;
+  border-radius: 10px;
+  background: var(--accent, #7c5cff);
+  color: #fff;
+  margin-left: auto;
+}
+
+.inspector-tool-desc {
+  font-size: 11px;
+  color: var(--text-secondary);
+  margin-top: 4px;
+  line-height: 1.4;
+}
+
+.inspector-tool-mime {
+  font-size: 10px;
+  font-family: 'Fira Code', monospace;
+  color: var(--text-secondary);
+  margin-top: 3px;
+}
+
+.inspector-empty {
+  font-size: 12px;
+  color: var(--text-secondary);
+  font-style: italic;
+  text-align: center;
+}
+
+.inspector-launch {
+  margin-top: 8px;
+  font-size: 11px;
+  padding: 4px 10px;
+}
+
+.inspector-log-actions {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.inspector-log-actions select {
+  font-size: 12px;
+  padding: 3px 6px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--bg-surface);
+  color: var(--text-primary);
+}
+
+.inspector-log {
+  flex: 1;
+  margin: 0;
+  padding: 12px 14px;
+  overflow: auto;
+  font-family: 'Fira Code', monospace;
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--text-primary);
+  background: var(--bg-code, var(--bg-base));
+  white-space: pre;
+}
+
+/* Inspector "Launch widget" modal */
+.inspector-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.42);
+  z-index: 1050;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.inspector-modal {
+  background: var(--bg-surface);
+  width: min(900px, 92%);
+  max-height: 85vh;
+  border-radius: var(--radius-lg, 8px);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  box-shadow: 0 14px 40px rgba(0, 0, 0, 0.3);
+}
+
+.inspector-modal header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-header, var(--bg-surface));
+}
+
+.inspector-modal header button {
+  margin-left: auto;
+}
+
+.inspector-modal-body {
+  flex: 1;
+  overflow: auto;
+}
+
+/* Inspector tab visibility tied to MCP Apps mode */
+.app:not([data-active-tab]) .app-only-tab,
+.tabs-bar .app-only-tab {
+  display: inline-flex;
+}
+
 /* --- Chat Messages --- */
 .chat-container {
   flex: 1;
@@ -2055,6 +2443,32 @@ textarea.prompt-modified {
 
 .tt-layout[data-show-schema="true"] {
   grid-template-columns: 1fr 1fr 1fr;
+}
+
+.tt-layout.tt-has-ui {
+  grid-template-columns: 1fr 1fr 1fr;
+}
+
+.tt-layout.tt-has-ui[data-show-schema="true"] {
+  grid-template-columns: 1fr 1fr 1fr 1fr;
+}
+
+.tt-ui-body {
+  flex: 1;
+  overflow: auto;
+  padding: 0;
+  background: var(--bg-base, #fff);
+}
+
+.tt-ui-badge {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--accent, #7c5cff);
+  background: color-mix(in srgb, var(--accent, #7c5cff) 12%, transparent);
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-weight: 600;
 }
 
 .tt-panel {

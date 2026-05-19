@@ -192,6 +192,306 @@ class AuthManager {
   }
 }
 
+/**
+ * Minimal MCP Apps host-side bridge for a single rendered widget. Owns one
+ * iframe, runs the JSON-RPC postMessage handshake (`ui/initialize` →
+ * `ui/notifications/initialized`), streams the captured tool I/O into the
+ * View, resizes the iframe on `ui/notifications/size-changed`, and proxies
+ * View→Host calls back through callbacks supplied by the host.
+ *
+ * Operates in desktop-style mode (proposal §6.1): single iframe on the same
+ * origin, CSP applied via `<meta http-equiv>` inside `srcdoc`. We accept the
+ * documented trade-off that meta-CSP is theoretically bypassable for a
+ * dev-tool.
+ */
+class AppWidgetBridge {
+  constructor(appCall, hostContext, callbacks) {
+    this.appCall = appCall;
+    this.hostContext = hostContext;
+    this.callbacks = callbacks || {};
+    this.iframe = null;
+    this.state = 'idle';
+    this.viewProtocolVersion = null;
+    this.viewAppCapabilities = null;
+    this._listener = null;
+    this._pendingPostInit = false;
+  }
+
+  mount(container) {
+    this.iframe = this._createIframe();
+    container.appendChild(this.iframe);
+    this._listener = (e) => this._onMessage(e);
+    window.addEventListener('message', this._listener);
+    this.state = 'mounted';
+  }
+
+  destroy() {
+    if (this._listener) {
+      window.removeEventListener('message', this._listener);
+      this._listener = null;
+    }
+    if (this.iframe?.parentNode) {
+      this.iframe.parentNode.removeChild(this.iframe);
+    }
+    this.iframe = null;
+    this.state = 'destroyed';
+  }
+
+  setTheme(themeName) {
+    this.hostContext.theme = { name: themeName };
+    this._notify('ui/notifications/host-context-changed', { theme: this.hostContext.theme });
+  }
+
+  _createIframe() {
+    const ui = this.appCall.uiResource;
+    const iframe = document.createElement('iframe');
+    iframe.className = 'app-widget-iframe';
+    iframe.setAttribute('data-call-id', this.appCall.callId);
+    iframe.setAttribute('sandbox', 'allow-scripts allow-forms');
+    const allow = this._buildPermissionPolicy(ui?.meta?.permissions);
+    if (allow) {
+      iframe.setAttribute('allow', allow);
+    }
+    iframe.srcdoc = this._wrapHtml(ui.text, this._buildCspMeta(ui?.meta?.csp));
+    iframe.style.width = '100%';
+    iframe.style.minHeight = '180px';
+    iframe.style.border = ui?.meta?.prefersBorder ? '1px solid var(--border)' : 'none';
+    return iframe;
+  }
+
+  _wrapHtml(html, cspMeta) {
+    if (!cspMeta) {
+      return html;
+    }
+    // Inject CSP meta as early as possible so it applies to inline scripts.
+    if (/<head[^>]*>/i.test(html)) {
+      return html.replace(/<head([^>]*)>/i, `<head$1>\n${cspMeta}`);
+    }
+    if (/<html[^>]*>/i.test(html)) {
+      return html.replace(/<html([^>]*)>/i, `<html$1>\n<head>${cspMeta}</head>`);
+    }
+    return `<!DOCTYPE html><html><head>${cspMeta}</head><body>${html}</body></html>`;
+  }
+
+  _buildCspMeta(csp) {
+    const directives = [
+      "default-src 'none'",
+      `script-src ${this._cspList(['self', 'unsafe-inline', ...(csp?.resourceDomains || [])])}`,
+      `style-src ${this._cspList(['self', 'unsafe-inline', ...(csp?.resourceDomains || [])])}`,
+      `img-src ${this._cspList(['self', 'data:', ...(csp?.resourceDomains || [])])}`,
+      `media-src ${this._cspList(['self', 'data:', ...(csp?.resourceDomains || [])])}`,
+      `font-src ${this._cspList(['self', 'data:', ...(csp?.resourceDomains || [])])}`,
+      `connect-src ${this._cspList(['self', ...(csp?.connectDomains || [])])}`,
+      `frame-src ${this._cspList(csp?.frameDomains || [], "'none'")}`,
+      `base-uri ${this._cspList(csp?.baseUriDomains || ['self'])}`,
+    ];
+    return `<meta http-equiv="Content-Security-Policy" content="${this._escapeAttr(directives.join('; '))}">`;
+  }
+
+  _cspList(items, fallback) {
+    if (!items || items.length === 0) {
+      return fallback || "'self'";
+    }
+    return items.map((d) => (d === 'self' || d === 'unsafe-inline' || d === 'data:' ? `'${d}'` : d)).join(' ');
+  }
+
+  _buildPermissionPolicy(permissions) {
+    if (!permissions) {
+      return null;
+    }
+    const out = [];
+    if (permissions.camera) {
+      out.push('camera');
+    }
+    if (permissions.microphone) {
+      out.push('microphone');
+    }
+    if (permissions.geolocation) {
+      out.push('geolocation');
+    }
+    if (permissions.clipboardWrite) {
+      out.push('clipboard-write');
+    }
+    return out.join('; ');
+  }
+
+  _escapeAttr(s) {
+    return String(s).replace(/"/g, '&quot;');
+  }
+
+  _onMessage(event) {
+    if (!this.iframe || event.source !== this.iframe.contentWindow) {
+      return;
+    }
+    const msg = event.data;
+    if (!msg || typeof msg !== 'object' || msg.jsonrpc !== '2.0') {
+      return;
+    }
+    if (this.callbacks.onJsonRpcMessage) {
+      this.callbacks.onJsonRpcMessage('view→host', msg, this.appCall);
+    }
+    if (typeof msg.method === 'string') {
+      this._dispatch(msg);
+    }
+  }
+
+  _dispatch(msg) {
+    const m = msg.method;
+    switch (m) {
+      case 'ui/initialize':
+        this._respond(msg.id, this._buildInitializeResult(msg.params));
+        return;
+      case 'ui/notifications/initialized':
+        this.state = 'ready';
+        this._sendToolIO();
+        return;
+      case 'ui/notifications/size-changed':
+        this._handleSizeChange(msg.params);
+        return;
+      case 'ui/notifications/log':
+      case 'notifications/message':
+        if (this.callbacks.onLog) {
+          this.callbacks.onLog(msg.params, this.appCall);
+        }
+        return;
+      case 'ui/open-link':
+        this._handleOpenLink(msg);
+        return;
+      case 'ui/message':
+        this._handleViewMessage(msg);
+        return;
+      case 'ui/update-model-context':
+        this._handleUpdateModelContext(msg);
+        return;
+      case 'ui/request-display-mode':
+        this._respond(msg.id, { displayMode: 'inline' });
+        return;
+      case 'tools/call':
+      case 'ui/request-call-tool':
+        this._handleViewCallTool(msg);
+        return;
+      default:
+        // Notifications without a handler are silently accepted; requests must
+        // get a method-not-found error so the View's JSON-RPC stub resolves.
+        if (typeof msg.id !== 'undefined') {
+          this._respondError(msg.id, -32601, `Method not found: ${m}`);
+        }
+    }
+  }
+
+  _respond(id, result) {
+    if (typeof id === 'undefined' || !this.iframe?.contentWindow) {
+      return;
+    }
+    const reply = { jsonrpc: '2.0', id, result };
+    if (this.callbacks.onJsonRpcMessage) {
+      this.callbacks.onJsonRpcMessage('host→view', reply, this.appCall);
+    }
+    this.iframe.contentWindow.postMessage(reply, '*');
+  }
+
+  _respondError(id, code, message) {
+    if (typeof id === 'undefined' || !this.iframe?.contentWindow) {
+      return;
+    }
+    const reply = { jsonrpc: '2.0', id, error: { code, message } };
+    if (this.callbacks.onJsonRpcMessage) {
+      this.callbacks.onJsonRpcMessage('host→view', reply, this.appCall);
+    }
+    this.iframe.contentWindow.postMessage(reply, '*');
+  }
+
+  _notify(method, params) {
+    if (!this.iframe?.contentWindow) {
+      return;
+    }
+    const msg = { jsonrpc: '2.0', method, params };
+    if (this.callbacks.onJsonRpcMessage) {
+      this.callbacks.onJsonRpcMessage('host→view', msg, this.appCall);
+    }
+    this.iframe.contentWindow.postMessage(msg, '*');
+  }
+
+  _buildInitializeResult(reqParams) {
+    this.viewProtocolVersion = reqParams?.protocolVersion || null;
+    this.viewAppCapabilities = reqParams?.appCapabilities || null;
+    return {
+      protocolVersion: this.viewProtocolVersion || '2026-01-26',
+      hostInfo: { name: 'fa-mcp-sdk:agent-tester', version: this.hostContext.hostVersion || '1.0.0' },
+      hostCapabilities: {
+        openLinks: {},
+        logging: {},
+        serverTools: { listChanged: false },
+        sampling: {},
+      },
+      hostContext: {
+        theme: this.hostContext.theme || { name: 'light' },
+        displayMode: 'inline',
+        containerType: 'inline',
+        availableDisplayModes: ['inline'],
+      },
+    };
+  }
+
+  _sendToolIO() {
+    this._notify('ui/notifications/tool-input', {
+      toolName: this.appCall.toolName,
+      arguments: this.appCall.arguments || {},
+    });
+    this._notify('ui/notifications/tool-result', this.appCall.result);
+  }
+
+  _handleSizeChange(params) {
+    const h = Number(params?.height);
+    if (Number.isFinite(h) && h > 0 && this.iframe) {
+      this.iframe.style.height = Math.min(Math.max(h, 80), 1600) + 'px';
+    }
+  }
+
+  _handleOpenLink(msg) {
+    const url = msg.params?.url;
+    if (typeof url === 'string') {
+      try {
+        const u = new URL(url, window.location.href);
+        if (['http:', 'https:', 'mailto:'].includes(u.protocol)) {
+          window.open(u.href, '_blank', 'noopener,noreferrer');
+        }
+      } catch {
+        /* ignore invalid url */
+      }
+    }
+    this._respond(msg.id, {});
+  }
+
+  _handleViewMessage(msg) {
+    if (this.callbacks.onViewMessage) {
+      this.callbacks.onViewMessage(msg.params, this.appCall);
+    }
+    this._respond(msg.id, {});
+  }
+
+  _handleUpdateModelContext(msg) {
+    if (this.callbacks.onUpdateModelContext) {
+      this.callbacks.onUpdateModelContext(msg.params, this.appCall);
+    }
+    this._respond(msg.id, {});
+  }
+
+  async _handleViewCallTool(msg) {
+    if (!this.callbacks.onViewCallTool) {
+      // Stage 8 wires this up; until then refuse politely.
+      this._respondError(msg.id, -32601, 'View→Host tool calls not enabled');
+      return;
+    }
+    try {
+      const result = await this.callbacks.onViewCallTool(msg.params, this.appCall);
+      this._respond(msg.id, result);
+    } catch (e) {
+      this._respondError(msg.id, -32000, e?.message || 'Tool call failed');
+    }
+  }
+}
+
 class McpAgentTester {
   constructor() {
     this.currentSessionId = null;
@@ -211,12 +511,19 @@ class McpAgentTester {
     this.messageFormats = {};
     this.messageTexts = {};
     this.defaultDisplayFormat = localStorage.getItem('agentTesterDefaultFormat') || 'HTML';
+    this.appMode = localStorage.getItem('agentTesterAppMode') === 'true';
+    this.activeAppWidgets = [];
+    this.maxLiveWidgets = 5;
+    this.uiMessageLog = [];
+    this.maxUiMessageLog = 500;
+    this._viewCallToolAllowed = false;
 
     this.mcpConfig = {
       url: null,
       transport: 'http',
       headers: {},
       name: null,
+      appMode: this.appMode,
     };
 
     this.initializeElements();
@@ -380,6 +687,498 @@ class McpAgentTester {
     }
   }
 
+  /**
+   * Toggle MCP Apps mode. Persists the flag, updates the active mcpConfig, and
+   * if the server is connected reconnects so the new capability set is sent on
+   * the next `initialize` handshake. All rendered widget iframes are cleared
+   * because their capability context just changed.
+   */
+  async handleAppModeToggle() {
+    const next = !!this.appModeToggle.checked;
+    this.appMode = next;
+    this.mcpConfig.appMode = next;
+    localStorage.setItem('agentTesterAppMode', next ? 'true' : 'false');
+
+    this.clearLiveAppWidgets();
+
+    if (this.currentServer && this.currentServer.isConnected) {
+      try {
+        await this.handleReconnect();
+        this.showToast(next ? 'MCP Apps mode: ON — reconnected' : 'MCP Apps mode: OFF — reconnected', 'success');
+      } catch (e) {
+        console.warn('Reconnect after appMode toggle failed:', e);
+        this.showToast('Reconnect failed: ' + (e?.message || e), 'error');
+      }
+    } else {
+      this.showToast(next ? 'MCP Apps mode enabled' : 'MCP Apps mode disabled', 'info');
+    }
+
+    this.refreshToolListAppIcons();
+  }
+
+  /**
+   * Spec §6.8: MCP Apps mode requires HTTP/SSE. Agent-tester currently only
+   * exposes HTTP/SSE transports in the UI, so this is a no-op stub kept for
+   * future STDIO transport support.
+   */
+  updateAppModeToggleAvailability() {
+    if (!this.appModeToggleLabel) {
+      return;
+    }
+    const transport = this.transportSelect?.value || 'http';
+    const supported = transport === 'http' || transport === 'sse';
+    this.appModeToggleLabel.classList.toggle('is-disabled', !supported);
+    if (this.appModeToggle) {
+      this.appModeToggle.disabled = !supported;
+    }
+  }
+
+  clearLiveAppWidgets() {
+    for (const entry of this.activeAppWidgets) {
+      try {
+        entry.bridge.destroy();
+      } catch (e) {
+        console.warn('Bridge destroy failed:', e);
+      }
+      if (entry.container?.parentNode) {
+        entry.container.parentNode.removeChild(entry.container);
+      }
+    }
+    this.activeAppWidgets = [];
+  }
+
+  /**
+   * Mount an `AppWidgetBridge` for a single appCall and return the container
+   * the message renderer should drop into the DOM. Honors the live-widget
+   * cap from proposal §6.2 by demoting the oldest widget to a static
+   * "poster" once the limit is exceeded.
+   */
+  renderAppWidget(appCall, messageId) {
+    const container = document.createElement('div');
+    container.className = 'app-widget-container';
+    container.dataset.callId = appCall.callId;
+    container.dataset.messageId = messageId;
+
+    const header = document.createElement('div');
+    header.className = 'app-widget-header';
+    header.innerHTML = `
+      <span class="material-icons-round app-widget-icon">grid_view</span>
+      <span class="app-widget-title">${this._escapeHtml(appCall.toolName)}</span>
+      <button type="button" class="app-widget-collapse btn-icon" title="Collapse">
+        <span class="material-icons-round">expand_less</span>
+      </button>
+    `;
+    container.appendChild(header);
+
+    const body = document.createElement('div');
+    body.className = 'app-widget-body';
+    container.appendChild(body);
+
+    const theme = document.documentElement.getAttribute('data-theme') || 'light';
+    const bridge = new AppWidgetBridge(
+      appCall,
+      { theme: { name: theme }, hostVersion: this.sdkVersion || '0.0.0' },
+      {
+        onJsonRpcMessage: (direction, msg) => this._logUiMessage(direction, msg, appCall),
+        onViewCallTool: (params, ac) => this._proxyViewCallTool(params, ac),
+        onLog: (params, ac) => this._logUiMessage('log', { method: 'notifications/message', params }, ac),
+        onViewMessage: (params, ac) => this._logUiMessage('msg', { method: 'ui/message', params }, ac),
+        onUpdateModelContext: (params, ac) => this._logUiMessage('ctx', { method: 'ui/update-model-context', params }, ac),
+      },
+    );
+    bridge.mount(body);
+
+    const entry = { callId: appCall.callId, messageId, bridge, container };
+    this.activeAppWidgets.push(entry);
+    this._enforceWidgetCap();
+
+    header.querySelector('.app-widget-collapse').addEventListener('click', () => {
+      const collapsed = container.classList.toggle('is-collapsed');
+      const icon = header.querySelector('.app-widget-collapse .material-icons-round');
+      if (icon) {
+        icon.textContent = collapsed ? 'expand_more' : 'expand_less';
+      }
+    });
+
+    return container;
+  }
+
+  _enforceWidgetCap() {
+    while (this.activeAppWidgets.length > this.maxLiveWidgets) {
+      const oldest = this.activeAppWidgets.shift();
+      if (!oldest) {
+        break;
+      }
+      try {
+        oldest.bridge.destroy();
+      } catch {
+        /* ignore */
+      }
+      if (oldest.container) {
+        oldest.container.classList.add('is-poster');
+        const body = oldest.container.querySelector('.app-widget-body');
+        if (body) {
+          body.innerHTML = '<div class="app-widget-poster">Widget unloaded (live-widget cap reached). Reload page to re-render.</div>';
+        }
+      }
+    }
+  }
+
+  _logUiMessage(direction, msg, appCall) {
+    const entry = {
+      timestamp: new Date().toISOString(),
+      direction,
+      callId: appCall?.callId || null,
+      toolName: appCall?.toolName || null,
+      method: msg?.method || (typeof msg?.id !== 'undefined' ? 'response' : 'unknown'),
+      msg,
+    };
+    this.uiMessageLog.push(entry);
+    if (this.uiMessageLog.length > this.maxUiMessageLog) {
+      this.uiMessageLog.splice(0, this.uiMessageLog.length - this.maxUiMessageLog);
+    }
+    this._broadcastUiLogEntry(entry);
+  }
+
+  _broadcastUiLogEntry(_entry) {
+    if (this.activeTab === 'inspector') {
+      this.renderInspectorLog();
+    }
+  }
+
+  /**
+   * Repaint the entire Inspector pane: app-tools list, UI resources, and the
+   * live `ui/*` JSON-RPC log. Called on tab activation and on the manual
+   * refresh button.
+   */
+  async refreshInspector() {
+    this.renderInspectorTools();
+    this.renderInspectorLog();
+    await this.refreshInspectorResources();
+  }
+
+  renderInspectorTools() {
+    if (!this.inspectorToolsList) {
+      return;
+    }
+    this.inspectorToolsList.innerHTML = '';
+    const tools = (this.currentServer?.isConnected && this.currentServer.tools) || [];
+    if (tools.length === 0) {
+      this.inspectorToolsList.innerHTML = '<li class="inspector-empty">No connected server</li>';
+      return;
+    }
+    for (const t of tools) {
+      const hasUi = this._toolHasUi(t);
+      const li = document.createElement('li');
+      li.className = hasUi ? 'inspector-tool has-ui' : 'inspector-tool';
+      li.innerHTML = `
+        <div class="inspector-tool-head">
+          <span class="material-icons-round inspector-tool-icon">${hasUi ? 'grid_view' : 'build'}</span>
+          <code>${this._escapeHtml(t.name)}</code>
+          ${hasUi ? '<span class="inspector-tool-flag">UI</span>' : ''}
+        </div>
+        <div class="inspector-tool-desc">${this._escapeHtml(t.description || '')}</div>
+        ${hasUi ? '<button type="button" class="btn btn-secondary inspector-launch">Launch widget</button>' : ''}
+      `;
+      const btn = li.querySelector('.inspector-launch');
+      if (btn) {
+        btn.addEventListener('click', () => this._launchInspectorWidget(t));
+      }
+      this.inspectorToolsList.appendChild(li);
+    }
+  }
+
+  async refreshInspectorResources() {
+    if (!this.inspectorResourcesList) {
+      return;
+    }
+    if (!this.currentServer?.isConnected) {
+      this.inspectorResourcesList.innerHTML = '<li class="inspector-empty">No connected server</li>';
+      return;
+    }
+    this.inspectorResourcesList.innerHTML = '<li class="inspector-empty">Loading…</li>';
+    try {
+      const resp = await apiFetch(
+        `${API_BASE}/api/mcp/ui-resources?serverName=${encodeURIComponent(this.currentServer.name)}`,
+      );
+      const data = await resp.json();
+      const list = Array.isArray(data.resources) ? data.resources : [];
+      if (list.length === 0) {
+        this.inspectorResourcesList.innerHTML = '<li class="inspector-empty">No UI resources registered</li>';
+        return;
+      }
+      this.inspectorResourcesList.innerHTML = '';
+      for (const r of list) {
+        const li = document.createElement('li');
+        li.className = 'inspector-resource';
+        li.innerHTML = `
+          <div class="inspector-tool-head">
+            <span class="material-icons-round inspector-tool-icon">code</span>
+            <code>${this._escapeHtml(r.uri || '')}</code>
+          </div>
+          <div class="inspector-tool-desc">${this._escapeHtml(r.name || r.description || '')}</div>
+          <div class="inspector-tool-mime">${this._escapeHtml(r.mimeType || '')}</div>
+        `;
+        this.inspectorResourcesList.appendChild(li);
+      }
+    } catch (e) {
+      this.inspectorResourcesList.innerHTML = `<li class="inspector-empty">Error: ${this._escapeHtml(e?.message || e)}</li>`;
+    }
+  }
+
+  renderInspectorLog() {
+    if (!this.inspectorLog) {
+      return;
+    }
+    const filter = this.inspectorLogFilter?.value || '';
+    const entries = filter
+      ? this.uiMessageLog.filter((e) => e.direction === filter || e.direction.startsWith(filter))
+      : this.uiMessageLog;
+    if (entries.length === 0) {
+      this.inspectorLog.textContent = '(no ui/* messages yet)';
+      return;
+    }
+    const lines = entries.slice(-200).map((e) => {
+      const tag = this._escapeHtml(e.direction);
+      const tool = this._escapeHtml(e.toolName || '-');
+      const method = this._escapeHtml(e.method || '-');
+      const shortMsg = JSON.stringify(e.msg).slice(0, 400);
+      return `[${e.timestamp.slice(11, 19)}] ${tag.padEnd(28)} ${tool} ${method} ${this._escapeHtml(shortMsg)}`;
+    });
+    this.inspectorLog.textContent = lines.join('\n');
+    this.inspectorLog.scrollTop = this.inspectorLog.scrollHeight;
+  }
+
+  /**
+   * Direct widget-only smoke test — invoke a tool without involving the LLM
+   * and mount the returned UI resource in a dedicated modal. Useful for
+   * iterating on widget HTML in isolation.
+   */
+  async _launchInspectorWidget(tool) {
+    if (!this.currentServer?.isConnected) {
+      this.showToast('Connect to an MCP server first', 'error');
+      return;
+    }
+    const args = prompt(`Arguments JSON for ${tool.name}:`, '{}');
+    if (args === null) {
+      return;
+    }
+    let parsed;
+    try {
+      parsed = args.trim() ? JSON.parse(args) : {};
+    } catch (e) {
+      this.showToast('Invalid JSON: ' + e.message, 'error');
+      return;
+    }
+
+    try {
+      const resp = await apiFetch(`${API_BASE}/api/mcp/call-tool`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          serverName: this.currentServer.name,
+          toolName: tool.name,
+          parameters: parsed,
+        }),
+      });
+      const data = await resp.json();
+      if (!resp.ok || !data.success) {
+        this.showToast('Tool call failed: ' + (data?.error || resp.status), 'error');
+        return;
+      }
+      if (!data.uiResource) {
+        this.showToast('Tool returned no UI resource', 'info');
+        return;
+      }
+      this._openWidgetModal(tool.name, parsed, data.result, data.uiResource);
+    } catch (e) {
+      this.showToast('Widget launch failed: ' + (e?.message || e), 'error');
+    }
+  }
+
+  _openWidgetModal(toolName, args, result, uiResource) {
+    let modal = document.getElementById('inspectorWidgetModal');
+    if (modal) {
+      modal.remove();
+    }
+    modal = document.createElement('div');
+    modal.id = 'inspectorWidgetModal';
+    modal.className = 'inspector-modal-overlay';
+    modal.innerHTML = `
+      <div class="inspector-modal">
+        <header>
+          <span class="material-icons-round">grid_view</span>
+          <strong>${this._escapeHtml(toolName)}</strong>
+          <button type="button" class="btn-icon inspector-modal-close" title="Close">
+            <span class="material-icons-round">close</span>
+          </button>
+        </header>
+        <div class="inspector-modal-body"></div>
+      </div>
+    `;
+    document.body.appendChild(modal);
+    modal.querySelector('.inspector-modal-close').addEventListener('click', () => {
+      if (this._inspectorBridge) {
+        try {
+          this._inspectorBridge.destroy();
+        } catch {
+          /* ignore */
+        }
+        this._inspectorBridge = null;
+      }
+      modal.remove();
+    });
+
+    const appCall = {
+      callId: `inspector-${Date.now()}`,
+      toolName,
+      arguments: args || {},
+      result,
+      uiResource,
+    };
+    const theme = document.documentElement.getAttribute('data-theme') || 'light';
+    const bridge = new AppWidgetBridge(
+      appCall,
+      { theme: { name: theme }, hostVersion: this.sdkVersion || '0.0.0' },
+      {
+        onJsonRpcMessage: (direction, msg) => this._logUiMessage(direction, msg, appCall),
+        onViewCallTool: (params, ac) => this._proxyViewCallTool(params, ac),
+        onLog: (params, ac) => this._logUiMessage('log', { method: 'notifications/message', params }, ac),
+      },
+    );
+    bridge.mount(modal.querySelector('.inspector-modal-body'));
+    this._inspectorBridge = bridge;
+  }
+
+  /**
+   * Proxy View → Host `tools/call`. Per proposal §6.4, the first view-initiated
+   * call in a session pops a confirm modal; the user MAY persist consent for
+   * the rest of the session via `sessionStorage`. All calls are logged as
+   * `view→host:call-tool` for the App Inspector.
+   */
+  async _proxyViewCallTool(params, appCall) {
+    const toolName = params?.name || params?.toolName;
+    if (!toolName || typeof toolName !== 'string') {
+      throw new Error('Missing tool name');
+    }
+    const args = params?.arguments || params?.args || {};
+
+    this._logUiMessage(
+      'view→host:call-tool',
+      { method: 'tools/call', params: { name: toolName, arguments: args } },
+      appCall,
+    );
+
+    if (!(await this._confirmViewCallTool(toolName, appCall))) {
+      throw new Error('User denied widget tool call');
+    }
+
+    if (!this.currentServer || !this.currentServer.isConnected) {
+      throw new Error('No MCP server connected');
+    }
+
+    const response = await apiFetch(`${API_BASE}/api/mcp/call-tool`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        serverName: this.currentServer.name,
+        toolName,
+        parameters: args,
+      }),
+    });
+
+    const data = await response.json();
+    if (!response.ok || !data.success) {
+      const errMsg = data?.error || `HTTP ${response.status}`;
+      this._logUiMessage(
+        'host→view:call-tool-error',
+        { method: 'tools/call', error: errMsg, params: { name: toolName } },
+        appCall,
+      );
+      throw new Error(errMsg);
+    }
+
+    this._logUiMessage(
+      'host→view:call-tool-result',
+      { method: 'tools/call', params: { name: toolName }, result: data.result },
+      appCall,
+    );
+    return data.result;
+  }
+
+  async _confirmViewCallTool(toolName, appCall) {
+    const SESSION_KEY = 'agentTesterAppWidgetConsent';
+    try {
+      if (sessionStorage.getItem(SESSION_KEY) === 'allow') {
+        return true;
+      }
+    } catch {
+      /* sessionStorage may be unavailable in private mode */
+    }
+
+    return new Promise((resolve) => {
+      const overlay = document.createElement('div');
+      overlay.className = 'app-widget-confirm-overlay';
+      overlay.innerHTML = `
+        <div class="app-widget-confirm">
+          <h3>Widget action requested</h3>
+          <p>Widget for <code>${this._escapeHtml(appCall.toolName)}</code> wants to call tool
+             <strong>${this._escapeHtml(toolName)}</strong> on the connected MCP server.</p>
+          <label class="app-widget-remember">
+            <input type="checkbox" id="appWidgetConsentRemember">
+            <span>Don't ask again in this session</span>
+          </label>
+          <div class="app-widget-confirm-actions">
+            <button type="button" class="btn" data-action="deny">Deny</button>
+            <button type="button" class="btn btn-primary" data-action="allow">Allow</button>
+          </div>
+        </div>
+      `;
+      document.body.appendChild(overlay);
+
+      const remember = overlay.querySelector('#appWidgetConsentRemember');
+      const finish = (allowed) => {
+        if (allowed && remember?.checked) {
+          try {
+            sessionStorage.setItem(SESSION_KEY, 'allow');
+          } catch {
+            /* ignore */
+          }
+        }
+        overlay.remove();
+        resolve(allowed);
+      };
+      overlay.addEventListener('click', (e) => {
+        const action = e.target?.closest?.('button')?.dataset?.action;
+        if (action === 'allow') {
+          finish(true);
+        } else if (action === 'deny' || e.target === overlay) {
+          finish(false);
+        }
+      });
+    });
+  }
+
+  _escapeHtml(s) {
+    return String(s).replace(/[&<>"']/g, (c) => ({
+      '&': '&amp;',
+      '<': '&lt;',
+      '>': '&gt;',
+      '"': '&quot;',
+      "'": '&#39;',
+    })[c]);
+  }
+
+  /**
+   * Placeholder hook — populated in the Tool Tester stage with logic that adds
+   * a "has UI" icon to app-tools in the dropdown when appMode is ON.
+   */
+  refreshToolListAppIcons() {
+    if (this.ttToolSelect && Array.isArray(this.ttTools)) {
+      this.refreshToolList();
+    }
+  }
+
   renderMessageContent(element, text, format) {
     if (format === 'HTML') {
       element.innerHTML = this.sanitizeHtml(text).trim();
@@ -453,6 +1252,16 @@ class McpAgentTester {
 
     this.themeToggle = document.getElementById('themeToggle');
     this.defaultFormatSelect = document.getElementById('defaultDisplayFormat');
+    this.appModeToggle = document.getElementById('appModeToggle');
+    this.appModeToggleLabel = document.getElementById('appModeToggleLabel');
+
+    // App Inspector tab elements
+    this.inspectorToolsList = document.getElementById('inspectorToolsList');
+    this.inspectorResourcesList = document.getElementById('inspectorResourcesList');
+    this.inspectorLog = document.getElementById('inspectorLog');
+    this.inspectorLogFilter = document.getElementById('inspectorLogFilter');
+    this.inspectorLogClear = document.getElementById('inspectorLogClear');
+    this.inspectorRefreshBtn = document.getElementById('inspectorRefreshBtn');
 
     // Tool Tester tab elements
     this.tabsBar = document.querySelector('.tabs-bar');
@@ -488,10 +1297,19 @@ class McpAgentTester {
       this.defaultFormatSelect.addEventListener('change', () => this.handleDefaultFormatChange());
     }
 
+    if (this.appModeToggle) {
+      this.appModeToggle.checked = this.appMode;
+      this.appModeToggle.addEventListener('change', () => this.handleAppModeToggle());
+      this.updateAppModeToggleAvailability();
+    }
+
     this.mcpConnectionForm.addEventListener('submit', (e) => this.handleMcpConnection(e));
 
     this.serverUrlInput.addEventListener('input', () => this.handleServerUrlChange());
-    this.transportSelect.addEventListener('change', () => this.saveFormValuesToStorage());
+    this.transportSelect.addEventListener('change', () => {
+      this.saveFormValuesToStorage();
+      this.updateAppModeToggleAvailability();
+    });
 
     this.serverUrlDropdown.addEventListener('click', (e) => this.toggleUrlDropdown(e));
     document.addEventListener('click', (e) => this.handleClickOutside(e));
@@ -597,6 +1415,19 @@ class McpAgentTester {
     if (this.ttResponseTextView) {
       this.ttResponseTextView.addEventListener('click', () => this.toggleResponseTextMode());
     }
+
+    if (this.inspectorRefreshBtn) {
+      this.inspectorRefreshBtn.addEventListener('click', () => this.refreshInspector());
+    }
+    if (this.inspectorLogClear) {
+      this.inspectorLogClear.addEventListener('click', () => {
+        this.uiMessageLog = [];
+        this.renderInspectorLog();
+      });
+    }
+    if (this.inspectorLogFilter) {
+      this.inspectorLogFilter.addEventListener('change', () => this.renderInspectorLog());
+    }
   }
 
   initTheme() {
@@ -617,6 +1448,13 @@ class McpAgentTester {
 
   applyTheme(theme) {
     document.documentElement.setAttribute('data-theme', theme);
+    for (const entry of this.activeAppWidgets || []) {
+      try {
+        entry.bridge.setTheme(theme);
+      } catch {
+        /* widget already torn down */
+      }
+    }
     if (this.themeToggle) {
       const icon = this.themeToggle.querySelector('.material-icons-round');
       if (icon) {
@@ -716,6 +1554,7 @@ class McpAgentTester {
       url: serverUrl,
       transport: transport,
       headers: this.getHeadersFromForm(),
+      appMode: this.appMode,
     };
 
     this.showLoading('Auto-connecting to MCP server...');
@@ -742,6 +1581,7 @@ class McpAgentTester {
           transport: transport,
           headers: this.getHeadersFromForm(),
           name: serverName,
+          appMode: this.appMode,
         };
 
         if (result.config && result.config.agentPrompt) {
@@ -810,6 +1650,7 @@ class McpAgentTester {
       url: serverUrl,
       transport: transport,
       headers: this.getHeadersFromForm(),
+      appMode: this.appMode,
     };
 
     this.showLoading('Connecting to MCP server...');
@@ -836,6 +1677,7 @@ class McpAgentTester {
           transport: transport,
           headers: this.getHeadersFromForm(),
           name: serverName,
+          appMode: this.appMode,
         };
 
         if (result.config && result.config.agentPrompt) {
@@ -1329,6 +2171,7 @@ class McpAgentTester {
       transport: 'http',
       headers: {},
       name: null,
+      appMode: this.appMode,
     };
     this.originalAgentPrompt = null;
     this.updateResetPromptButton();
@@ -1416,6 +2259,7 @@ class McpAgentTester {
           transport: 'http',
           headers: {},
           name: null,
+          appMode: this.appMode,
         };
         this.originalAgentPrompt = null;
         this.updateResetPromptButton();
@@ -1440,6 +2284,7 @@ class McpAgentTester {
       url: this.currentServer.url,
       transport: this.currentServer.transport || 'http',
       headers: this.currentServer.headers || {},
+      appMode: this.appMode,
     };
 
     this.showLoading('Reconnecting to MCP server...');
@@ -1544,9 +2389,11 @@ class McpAgentTester {
               transport: this.mcpConfig.transport,
               headers: this.mcpConfig.headers,
               name: this.mcpConfig.name,
+              appMode: this.appMode,
             }
           : undefined,
         modelConfig: modelConfig,
+        appMode: this.appMode,
       };
 
       const response = await apiFetch(`${API_BASE}/api/chat/message`, {
@@ -1563,7 +2410,14 @@ class McpAgentTester {
 
       this.currentSessionId = result.sessionId;
 
-      this.addMessage(result.message, 'assistant', result.metadata);
+      // appCalls[] arrives only in MCP Apps mode. Forward to the renderer
+      // alongside the assistant message so the widget shows up next to its
+      // text body.
+      const metadata = result.metadata || {};
+      if (Array.isArray(result.appCalls) && result.appCalls.length > 0) {
+        metadata.appCalls = result.appCalls;
+      }
+      this.addMessage(result.message, 'assistant', metadata);
     } catch (error) {
       console.error('Send message error:', error);
       this.addMessage(`Error: ${error.message}`, 'assistant', { error: true });
@@ -1635,6 +2489,18 @@ class McpAgentTester {
         responseTime.innerHTML = `<small class="a-info">Response time: ${metadata.response_time}ms</small>`;
         content.appendChild(responseTime);
       }
+
+      if (Array.isArray(metadata.appCalls)) {
+        for (const appCall of metadata.appCalls) {
+          if (!appCall?.uiResource) {
+            continue;
+          }
+          const widgetContainer = this.renderAppWidget(appCall, messageId);
+          if (widgetContainer) {
+            content.appendChild(widgetContainer);
+          }
+        }
+      }
     }
 
     messageDiv.appendChild(avatar);
@@ -1665,6 +2531,7 @@ class McpAgentTester {
   }
 
   clearChat() {
+    this.clearLiveAppWidgets();
     const welcomeMessage = this.chatMessages.querySelector('.message.welcome');
     this.chatMessages.innerHTML = '';
     if (welcomeMessage) {
@@ -2250,17 +3117,33 @@ class McpAgentTester {
       appEl.setAttribute('data-active-tab', tabName);
     }
 
-    if (tabName === 'chat') {
-      this.tabPaneChat.style.display = '';
-      this.tabPaneChat.classList.add('active');
-      this.tabPaneToolTester.style.display = 'none';
-      this.tabPaneToolTester.classList.remove('active');
-    } else if (tabName === 'tool-tester') {
+    const inspectorPane = document.getElementById('tabPaneInspector');
+    const hideAll = () => {
       this.tabPaneChat.style.display = 'none';
       this.tabPaneChat.classList.remove('active');
+      this.tabPaneToolTester.style.display = 'none';
+      this.tabPaneToolTester.classList.remove('active');
+      if (inspectorPane) {
+        inspectorPane.style.display = 'none';
+        inspectorPane.classList.remove('active');
+      }
+    };
+    if (tabName === 'chat') {
+      hideAll();
+      this.tabPaneChat.style.display = '';
+      this.tabPaneChat.classList.add('active');
+    } else if (tabName === 'tool-tester') {
+      hideAll();
       this.tabPaneToolTester.style.display = '';
       this.tabPaneToolTester.classList.add('active');
       this.refreshToolList();
+    } else if (tabName === 'inspector') {
+      hideAll();
+      if (inspectorPane) {
+        inspectorPane.style.display = '';
+        inspectorPane.classList.add('active');
+      }
+      this.refreshInspector();
     }
   }
 
@@ -2279,13 +3162,24 @@ class McpAgentTester {
     tools.forEach((tool) => {
       const opt = document.createElement('option');
       opt.value = tool.name;
-      opt.textContent = tool.name;
+      const isApp = this._toolHasUi(tool);
+      // Prefix with a small marker so the LLM can't disambiguate, but a human
+      // reading the dropdown immediately sees which tools ship a widget.
+      opt.textContent = this.appMode && isApp ? `🖼  ${tool.name}` : tool.name;
+      if (isApp) {
+        opt.dataset.hasUi = 'true';
+      }
       this.ttToolSelect.appendChild(opt);
     });
 
     const stillExists = tools.some((t) => t.name === previousValue);
     this.ttToolSelect.value = stillExists ? previousValue : '';
     this.handleToolSelectionChange();
+  }
+
+  _toolHasUi(tool) {
+    const uri = tool?._meta?.ui?.resourceUri ?? tool?._meta?.['ui/resourceUri'];
+    return typeof uri === 'string' && uri.length > 0;
   }
 
   getSelectedTool() {
@@ -2643,7 +3537,7 @@ class McpAgentTester {
 
       this.ttRequestStatus.textContent = `Success in ${data.durationMs ?? elapsedMs} ms`;
       this.ttRequestStatus.className = 'tt-status tt-status-success';
-      this.renderToolResponse(data.result, false);
+      this.renderToolResponse(data.result, false, data.uiResource);
     } catch (error) {
       const elapsedMs = Math.round(performance.now() - startedAt);
       this.ttRequestStatus.textContent = `Error in ${elapsedMs} ms`;
@@ -2654,13 +3548,89 @@ class McpAgentTester {
     }
   }
 
-  renderToolResponse(result, isError) {
+  renderToolResponse(result, isError, uiResource) {
     this.ttLastResult = result;
     this.ttResponseContent.classList.toggle('tt-response-error', !!isError);
     if (isError) {
       this.ttResponseTextMode = false;
     }
     this.renderToolResponseBody();
+    this.renderToolResponseWidget(uiResource);
+  }
+
+  /**
+   * Mount or tear down the split-view widget panel next to the raw JSON
+   * response. Only renders when MCP Apps mode is ON and the server actually
+   * returned a UI resource (either embedded or via `_meta.ui.resourceUri`).
+   */
+  renderToolResponseWidget(uiResource) {
+    let panel = document.getElementById('ttUiWidgetPanel');
+    if (this._ttUiBridge) {
+      try {
+        this._ttUiBridge.destroy();
+      } catch {
+        /* ignore */
+      }
+      this._ttUiBridge = null;
+    }
+    if (!this.appMode || !uiResource) {
+      if (panel) {
+        panel.remove();
+      }
+      this.ttLayout?.classList.remove('tt-has-ui');
+      return;
+    }
+
+    if (!panel) {
+      panel = document.createElement('section');
+      panel.id = 'ttUiWidgetPanel';
+      panel.className = 'tt-panel tt-ui-panel';
+      panel.setAttribute('data-testid', 'at-tt-ui-panel');
+      panel.innerHTML = `
+        <header class="tt-panel-header">
+          <h3>UI Widget</h3>
+          <span class="tt-ui-badge">MCP Apps</span>
+        </header>
+        <div class="tt-ui-body"></div>
+      `;
+      this.ttLayout.appendChild(panel);
+    }
+
+    const body = panel.querySelector('.tt-ui-body');
+    body.innerHTML = '';
+
+    const tool = this.getSelectedTool();
+    const theme = document.documentElement.getAttribute('data-theme') || 'light';
+    const appCall = {
+      callId: `tt-${Date.now()}`,
+      toolName: tool?.name || 'unknown',
+      arguments: this._safeParseJson(this.ttRequestJson?.value) || {},
+      result: this.ttLastResult,
+      uiResource,
+    };
+    const bridge = new AppWidgetBridge(
+      appCall,
+      { theme: { name: theme }, hostVersion: this.sdkVersion || '0.0.0' },
+      {
+        onJsonRpcMessage: (direction, msg) => this._logUiMessage(direction, msg, appCall),
+        onViewCallTool: (params, ac) => this._proxyViewCallTool(params, ac),
+        onLog: (params, ac) => this._logUiMessage('log', { method: 'notifications/message', params }, ac),
+      },
+    );
+    bridge.mount(body);
+    this._ttUiBridge = bridge;
+    this.ttLayout.classList.add('tt-has-ui');
+  }
+
+  _safeParseJson(s) {
+    if (!s) {
+      return null;
+    }
+    try {
+      return JSON.parse(s);
+    } catch {
+      return null;
+    }
   }
 
   renderToolResponseBody() {
@@ -2747,6 +3717,7 @@ class McpAgentTester {
     }
     this.ttResponseContent.innerHTML =
       '<span class="tt-placeholder">No response yet. Connect to a server, select a tool, and send a request.</span>';
+    this.renderToolResponseWidget(null);
     this.ttRequestStatus.textContent = '';
     this.ttRequestStatus.className = 'tt-status';
   }
