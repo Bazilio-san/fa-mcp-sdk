@@ -18,7 +18,7 @@ npm install fa-mcp-sdk
 | [03-configuration](03-configuration.md) | `appConfig`, YAML config, access points for external services, cache | Server configuration, external services |
 | [04-authentication](04-authentication.md) | JWT, Basic auth, server tokens, `createAuthMW()`, Token Generator, CLI Token Generator, JWT Generation API | Authentication setup |
 | [05-ad-authorization](05-ad-authorization.md) | AD group authorization at HTTP/tool levels | AD group restrictions |
-| [06-utilities](06-utilities.md) | `ServerError`, `normalizeHeaders`, logging, Consul, graceful shutdown | Error handling, utilities |
+| [06-utilities](06-utilities.md) | `ServerError`, `normalizeHeaders`, logging, MCP debug switches (`DEBUG=mcp:*`), Consul, graceful shutdown | Error handling, utilities, request tracing |
 | [07-testing-and-operations](07-testing-and-operations.md) | Test clients (STDIO, HTTP, SSE, Streamable HTTP) | Testing, deployment |
 | [08-agent-tester-and-headless-api](08-agent-tester-and-headless-api.md) | Agent Tester, Headless API, structured logging, automated testing, UI `data-testid` reference | Agent-driven tool development, CLI automation, UI E2E tests |
 | [09-database](09-database.md) | PostgreSQL sugar layer (`queryMAIN`, `execMAIN`, `getInsertSqlMAIN`, `getMergeSqlMAIN`, `mergeByBatch`), `pgvector`, secondary DBs | Database access, upserts, batching |
@@ -51,6 +51,9 @@ import {
 
 // Utilities
 import { logger, fileLogger, Logger, applyLoggerSettings, trim, ppj, toError, toStr, normalizeHeaders } from 'fa-mcp-sdk';
+
+// MCP debug switches (DEBUG=mcp:tool|mcp:resource|mcp:prompt|mcp:notification or DEBUG=mcp:*)
+import { debugMcpTool, debugMcpResource, debugMcpPrompt, debugMcpNotification, debugTokenAuth } from 'fa-mcp-sdk';
 
 // Test Clients
 import { McpHttpClient, McpStdioClient, McpSseClient, McpStreamableHttpClient } from 'fa-mcp-sdk';

@@ -4,6 +4,7 @@
  */
 import { IGetPromptRequest, ITransportContext, IPromptContent, IPromptData } from '../_types_/types.js';
 import { getProjectData } from '../bootstrap/init-config.js';
+import { debugMcpPrompt } from '../debug.js';
 
 async function getPrompts(args: ITransportContext): Promise<IPromptData[]> {
   const projectData = getProjectData();
@@ -50,12 +51,22 @@ async function getPrompts(args: ITransportContext): Promise<IPromptData[]> {
 }
 
 export async function getPromptsList(args: ITransportContext) {
+  if (debugMcpPrompt.enabled) {
+    debugMcpPrompt('→ prompts/list');
+  }
   const prompts = await getPrompts(args);
-  return { prompts: prompts.map(({ content, ...rest }) => ({ ...rest })) };
+  const result = { prompts: prompts.map(({ content, ...rest }) => ({ ...rest })) };
+  if (debugMcpPrompt.enabled) {
+    debugMcpPrompt(`← prompts/list (${result.prompts.length})\n${JSON.stringify(result, null, 2)}`);
+  }
+  return result;
 }
 
 export const getPrompt = async (request: IGetPromptRequest, args: ITransportContext): Promise<any> => {
   const { name } = request.params;
+  if (debugMcpPrompt.enabled) {
+    debugMcpPrompt(`→ prompts/get ${name}\n${JSON.stringify(request.params ?? {}, null, 2)}`);
+  }
   const prompts = await getPrompts(args);
 
   // Check if prompts are available
@@ -71,7 +82,7 @@ export const getPrompt = async (request: IGetPromptRequest, args: ITransportCont
     throw new Error(`Unknown prompt: ${name}`);
   }
 
-  return {
+  const result = {
     messages: [
       {
         role: 'assistant',
@@ -82,4 +93,8 @@ export const getPrompt = async (request: IGetPromptRequest, args: ITransportCont
       },
     ],
   };
+  if (debugMcpPrompt.enabled) {
+    debugMcpPrompt(`← prompts/get ${name}\n${content}`);
+  }
+  return result;
 };

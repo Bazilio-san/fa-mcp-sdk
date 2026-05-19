@@ -137,6 +137,8 @@ export {
   type SwaggerUIConfig,
 } from './web/openapi.js';
 
+export { debugTokenAuth, debugMcpTool, debugMcpResource, debugMcpPrompt, debugMcpNotification } from './debug.js';
+
 export { Logger } from 'af-logger-ts';
 
 export { createAgentTesterRouter } from './agent-tester/agent-tester-router.js';

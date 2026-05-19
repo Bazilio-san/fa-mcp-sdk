@@ -21,6 +21,7 @@ import { createAgentTesterSessionMW } from '../auth/agent-tester-auth.js';
 import { generateToken, MIN_ENCRYPT_KEY_LENGTH } from '../auth/jwt.js';
 import { createAuthMW } from '../auth/middleware.js';
 import { appConfig, getProjectData } from '../bootstrap/init-config.js';
+import { debugMcpNotification } from '../debug.js';
 import { getMainDBConnectionStatus } from '../db/pg-db.js';
 import { BaseMcpError } from '../errors/BaseMcpError.js';
 import { createJsonRpcErrorResponse, ServerError, toError, toStr } from '../errors/errors.js';
@@ -527,6 +528,9 @@ export async function startHttpServer(): Promise<void> {
           logger.info('MCP client initialization completed');
         } else {
           logger.debug(`MCP notification received: ${method}`);
+        }
+        if (debugMcpNotification.enabled) {
+          debugMcpNotification(`← ${method}\n${JSON.stringify(params ?? {}, null, 2)}`);
         }
         return res.status(204).send();
       }

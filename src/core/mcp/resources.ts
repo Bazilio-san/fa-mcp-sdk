@@ -8,6 +8,7 @@ import * as path from 'node:path';
 import { IUsedHttpHeader, IResource, IResourceData, IResourceInfo, ITransportContext } from '../_types_/types.js';
 import { appConfig, getProjectData } from '../bootstrap/init-config.js';
 import { ROOT_PROJECT_DIR } from '../constants.js';
+import { debugMcpResource } from '../debug.js';
 import { assembleReadmeWithSatellites } from './readme-assembler.js';
 
 let readme = assembleReadmeWithSatellites(ROOT_PROJECT_DIR);
@@ -78,11 +79,21 @@ This information is used by searching for this MCP server and its information in
 };
 
 export const getResourcesList = async (args: ITransportContext): Promise<{ resources: IResourceInfo[] }> => {
+  if (debugMcpResource.enabled) {
+    debugMcpResource('→ resources/list');
+  }
   const resources: IResourceData[] = await createResources(args);
-  return { resources: resources.map(({ content, ...rest }) => ({ ...rest })) };
+  const result = { resources: resources.map(({ content, ...rest }) => ({ ...rest })) };
+  if (debugMcpResource.enabled) {
+    debugMcpResource(`← resources/list (${result.resources.length})\n${JSON.stringify(result, null, 2)}`);
+  }
+  return result;
 };
 
 export const getResource = async (uri: string, args: ITransportContext): Promise<IResource> => {
+  if (debugMcpResource.enabled) {
+    debugMcpResource(`→ resources/read ${uri}`);
+  }
   const resources = await createResources(args);
   const resource = resources.find((r) => r.uri === uri);
   if (!resource) {
@@ -95,7 +106,7 @@ export const getResource = async (uri: string, args: ITransportContext): Promise
   if (!content) {
     throw new Error(`Can not get content of resource '${uri}' by custom handler`);
   }
-  return {
+  const result: IResource = {
     contents: [
       {
         uri: resource.uri,
@@ -105,4 +116,9 @@ export const getResource = async (uri: string, args: ITransportContext): Promise
       },
     ],
   };
+  if (debugMcpResource.enabled) {
+    const body = typeof content === 'string' ? content : JSON.stringify(content, null, 2);
+    debugMcpResource(`← resources/read ${uri}\n${body}`);
+  }
+  return result;
 };

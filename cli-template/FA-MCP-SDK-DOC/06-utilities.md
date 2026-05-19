@@ -224,6 +224,73 @@ applyLoggerSettings({ level: 'info' });
 > Note: in STDIO transport the logger is a stub (writes to `stderr`) and `applyLoggerSettings` is a
 > no-op — `console.log` etc. would otherwise corrupt the JSON-RPC framing on stdout.
 
+## MCP Debug Output (`DEBUG=mcp:*`)
+
+The SDK ships request/response tracing for every MCP channel as four independent debug switches
+(built on `af-tools-ts` `Debug()` — same machinery as `DEBUG=token:auth`). Each category prints
+the raw request and the raw response in human-readable form; turn them on selectively from the
+shell or your `.env`.
+
+| Env value                | What it prints                                                  |
+|--------------------------|-----------------------------------------------------------------|
+| `DEBUG=mcp:tool`         | `tools/call` — name + arguments in, response (text or JSON) out |
+| `DEBUG=mcp:resource`     | `resources/list` and `resources/read` — URI in, body out        |
+| `DEBUG=mcp:prompt`       | `prompts/list` and `prompts/get` — name/args in, messages out   |
+| `DEBUG=mcp:notification` | All incoming `notifications/*` (method + params)                |
+| `DEBUG=mcp:*`            | All four at once                                                |
+| `DEBUG=*`                | Everything, including `token:auth` and any project debugs       |
+
+Combine with commas: `DEBUG=mcp:tool,mcp:prompt yarn start`. The hooks live in the core MCP
+dispatcher (see `init-mcp-server.ts` for the tool wrapper, `mcp/prompts.ts` and `mcp/resources.ts`
+for the resource/prompt taps, and `web/server-http.ts` for the notification branch) — both HTTP and
+STDIO transports route through them, so you get the same output regardless of how the client is
+connected.
+
+```bash
+# One-off debug session
+DEBUG=mcp:tool yarn start
+
+# Trace everything an Agent Tester run does
+DEBUG=mcp:* yarn start
+
+# Persistent in .env
+echo "DEBUG=mcp:tool,mcp:resource" >> .env
+```
+
+> ⚠️ STDIO transport reserves `stdout` for the JSON-RPC stream. The underlying `Debug()` writes to
+> `stdout` via `console.log`, so enabling `DEBUG=mcp:*` in STDIO mode **will corrupt the framing**
+> the client sees. Use these switches with HTTP/SSE transport, or redirect stdout.
+
+### Extending with Custom Debug Categories
+
+Add your own switches with the same `Debug()` helper from `af-tools-ts`:
+
+```typescript
+// src/lib/debug.ts
+import { Debug } from 'af-tools-ts';
+import { red, lBlue } from 'af-color';
+
+export const debugExternalApi = Debug('myapp:external-api', {
+  prefixColor: red,
+  messageColor: lBlue,
+});
+```
+
+```typescript
+// inside any handler / client
+import { debugExternalApi } from '../lib/debug.js';
+
+if (debugExternalApi.enabled) {
+  debugExternalApi(`POST ${url}\n${JSON.stringify(body, null, 2)}`);
+}
+```
+
+Enable with `DEBUG=myapp:external-api`. The `.enabled` guard avoids the JSON-stringify cost when
+the category is off. The four built-in `debugMcpTool`/`debugMcpResource`/`debugMcpPrompt`/
+`debugMcpNotification` instances are re-exported from `fa-mcp-sdk` if you want to piggyback on
+them from your own code (e.g. emit a custom line inside `handle-tool-call.ts` whenever
+`debugMcpTool.enabled` is true).
+
 ## Event System
 
 ```typescript

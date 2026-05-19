@@ -1,12 +1,23 @@
 import chalk from 'chalk';
 
-import { logger as lgr, formatToolResult, ToolExecutionError, TToolHandlerResponse } from '../../core/index.js';
+import {
+  debugMcpTool,
+  formatToolResult,
+  logger as lgr,
+  ToolExecutionError,
+  TToolHandlerResponse,
+} from '../../core/index.js';
 
 const logger = lgr.getSubLogger({ name: chalk.bgGrey('tools') });
 
 /**
  * Template tool handler - customize this for your specific tools
  * This handles MCP tool execution requests
+ *
+ * Debug output for tool requests/responses is wired up centrally by the SDK
+ * (see `init-mcp-server.ts`) and activated with `DEBUG=mcp:tool`. Other MCP
+ * channels have their own switches: `DEBUG=mcp:resource`, `DEBUG=mcp:prompt`,
+ * `DEBUG=mcp:notification`. Use `DEBUG=mcp:*` to enable them all at once.
  */
 export const handleToolCall = async (params: { name: string; arguments?: any }): Promise<any> => {
   const { name, arguments: args } = params;
@@ -14,14 +25,26 @@ export const handleToolCall = async (params: { name: string; arguments?: any }):
   logger.info(`Tool called: ${name}`);
 
   try {
+    let result: TToolHandlerResponse;
     // TODO: Implement your tool routing logic here
     switch (name) {
       case 'example_tool':
-        return await handleExampleTool(args);
+        result = await handleExampleTool(args);
+        break;
 
       default:
         throw new ToolExecutionError(name, `Unknown tool: ${name}`);
     }
+
+    // Optional: per-handler debug hook, in addition to the SDK-level wrapper.
+    // Useful if you want to inspect intermediate (pre-format) values inside a
+    // specific tool — define a new Debug category in `src/lib/debug.ts` and
+    // call it here. The example below piggybacks on the built-in switch.
+    if (debugMcpTool.enabled) {
+      debugMcpTool(`handler[${name}] returned\n${JSON.stringify(result, null, 2)}`);
+    }
+
+    return result;
   } catch (error: Error | any) {
     logger.error(`Tool execution failed for ${name}:`, error);
     error.printed = true;

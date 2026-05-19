@@ -2,12 +2,13 @@ import { closeAllPgConnectionsPg } from 'af-db-ts';
 import chalk from 'chalk';
 import { AccessPoints, IAccessPoints, IRegisterCyclic, IAccessPoint } from 'fa-consul';
 
-import { McpServerData } from './_types_/types.js';
+import { IToolHandlerParams, McpServerData, TToolHandlerResponse } from './_types_/types.js';
 import { dotEnvResult } from './bootstrap/dotenv.js';
 import { appConfig } from './bootstrap/init-config.js';
 import { startupInfo } from './bootstrap/startup-info.js';
 import { accessPointUpdater } from './consul/access-points-updater.js';
 import { registerCyclic } from './consul/register.js';
+import { debugMcpTool } from './debug.js';
 import { checkMainDB } from './db/pg-db.js';
 import { applyLoggerSettings, fileLogger, logger as lgr } from './logger.js';
 
@@ -16,6 +17,50 @@ import { startStdioServer } from './mcp/server-stdio.js';
 import { checkPortAvailability } from './utils/port-checker.js';
 import { isNonEmptyObject } from './utils/utils.js';
 import { startHttpServer } from './web/server-http.js';
+
+/**
+ * Render a tool response in human-readable form for the DEBUG=mcp:tool stream.
+ * Text-content responses are dumped as their `text`; structuredContent and any other
+ * shape is pretty-printed JSON.
+ */
+function formatToolResponseForDebug(res: any): string {
+  if (res?.content?.[0]?.text != null) {
+    return String(res.content[0].text);
+  }
+  try {
+    return JSON.stringify(res, null, 2);
+  } catch {
+    return String(res);
+  }
+}
+
+/**
+ * Decorate `data.toolHandler` so every tool call emits a request/response pair on the
+ * DEBUG=mcp:tool stream. Both HTTP and STDIO transports resolve the handler through the
+ * same `global.__MCP_PROJECT_DATA__`, so wrapping here covers all transports at once.
+ */
+function wrapProjectDataWithDebug(data: McpServerData): McpServerData {
+  const originalToolHandler = data.toolHandler;
+  const wrappedToolHandler = async <T = unknown>(params: IToolHandlerParams): Promise<TToolHandlerResponse<T>> => {
+    if (debugMcpTool.enabled) {
+      const { name, arguments: args } = params;
+      debugMcpTool(`→ tool/call ${name}\n${JSON.stringify(args ?? {}, null, 2)}`);
+    }
+    try {
+      const result = await originalToolHandler<T>(params);
+      if (debugMcpTool.enabled) {
+        debugMcpTool(`← tool/call ${params.name}\n${formatToolResponseForDebug(result)}`);
+      }
+      return result;
+    } catch (error: any) {
+      if (debugMcpTool.enabled) {
+        debugMcpTool(`✗ tool/call ${params.name} threw: ${error?.message || String(error)}`);
+      }
+      throw error;
+    }
+  };
+  return { ...data, toolHandler: wrappedToolHandler };
+}
 
 let cyclicRegisterServiceInConsul: IRegisterCyclic;
 const initCyclicRegisterServiceInConsul = async () => {
@@ -91,7 +136,7 @@ export async function initMcpServer(data: McpServerData): Promise<void> {
   process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
 
   // Temporarily store data in a global context for access from _core functions
-  global.__MCP_PROJECT_DATA__ = data;
+  global.__MCP_PROJECT_DATA__ = wrapProjectDataWithDebug(data);
 
   const { transportType } = appConfig.mcp;
 

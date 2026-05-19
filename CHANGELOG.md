@@ -5,6 +5,29 @@ All notable changes to `fa-mcp-sdk` are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.122]
+
+### Added
+
+- **Built-in MCP debug switches.** Four independent `af-tools-ts` `Debug()` categories trace every MCP channel; both HTTP and STDIO transports route through the same hooks so output is transport-agnostic.
+  - `DEBUG=mcp:tool` — `tools/call` request (name + arguments) and response (text or JSON). Wired up in `init-mcp-server.ts` via a `toolHandler` wrapper so it intercepts the user-supplied handler once and covers every transport.
+  - `DEBUG=mcp:resource` — `resources/list` and `resources/read` request/response in `src/core/mcp/resources.ts`.
+  - `DEBUG=mcp:prompt` — `prompts/list` and `prompts/get` request/response in `src/core/mcp/prompts.ts`.
+  - `DEBUG=mcp:notification` — every incoming `notifications/*` (method + params) in `src/core/web/server-http.ts`.
+  - `DEBUG=mcp:*` enables all four at once.
+- New exports from `fa-mcp-sdk`: `debugMcpTool`, `debugMcpResource`, `debugMcpPrompt`, `debugMcpNotification` (and the pre-existing `debugTokenAuth`), so handlers can guard custom debug output with `if (debugMcpTool.enabled) { ... }`.
+- `src/template/tools/handle-tool-call.ts` now demonstrates the `if (debugMcpTool.enabled)` pattern for per-handler tracing inside user code.
+
+### Changed
+
+- **Agent Tester UI redesign (commit `ff8916e`).** The left sidebar that held connection, model, agent-prompt and custom-prompt panels has been removed; all of those controls now live in a Settings modal opened by a gear button (`#settingsBtn`, `data-testid="at-settings-btn"`) in the header. The MCP Server URL field, transport selector and a new combined Connect/Disconnect button (`#connectionToggleBtn`, `data-testid="at-connect-btn"`) sit directly in the header, along with the tab bar (Chat / Tool Tester) — the chat area now uses the full viewport width. The dedicated `Connect` button, `sidebar`/`sidebarToggleMobile` markup and their JS handlers (`toggleSidebar`) are gone; the new flow is `openSettingsModal()` / `closeSettingsModal()` (Esc + backdrop click close it) and a single submit handler on `mcpConnectionForm` that calls `disconnectServer()` when already connected. The `Clear Chat` and default-format selector were marked `.chat-only` so they hide on the Tool Tester tab. `styles.css` was rewritten to support the new header layout and modal styling.
+- Minor refactor in `src/core/mcp/mcp-apps.ts`: `getUiCapability()` now uses `isObject()` from `utils` instead of an inline `typeof === 'object'` check (same semantics, consistent with the rest of the codebase). `src/core/index.ts` re-orders the `appConfig` / `getProjectData` / `getSafeAppConfig` export block ahead of the MCP Apps helpers — purely cosmetic.
+
+### Documentation
+
+- New "MCP Debug Output (`DEBUG=mcp:*`)" section in `cli-template/FA-MCP-SDK-DOC/06-utilities.md` describes each switch, the STDIO caveat (`stdout` is the JSON-RPC framing channel — Debug writes there too), and how to add project-specific `Debug()` categories.
+- Index file `cli-template/FA-MCP-SDK-DOC/00-FA-MCP-SDK-index.md` lists the new exports and the row pointer for `06-utilities.md` now mentions request tracing.
+
 ## [0.4.112] - 2026-05-18
 
 ### Added
