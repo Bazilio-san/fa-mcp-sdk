@@ -18,8 +18,9 @@ import { IClientCapabilities, IGetPromptRequest } from '../_types_/types.js';
 import { createAgentTesterRouter } from '../agent-tester/agent-tester-router.js';
 import { validateAdminAuthConfig } from '../auth/admin-auth.js';
 import { createAgentTesterSessionMW } from '../auth/agent-tester-auth.js';
-import { generateToken, MIN_ENCRYPT_KEY_LENGTH } from '../auth/jwt.js';
+import { checkJwtToken, generateToken, MIN_ENCRYPT_KEY_LENGTH } from '../auth/jwt.js';
 import { createAuthMW } from '../auth/middleware.js';
+import { checkPermanentToken } from '../auth/permanent.js';
 import { appConfig, getProjectData } from '../bootstrap/init-config.js';
 import { debugMcpNotification } from '../debug.js';
 import { getMainDBConnectionStatus } from '../db/pg-db.js';
@@ -147,6 +148,33 @@ export async function startHttpServer(): Promise<void> {
     }
     res.json(health);
   });
+
+  // Token check endpoint: GET /ct?t=<token> or POST /ct {"t": "<token>"}
+  // Returns { success, type: 'permanent' | 'JWT', payload? } or { success: false, error }
+  const handleTokenCheck = (req: express.Request, res: express.Response) => {
+    const raw = req.method === 'GET' ? req.query.t : req.body?.t;
+    const token = typeof raw === 'string' ? raw.trim() : '';
+    if (!token) {
+      return res.status(400).json({ success: false, error: 'Token not provided. Pass via "t" query/body parameter' });
+    }
+
+    const { errorReason: permError } = checkPermanentToken(token);
+    if (!permError) {
+      return res.json({ success: true, type: 'permanent' });
+    }
+
+    const xff = req.headers['x-forwarded-for'];
+    const xffStr = (Array.isArray(xff) ? (xff[0] ?? '') : (xff ?? '')).split(',').shift() ?? '';
+    const clientIp = req.ip ?? (xffStr.trim() || (req.socket?.remoteAddress ?? ''));
+    const jwtResult = checkJwtToken({ token, clientIp });
+    if (!jwtResult.errorReason) {
+      return res.json({ success: true, type: 'JWT', payload: jwtResult.payload });
+    }
+
+    return res.status(401).json({ success: false, error: jwtResult.errorReason });
+  };
+  app.get('/ct', handleTokenCheck);
+  app.post('/ct', handleTokenCheck);
 
   // Public endpoint: returns used HTTP headers configured in the template (optional)
   app.get('/used-http-headers', (req, res) => {
@@ -662,6 +690,7 @@ export async function startHttpServer(): Promise<void> {
     const availableEndpoints: any = {
       home: 'GET /',
       health: 'GET /health',
+      checkToken: 'GET /ct?t=<token>, POST /ct',
       sse: 'GET /sse, POST /sse',
       messages: 'POST /messages',
       mcp: 'POST /mcp',
