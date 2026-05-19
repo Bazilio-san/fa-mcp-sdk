@@ -128,7 +128,7 @@ Detailed fa-mcp-sdk docs are in `FA-MCP-SDK-DOC/`:
 | `05-ad-authorization.md` | AD group authorization, AD config |
 | `06-utilities.md` | Error handling, logging, Consul |
 | `07-testing-and-operations.md` | Test clients (STDIO, HTTP, SSE, Streamable HTTP) |
-| `08-agent-tester-and-headless-api.md` | Agent Tester, Headless API, structured logging, automated testing |
+| `08-agent-tester-and-headless-api.md` | Agent Tester, Headless API, structured logging, automated testing, MCP Apps mode (capability negotiation, `appCalls[]`, widget rendering, App Inspector) |
 | `09-database.md` | PostgreSQL sugar layer (`queryMAIN`, `execMAIN`, upserts, `mergeByBatch`), `pgvector`, secondary DBs |
 | `10-mcp-apps.md` | Building / extending MCP Apps (UI-augmented tools) — protocol contract, SDK surface, patterns, pitfalls |
 

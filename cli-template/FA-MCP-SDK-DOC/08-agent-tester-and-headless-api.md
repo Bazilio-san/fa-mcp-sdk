@@ -309,6 +309,7 @@ Only `message` is required. `mcpConfig` is required for tool calls.
 | `agentPrompt` | no | Agent prompt to send to the LLM as the system prompt. When provided, **replaces** the MCP server's `agent_prompt`. When omitted, the MCP server's `agent_prompt` is used (if available), otherwise a built-in default |
 | `customPrompt` | no | Additional instructions appended after `agentPrompt`. Use for per-request modifiers without replacing the main prompt |
 | `modelConfig` | no | LLM model settings (model name, temperature, maxTokens, maxTurns) |
+| `appMode` | no | Boolean. When `true`, advertises MCP Apps UI capability on the MCP `initialize` handshake (so the server returns UI-augmented tool variants), appends an MCP-Apps-aware system prompt, and records the would-be-rendered UI resource for each tool call in `trace.turns[].app_calls[]`. Default `false` — text-only behavior. See [MCP Apps Mode](#mcp-apps-mode) |
 
 #### Brief Response (default)
 
@@ -420,6 +421,266 @@ Compare `system_prompt_sent` and agent responses between variations to find the 
 ### Sessions
 
 The headless API shares sessions with the chat UI. To start a fresh conversation, omit `sessionId`. To continue an existing conversation, pass `sessionId` from a previous response.
+
+## MCP Apps Mode
+
+Agent Tester doubles as a developer-grade MCP Apps host. When activated, it advertises UI capability
+on the MCP `initialize` handshake so the connected server can branch between text-only and
+UI-augmented tool variants, renders returned UI resources inside sandboxed iframes alongside chat
+messages, and exposes the same wire-level events to headless tests. The mode is **fully optional**
+and orthogonal to existing features — when off, Agent Tester behaves exactly as before.
+
+### Toggling MCP Apps mode
+
+The header carries a global `Apps` checkbox (test-id `at-app-mode-toggle`) visible on every tab.
+Toggling it:
+
+1. Persists the choice in `localStorage['agentTesterAppMode']`.
+2. Reconnects the MCP client with the new capability set. The capability sent on `initialize` is:
+   ```json
+   { "capabilities": { "extensions": { "io.modelcontextprotocol/ui": { "mimeTypes": ["text/html;profile=mcp-app"] } } } }
+   ```
+3. Clears all currently mounted widget iframes (their capability context just changed).
+4. Updates the Tool Tester dropdown — tools with `_meta.ui.resourceUri` get a 🖼 marker.
+
+The same `appMode: true` flag travels through the request body of `POST /api/chat/test`, so
+headless tests can exercise both transports of the same tool from a single suite.
+
+### Capability negotiation
+
+Servers MUST gate UI-only behavior on `getUiCapability(clientCapabilities)` per the MCP Apps spec
+(`fa-mcp-sdk` re-exports `getUiCapability`, `hostSupportsMcpApps`, `MCP_APPS_EXTENSION_ID`,
+`MCP_APPS_RESOURCE_MIME_TYPE` — see [10-mcp-apps.md](10-mcp-apps.md) §6.1.1). With Agent Tester:
+
+| Toggle state | Sent on `initialize` | Server expected to |
+|---|---|---|
+| OFF (default) | no `extensions["io.modelcontextprotocol/ui"]` | return text-only `content[]`, ignore `_meta.ui.*` |
+| ON | `extensions["io.modelcontextprotocol/ui"]: { mimeTypes: ["text/html;profile=mcp-app"] }` | return text fallback **and** UI resource (embedded `content[]` entry or via tool's `_meta.ui.resourceUri`) |
+
+Connection caching in the agent-tester service keys on `appMode`, so flipping the toggle always
+forces a fresh `Client` — old text-only handles are never reused for an app-mode session.
+
+### `appCalls[]` in `/api/chat/message` responses
+
+When `appMode` is on, every tool invocation made during the turn produces an `appCalls[]` entry on
+the chat response. Each entry pairs the OpenAI `tool_call_id` with the **untruncated**
+`CallToolResult` and, when available, the UI resource the host would render:
+
+```json
+{
+  "id": "msg-…",
+  "message": "Here are the results — see the chart below.",
+  "sessionId": "abc",
+  "metadata": { "response_time": 1842, "tools_used": ["get_weather"] },
+  "appCalls": [
+    {
+      "callId": "call_abc123",
+      "toolName": "get_weather",
+      "arguments": { "location": "London" },
+      "result": { "content": [{ "type": "text", "text": "{...}" }], "structuredContent": { /* ... */ } },
+      "uiResource": {
+        "uri": "ui://weather/view.html",
+        "mimeType": "text/html;profile=mcp-app",
+        "text": "<!DOCTYPE html>...",
+        "meta": { "csp": { "connectDomains": ["https://api.openweathermap.org"] }, "prefersBorder": true }
+      }
+    }
+  ]
+}
+```
+
+The LLM context still receives the truncated tool result (the standard `agentTester.modelConfig
+.toolResultLimitChars` truncation continues to apply); `appCalls[]` carries the full payload for
+the UI bridge so the widget sees what the server actually returned.
+
+Two extraction paths are supported in priority order:
+
+1. **Embedded resource** — a `content[]` block of type `resource` whose `mimeType` is
+   `text/html;profile=mcp-app`. Used as-is.
+2. **`_meta.ui.resourceUri`** — when the tool definition (preserved via `tools/list`) carries this
+   field, Agent Tester issues `resources/read` against the URI and uses the returned
+   `mcp-app`-typed content.
+
+When neither path yields a UI resource, `uiResource` is omitted but the `appCall` entry is still
+present — useful for tests that assert "this app-mode call did **not** return a widget".
+
+### `app_calls[]` in `/api/chat/test` traces
+
+The headless API exposes the same information on `trace.turns[].app_calls[]`:
+
+```json
+{
+  "trace": {
+    "turns": [
+      {
+        "turn": 1,
+        "tool_calls": [{ "name": "get_weather", "arguments": { "location": "London" } }],
+        "tool_results": [{ "name": "get_weather", "result": { "...": "..." }, "duration_ms": 230 }],
+        "app_calls": [
+          {
+            "callId": "call_abc123",
+            "toolName": "get_weather",
+            "arguments": { "location": "London" },
+            "result": { "...": "full untruncated result..." },
+            "uiResource": { "uri": "ui://weather/view.html", "mimeType": "text/html;profile=mcp-app", "text": "<!DOCTYPE html>..." }
+          }
+        ]
+      }
+    ]
+  }
+}
+```
+
+Headless never mounts an iframe — `app_calls[]` is the **trace** of what would have been
+delivered to a real host. This lets test authors assert that a tool correctly ships both
+representations (text and UI) without needing a browser.
+
+### Writing automated tests for both modes
+
+Pattern: assert that a single tool behaves correctly under both capability sets in one suite. The
+text-only branch verifies fallback contract; the app-mode branch verifies the UI delivery path.
+
+```typescript
+import { describe, expect, test } from '@jest/globals';
+
+const baseUrl = process.env.MCP_BASE_URL ?? 'http://localhost:9876';
+const mcpConfig = { url: `${baseUrl}/mcp`, transport: 'http' as const };
+
+async function run(message: string, appMode: boolean) {
+  const r = await fetch(`${baseUrl}/agent-tester/api/chat/test`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ message, mcpConfig, appMode }),
+  });
+  return r.json();
+}
+
+describe('get_weather honors host capabilities', () => {
+  test('text-only host gets text response', async () => {
+    const r = await run('What is the weather in London?', false);
+    const firstTool = r.trace.turns[0].tool_results[0];
+    expect(firstTool.result.content[0].type).toBe('text');
+    expect(r.trace.turns[0].app_calls).toBeUndefined();
+  });
+
+  test('app-mode host gets UI resource', async () => {
+    const r = await run('What is the weather in London?', true);
+    const apps = r.trace.turns[0].app_calls;
+    expect(apps).toHaveLength(1);
+    expect(apps[0].uiResource.mimeType).toBe('text/html;profile=mcp-app');
+    expect(apps[0].uiResource.text).toMatch(/<html|<body|<div/);
+  });
+
+  test('text fallback still present in app-mode (spec compliance)', async () => {
+    // Per MCP Apps spec, content[] MUST contain a meaningful text representation
+    // even when UI is supported. This catches servers that drop text in app-mode.
+    const r = await run('What is the weather in London?', true);
+    const fullResult = r.trace.turns[0].app_calls[0].result;
+    expect(fullResult.content?.some((c: any) => c.type === 'text' && c.text)).toBe(true);
+  });
+});
+```
+
+Pair this with `data-testid`-based Playwright tests that mount the actual iframe (see
+[UI Test Selectors](#ui-test-selectors-data-testid) below) for full end-to-end coverage.
+
+### `uiResource` in `/api/mcp/call-tool` (Tool Tester support)
+
+When the active MCP session is in app-mode, the direct invocation endpoint also extracts and
+returns the UI resource:
+
+```
+POST /agent-tester/api/mcp/call-tool
+```
+
+Request:
+```json
+{ "serverName": "my-mcp", "toolName": "get_weather", "parameters": { "location": "London" } }
+```
+
+Response (with appMode active on the connected server):
+```json
+{
+  "success": true,
+  "durationMs": 230,
+  "result": { "content": [...], "structuredContent": {...} },
+  "uiResource": { "uri": "ui://...", "mimeType": "text/html;profile=mcp-app", "text": "<!DOCTYPE...", "meta": {...} }
+}
+```
+
+The Tool Tester tab uses this to render a split-view: raw JSON on the left, mounted widget on the
+right. The widget runs the full handshake (`ui/initialize` → `tool-input` → `tool-result`) the
+same way it would inside a chat message, so you can iterate on widget HTML without a chat agent
+in the loop.
+
+### `GET /api/mcp/ui-resources`
+
+Lists all UI resources advertised by a connected server. Used by the App Inspector tab; available
+for headless inventory checks.
+
+```
+GET /agent-tester/api/mcp/ui-resources?serverName=<name>
+```
+
+Response:
+```json
+{
+  "resources": [
+    {
+      "uri": "ui://weather/view.html",
+      "name": "Weather View",
+      "mimeType": "text/html;profile=mcp-app",
+      "description": "Interactive weather display"
+    }
+  ]
+}
+```
+
+Filter logic: keeps resources whose `mimeType` is `text/html;profile=mcp-app` **or** whose `uri`
+starts with `ui://`. Returns `404` when the named server is not connected.
+
+### App Inspector tab
+
+A third tab (test-id `at-tab-inspector`) appears next to Chat / Tool Tester. It surfaces:
+
+- **App Tools** — every tool from the connected server with a `🖼 UI` flag for those that carry
+  `_meta.ui.resourceUri`. Each app-tool gets a "Launch widget" button that runs the tool with an
+  arguments JSON (prompted) and mounts the returned widget in a modal — useful for iterating on a
+  widget without going through chat or Tool Tester.
+- **UI Resources** — output of `GET /api/mcp/ui-resources` for the connected server.
+- **UI Message Log** — live capture of every JSON-RPC frame passing through the iframe bridges
+  (host→view, view→host, View-initiated tool calls, log notifications). Filterable by direction.
+  Last 500 entries kept in memory.
+
+The Inspector is the recommended surface for debugging widget protocol issues — handshake
+failures, missing `tool-input` notifications, unhandled View requests all surface here.
+
+### Sandbox & security model (developer-mode trade-offs)
+
+Agent Tester implements the **desktop-style** host pattern from the spec (§6.1 of the original
+proposal): a single iframe on the same origin as the host page, with CSP applied via
+`<meta http-equiv="Content-Security-Policy">` inside `srcdoc`. The directive list is built from
+`_meta.ui.csp` (`connectDomains`, `resourceDomains`, `frameDomains`, `baseUriDomains`) — same
+mapping as the canonical web hosts. Permission Policy comes from `_meta.ui.permissions` and is
+attached to the iframe's `allow=` attribute.
+
+Notable developer-mode trade-offs (accepted because this is a dev tool, not a production host):
+
+- **Meta-CSP is theoretically bypassable** (a malicious View could try to inject another `<meta>`
+  before the host's, though Agent Tester injects the CSP meta as the first child of `<head>` so
+  this is unlikely in practice). Production hosts SHOULD use HTTP headers from a separate
+  sandbox origin — see the spec digest for guidance.
+- **View → Host `tools/call`** is proxied to the agent-tester's own `/api/mcp/call-tool` endpoint
+  using whatever auth the user already configured. The first such call within a session shows a
+  confirm modal ("Widget for tool X wants to call tool Y — Allow? / Deny?") with an opt-in
+  "don't ask again in this session" checkbox (stored in `sessionStorage`).
+- **Live-widget cap**: up to 5 mounted iframes at once. Older widgets demote to a "poster" with a
+  reload hint to bound memory in long chat sessions.
+
+### Configuration
+
+No new top-level config keys. App-mode behavior is purely runtime — controlled by the user toggle
+or the `appMode` request flag. The existing `agentTester.*` options still apply.
 
 ## Structured JSON Logging (`agentTester.logJson`)
 
@@ -605,10 +866,33 @@ The sidebar shows only the current model name (read-only) and a gear button. All
 | testid | Element |
 |---|---|
 | `at-sidebar-toggle-mobile` | Mobile sidebar toggle |
+| `at-tab-chat` / `at-tab-tool-tester` / `at-tab-inspector` | Tab switcher buttons (Chat / Tool Tester / App Inspector) |
+| `at-app-mode-toggle` | MCP Apps mode checkbox — toggles app-mode capability and widget rendering |
+| `at-app-mode-toggle-label` | Wrapping `<label>` of the checkbox (carries `is-disabled` class when transport is unsupported) |
 | `at-default-format` | Default display format `<select>` (HTML / MD) |
 | `at-theme-toggle` | Light/dark theme toggle |
 | `at-clear-chat` | Clear chat button |
 | `at-logout-btn` | Logout button (visible only when `useAuth` is true) |
+
+**Tool Tester — MCP Apps split-view (only when app-mode is on AND the response carries a `uiResource`)**
+
+| testid | Element |
+|---|---|
+| `at-tt-ui-panel` | Third panel mounted next to Request/Response when a UI widget is rendered |
+
+**App Inspector tab**
+
+| testid | Element |
+|---|---|
+| `at-tab-pane-inspector` | Inspector pane container |
+| `at-inspector-tools-panel` | Left column: tools + resources |
+| `at-inspector-tools-list` | App Tools list container; each tool item carries `has-ui` class when it ships a UI resource |
+| `at-inspector-resources-list` | UI Resources list container |
+| `at-inspector-refresh` | Refresh button (re-queries `/api/mcp/ui-resources` and re-renders tools) |
+| `at-inspector-log-panel` | Right column: live `ui/*` JSON-RPC log |
+| `at-inspector-log` | Log `<pre>` (newest entry at bottom; capped at 500) |
+| `at-inspector-log-filter` | Direction filter `<select>` (All / view→host / host→view / view→host tool-call) |
+| `at-inspector-log-clear` | Clear log button |
 
 **Chat area**
 

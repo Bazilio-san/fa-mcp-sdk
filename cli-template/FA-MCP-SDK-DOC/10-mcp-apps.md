@@ -29,6 +29,21 @@ hosts (MCP-UI vs. OpenAI Apps SDK fragmentation), (b) inconsistent security mode
 content, and (c) inability to ship rich interactive surfaces (dashboards, players, forms, maps)
 through the protocol.
 
+### Hosts that ship with this SDK
+
+`fa-mcp-sdk` includes **Agent Tester** (`/agent-tester`) — a developer-grade MCP Apps host. Toggle
+the `Apps` checkbox in the header to advertise UI capability on the MCP `initialize` handshake;
+returned widgets render inline under each chat message, Tool Tester gains a split-view raw/UI
+panel, and a dedicated **App Inspector** tab surfaces every `ui/*` JSON-RPC frame for debugging.
+The same `appMode: true` flag is accepted on the headless `POST /api/chat/test` endpoint so
+automated tests can assert both text-only and UI-augmented behaviors of the same tool in one
+suite. See [08-agent-tester-and-headless-api.md](08-agent-tester-and-headless-api.md) → "MCP Apps
+Mode" for the full surface (capability negotiation, `appCalls[]` / `app_calls[]`, the
+`/api/mcp/ui-resources` endpoint, security trade-offs of desktop-style hosting).
+
+This is intentionally a **dev-tool host** — for production MCP App rendering use Claude Desktop,
+Claude.ai, or another spec-compliant host listed below.
+
 ## 3. Architecture
 
 Three entities cooperate over two transports:

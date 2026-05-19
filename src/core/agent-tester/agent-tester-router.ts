@@ -20,11 +20,7 @@ import { logger as lgr } from '../logger.js';
 
 import { TesterAgentService } from './services/TesterAgentService.js';
 import { TesterMcpClientService } from './services/TesterMcpClientService.js';
-import {
-  findEmbeddedAppResource,
-  getToolUiResourceUri,
-  readUiResource,
-} from './services/mcp-apps-utils.js';
+import { findEmbeddedAppResource, getToolUiResourceUri, readUiResource } from './services/mcp-apps-utils.js';
 import { ITesterChatRequest, TesterMcpConfig, TesterMcpConnectionRequest, ITesterMcpTool } from './types.js';
 
 const __filename = fileURLToPath(import.meta.url);

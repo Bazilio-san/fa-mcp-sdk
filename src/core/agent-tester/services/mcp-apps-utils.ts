@@ -49,9 +49,7 @@ export async function readUiResource(client: Client, uri: string): Promise<IMcpA
   try {
     const resource = await (client as any).readResource({ uri });
     const contents = Array.isArray(resource?.contents) ? resource.contents : [];
-    const ui = contents.find(
-      (c: any) => c && typeof c.text === 'string' && c.mimeType === MCP_APPS_RESOURCE_MIME_TYPE,
-    );
+    const ui = contents.find((c: any) => c && typeof c.text === 'string' && c.mimeType === MCP_APPS_RESOURCE_MIME_TYPE);
     if (ui) {
       const out: IMcpAppUiResource = {
         uri: typeof ui.uri === 'string' ? ui.uri : uri,

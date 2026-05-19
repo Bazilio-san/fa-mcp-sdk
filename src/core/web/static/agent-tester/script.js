@@ -783,7 +783,8 @@ class McpAgentTester {
         onViewCallTool: (params, ac) => this._proxyViewCallTool(params, ac),
         onLog: (params, ac) => this._logUiMessage('log', { method: 'notifications/message', params }, ac),
         onViewMessage: (params, ac) => this._logUiMessage('msg', { method: 'ui/message', params }, ac),
-        onUpdateModelContext: (params, ac) => this._logUiMessage('ctx', { method: 'ui/update-model-context', params }, ac),
+        onUpdateModelContext: (params, ac) =>
+          this._logUiMessage('ctx', { method: 'ui/update-model-context', params }, ac),
       },
     );
     bridge.mount(body);
@@ -818,7 +819,8 @@ class McpAgentTester {
         oldest.container.classList.add('is-poster');
         const body = oldest.container.querySelector('.app-widget-body');
         if (body) {
-          body.innerHTML = '<div class="app-widget-poster">Widget unloaded (live-widget cap reached). Reload page to re-render.</div>';
+          body.innerHTML =
+            '<div class="app-widget-poster">Widget unloaded (live-widget cap reached). Reload page to re-render.</div>';
         }
       }
     }
@@ -1160,13 +1162,17 @@ class McpAgentTester {
   }
 
   _escapeHtml(s) {
-    return String(s).replace(/[&<>"']/g, (c) => ({
-      '&': '&amp;',
-      '<': '&lt;',
-      '>': '&gt;',
-      '"': '&quot;',
-      "'": '&#39;',
-    })[c]);
+    return String(s).replace(
+      /[&<>"']/g,
+      (c) =>
+        ({
+          '&': '&amp;',
+          '<': '&lt;',
+          '>': '&gt;',
+          '"': '&quot;',
+          "'": '&#39;',
+        })[c],
+    );
   }
 
   /**
