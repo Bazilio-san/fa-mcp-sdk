@@ -5,6 +5,27 @@ All notable changes to `fa-mcp-sdk` are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.139] - 2026-05-20
+
+### Added
+
+- **Agent Tester "Remember me" login.** Both authentication forms (token and basic) gained a "Remember me on this
+  device" checkbox (checked by default). When enabled, credentials are persisted to `localStorage` under
+  `agentTesterAuthCreds` and reused for a silent re-login on subsequent visits, bypassing the login overlay entirely
+  while the credentials remain valid. On failed silent re-login the saved entry is cleared and the overlay is shown
+  with fields pre-filled from the last saved values (the **basic** tab is auto-selected when only `username`/`password`
+  were saved). Logout and any authentication-failure response also clear the saved credentials. New private API on
+  `AuthManager`: `_loadSavedCreds`, `_saveCreds`, `_clearSavedCreds`, plus `silent` and `remember` options on
+  `_login(credentials, opts)`.
+
+### Changed
+
+- **Agent Tester settings modal — explicit OK button.** The modal now has a footer with a primary **OK** button
+  (`#settingsModalOk`) that closes the dialog. The previous click-outside-to-close behavior was removed to prevent
+  accidental dismissal while editing settings; **Escape** still closes the modal.
+- **Agent Tester logout button styling.** `#logoutBtn` is rendered in the error color (`var(--error)`) and uses the
+  error background on hover, making the destructive action visually distinct from neighboring toolbar buttons.
+
 ## [0.4.131] - 2026-05-19
 
 ### Added

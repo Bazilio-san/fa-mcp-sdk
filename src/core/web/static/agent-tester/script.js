@@ -38,6 +38,8 @@ function apiFetch(url, options = {}) {
  * Auth manager — handles login overlay when agentTester.useAuth is enabled.
  */
 class AuthManager {
+  static LS_KEY = 'agentTesterAuthCreds';
+
   constructor() {
     this._authenticated = false;
     this._authRequired = false;
@@ -61,7 +63,13 @@ class AuthManager {
         return true;
       }
 
-      this._showLoginOverlay(status.methods || []);
+      // Try silent re-login with saved credentials before showing overlay
+      const saved = this._loadSavedCreds();
+      if (saved && (await this._login(saved, { silent: true }))) {
+        return true;
+      }
+
+      this._showLoginOverlay(status.methods || [], saved);
       return false; // block app init until authenticated
     } catch (e) {
       console.warn('Auth status check failed, proceeding without auth:', e);
@@ -69,7 +77,39 @@ class AuthManager {
     }
   }
 
-  _showLoginOverlay(methods) {
+  _loadSavedCreds() {
+    try {
+      const raw = localStorage.getItem(AuthManager.LS_KEY);
+      if (!raw) {
+        return null;
+      }
+      const obj = JSON.parse(raw);
+      if (obj && (obj.token || (obj.username && obj.password))) {
+        return obj;
+      }
+    } catch {
+      /* ignore */
+    }
+    return null;
+  }
+
+  _saveCreds(creds) {
+    try {
+      localStorage.setItem(AuthManager.LS_KEY, JSON.stringify(creds));
+    } catch {
+      /* ignore */
+    }
+  }
+
+  _clearSavedCreds() {
+    try {
+      localStorage.removeItem(AuthManager.LS_KEY);
+    } catch {
+      /* ignore */
+    }
+  }
+
+  _showLoginOverlay(methods, saved) {
     const overlay = document.getElementById('authOverlay');
     const appEl = document.querySelector('.app');
     overlay.style.display = 'flex';
@@ -82,10 +122,30 @@ class AuthManager {
     const basicForm = document.getElementById('authBasicForm');
     const tabs = document.getElementById('authTabs');
 
+    // Pre-fill from saved credentials (if any)
+    if (saved?.token) {
+      document.getElementById('authToken').value = saved.token;
+    }
+    if (saved?.username) {
+      document.getElementById('authUsername').value = saved.username;
+    }
+    if (saved?.password) {
+      document.getElementById('authPassword').value = saved.password;
+    }
+
+    // If saved creds match a single available method, switch to that tab.
+    const preferBasic = saved?.username && hasBasic && !saved?.token;
+
     if (hasToken && hasBasic) {
       tabs.style.display = 'flex';
-      tokenForm.style.display = 'flex';
-      basicForm.style.display = 'none';
+      if (preferBasic) {
+        tokenForm.style.display = 'none';
+        basicForm.style.display = 'flex';
+        document.querySelectorAll('.auth-tab').forEach((t) => t.classList.toggle('active', t.dataset.tab === 'basic'));
+      } else {
+        tokenForm.style.display = 'flex';
+        basicForm.style.display = 'none';
+      }
       this._bindTabs();
     } else if (hasBasic) {
       tokenForm.style.display = 'none';
@@ -98,8 +158,9 @@ class AuthManager {
     tokenForm.addEventListener('submit', (e) => {
       e.preventDefault();
       const token = document.getElementById('authToken').value.trim();
+      const remember = document.getElementById('authTokenRemember').checked;
       if (token) {
-        this._login({ token });
+        this._login({ token }, { remember });
       }
     });
 
@@ -107,8 +168,9 @@ class AuthManager {
       e.preventDefault();
       const username = document.getElementById('authUsername').value.trim();
       const password = document.getElementById('authPassword').value;
+      const remember = document.getElementById('authBasicRemember').checked;
       if (username && password) {
-        this._login({ username, password });
+        this._login({ username, password }, { remember });
       }
     });
   }
@@ -134,8 +196,17 @@ class AuthManager {
     });
   }
 
-  async _login(credentials) {
-    this._hideError();
+  /**
+   * Attempt login. Options:
+   *   - silent:   on failure, suppress error UI and return false (used for auto-login)
+   *   - remember: on success, persist credentials to localStorage; on omission, leave LS untouched
+   *
+   * Returns true on success, false on failure.
+   */
+  async _login(credentials, { silent = false, remember } = {}) {
+    if (!silent) {
+      this._hideError();
+    }
     try {
       const resp = await apiFetch(`${API_BASE}/api/auth/login`, {
         method: 'POST',
@@ -144,12 +215,22 @@ class AuthManager {
       });
 
       if (!resp.ok) {
-        const err = await resp.json();
+        if (silent) {
+          this._clearSavedCreds();
+          return false;
+        }
+        const err = await resp.json().catch(() => ({}));
         this._showError(err.error || 'Authentication failed');
-        return;
+        return false;
       }
 
       this._authenticated = true;
+
+      if (remember === true) {
+        this._saveCreds(credentials);
+      } else if (remember === false) {
+        this._clearSavedCreds();
+      }
 
       // Hide overlay, show app
       document.getElementById('authOverlay').style.display = 'none';
@@ -158,8 +239,12 @@ class AuthManager {
 
       // Initialize the main app after successful login
       window.mcpAgentTester = new McpAgentTester();
+      return true;
     } catch (_e) {
-      this._showError('Connection error');
+      if (!silent) {
+        this._showError('Connection error');
+      }
+      return false;
     }
   }
 
@@ -172,6 +257,7 @@ class AuthManager {
   }
 
   async _logout() {
+    this._clearSavedCreds();
     try {
       await apiFetch(`${API_BASE}/api/auth/logout`, { method: 'POST' });
     } catch {
@@ -1216,6 +1302,7 @@ class McpAgentTester {
     this.settingsModal = document.getElementById('settingsModal');
     this.settingsBtn = document.getElementById('settingsBtn');
     this.settingsModalClose = document.getElementById('settingsModalClose');
+    this.settingsModalOk = document.getElementById('settingsModalOk');
 
     // LLM settings — collapsed view + modal
     this.modelDisplay = document.getElementById('modelDisplay');
@@ -1375,12 +1462,8 @@ class McpAgentTester {
     if (this.settingsModalClose) {
       this.settingsModalClose.addEventListener('click', () => this.closeSettingsModal());
     }
-    if (this.settingsModal) {
-      this.settingsModal.addEventListener('click', (e) => {
-        if (e.target === this.settingsModal) {
-          this.closeSettingsModal();
-        }
-      });
+    if (this.settingsModalOk) {
+      this.settingsModalOk.addEventListener('click', () => this.closeSettingsModal());
     }
     document.addEventListener('keydown', (e) => {
       if (e.key === 'Escape' && this.settingsModal && this.settingsModal.style.display === 'flex') {

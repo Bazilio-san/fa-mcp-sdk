@@ -30,6 +30,10 @@
                     <label for="authToken">Token</label>
                     <input type="password" id="authToken" placeholder="Enter access token" autocomplete="off" data-testid="at-auth-token-input">
                 </div>
+                <label class="auth-remember" data-testid="at-auth-token-remember-label">
+                    <input type="checkbox" id="authTokenRemember" checked data-testid="at-auth-token-remember">
+                    <span>Remember me on this device</span>
+                </label>
                 <button type="submit" class="btn btn-primary auth-submit" data-testid="at-auth-token-submit">
                     <span class="material-icons-round">login</span>
                     Sign In
@@ -45,6 +49,10 @@
                     <label for="authPassword">Password</label>
                     <input type="password" id="authPassword" placeholder="Password" autocomplete="current-password" data-testid="at-auth-password">
                 </div>
+                <label class="auth-remember" data-testid="at-auth-basic-remember-label">
+                    <input type="checkbox" id="authBasicRemember" checked data-testid="at-auth-basic-remember">
+                    <span>Remember me on this device</span>
+                </label>
                 <button type="submit" class="btn btn-primary auth-submit" data-testid="at-auth-basic-submit">
                     <span class="material-icons-round">login</span>
                     Sign In
@@ -362,6 +370,9 @@
                         <textarea id="customPrompt" placeholder="Enter additional custom prompt..." rows="2" data-testid="at-custom-prompt"></textarea>
                     </div>
                 </section>
+            </div>
+            <div class="settings-modal-footer">
+                <button type="button" class="btn btn-primary" id="settingsModalOk" data-testid="at-settings-modal-ok">OK</button>
             </div>
         </div>
     </div>

@@ -521,6 +521,15 @@ body {
   color: var(--text);
 }
 
+#logoutBtn {
+  color: var(--error);
+}
+
+#logoutBtn:hover {
+  background-color: var(--error-bg);
+  color: var(--error);
+}
+
 .btn-danger {
   background: var(--error-bg);
   color: var(--error);
@@ -2117,6 +2126,13 @@ textarea.prompt-modified {
   margin-bottom: 0;
 }
 
+.settings-modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  padding: 12px 20px;
+  border-top: 1px solid var(--border);
+}
+
 /* ============================================
    LLM Settings Modal
    ============================================ */
@@ -2332,6 +2348,24 @@ textarea.prompt-modified {
   outline: none;
   border-color: var(--border-focus);
   box-shadow: 0 0 0 3px var(--primary-glow);
+}
+
+.auth-remember {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+  cursor: pointer;
+  user-select: none;
+}
+
+.auth-remember input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  cursor: pointer;
+  accent-color: var(--primary);
 }
 
 .auth-submit {

@@ -9,7 +9,7 @@
     <node-options value="--dns-result-order=ipv4first --no-node-snapshot" />
     <package-manager value="npm" />
     <envs>
-      <env name="NODE_ENV" value="qqq" />
+      <env name="NODE_ENV_" value="qqq" />
     </envs>
     <method v="2" />
   </configuration>
