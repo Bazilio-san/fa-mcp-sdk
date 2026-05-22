@@ -1,0 +1,135 @@
+stages:
+  - lint
+  - test-build
+  - build-image
+  - deploy
+
+# ── CI: Merge Request checks ──────────────────────────────────────
+
+.node-template: &node-template
+  image: node:22-alpine
+  tags:
+    - docker
+  before_script:
+    - yarn install --frozen-lockfile
+  cache:
+    key:
+      files:
+        - yarn.lock
+    paths:
+      - node_modules/
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+
+lint:
+  <<: *node-template
+  stage: lint
+  script:
+    - yarn lint
+
+test-build:
+  <<: *node-template
+  stage: test-build
+  script:
+    - yarn build
+
+# ── CD: Build Docker Image ────────────────────────────────────────
+
+build-image:
+  stage: build-image
+  image: docker:27
+  services:
+    - docker:27-dind
+  tags:
+    - docker
+  script:
+    - docker compose -f deploy/docker/docker-compose.yml up -d --build --force-recreate app
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "master"'
+      when: manual
+
+# ── CD: Deploy ────────────────────────────────────────────────────
+# Замените <SERVER_TAG> на тег вашего сервера, <BRANCH> на целевую ветку,
+# <DEPLOY_DIR> на путь к проекту на сервере.
+
+# deploy_<instance>:
+#   stage: deploy
+#   tags:
+#     - <SERVER_TAG>
+#   variables:
+#     HOST_PORT: {{port}}
+#   environment:
+#     name: <instance>
+#   script:
+#     - docker compose -f deploy/docker/docker-compose.yml --env-file .env up -d --build --force-recreate app
+#     - |
+#       echo "Waiting for health check..."
+#       for i in $(seq 1 60); do
+#         if docker compose -f deploy/docker/docker-compose.yml exec -T app wget -q -O /dev/null http://localhost:{{port}}/health 2>/dev/null; then
+#           echo "Health check passed after ${i}s"
+#           break
+#         fi
+#         if [ "$i" -eq 60 ]; then
+#           echo "Health check failed after 60s"
+#           docker compose -f deploy/docker/docker-compose.yml logs --tail=50 app
+#           exit 1
+#         fi
+#         sleep 1
+#       done
+#     - docker compose -f deploy/docker/docker-compose.yml logs --tail=50 app
+#   rules:
+#     - if: '$CI_COMMIT_BRANCH == "<BRANCH>"'
+#       when: manual
+
+# stop_<instance>:
+#   stage: deploy
+#   tags:
+#     - <SERVER_TAG>
+#   environment:
+#     name: <instance>
+#   script:
+#     - docker compose -f deploy/docker/docker-compose.yml down
+#   rules:
+#     - if: '$CI_COMMIT_BRANCH == "<BRANCH>"'
+#       when: manual
+
+# restart_<instance>:
+#   stage: deploy
+#   tags:
+#     - <SERVER_TAG>
+#   variables:
+#     HOST_PORT: {{port}}
+#   environment:
+#     name: <instance>
+#   script:
+#     - docker compose -f deploy/docker/docker-compose.yml --env-file .env restart app
+#     - |
+#       echo "Waiting for health check..."
+#       for i in $(seq 1 60); do
+#         if docker compose -f deploy/docker/docker-compose.yml exec -T app wget -q -O /dev/null http://localhost:{{port}}/health 2>/dev/null; then
+#           echo "Health check passed after ${i}s"
+#           break
+#         fi
+#         if [ "$i" -eq 60 ]; then
+#           echo "Health check failed after 60s"
+#           docker compose -f deploy/docker/docker-compose.yml logs --tail=100 app
+#           exit 1
+#         fi
+#         sleep 1
+#       done
+#     - docker compose -f deploy/docker/docker-compose.yml logs --tail=100 app
+#   rules:
+#     - if: '$CI_COMMIT_BRANCH == "<BRANCH>"'
+#       when: manual
+
+# logs_<instance>:
+#   stage: deploy
+#   tags:
+#     - <SERVER_TAG>
+#   environment:
+#     name: <instance>
+#   script:
+#     - docker compose -f deploy/docker/docker-compose.yml logs --tail=100 app
+#   rules:
+#     - if: '$CI_COMMIT_BRANCH == "<BRANCH>"'
+#       when: manual
