@@ -1,0 +1,32 @@
+stages:
+  - lint
+  - test-build
+
+# ── CI: Merge Request checks ──────────────────────────────────────
+
+.node-template: &node-template
+  image: node:22-alpine
+  tags:
+    - docker
+  before_script:
+    - yarn install --frozen-lockfile
+  cache:
+    key:
+      files:
+        - yarn.lock
+    paths:
+      - node_modules/
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+
+lint:
+  <<: *node-template
+  stage: lint
+  script:
+    - yarn lint
+
+test-build:
+  <<: *node-template
+  stage: test-build
+  script:
+    - yarn build
