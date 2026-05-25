@@ -12,3 +12,5 @@
 /db-forest-config.xml
 /OxcSettings.xml
 /OxfmtSettings.xml
+/compiler.xml
+/sqldialects.xml

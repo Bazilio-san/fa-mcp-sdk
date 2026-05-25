@@ -93,3 +93,4 @@ glm.sh
 preferred-language.txt
 /mcp-ext-apps/
 .agents/
+.qwen/

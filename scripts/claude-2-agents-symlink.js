@@ -8,6 +8,9 @@
  *   .claude/skills/          canonical skills storage
  *   .agents/skills -> ../.claude/skills
  *
+ *   .claude/.qwen/           canonical Qwen Code memory/settings
+ *   .qwen -> .claude/.qwen
+ *
  * This script intentionally links ONLY compatible entities.
  * It does NOT link:
  *   - .claude/agents    -> Codex agents use .codex/agents/*.toml
@@ -25,6 +28,12 @@ const LINK_MAPPINGS = [
     name: 'skills',
     source: '.claude/skills',
     link: '.agents/skills',
+    type: 'dir',
+  },
+  {
+    name: 'qwen',
+    source: '.claude/skills',
+    link: '.qwen/skills',
     type: 'dir',
   },
 ];
@@ -314,7 +323,7 @@ function main() {
   }
 
   log('');
-  log('Note: only skills are linked because they are the compatible shared entity.');
+  log('Note: skills are linked because they are the compatible shared entities.');
   log('Do not symlink .claude/agents, .claude/commands, settings, hooks, or MCP config directly.');
 }
 
