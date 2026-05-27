@@ -3,7 +3,7 @@ import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import { createMcpServer } from './create-mcp-server.js';
 
 // Create server instance
-const server = createMcpServer();
+const server = createMcpServer('stdio');
 
 /**
  * Start STDIO server

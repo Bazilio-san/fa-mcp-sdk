@@ -1,20 +1,23 @@
+import { randomUUID } from 'node:crypto';
 import { dirname, join } from 'path';
 import { fileURLToPath } from 'url';
 
 import { SSEServerTransport } from '@modelcontextprotocol/sdk/server/sse.js';
+import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 import {
   CallToolRequestSchema,
   ListToolsRequestSchema,
   ListPromptsRequestSchema,
   ListResourcesRequestSchema,
   ReadResourceRequestSchema,
+  isInitializeRequest,
 } from '@modelcontextprotocol/sdk/types.js';
 import chalk from 'chalk';
 import express from 'express';
 import helmet from 'helmet';
 import { RateLimiterMemory } from 'rate-limiter-flexible';
 
-import { IClientCapabilities, IGetPromptRequest } from '../_types_/types.js';
+import { IClientCapabilities } from '../_types_/types.js';
 import { createAgentTesterRouter } from '../agent-tester/agent-tester-router.js';
 import { validateAdminAuthConfig } from '../auth/admin-auth.js';
 import { createAgentTesterSessionMW } from '../auth/agent-tester-auth.js';
@@ -22,13 +25,11 @@ import { checkJwtToken, generateToken, MIN_ENCRYPT_KEY_LENGTH } from '../auth/jw
 import { createAuthMW } from '../auth/middleware.js';
 import { checkPermanentToken } from '../auth/permanent.js';
 import { appConfig, getProjectData } from '../bootstrap/init-config.js';
-import { debugMcpNotification } from '../debug.js';
 import { getMainDBConnectionStatus } from '../db/pg-db.js';
-import { BaseMcpError } from '../errors/BaseMcpError.js';
 import { createJsonRpcErrorResponse, ServerError, toError, toStr } from '../errors/errors.js';
 import { logger as lgr } from '../logger.js';
 import { createMcpServer } from '../mcp/create-mcp-server.js';
-import { getPrompt, getPromptsList } from '../mcp/prompts.js';
+import { getPromptsList } from '../mcp/prompts.js';
 import { getResource, getResourcesList } from '../mcp/resources.js';
 import { formatRateLimitError, isRateLimitError } from '../utils/rate-limit.js';
 import { getTools, normalizeHeaders } from '../utils/utils.js';
@@ -338,7 +339,7 @@ export async function startHttpServer(): Promise<void> {
     preservedHeaders: Record<string, string>,
     mcpAuthPayload?: { user: string; [key: string]: any },
   ) {
-    const sseServer = createMcpServer();
+    const sseServer = createMcpServer('sse');
 
     const sseCtx = () => {
       const caps = sseServer.getClientCapabilities() as IClientCapabilities | undefined;
@@ -515,174 +516,131 @@ export async function startHttpServer(): Promise<void> {
     }
   });
 
-  // Streamable HTTP is stateless per request — there is no per-connection MCP server holding
-  // capabilities after the handshake. We instead key the capabilities reported on `initialize`
-  // by the `Mcp-Session-Id` header the client SHOULD send on subsequent requests. When the
-  // header is missing (e.g. one-shot clients that don't observe sessions), `clientCapabilities`
-  // stays `undefined` and handlers MUST fall back to text-only output.
-  const httpClientCapabilitiesBySession = new Map<string, IClientCapabilities>();
+  // Streamable HTTP runs **stateful**: each MCP session owns a `StreamableHTTPServerTransport`
+  // bound to its own `Server` instance (so `getClientCapabilities()` works like on stdio). The
+  // transport is created on `initialize`, keyed by the server-generated `Mcp-Session-Id`, and the
+  // SDK transport handles protocol-version negotiation, error codes, notifications (202) and the
+  // GET-SSE / DELETE-teardown semantics for us.
   const HTTP_SESSION_HEADER = 'mcp-session-id';
-  // Soft cap to bound memory; oldest session entry is evicted (FIFO via Map insertion order).
+  // Soft cap to bound memory; oldest session is evicted (FIFO via Map insertion order).
   const MAX_HTTP_SESSIONS = 4096;
-  const getSessionId = (headers: Record<string, string>): string | undefined => headers[HTTP_SESSION_HEADER];
-  const cacheClientCapabilities = (sessionId: string, capabilities: IClientCapabilities) => {
-    if (httpClientCapabilitiesBySession.size >= MAX_HTTP_SESSIONS) {
-      const oldestKey = httpClientCapabilitiesBySession.keys().next().value;
-      if (oldestKey) {
-        httpClientCapabilitiesBySession.delete(oldestKey);
+  const mcpTransports = new Map<string, StreamableHTTPServerTransport>();
+  const evictOldestSession = (keep: string) => {
+    while (mcpTransports.size > MAX_HTTP_SESSIONS) {
+      const oldest = mcpTransports.keys().next().value;
+      if (!oldest || oldest === keep) {
+        break;
       }
+      const t = mcpTransports.get(oldest);
+      mcpTransports.delete(oldest);
+      void t?.close();
     }
-    httpClientCapabilitiesBySession.set(sessionId, capabilities);
   };
 
-  // POST endpoint for MCP requests
+  const noSessionError = (req: express.Request, res: express.Response) => {
+    res.status(400).json({
+      jsonrpc: '2.0',
+      id: (req.body as any)?.id ?? null,
+      error: { code: -32600, message: 'No valid MCP session. Send `initialize` first.' },
+    });
+  };
+
+  // GET (server→client SSE stream) and DELETE (session teardown) operate on an existing session.
+  const routeToSession = async (req: express.Request, res: express.Response): Promise<void> => {
+    const sessionId = req.headers[HTTP_SESSION_HEADER] as string | undefined;
+    const transport = sessionId ? mcpTransports.get(sessionId) : undefined;
+    if (!transport) {
+      noSessionError(req, res);
+      return;
+    }
+    await transport.handleRequest(req, res, req.body);
+  };
+
+  // POST endpoint for MCP requests — handshake + all JSON-RPC calls go through the SDK transport.
   app.post('/mcp', authMW, async (req, res) => {
     try {
-      // Apply rate limiting
+      // Rate limiting and the body-size limit stay here, before the transport takes over.
       const clientId = req.ip || 'unknown';
       await handleRateLimit(rateLimiter, clientId, req.ip || 'unknown', 'HTTP MCP', res, req.body?.id);
-
-      const request = req.body;
-      const { method, params, id } = request;
-
-      logger.info(`HTTP MCP request received: ${method} | id: ${id}`);
-
-      // JSON-RPC notifications (no `id`) MUST NOT receive a response. MCP clients legitimately
-      // emit a variety of `notifications/*` events (initialized, cancelled, progress,
-      // roots/list_changed, message, …) and we acknowledge them with 204 instead of erroring out
-      // on unknown ones — matching MCP/JSON-RPC semantics and keeping the log clean.
-      if (typeof method === 'string' && method.startsWith('notifications/')) {
-        if (method === 'notifications/initialized') {
-          logger.info('MCP client initialization completed');
-        } else {
-          logger.debug(`MCP notification received: ${method}`);
-        }
-        if (debugMcpNotification.enabled) {
-          debugMcpNotification(`← ${method}\n${JSON.stringify(params ?? {}, null, 2)}`);
-        }
-        return res.status(204).send();
+      if (res.headersSent) {
+        return; // rate limit already responded
       }
 
-      const mcpAuthPayload = (req as any).authInfo?.payload;
-      const preservedHeaders = normalizeHeaders(req.headers);
-      const sessionId = getSessionId(preservedHeaders);
-      const cachedCapabilities = sessionId ? httpClientCapabilitiesBySession.get(sessionId) : undefined;
-      const httpArgs = {
-        transport: 'http' as const,
-        headers: preservedHeaders,
-        payload: mcpAuthPayload,
-        ...(cachedCapabilities ? { clientCapabilities: cachedCapabilities } : {}),
-      };
+      // Dedicated rate-limit bucket for tool calls (was inline in the old switch).
+      if ((req.body as any)?.method === 'tools/call') {
+        const toolCallClientId = `tool-${req.ip || 'unknown'}`;
+        await handleRateLimit(
+          rateLimiter,
+          toolCallClientId,
+          req.ip || 'unknown',
+          `tool call | tool: ${(req.body as any)?.params?.name || 'unknown'}`,
+          res,
+          (req.body as any)?.id,
+        );
+        if (res.headersSent) {
+          return;
+        }
+      }
 
-      let result;
+      const sessionId = req.headers[HTTP_SESSION_HEADER] as string | undefined;
+      const existing = sessionId ? mcpTransports.get(sessionId) : undefined;
+      if (existing) {
+        await existing.handleRequest(req, res, req.body);
+        return;
+      }
 
-      switch (method) {
-        case 'initialize':
-          const { protocolVersion, capabilities: clientCapabilities, clientInfo } = params || {};
-          logger.info(
-            `MCP client initializing: protocolVersion: ${protocolVersion} | clientCapabilities: ${JSON.stringify(clientCapabilities)} | clientInfo: ${JSON.stringify(clientInfo)}`,
-          );
-          // Cache reported capabilities so subsequent stateless POSTs from the same session can
-          // surface them through `IToolHandlerParams.clientCapabilities`.
-          if (sessionId && clientCapabilities && typeof clientCapabilities === 'object') {
-            cacheClientCapabilities(sessionId, clientCapabilities as IClientCapabilities);
+      if (isInitializeRequest(req.body)) {
+        logger.info(
+          `MCP client initializing: protocolVersion: ${(req.body as any)?.params?.protocolVersion} | clientInfo: ${JSON.stringify((req.body as any)?.params?.clientInfo)}`,
+        );
+        const transport = new StreamableHTTPServerTransport({
+          sessionIdGenerator: () => randomUUID(),
+          onsessioninitialized: (sid: string) => {
+            mcpTransports.set(sid, transport);
+            evictOldestSession(sid);
+          },
+          onsessionclosed: (sid: string) => {
+            mcpTransports.delete(sid);
+          },
+        });
+        // SDK `Transport` exposes `onclose` as a plain setter (not an EventTarget), so
+        // `addEventListener` does not apply here — this is the canonical SDK pattern.
+        // oxlint-disable-next-line unicorn/prefer-add-event-listener
+        transport.onclose = () => {
+          const sid = transport.sessionId;
+          if (sid) {
+            mcpTransports.delete(sid);
           }
-          result = {
-            protocolVersion: '2024-11-05',
-            capabilities: {
-              tools: {},
-              prompts: {},
-              resources: {},
-            },
-            serverInfo: {
-              name: appConfig.name,
-              version: appConfig.version,
-            },
-          };
-          break;
-
-        case 'tools/list':
-          const tools = await getTools(httpArgs);
-          result = { tools };
-          break;
-
-        case 'tools/call':
-          // Apply rate limiting for tool calls
-          const toolCallClientId = `tool-${req.ip || 'unknown'}`;
-          await handleRateLimit(
-            rateLimiter,
-            toolCallClientId,
-            req.ip || 'unknown',
-            `tool call | tool: ${params?.name || 'unknown'}`,
-            res,
-            id,
-          );
-          const { toolHandler } = getProjectData();
-          result = await toolHandler({ ...params, ...httpArgs });
-          break;
-
-        case 'prompts/list':
-          result = await getPromptsList(httpArgs);
-          break;
-
-        case 'prompts/get': {
-          result = await getPrompt(request as IGetPromptRequest, httpArgs);
-          break;
-        }
-
-        case 'resources/list':
-          result = await getResourcesList(httpArgs);
-          break;
-
-        case 'resources/read': {
-          result = await getResource(params.uri, httpArgs);
-          break;
-        }
-
-        case 'ping':
-          result = { pong: true };
-          break;
-
-        default:
-          throw new Error(`Unknown method: ${method}`);
+        };
+        const server = createMcpServer('http');
+        // Cast: SDK `Transport` types are stricter under `exactOptionalPropertyTypes`, but
+        // `StreamableHTTPServerTransport` is a valid transport.
+        await server.connect(transport as any);
+        await transport.handleRequest(req, res, req.body);
+        return;
       }
 
-      return res.json({
-        jsonrpc: '2.0',
-        id,
-        result,
-      });
+      // No session and not an `initialize` request → 400 per MCP transport semantics.
+      noSessionError(req, res);
     } catch (error: Error | any) {
       if (!error.printed) {
         logger.error('MCP request failed', toError(error));
         error.printed = true;
       }
-      let errorResponse;
-      if (error instanceof BaseMcpError) {
-        // Use full error structure with details for better debugging
-        const errorObj = error.toJSON();
-        errorResponse = {
-          code: -1,
-          message: errorObj.message,
-          data: {
-            code: errorObj.code,
-            details: errorObj.details,
-            // stack: process.env.NODE_ENV === 'development' ? errorObj.stack : undefined
-          },
-        };
-      } else {
-        // Standard error handling for non-MCP errors
-        errorResponse = {
-          code: -1,
-          message: toStr(error),
-        };
+      if (!res.headersSent) {
+        res
+          .status(500)
+          .json(createJsonRpcErrorResponse(error instanceof ServerError ? error : new ServerError(toStr(error))));
       }
-      return res.json({
-        jsonrpc: '2.0',
-        id: req.body?.id ?? 1,
-        error: errorResponse,
-      });
     }
+  });
+
+  app.get('/mcp', authMW, async (req, res) => {
+    await routeToSession(req, res);
+  });
+
+  app.delete('/mcp', authMW, async (req, res) => {
+    await routeToSession(req, res);
   });
 
   // 404 handler for unknown routes

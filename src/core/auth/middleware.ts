@@ -114,6 +114,7 @@ export const getMultiAuthError = async (req: Request): Promise<{ code: number; m
 
   // Add authentication information to request for use in application
   (req as any).authInfo = { ...authResult };
+  (req as any).auth = { ...authResult }; // SDK transport bridge — see createAuthMW
 
   return undefined;
 };
@@ -166,6 +167,9 @@ export function createAuthMW(options: AuthMiddlewareOptions = {}) {
 
       // Add authentication information to request for use in application
       (req as any).authInfo = authResult;
+      // Bridge for SDK transports: `StreamableHTTPServerTransport` reads `req.auth` and surfaces it
+      // to handlers as `extra.authInfo`. Keep `payload` so `createMcpServer` can pass it downstream.
+      (req as any).auth = authResult;
       return next();
     } catch {
       res.status(500).send('Authentication error');

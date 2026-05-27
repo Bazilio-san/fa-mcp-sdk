@@ -485,7 +485,7 @@ import {
 |-----------|--------|--------------|
 | STDIO | `Server.getClientCapabilities()` (low-level SDK) read inside every handler in `createMcpServer()`. | Every call. |
 | SSE | Same as STDIO, but resolved per-connection (each SSE session owns its own `Server`). | Every call. |
-| Streamable HTTP | Cached on `initialize` keyed by `Mcp-Session-Id` (in-memory `Map`, soft FIFO cap of 4096 sessions). | Subsequent calls only when the client sends the `Mcp-Session-Id` header. `undefined` otherwise — handlers MUST fall back to text-only. |
+| Streamable HTTP | Same as STDIO — each session owns its own `Server` + `StreamableHTTPServerTransport` (stateful, keyed by `Mcp-Session-Id`, in-memory `Map` with soft FIFO cap of 4096 sessions). `getClientCapabilities()` is read per handler. | Every call within a session. A client that never sends `Mcp-Session-Id` cannot make post-`initialize` calls (→ 400), so handlers still treat `undefined` as text-only. |
 
 ```ts
 export const handleToolCall = async (params: IToolHandlerParams) => {

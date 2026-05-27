@@ -20,13 +20,20 @@ const prompt = await client.getPrompt('agent_brief');
 
 ### HTTP Transport
 
+> **Deprecated:** `McpHttpClient` is now a thin alias of `McpStreamableHttpClient` (see below). The
+> server's `/mcp` endpoint runs the SDK `StreamableHTTPServerTransport`, so the old plain-POST client
+> no longer applies — both names speak the same Streamable HTTP protocol. Prefer
+> `McpStreamableHttpClient` in new code.
+
 ```typescript
 import { McpHttpClient } from 'fa-mcp-sdk';
 
-const client = new McpHttpClient('http://localhost:3000');
-const result = await client.callTool('my_tool', { query: 'test' }, {
-  'Authorization': 'Bearer token'
+// Auth headers go in the constructor (not as a per-call argument).
+const client = new McpHttpClient('http://localhost:3000', {
+  headers: { Authorization: 'Bearer token' },
 });
+await client.initialize();
+const result = await client.callTool('my_tool', { query: 'test' });
 ```
 
 ### SSE Transport
@@ -38,41 +45,50 @@ const client = new McpSseClient('http://localhost:3000');
 const result = await client.callTool('my_tool', { query: 'test' });
 ```
 
-### Streamable HTTP (MCP 2025)
+### Streamable HTTP (MCP 2025-11-25)
+
+Wraps the official `@modelcontextprotocol/sdk` `Client` + `StreamableHTTPClientTransport`. The SDK
+transport sets `Accept: application/json, text/event-stream`, captures/resends `Mcp-Session-Id`,
+negotiates the protocol version, and sends `DELETE /mcp` on `close()`.
 
 ```typescript
 import { McpStreamableHttpClient } from 'fa-mcp-sdk';
 
 const client = new McpStreamableHttpClient('http://localhost:3000', {
-  headers: { 'Authorization': 'Bearer token' },
+  headers: { Authorization: 'Bearer token' },
   requestTimeoutMs: 60000,
 });
 
-await client.initialize({
-  protocolVersion: '2024-11-05',
-  clientInfo: { name: 'test-client', version: '1.0.0' },
-});
+// `initialize()` runs the full handshake; the server answers the negotiated version (2025-11-25).
+await client.initialize();
 
 const result = await client.callTool('my_tool', { query: 'test' });
 const prompt = await client.getPrompt('agent_brief');
 const resources = await client.listResources();
 const content = await client.readResource('custom://data');
 
-// Notifications
-const unsub = client.onNotification('notifications/tools/list_changed', (p) => console.log(p));
-
 await client.close();
 ```
 
-**Methods:** `initialize`, `close`, `callTool`, `getPrompt`, `listResources`, `readResource`, `listTools`, `listPrompts`, `sendRpc`, `notify`, `onNotification`
+**Methods:** `initialize`, `close`, `callTool`, `getPrompt`, `listResources`, `readResource`,
+`listTools`, `listPrompts`. After `initialize()`, `client.serverInfo`, `client.capabilities` and
+`client.protocolVersion` are populated.
 
 ## Transport Types
 
 | Transport | Config | Use Case |
 |-----------|--------|----------|
 | STDIO | `mcp.transportType: "stdio"` | CLI, local dev |
-| HTTP | `mcp.transportType: "http"` | Web integrations, REST API |
-| SSE | HTTP transport | Long-running ops, streaming |
+| HTTP (Streamable HTTP) | `mcp.transportType: "http"` | Web integrations, REST API |
+| SSE (legacy) | HTTP transport | Long-running ops, streaming; older clients |
+
+The HTTP transport is **Streamable HTTP** (SDK `StreamableHTTPServerTransport`), stateful per session:
+
+| Method `/mcp` | Behaviour |
+|---------------|-----------|
+| `POST` | `initialize` opens a session (server returns `Mcp-Session-Id`); subsequent calls must echo it. Notifications → **202**. No session + not `initialize` → **400**. |
+| `GET` | Server→client SSE stream for the session. |
+| `DELETE` | Tears down the session. |
 
 ## Running Tests
 

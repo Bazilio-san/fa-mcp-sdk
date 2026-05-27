@@ -5,6 +5,46 @@ All notable changes to `fa-mcp-sdk` are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.144] - 2026-05-27
+
+### Changed
+
+- **Streamable HTTP `/mcp` now runs on the SDK transport (BREAKING).** The hand-rolled `switch(method)`
+  router in `server-http.ts` was replaced with `@modelcontextprotocol/sdk`'s
+  `StreamableHTTPServerTransport`, driving the same `Server` instance as STDIO (one code path). Each
+  MCP session is **stateful** — its own `Server` + transport, keyed by a server-generated
+  `Mcp-Session-Id`, stored in an in-memory `Map` with a FIFO soft cap (`MAX_HTTP_SESSIONS = 4096`) and
+  cleanup on session close. This brings, from the SDK:
+  - **Protocol negotiation** — `initialize` now answers the negotiated version (`2025-11-25` for
+    up-to-date clients) instead of the previously hardcoded `2024-11-05`.
+  - **`GET /mcp`** (server→client SSE stream) and **`DELETE /mcp`** (explicit session teardown).
+  - **`notifications/*` → HTTP 202** (was 204); standard JSON-RPC error codes from the transport.
+  - **400** for a non-`initialize` request without a valid session.
+- **`createMcpServer(transportType)` now takes a transport argument** and builds handler context from
+  the SDK per-request `extra` (`requestInfo.headers`, `authInfo`) instead of a STDIO-only context.
+  `params.clientCapabilities` is now read from each session's own `Server.getClientCapabilities()`
+  (no separate capabilities cache).
+- **`McpStreamableHttpClient` rewritten over the SDK client (BREAKING).** It now wraps
+  `@modelcontextprotocol/sdk` `Client` + `StreamableHTTPClientTransport`, which handles
+  `Accept: application/json, text/event-stream`, `Mcp-Session-Id` capture/resend, version negotiation
+  and `DELETE`-on-close. Removed the bespoke `sendRpc` / `notify` / `onNotification` methods; the
+  `BaseMcpClient` surface (`listTools`, `callTool`, `getPrompt`, `listResources`, `readResource`, …)
+  is unchanged.
+- **`McpHttpClient` is now a deprecated thin alias** of `McpStreamableHttpClient`. The old plain-POST
+  client was incompatible with the SDK server transport (missing `Accept`/session handling).
+
+### Added
+
+- **HTTP auth bridge `req.auth`.** `createAuthMW` now also sets `req.auth` (alongside `req.authInfo`)
+  so the SDK transport surfaces the auth result to handlers as `extra.authInfo` → `params.payload`.
+
+### Notes
+
+- Auth, rate limiting and the request body-size limit remain Express middleware **before** the SDK
+  transport, so their behaviour is unchanged.
+- `ping` is now handled by the SDK `Server` and returns an empty result `{}` (previously the
+  hand-rolled router returned `{ pong: true }`).
+
 ## [0.4.139] - 2026-05-20
 
 ### Added

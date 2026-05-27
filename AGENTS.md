@@ -41,9 +41,15 @@ node scripts/generate-jwt.js -u <username> -ttl <duration> [-s <service>] [-p <p
 # JWT generation API (HTTP endpoint, requires webServer.genJwtApiEnable: true)
 # POST /gen-jwt  {"username":"user","ttl":"30d","service":"svc","params":"key=val"}
 
-# Tests
-npx jest               # run all tests
-npx jest tests/path/to/file.test.ts   # single test file
+# Tests (no jest — node's built-in runner via .test.mjs)
+npm run test:jwt          # build + node tests/jwt.test.mjs
+npm run test:ip-check     # build + node tests/ip-check.test.mjs
+node tests/jwt.test.mjs   # single suite (run `npm run build` first)
+
+# MCP transport integration (manual, against a running server — `npm run build && npm start` first):
+node src/tests/mcp/test-http.js    # HTTP/StreamableHTTP transport
+node src/tests/mcp/test-sse.js     # SSE transport
+node src/tests/mcp/test-stdio.js   # STDIO transport
 ```
 
 ## JWT Token Generation (Skill /gen-jwt)

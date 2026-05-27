@@ -1,60 +1,31 @@
+import { Client } from '@modelcontextprotocol/sdk/client/index.js';
+import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
+import { ResultSchema } from '@modelcontextprotocol/sdk/types.js';
+
 import { BaseMcpClient } from './BaseMcpClient.js';
 
 type Json = any;
 
-interface JsonRpcRequest {
-  jsonrpc: '2.0';
-  id?: number;
-  method: string;
-  params?: Json;
-}
-
-interface JsonRpcSuccess {
-  jsonrpc: '2.0';
-  id: number;
-  result: Json;
-}
-
-interface JsonRpcErrorObj {
-  code: number;
-  message: string;
-  data?: Json;
-}
-
-interface JsonRpcErrorRes {
-  jsonrpc: '2.0';
-  id: number | null;
-  error: JsonRpcErrorObj;
-}
-
-type JsonRpcMessage = JsonRpcSuccess | JsonRpcErrorRes | JsonRpcRequest;
-
 /**
  * MCP Streamable HTTP Client
  *
- * Supports a long-lived connection over HTTP (NDJSON),
- * multiple requests/responses and incoming notifications.
+ * Thin wrapper around the official SDK `Client` + `StreamableHTTPClientTransport`. The SDK transport
+ * handles the parts the server's `StreamableHTTPServerTransport` requires: the
+ * `Accept: application/json, text/event-stream` header, capturing/resending `Mcp-Session-Id`,
+ * protocol-version negotiation, SSE/JSON response parsing and a `DELETE` on close.
+ *
+ * The public surface (`listTools`, `callTool`, … via {@link BaseMcpClient}) is unchanged — only the
+ * transport-level `sendRequest`/`initialize`/`close` are reimplemented.
  */
 export class McpStreamableHttpClient extends BaseMcpClient {
-  private readonly baseURL: string;
-  private readonly endpointPath: string;
+  private readonly url: URL;
   private readonly requestTimeoutMs: number;
+  private client: Client;
+  private transport: StreamableHTTPClientTransport | undefined;
 
-  private encoder = new TextEncoder();
-  private decoder = new TextDecoder();
-  private controller!: ReadableStreamDefaultController<Uint8Array>;
-  private outgoing!: ReadableStream<Uint8Array>;
-  private response: Response | undefined;
-  private reader: ReadableStreamDefaultReader<Uint8Array> | undefined;
-  private abort: AbortController | undefined;
-  private readLoopPromise: Promise<void> | undefined;
-
-  private pending = new Map<number, { resolve: (v: any) => void; reject: (e: any) => void; timer?: any }>();
-  private notifications = new Map<string, Set<(params: any) => void>>();
-
-  public serverInfo?: { name: string; version: string };
-  public capabilities?: any;
-  public protocolVersion?: string;
+  public serverInfo: { name: string; version: string } | undefined;
+  public capabilities: any;
+  public protocolVersion: string | undefined;
 
   constructor(
     baseURL: string,
@@ -65,215 +36,43 @@ export class McpStreamableHttpClient extends BaseMcpClient {
     },
   ) {
     super(options?.headers ?? {});
-    this.baseURL = baseURL.replace(/\/$/, '');
-    this.endpointPath = options?.endpointPath ?? '/mcp';
+    this.url = new URL(options?.endpointPath ?? '/mcp', baseURL.replace(/\/$/, '') + '/');
     this.requestTimeoutMs = options?.requestTimeoutMs ?? 120_000;
+    this.client = new Client({ name: 'fa-mcp-test-client', version: '1.0.0' }, { capabilities: {} });
   }
 
-  onNotification(method: string, handler: (params: any) => void) {
-    if (!this.notifications.has(method)) {
-      this.notifications.set(method, new Set());
+  override async initialize(_params?: {
+    protocolVersion?: string;
+    capabilities?: any;
+    clientInfo?: { name: string; version: string };
+  }) {
+    if (!this.transport) {
+      this.transport = new StreamableHTTPClientTransport(this.url, {
+        requestInit: { headers: this.customHeaders },
+      });
+      // `connect()` runs the full initialize handshake (+ notifications/initialized).
+      // Cast: SDK `Transport` is stricter under `exactOptionalPropertyTypes`.
+      await this.client.connect(this.transport as any);
     }
-    this.notifications.get(method)!.add(handler);
-    return () => this.notifications.get(method)!.delete(handler);
-  }
-
-  private emitNotification(method: string, params: any) {
-    const set = this.notifications.get(method);
-    if (!set) {
-      return;
+    const serverVersion = this.client.getServerVersion();
+    if (serverVersion) {
+      this.serverInfo = { name: serverVersion.name, version: serverVersion.version };
     }
-    for (const fn of set) {
-      try {
-        fn(params);
-      } catch {
-        /* noop */
-      }
-    }
-  }
-
-  async connect() {
-    if (this.response) {
-      return;
-    } // already connected
-
-    this.abort = new AbortController();
-    // create outgoing stream for writing NDJSON
-    this.outgoing = new ReadableStream<Uint8Array>({
-      start: (c) => {
-        this.controller = c;
-      },
-      cancel: () => {
-        /* ignore */
-      },
-    });
-
-    const headers = {
-      'Content-Type': 'application/json',
-      Accept: 'application/json',
-      ...this.customHeaders,
-    } as Record<string, string>;
-
-    this.response = await fetch(`${this.baseURL}${this.endpointPath}`, {
-      method: 'POST',
-      headers,
-      body: this.outgoing,
-      // @ts-ignore — required in Node for streaming request body
-      duplex: 'half',
-      signal: this.abort.signal,
-    });
-
-    if (!this.response.ok || !this.response.body) {
-      const err = new Error(`Stream HTTP connect failed: ${this.response.status} ${this.response.statusText}`);
-      this.cleanup();
-      throw err;
-    }
-
-    this.reader = this.response.body.getReader();
-    this.readLoopPromise = this.readLoop();
-  }
-
-  override async initialize(
-    params: {
-      protocolVersion?: string;
-      capabilities?: any;
-      clientInfo?: { name: string; version: string };
-    } = {},
-  ) {
-    await this.connect();
-    const res = await this.sendRpc('initialize', params);
-    this.protocolVersion = res?.protocolVersion;
-    this.capabilities = res?.capabilities;
-    this.serverInfo = res?.serverInfo;
-
-    // best-effort: notify the server about initialization, do not wait for a response
-    this.notify('notifications/initialized', {});
-    return res;
+    this.capabilities = this.client.getServerCapabilities();
+    this.protocolVersion = (serverVersion as any)?.protocolVersion;
+    return { protocolVersion: this.protocolVersion, capabilities: this.capabilities, serverInfo: this.serverInfo };
   }
 
   override async close() {
-    try {
-      // attempt to gracefully finish writing
-      try {
-        this.controller?.close();
-      } catch {}
-      // reject all pending requests
-      for (const [_id, p] of this.pending) {
-        p.reject(new Error('Connection closed'));
-      }
-      this.pending.clear();
-      // stop reading
-      try {
-        await this.reader?.cancel();
-      } catch {}
-      this.abort?.abort();
-      await this.readLoopPromise?.catch(() => {});
-    } finally {
-      this.cleanup();
+    await this.transport?.close(); // sends DELETE /mcp and tears down the session
+    this.transport = undefined;
+  }
+
+  protected override async sendRequest(method: string, params: Json): Promise<any> {
+    if (!this.transport) {
+      await this.initialize();
     }
-  }
-
-  private cleanup() {
-    this.response = undefined;
-    this.reader = undefined;
-    this.readLoopPromise = undefined;
-    this.abort = undefined;
-  }
-
-  private async readLoop() {
-    let buffer = '';
-    while (true) {
-      const { done, value } = await this.reader!.read();
-      if (done) {
-        break;
-      }
-      buffer += this.decoder.decode(value, { stream: true });
-      let idx;
-      while ((idx = buffer.indexOf('\n')) >= 0) {
-        const line = buffer.slice(0, idx);
-        buffer = buffer.slice(idx + 1);
-        const trimmed = line.trim();
-        if (!trimmed) {
-          continue;
-        }
-        let msg: JsonRpcMessage | undefined;
-        try {
-          msg = JSON.parse(trimmed);
-        } catch {
-          continue;
-        }
-        if (!msg) {
-          continue;
-        }
-        this.routeIncoming(msg);
-      }
-    }
-  }
-
-  private routeIncoming(msg: JsonRpcMessage) {
-    // response success
-    if ((msg as any).result !== undefined && typeof (msg as any).id === 'number') {
-      const { id, result } = msg as JsonRpcSuccess;
-      const pending = this.pending.get(id);
-      if (pending) {
-        clearTimeout(pending.timer);
-        this.pending.delete(id);
-        pending.resolve(result);
-      }
-      return;
-    }
-    // response error
-    if ((msg as any).error && 'id' in (msg as any)) {
-      const { id, error } = msg as JsonRpcErrorRes;
-      if (typeof id === 'number') {
-        const pending = this.pending.get(id);
-        if (pending) {
-          clearTimeout(pending.timer);
-          this.pending.delete(id);
-          const err: any = new Error(`MCP Error ${error.code}: ${error.message}`);
-          err.data = error.data;
-          pending.reject(err);
-        }
-      } else {
-        // error without id — log as notification error
-        this.emitNotification('error', error);
-      }
-      return;
-    }
-    // incoming request/notification
-    if ((msg as any).method) {
-      const { method, params } = msg as JsonRpcRequest;
-      this.emitNotification(method, params);
-    }
-  }
-
-  private writeNdjson(obj: object) {
-    const chunk = this.encoder.encode(JSON.stringify(obj) + '\n');
-    this.controller.enqueue(chunk);
-  }
-
-  notify(method: string, params?: Json) {
-    const req: JsonRpcRequest = { jsonrpc: '2.0', method, params };
-    this.writeNdjson(req);
-  }
-
-  async sendRpc<T = any>(method: string, params?: Json, timeoutMs = this.requestTimeoutMs): Promise<T> {
-    const id = this.nextId++;
-    const req: JsonRpcRequest = { jsonrpc: '2.0', id, method, params };
-    await this.connect();
-    const p = new Promise<T>((resolve, reject) => {
-      const timer = setTimeout(() => {
-        this.pending.delete(id);
-        reject(new Error(`Request timed out: ${method}`));
-      }, timeoutMs);
-      this.pending.set(id, { resolve, reject, timer });
-    });
-    this.writeNdjson(req);
-    return p;
-  }
-
-  // Override sendRequest to use sendRpc for consistency
-  protected override async sendRequest(method: string, params: any): Promise<any> {
-    return this.sendRpc(method, params);
+    // `ResultSchema` is the base passthrough result — accepts any MCP result without a strict schema.
+    return this.client.request({ method, params } as any, ResultSchema as any, { timeout: this.requestTimeoutMs });
   }
 }

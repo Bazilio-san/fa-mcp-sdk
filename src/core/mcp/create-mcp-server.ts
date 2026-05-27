@@ -8,9 +8,15 @@ import {
   ReadResourceRequestSchema,
 } from '@modelcontextprotocol/sdk/types.js';
 
-import { IClientCapabilities, IGetPromptRequest, IReadResourceRequest } from '../_types_/types.js';
+import {
+  IClientCapabilities,
+  IGetPromptRequest,
+  IReadResourceRequest,
+  ITransportContext,
+  TTransportType,
+} from '../_types_/types.js';
 import { appConfig, getProjectData } from '../bootstrap/init-config.js';
-import { getTools } from '../utils/utils.js';
+import { getTools, normalizeHeaders } from '../utils/utils.js';
 
 import { getPrompt, getPromptsList } from './prompts.js';
 import { getResource, getResourcesList } from './resources.js';
@@ -18,13 +24,18 @@ import { getResource, getResourcesList } from './resources.js';
 /**
  * Create MCP Server instance with registered tool and prompt handlers.
  *
- * Tool/list/read handlers below all read `server.getClientCapabilities()` on
- * each call so they always pass the **current** capabilities to user code —
- * by the time `tools/call` arrives, the initialize handshake has completed
- * and the call returns the host's reported capabilities (including any
- * `extensions["io.modelcontextprotocol/ui"]` payload for MCP Apps).
+ * The same `Server` is driven by every SDK transport (stdio + Streamable HTTP), so handlers build
+ * their {@link ITransportContext} from the per-request `extra` (`RequestHandlerExtra`) that the SDK
+ * passes as the second argument:
+ *   - `extra.requestInfo.headers` — full request headers (HTTP only; absent on stdio);
+ *   - `extra.authInfo` — whatever the transport read from `req.auth` (HTTP auth middleware bridge);
+ *   - `server.getClientCapabilities()` — capabilities reported during the `initialize` handshake,
+ *     reliable because each HTTP session owns its own `Server` instance (stateful transport).
+ *
+ * @param transportType — transport that owns this server instance, surfaced to handlers as
+ *   `ITransportContext.transport`.
  */
-export function createMcpServer(): Server {
+export function createMcpServer(transportType: TTransportType): Server {
   const server = new Server(
     {
       name: appConfig.name,
@@ -39,42 +50,46 @@ export function createMcpServer(): Server {
     },
   );
 
-  const ctx = (): {
-    transport: 'stdio';
-    clientCapabilities?: IClientCapabilities;
-  } => {
+  const ctx = (extra: { requestInfo?: { headers?: Record<string, any> }; authInfo?: any }): ITransportContext => {
+    const headers = extra.requestInfo?.headers ? normalizeHeaders(extra.requestInfo.headers) : undefined;
+    const payload = extra.authInfo?.payload as ITransportContext['payload'];
     const caps = server.getClientCapabilities() as IClientCapabilities | undefined;
-    return caps ? { transport: 'stdio', clientCapabilities: caps } : { transport: 'stdio' };
+    return {
+      transport: transportType,
+      ...(headers ? { headers } : {}),
+      ...(payload ? { payload } : {}),
+      ...(caps ? { clientCapabilities: caps } : {}),
+    };
   };
 
   // Handler for listing available tools
-  server.setRequestHandler(ListToolsRequestSchema, async () => {
-    const tools = await getTools(ctx());
+  server.setRequestHandler(ListToolsRequestSchema, async (_request, extra) => {
+    const tools = await getTools(ctx(extra));
     return { tools };
   });
 
   // Handler for tool execution
-  server.setRequestHandler(CallToolRequestSchema, async (request) => {
+  server.setRequestHandler(CallToolRequestSchema, async (request, extra) => {
     const { toolHandler } = getProjectData();
-    return (await toolHandler({ ...request.params, ...ctx() })) as any;
+    return (await toolHandler({ ...request.params, ...ctx(extra) })) as any;
   });
 
   // Handler for listing available prompts
-  server.setRequestHandler(ListPromptsRequestSchema, async () => getPromptsList(ctx()));
+  server.setRequestHandler(ListPromptsRequestSchema, async (_request, extra) => getPromptsList(ctx(extra)));
 
   // Handler for getting prompt content
   server.setRequestHandler(
     GetPromptRequestSchema,
     // @ts-ignore
-    async (request: IGetPromptRequest) => await getPrompt(request, ctx()),
+    async (request: IGetPromptRequest, extra) => await getPrompt(request, ctx(extra)),
   );
 
   // Handler for listing available resources
-  server.setRequestHandler(ListResourcesRequestSchema, async () => getResourcesList(ctx()));
+  server.setRequestHandler(ListResourcesRequestSchema, async (_request, extra) => getResourcesList(ctx(extra)));
 
   // Handler for reading resource content
-  server.setRequestHandler(ReadResourceRequestSchema, async (request: IReadResourceRequest) => {
-    return (await getResource(request.params.uri, ctx())) as any;
+  server.setRequestHandler(ReadResourceRequestSchema, async (request: IReadResourceRequest, extra) => {
+    return (await getResource(request.params.uri, ctx(extra))) as any;
   });
 
   return server;
