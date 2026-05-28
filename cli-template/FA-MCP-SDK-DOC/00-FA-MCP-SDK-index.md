@@ -13,9 +13,9 @@ npm install fa-mcp-sdk
 | File | Content | Read When |
 |------|---------|-----------|
 | [01-getting-started](01-getting-started.md) | `initMcpServer()`, `McpServerData`, `IPromptData`, `IResourceData`, `AppConfig` | Starting new project |
-| [02-1-tools-and-api](02-1-tools-and-api.md) | Tool definitions, `toolHandler`, outbound webhooks, REST API with tsoa, OpenAPI/Swagger | Creating tools, REST endpoints, webhook callbacks |
-| [02-2-prompts-and-resources](02-2-prompts-and-resources.md) | Standard/custom prompts, resources, `requireAuth` | Configuring prompts/resources |
-| [03-configuration](03-configuration.md) | `appConfig`, YAML config, access points, cache, **`mcp.limits` (payload/result/timeout)**, **/health & /ready**, **CORS hardening**, **MCP error codes** (`-32002…-32005`) | Server configuration, external services, transport-level hardening |
+| [02-1-tools-and-api](02-1-tools-and-api.md) | Tool definitions, **snake_case name validation**, **`$schema` 2020-12 + `additionalProperties:false`**, **server-side `arguments` validation**, **`outputSchema` + `structuredContent` mirror**, `toolHandler`, outbound webhooks, REST API with tsoa, OpenAPI/Swagger | Creating tools, REST endpoints, webhook callbacks |
+| [02-2-prompts-and-resources](02-2-prompts-and-resources.md) | Standard/custom prompts, **parameterised prompts (`IPromptArgument[]`)**, resources, **built-in `project://version`, `use://auth`, `<name>://agent/brief\|prompt`**, **opt-in `resources/templates/list` + `resources/subscribe`**, `requireAuth` | Configuring prompts/resources |
+| [03-configuration](03-configuration.md) | `appConfig`, YAML config, access points, cache, **`mcp.limits` (payload/result/timeout)**, **`mcp.pagination`**, **`mcp.resources` (MAY)**, **/health & /ready**, **CORS hardening**, **MCP error codes** (`-32002…-32005`) | Server configuration, external services, transport-level hardening |
 | [04-authentication](04-authentication.md) | JWT, Basic auth, server tokens, `createAuthMW()`, Token Generator, CLI Token Generator, JWT Generation API | Authentication setup |
 | [05-ad-authorization](05-ad-authorization.md) | AD group authorization at HTTP/tool levels | AD group restrictions |
 | [06-utilities](06-utilities.md) | `ServerError`, `normalizeHeaders`, logging, MCP debug switches (`DEBUG=mcp:*`), JSON-lines sink (`mcp.debug.logFile` → `emitTrace`), built-in debug tools (`mcp.debug.builtinTools`), Consul, graceful shutdown | Error handling, utilities, request tracing, post-mortem analysis |
@@ -43,6 +43,13 @@ import {
   // Appendix B errors — emitted by the SDK transport; re-throwable from tool / API code
   PayloadTooLargeError, TimeoutError, RateLimitedError, ResourceNotFoundError,
   MCP_ERROR_CODES, IMcpErrorData, createJsonRpcErrorResponse,
+} from 'fa-mcp-sdk';
+
+// Prompts (parameterised — standard §10.5) & Resources (templates/subscribe — §11.5)
+import {
+  IPromptArgument, IPromptData,
+  IResourceTemplateInfo,
+  notifyResourceUpdated,                              // call to broadcast `notifications/resources/updated`
 } from 'fa-mcp-sdk';
 
 // Database & Cache

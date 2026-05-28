@@ -28,19 +28,34 @@ export const AGENT_PROMPT = `You are a database management assistant.
 Add in `src/prompts/custom-prompts.ts`:
 
 ```typescript
-import { IPromptData, IGetPromptRequest } from 'fa-mcp-sdk';
+import { IPromptData, IGetPromptRequest, IPromptArgument } from 'fa-mcp-sdk';
 
 export const customPrompts: IPromptData[] = [
   { name: 'greeting', description: 'Greeting message', arguments: [],
     content: 'Hello! How can I help?' },
 
-  { name: 'context_prompt', description: 'Context-aware', arguments: [],
-    content: (req: IGetPromptRequest) => `Context: ${JSON.stringify(req.params.arguments)}` },
+  // Standard §10.5 — parameterised prompt. The `arguments[]` array is advertised in
+  // prompts/list; the values arrive as `request.params.arguments` (string map) on
+  // prompts/get. The content function receives them as the second argument.
+  {
+    name: 'context_prompt',
+    description: 'Context-aware prompt with explicit arguments',
+    arguments: [
+      { name: 'topic',    description: 'Subject area to focus on', required: true },
+      { name: 'audience', description: 'Audience level (junior / senior)',     required: false },
+    ] satisfies IPromptArgument[],
+    content: (_req, args) =>
+      `Focus on ${args?.topic ?? 'the codebase'} for a ${args?.audience ?? 'mixed'} audience.`,
+  },
 
   { name: 'admin_only', description: 'Admin instructions', arguments: [],
     content: 'Admin-only content', requireAuth: true },
 ];
 ```
+
+> **Compatibility.** The old single-argument signature
+> `(req: IGetPromptRequest) => string` still works — the second `args` parameter is
+> optional. Only update prompts that need access to the values.
 
 Pass to server:
 ```typescript
@@ -114,12 +129,21 @@ export const customPrompts = async (ctx: ITransportContext): Promise<IPromptData
 
 ### Standard Resources
 
-| URI | Description |
-|-----|-------------|
-| `project://id` | Service identifier (`appConfig.name`) |
-| `project://name` | Display name (`appConfig.productName`) |
-| `doc://readme` | README.md content |
-| `use://http-headers` | Used HTTP headers (from `usedHttpHeaders`) |
+| URI | MIME | Description |
+|-----|------|-------------|
+| `project://id` | `text/plain` | Service identifier (`appConfig.name`) |
+| `project://name` | `text/plain` | Display name (`appConfig.productName`) |
+| `project://version` | `text/plain` | Server version (`appConfig.version`) — mirror of `GET /health.version` and `serverInfo.version` (standard §4 SHOULD) |
+| `doc://readme` | `text/markdown` | README.md content |
+| `use://http-headers` | `application/json` | Used HTTP headers (from `usedHttpHeaders`) |
+| `use://auth` | `application/json` | Enabled auth schemes / methods / expected JWT claims (standard §11.2 SHOULD) |
+| `<appConfig.name>://agent/brief` | `text/markdown` | Mirror of `agent_brief` prompt (Avatar profile §11.2) |
+| `<appConfig.name>://agent/prompt` | `text/markdown` | Mirror of `agent_prompt` prompt (Avatar profile §11.2) |
+
+> The `<appConfig.name>://agent/*` URIs are built automatically from `appConfig.name`
+> (e.g. `mcp-jira://agent/brief`). If a project's `customResources` list contains a
+> resource with the same URI, the project-supplied entry wins — handy when the service
+> needs to publish a different brief through the resources endpoint than through prompts.
 
 ### Custom Resources
 
@@ -203,3 +227,60 @@ Both prompts and resources support `requireAuth: true`:
 - Requires valid authentication to access
 - Unauthenticated requests get error
 - Works with any configured auth method (JWT, Basic, etc.)
+
+## Optional MAY capabilities — templates & subscribe (standard §11.5)
+
+Disabled by default. Opt-in via `config/default.yaml`:
+
+```yaml
+mcp:
+  resources:
+    subscribeEnabled: false   # MAY §11.5 — turn on only when resources change at runtime
+    templatesEnabled: false   # MAY §11.5 — turn on when you publish customResourceTemplates
+```
+
+### `resources/templates/list`
+
+When `templatesEnabled: true`, register `customResourceTemplates` on `McpServerData`:
+
+```typescript
+import { IResourceTemplateInfo, McpServerData } from 'fa-mcp-sdk';
+
+const customResourceTemplates: IResourceTemplateInfo[] = [
+  {
+    uriTemplate: 'issue://{key}',                         // RFC 6570
+    name: 'jira-issue',
+    title: 'Jira issue by key',
+    description: 'Single Jira issue addressable by ticket key.',
+    mimeType: 'application/json',
+  },
+];
+
+const serverData: McpServerData = { ..., customResourceTemplates };
+```
+
+If you do not register any templates the server still answers `resources/templates/list`
+with an empty array — clients can probe the capability safely.
+
+### `resources/subscribe` + change notifications
+
+When `subscribeEnabled: true`, the server advertises `subscribe` and `listChanged` in its
+`resources` capability. To notify subscribers when content changes call
+`notifyResourceUpdated(server, uri)`:
+
+```typescript
+import { notifyResourceUpdated } from 'fa-mcp-sdk';
+
+// Each HTTP session owns its own Server instance — track the server reference at the
+// point where you have it (e.g. inside a custom-resources content function).
+await notifyResourceUpdated(server, 'project://version');
+```
+
+The helper emits `notifications/resources/updated` only to clients that previously called
+`resources/subscribe` for the given URI on that `Server`.
+
+## Pagination (standard §8.4)
+
+`prompts/list` and `resources/list` use the same cursor-based pagination as `tools/list`:
+opaque base64(offset), stable sort by `name` / `uri`. The page size comes from
+`mcp.pagination.pageSize` (default 100). See [03-configuration → "Pagination"](./03-configuration.md#pagination).

@@ -128,6 +128,13 @@ mcp:
   tools:
     answerAs: text   # text | structuredContent
     hideAnnotations: false  # true — strip `annotations` from tool listings
+  # Standard §8.4 — server-side pagination for tools/list, prompts/list, resources/list.
+  pagination:
+    pageSize: 100                # items per page (cursor is opaque base64(offset))
+  # Standard §11.5 — optional MAY resource capabilities. Off by default.
+  resources:
+    subscribeEnabled: false      # advertise `subscribe` + `listChanged`; emit notifications/resources/updated
+    templatesEnabled: false      # advertise + serve resources/templates/list
 
 swagger:
   servers:
@@ -404,6 +411,40 @@ db:
         usedExtensions: []          # e.g. [pgvector]
 ```
 
+
+## Pagination (`mcp.pagination`)
+
+Standard §8.4 — server-side pagination for `tools/list`, `prompts/list`, and
+`resources/list`. The SDK sorts items stably by `name` / `uri`, slices the list, and
+returns `nextCursor` (opaque base64 of the next offset) when more entries follow.
+
+| Key | Default | Notes |
+|-----|---------|-------|
+| `mcp.pagination.pageSize` | `100` | Items per page; lower this for low-context clients (e.g. terminal MCP clients) or raise it for power users. |
+
+Override per environment via `MCP_PAGINATION_PAGE_SIZE`. Invalid cursors return JSON-RPC
+`-32602` with `error.data.field: 'cursor'`.
+
+```bash
+# clients without pagination support still see the first page — fully spec-compliant
+curl -s ... -d '{"jsonrpc":"2.0","method":"tools/list","id":1}'
+
+# clients that opt in
+curl -s ... -d '{"jsonrpc":"2.0","method":"tools/list","id":1,"params":{"cursor":"NTA="}}'
+```
+
+## Resource MAY capabilities (`mcp.resources`)
+
+Standard §11.5 — opt-in templates and subscriptions. Defaults keep the server in the
+"static resources only" mode that low-context clients expect.
+
+| Key | Default | Notes |
+|-----|---------|-------|
+| `mcp.resources.subscribeEnabled` | `false` | Advertise `subscribe` + `listChanged` and register `resources/subscribe`. Project code emits change events via `notifyResourceUpdated(server, uri)`. |
+| `mcp.resources.templatesEnabled` | `false` | Advertise + serve `resources/templates/list`. Templates come from `McpServerData.customResourceTemplates`. |
+
+See [02-2-prompts-and-resources → "Optional MAY capabilities"](./02-2-prompts-and-resources.md#optional-may-capabilities-templates--subscribe-standard-115)
+for end-to-end examples.
 
 ## HTTP Transport Hardening (`mcp.limits`)
 

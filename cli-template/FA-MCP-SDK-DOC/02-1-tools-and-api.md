@@ -9,14 +9,67 @@ import { Tool } from '@modelcontextprotocol/sdk/types.js';
 
 export const tools: Tool[] = [{
   name: 'my_custom_tool',
+  title: 'My custom tool',                                  // SHOULD §9.1 — human-readable name
   description: 'Description of what this tool does',
   inputSchema: {
+    $schema: 'https://json-schema.org/draft/2020-12/schema', // standard §9.2
     type: 'object',
     properties: {
       query: { type: 'string', description: 'Input query' },
       options: { type: 'object', description: 'Optional config' },
     },
     required: ['query'],
+    additionalProperties: false,                             // reject unknown fields
+  },
+}];
+```
+
+**Standard §9.1 (MUST) — tool name `name` MUST match `/^[a-z][a-z0-9_]{0,62}$/`** (ASCII
+snake_case, 1..63 chars). The SDK validates names eagerly at `initMcpServer()` for static
+tool arrays and lazily on the first `getTools()` call for dynamic (function-form) tools — a
+violation throws with the offending name printed.
+
+**Standard §9.2 — `inputSchema` SHOULD declare `$schema: '…/draft/2020-12/schema'` and
+`additionalProperties: false`.** Both fields are recognised by the `IToolInputSchema` type.
+
+**Standard §9.3 (MUST) — arguments are validated server-side.** Before `toolHandler` is
+called, the SDK validates `request.params.arguments` against `inputSchema` via ajv (draft
+2020-12). On failure the response is JSON-RPC `-32602` with
+`error.data = { field, reason }`; the handler is **not** invoked. This means tool code
+no longer needs to repeat shape checks — by the time the handler runs, `args` already
+matches the schema.
+
+### Output schema and `structuredContent` (standard §9.4 / §12.4)
+
+A tool MAY declare `outputSchema` to describe its `structuredContent` payload. When set,
+the SDK validates the handler's response against the schema — a violation raises JSON-RPC
+`-32603` (internal error: the tool broke its own contract). Whenever a response includes
+`structuredContent`, the SDK mirrors a serialised JSON copy into `content[0].text` so
+legacy clients that only read `content` keep working without code changes.
+
+```typescript
+export const tools: Tool[] = [{
+  name: 'search_docs',
+  title: 'Search documents',
+  description: 'Vector search over the knowledge base.',
+  inputSchema: { /* …as above… */ },
+  outputSchema: {
+    $schema: 'https://json-schema.org/draft/2020-12/schema',
+    type: 'object',
+    properties: {
+      results: {
+        type: 'array',
+        items: {
+          type: 'object',
+          properties: { id: { type: 'string' }, score: { type: 'number' } },
+          required: ['id'],
+          additionalProperties: true,
+        },
+      },
+      total: { type: 'number' },
+    },
+    required: ['results'],
+    additionalProperties: true,
   },
 }];
 ```
