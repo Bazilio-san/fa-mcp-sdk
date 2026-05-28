@@ -3,24 +3,27 @@
  * Generate JWT token for MCP server authentication.
  *
  * Usage:
- *   node scripts/generate-jwt.js -u <username> -ttl <duration> [-s <service>] [-p <params>]
+ *   node scripts/generate-jwt.js -u <username> -ttl <duration> [-s <service>] [-p <params>] [--key <path>]
  *
  * Options:
  *   -u,   --username       Username (required). ENV: JWT_PAYLOAD_USERNAME
  *   -ttl                   Token lifetime: <N>s | <N>m | <N>d | <N>y (required). ENV: JWT_TTL
  *   -s,   --service-name   Service name (optional). ENV: JWT_PAYLOAD_SERVICE_NAME
  *   -p,   --params         Extra payload "key=value;key=value" (optional). ENV: JWT_PAYLOAD_PARAMS
+ *   --key                  Override private key path (only meaningful in modes embedded/localKey)
  *
- * The signing secret is read from config: webServer.auth.jwtToken.encryptKey
- * Token format: standard signed JWT (HS256), 3 segments header.payload.signature.
+ * Behavior by jwtToken.mode:
+ *   - legacyAesCtr: HS256 with encryptKey (legacy behavior).
+ *   - embedded:     ES256/RS256 with keys from keyStoragePath (private.pem).
+ *   - localKey:     ES256/RS256 with privateKeyPath (must be configured or passed via --key).
+ *   - remoteJwks:   exits with error — tokens must be obtained from the external IdP.
  */
 
 import crypto from 'crypto';
-import { readFileSync } from 'fs';
+import { existsSync, readFileSync } from 'fs';
 import { fileURLToPath } from 'url';
 import { dirname, resolve } from 'path';
 import configModule from 'config';
-import jwt from 'jsonwebtoken';
 
 // ── CLI argument parsing ────────────────────────────────────────────
 
@@ -38,6 +41,7 @@ const username = getArg('-u', '--username') ?? process.env.JWT_PAYLOAD_USERNAME;
 const ttlRaw = getArg('-ttl', '-ttl') ?? process.env.JWT_TTL;
 const service = getArg('-s', '--service-name') ?? process.env.JWT_PAYLOAD_SERVICE_NAME;
 const paramsRaw = getArg('-p', '--params') ?? process.env.JWT_PAYLOAD_PARAMS;
+const keyOverride = getArg('--key', '--private-key');
 
 // ── Validation ──────────────────────────────────────────────────────
 
@@ -68,26 +72,31 @@ if (ttlValue <= 0) {
 const TTL_MULTIPLIERS = { s: 1, m: 60, d: 86400, y: 31536000 };
 const liveTimeSec = ttlValue * TTL_MULTIPLIERS[ttlUnit];
 
-// ── Config ──────────────────────────────────────────────────────────
+// ── Resolve mode + config ───────────────────────────────────────────
 
-let encryptKey;
-try {
-  encryptKey = configModule.get('webServer.auth.jwtToken.encryptKey');
-} catch {
-  // config key not found
+function getOpt(path) {
+  try {
+    return configModule.get(path);
+  } catch {
+    return undefined;
+  }
 }
 
-if (!encryptKey || String(encryptKey).trim() === '' || encryptKey === '***') {
-  console.error('Error: webServer.auth.jwtToken.encryptKey is not configured or has a placeholder value.');
-  console.error('Set it in config/local.yaml or via ENV WS_TOKEN_ENCRYPT_KEY');
+const mode = (getOpt('webServer.auth.jwtToken.mode') || 'legacyAesCtr').toString();
+const algorithm = (getOpt('webServer.auth.jwtToken.algorithm') || 'ES256').toString();
+const configuredIssuer = String(getOpt('webServer.auth.jwtToken.issuer') || '').trim();
+const expectedIssuer = String(getOpt('webServer.auth.jwtToken.expectedIssuer') || '').trim();
+const expectedAudience = String(getOpt('webServer.auth.jwtToken.expectedAudience') || '').trim();
+const keyStoragePath = String(getOpt('webServer.auth.jwtToken.keyStoragePath') || './keys');
+const configuredPrivateKey = String(getOpt('webServer.auth.jwtToken.privateKeyPath') || '');
+
+if (mode === 'remoteJwks') {
+  const jwksUri = String(getOpt('webServer.auth.jwtToken.jwksUri') || '');
+  console.error(
+    'Error: this server runs in mode=remoteJwks and does not issue tokens.\n' +
+      `Obtain a token from the IdP${jwksUri ? ` at ${jwksUri}` : ''}.`,
+  );
   process.exit(1);
-}
-
-let configuredIssuer = '';
-try {
-  configuredIssuer = String(configModule.get('webServer.auth.jwtToken.issuer') || '').trim();
-} catch {
-  // optional field, ignore
 }
 
 // ── Auto-detect service name if checkMCPName is enabled ─────────────
@@ -95,18 +104,11 @@ try {
 let effectiveService = service;
 
 if (!effectiveService || !effectiveService.trim()) {
-  let checkMCPName = false;
-  try {
-    checkMCPName = configModule.get('webServer.auth.jwtToken.checkMCPName');
-  } catch {
-    // config key not found
-  }
+  const checkMCPName = getOpt('webServer.auth.jwtToken.checkMCPName');
   if (checkMCPName) {
-    // 1) Try SERVICE_NAME from .env
     if (process.env.SERVICE_NAME && process.env.SERVICE_NAME.trim()) {
       effectiveService = process.env.SERVICE_NAME.trim();
     } else {
-      // 2) Fallback to package.json name
       try {
         const __filename = fileURLToPath(import.meta.url);
         const __dirname = dirname(__filename);
@@ -122,11 +124,13 @@ if (!effectiveService || !effectiveService.trim()) {
   }
 }
 
-// ── Build payload (private claims only) ─────────────────────────────
+if (!effectiveService && expectedAudience) {
+  effectiveService = expectedAudience;
+}
+
+// ── Build private claims ────────────────────────────────────────────
 
 const privateClaims = {};
-
-// Parse extra params: "key1=value1;key2=value2"
 if (paramsRaw && paramsRaw.trim()) {
   const pairs = paramsRaw.trim().split(';');
   for (const pair of pairs) {
@@ -141,35 +145,109 @@ if (paramsRaw && paramsRaw.trim()) {
       console.error(`Error: empty key in param "${pair}"`);
       process.exit(1);
     }
-    // Skip reserved fields if user accidentally passes them
-    if (['user', 'expire', 'iat', 'service', 'sub', 'aud', 'exp', 'iss', 'jti'].includes(key)) {
+    if (['user', 'expire', 'iat', 'service', 'sub', 'aud', 'exp', 'iss', 'jti', 'nbf'].includes(key)) {
       continue;
     }
     privateClaims[key] = value;
   }
 }
 
-// ── Generate token ──────────────────────────────────────────────────
-
 const normalizedUser = username.trim().toLowerCase();
-const signOptions = {
-  algorithm: 'HS256',
-  subject: normalizedUser,
-  expiresIn: liveTimeSec,
-  jwtid: crypto.randomUUID(),
-};
-if (effectiveService && effectiveService.trim()) {
-  signOptions.audience = effectiveService.trim();
+
+// ── Sign token ──────────────────────────────────────────────────────
+
+let token;
+let signedAlg;
+
+if (mode === 'legacyAesCtr') {
+  // Legacy HS256
+  const { default: jwt } = await import('jsonwebtoken');
+  let encryptKey = getOpt('webServer.auth.jwtToken.encryptKey');
+  if (!encryptKey || String(encryptKey).trim() === '' || encryptKey === '***') {
+    console.error('Error: webServer.auth.jwtToken.encryptKey is not configured or has a placeholder value.');
+    console.error('Set it in config/local.yaml or via ENV WS_TOKEN_ENCRYPT_KEY');
+    process.exit(1);
+  }
+  signedAlg = 'HS256';
+  const signOptions = {
+    algorithm: 'HS256',
+    subject: normalizedUser,
+    expiresIn: liveTimeSec,
+    jwtid: crypto.randomUUID(),
+  };
+  if (effectiveService && effectiveService.trim()) {
+    signOptions.audience = effectiveService.trim();
+  }
+  if (configuredIssuer) {
+    signOptions.issuer = configuredIssuer;
+  }
+  token = jwt.sign(privateClaims, String(encryptKey), signOptions);
+} else {
+  // embedded / localKey — sign with ES256/RS256 via jose
+  const { SignJWT, importPKCS8 } = await import('jose');
+
+  let privPath;
+  if (keyOverride) {
+    privPath = resolve(keyOverride);
+  } else if (mode === 'embedded') {
+    privPath = resolve(keyStoragePath, 'private.pem');
+  } else if (mode === 'localKey') {
+    if (!configuredPrivateKey) {
+      console.error('Error: mode=localKey requires webServer.auth.jwtToken.privateKeyPath in config');
+      console.error('       or pass --key <path>');
+      process.exit(1);
+    }
+    privPath = resolve(configuredPrivateKey);
+  } else {
+    console.error(`Error: unknown jwtToken.mode "${mode}"`);
+    process.exit(1);
+  }
+  if (!existsSync(privPath)) {
+    console.error(`Error: private key not found at ${privPath}`);
+    if (mode === 'embedded') {
+      console.error('Hint: start the server once (npm start) to autogenerate the keypair, or run:');
+      console.error('  openssl ecparam -name prime256v1 -genkey -noout -out <path>/private.pem');
+      console.error('  openssl ec -in <path>/private.pem -pubout -out <path>/public.pem');
+    }
+    process.exit(1);
+  }
+  const privPem = readFileSync(privPath, 'utf8');
+  const privateKey = await importPKCS8(privPem, algorithm, { extractable: true });
+  signedAlg = algorithm;
+
+  const issuer = expectedIssuer || configuredIssuer || `urn:fa-mcp:${getOpt('name') || 'fa-mcp-sdk'}`;
+  const audience = effectiveService || expectedAudience || undefined;
+
+  const builder = new SignJWT(privateClaims)
+    .setProtectedHeader({ alg: algorithm, typ: 'JWT' })
+    .setSubject(normalizedUser)
+    .setIssuedAt()
+    .setExpirationTime(Math.floor(Date.now() / 1000) + liveTimeSec)
+    .setJti(crypto.randomUUID());
+  if (issuer) {
+    builder.setIssuer(issuer);
+  }
+  if (audience) {
+    builder.setAudience(audience);
+  }
+  token = await builder.sign(privateKey);
 }
-if (configuredIssuer) {
-  signOptions.issuer = configuredIssuer;
+
+// ── Decode for display ──────────────────────────────────────────────
+
+function decodePayloadSegment(jwtToken) {
+  try {
+    const parts = jwtToken.split('.');
+    if (parts.length !== 3) {
+      return {};
+    }
+    return JSON.parse(Buffer.from(parts[1], 'base64url').toString('utf8'));
+  } catch {
+    return {};
+  }
 }
 
-const token = jwt.sign(privateClaims, String(encryptKey), signOptions);
-
-// ── Decode for display (normalized payload, mirrors checkJwtToken) ──
-
-const decoded = jwt.decode(token, { json: true }) || {};
+const decoded = decodePayloadSegment(token);
 const expireMs = (decoded.exp || 0) * 1000;
 const iatIso = decoded.iat ? new Date(decoded.iat * 1000).toISOString() : new Date().toISOString();
 
@@ -190,7 +268,7 @@ for (const [k, v] of Object.entries(privateClaims)) {
 }
 
 console.log('');
-console.log('JWT Token generated successfully');
+console.log(`JWT Token generated successfully (mode=${mode}, alg=${signedAlg})`);
 console.log('─'.repeat(50));
 console.log(`  User:      ${displayPayload.user}`);
 if (displayPayload.service) {

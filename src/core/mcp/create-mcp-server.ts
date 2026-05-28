@@ -20,6 +20,7 @@ import {
   TTransportType,
 } from '../_types_/types.js';
 import { appConfig, getProjectData } from '../bootstrap/init-config.js';
+import { RateLimitedError } from '../errors/specific-errors.js';
 import { getTools, normalizeHeaders } from '../utils/utils.js';
 
 import { paginate, parsePageSize } from './pagination.js';
@@ -33,6 +34,21 @@ import {
 } from './resources.js';
 import { truncateToolResponse, withToolTimeout } from './tool-limits.js';
 import { validateToolInput, validateToolOutput } from './validate-tool-args.js';
+
+/**
+ * Standard §14 — per-subject in-flight counter for tools/call. Keys are the JWT `sub`
+ * (or 'anonymous' when auth is disabled / token is absent). Excess concurrent calls
+ * raise RateLimitedError with the standard `Retry-After` semantics.
+ */
+const inFlightBySubject = new Map<string, number>();
+
+function subjectKeyFromAuth(authInfo: any): string {
+  const sub = authInfo?.payload?.sub ?? authInfo?.payload?.user ?? authInfo?.username;
+  if (typeof sub === 'string' && sub.trim()) {
+    return sub.trim().toLowerCase();
+  }
+  return 'anonymous';
+}
 
 /**
  * Create MCP Server instance with registered tool and prompt handlers.
@@ -110,39 +126,77 @@ export function createMcpServer(transportType: TTransportType): Server {
       throw new McpError(-32602, `Unknown tool: ${toolName}`, { field: 'name', reason: 'unknown_tool' });
     }
 
+    // Standard §7.5 — scope enforcement for tool dispatch. Scopes declared on tool._meta.requiredScopes
+    // (preferred) or tool.requiredScopes are matched against the token's `scope` claim.
+    const required: string[] = ((tool as any)._meta?.requiredScopes ?? (tool as any).requiredScopes ?? []) as string[];
+    if (Array.isArray(required) && required.length > 0) {
+      const tokenScopes = String((extra as any)?.authInfo?.payload?.scope ?? '')
+        .split(/\s+/)
+        .filter(Boolean);
+      const missing = required.filter((s) => !tokenScopes.includes(s));
+      if (missing.length > 0) {
+        throw new McpError(-32004, `Missing scopes: ${missing.join(',')}`, {
+          field: 'scope',
+          reason: 'insufficient_scope',
+          missing,
+        });
+      }
+    }
+
     const inputCheck = validateToolInput(tool, args);
     if (!inputCheck.valid) {
       throw new McpError(-32602, 'Invalid params', { field: inputCheck.field, reason: inputCheck.reason });
     }
 
-    const response = (await withToolTimeout(
-      toolName,
-      () => toolHandler({ ...request.params, ...ctx(extra) }) as Promise<any>,
-    )) as any;
+    // Standard §14 — per-subject concurrent in-flight cap.
+    const maxConcurrent = appConfig.mcp.rateLimit?.maxConcurrentPerSubject ?? 16;
+    const subjectKey = subjectKeyFromAuth((extra as any)?.authInfo);
+    const current = inFlightBySubject.get(subjectKey) ?? 0;
+    if (current >= maxConcurrent) {
+      throw new RateLimitedError(
+        `Too many concurrent tool calls for subject "${subjectKey}" (limit ${maxConcurrent})`,
+        1,
+      );
+    }
+    inFlightBySubject.set(subjectKey, current + 1);
 
-    if (response && typeof response === 'object' && 'structuredContent' in response) {
-      const outputCheck = validateToolOutput(tool, (response as any).structuredContent);
-      if (!outputCheck.valid) {
-        throw new McpError(-32603, 'Tool produced result that violates outputSchema', {
-          field: outputCheck.field,
-          reason: outputCheck.reason,
-        });
-      }
-      // §12.4 — mirror structuredContent in content[0] as JSON text for legacy clients.
-      const existingContent = Array.isArray((response as any).content) ? (response as any).content : undefined;
-      const hasText = existingContent?.some((p: any) => p?.type === 'text' && typeof p?.text === 'string');
-      if (!hasText) {
-        let serialized: string;
-        try {
-          serialized = JSON.stringify((response as any).structuredContent ?? null, null, 2);
-        } catch {
-          serialized = '';
+    try {
+      const response = (await withToolTimeout(
+        toolName,
+        () => toolHandler({ ...request.params, ...ctx(extra) }) as Promise<any>,
+      )) as any;
+
+      if (response && typeof response === 'object' && 'structuredContent' in response) {
+        const outputCheck = validateToolOutput(tool, (response as any).structuredContent);
+        if (!outputCheck.valid) {
+          throw new McpError(-32603, 'Tool produced result that violates outputSchema', {
+            field: outputCheck.field,
+            reason: outputCheck.reason,
+          });
         }
-        (response as any).content = [{ type: 'text', text: serialized }, ...(existingContent ?? [])];
+        // §12.4 — mirror structuredContent in content[0] as JSON text for legacy clients.
+        const existingContent = Array.isArray((response as any).content) ? (response as any).content : undefined;
+        const hasText = existingContent?.some((p: any) => p?.type === 'text' && typeof p?.text === 'string');
+        if (!hasText) {
+          let serialized: string;
+          try {
+            serialized = JSON.stringify((response as any).structuredContent ?? null, null, 2);
+          } catch {
+            serialized = '';
+          }
+          (response as any).content = [{ type: 'text', text: serialized }, ...(existingContent ?? [])];
+        }
+      }
+
+      return truncateToolResponse(response) as any;
+    } finally {
+      const after = (inFlightBySubject.get(subjectKey) ?? 1) - 1;
+      if (after <= 0) {
+        inFlightBySubject.delete(subjectKey);
+      } else {
+        inFlightBySubject.set(subjectKey, after);
       }
     }
-
-    return truncateToolResponse(response) as any;
   });
 
   // Handler for listing available prompts (standard §8.4 — server-side pagination).

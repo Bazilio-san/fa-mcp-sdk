@@ -249,6 +249,11 @@ mcp:
     maxRequests: 100
     #> Rate limit window length in milliseconds (1 minute)
     windowMs: 60000
+    #> Standard §14 — 'subject' counts requests per JWT `sub` (fallback to IP when no JWT).
+    #> 'ip' = legacy behavior. Default: 'subject'.
+    scope: subject
+    #> Max simultaneous in-flight tools/call requests per subject. Excess → -32003 / 429 + Retry-After.
+    maxConcurrentPerSubject: 16
   #> Hard ceilings enforced by the HTTP transport (standard §14).
   #> Concrete servers MAY raise or lower these values without patching SDK code.
   limits:
@@ -346,17 +351,25 @@ webServer:
     permanentServerTokens: [ 'token' ]
 
     #> ========================================================================
-    #> JWT TOKEN — standard signed JWT (HS256)
-    #> Tokens issued by this SDK are standard 3-segment JWTs `header.payload.signature`.
-    #> The verifier also temporarily accepts pre-migration legacy tokens
-    #> (`<expire_ms>.<hex>` AES-256-CTR format) for backward compatibility.
+    #> JWT TOKEN
+    #> Four operating modes:
+    #>   legacyAesCtr (default) — HS256 issue + legacy AES-CTR read. Uses `encryptKey`
+    #>                            below. Backward-compatible behavior — no migration needed.
+    #>   embedded               — ES256/RS256 with built-in IdP. Server auto-generates a
+    #>                            keypair into `keyStoragePath` on first start, publishes
+    #>                            JWKS at /.well-known/jwks.json, and exposes
+    #>                            POST /oauth/token (grant_type=password). For dev / demo.
+    #>   localKey               — ES256/RS256 verify against a public key on disk
+    #>                            (`publicKeyPath`). Issuance requires `privateKeyPath`.
+    #>   remoteJwks             — Production: verify against a remote IdP's JWKS endpoint
+    #>                            (`jwksUri`). This server does NOT issue tokens —
+    #>                            obtain them from the IdP.
     #> CPU cost: Medium — signature verification + JSON parsing
-    #>
-    #> To enable this authentication, you need to set auth.enabled = true and set
-    #> encryptKey to at least 8 characters (used as the HS256 signing secret).
     #> ========================================================================
     jwtToken:
-      #> HS256 signing secret used to sign/verify tokens for this MCP (minimum 8 chars)
+      #> Operating mode (see above). Default: legacyAesCtr (preserves existing behavior).
+      mode: legacyAesCtr
+      #> HS256 signing secret — used ONLY by legacyAesCtr mode (minimum 8 chars).
       encryptKey: '***'
       #> If webServer.auth.enabled and the parameter true, the service name and the service specified in the token will be checked
       checkMCPName: true
@@ -364,8 +377,37 @@ webServer:
       #> the client IP will be checked against the allowed list in the token
       isCheckIP: false
       #> Optional JWT `iss` claim. When non-empty, the generator stamps it and the verifier requires it.
-      #> Leave empty to skip issuer enforcement.
+      #> Leave empty to skip issuer enforcement. Used by legacyAesCtr mode.
       issuer: ''
+
+      #> -------- Settings below apply ONLY to modes embedded / localKey / remoteJwks --------
+
+      #> Asymmetric signing algorithm. ES256 (ECDSA P-256) recommended — smaller tokens, faster.
+      algorithm: ES256
+      #> Directory for embedded keypair (private.pem + public.pem). Auto-generated on first run.
+      #> Used only in mode=embedded. Default: ./keys
+      keyStoragePath: './keys'
+      #> Path to public key PEM. Used only in mode=localKey.
+      publicKeyPath: ''
+      #> Path to private key PEM. Optional — when set, allows local issuance via
+      #> generate-jwt.js and POST /gen-jwt. Used in mode=localKey.
+      privateKeyPath: ''
+      #> Remote JWKS endpoint URL. Used only in mode=remoteJwks.
+      #> Example: https://idp.example.com/.well-known/jwks.json
+      jwksUri: ''
+      #> Expected `iss` claim. Required match in modes embedded/localKey/remoteJwks.
+      #> In embedded mode auto-derived from request origin if empty.
+      expectedIssuer: ''
+      #> Expected `aud` claim. Defaults to appConfig.name when empty.
+      expectedAudience: ''
+      #> JWKS in-memory cache TTL (seconds). Default: 600 (10 min).
+      jwksCacheTtl: 600
+      #> Minimum interval between repeat JWKS fetches when kid is missing (seconds). Default: 30.
+      jwksCooldown: 30
+      #> Allowed clock skew for exp/nbf checks (seconds). Default: 30. Max enforced: 60 (standard Прил. A.1).
+      clockSkew: 30
+      #> Default TTL (seconds) for tokens issued by embedded /oauth/token endpoint. Default: 1800 (30 min).
+      defaultTtl: 1800
 
     #> ========================================================================
     #> Basic Authentication — Base64 encoded username:password
@@ -399,3 +441,20 @@ webServer:
   #> Requires valid Authorization header (any method configured in webServer.auth).
   #> ========================================================================
   genJwtApiEnable: false
+
+  #> ========================================================================
+  #> TOKEN CHECK ENDPOINT (/ct)
+  #> Standard §7.1 forbids passing secrets in URL query strings (logs / referrers).
+  #> By default only POST /ct with JSON body { "t": "<token>" } is accepted.
+  #> GET /ct?t=<token> is disabled and returns HTTP 405.
+  #> ========================================================================
+  tokenCheck:
+    #> Allow legacy GET /ct?t=<token> form. Ignored when NODE_ENV=production.
+    #> Default: false (compliant with standard §7.1).
+    allowQueryToken: false
+
+  #> ========================================================================
+  #> Trust proxy (used by /.well-known/openid-configuration etc. to derive issuer
+  #> from X-Forwarded-Proto / X-Forwarded-Host). Set true behind HTTPS reverse proxy.
+  #> ========================================================================
+  trustProxy: false

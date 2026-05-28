@@ -18,6 +18,7 @@ import { logger as lgr } from '../logger.js';
 
 import { checkBasicAuth } from './basic.js';
 import { checkJwtToken } from './jwt.js';
+import { canLocallyIssueJwt } from './key-resolver.js';
 import { createAuthMW } from './middleware.js';
 import { checkPermanentToken } from './permanent.js';
 import { AuthResult } from './types.js';
@@ -122,8 +123,11 @@ export function getAvailableAuthMethods(): string[] {
   if (auth?.basic?.username && auth?.basic?.password) {
     methods.push('basic');
   }
-  if (auth?.jwtToken?.encryptKey) {
-    methods.push('token'); // JWT tokens are entered as tokens
+  // JWT available if we have any way to either sign (legacy/embedded/localKey) or verify
+  // against an external IdP (remoteJwks). The login dialog needs the "token" option so
+  // headless clients / pasted tokens can be used.
+  if (canLocallyIssueJwt() || auth?.jwtToken?.mode === 'remoteJwks') {
+    methods.push('token');
   }
   return [...new Set(methods)];
 }
@@ -132,7 +136,11 @@ export function getAvailableAuthMethods(): string[] {
  * Validate login credentials.
  * Returns AuthResult with success=true if valid.
  */
-export function validateLoginCredentials(body: { token?: string; username?: string; password?: string }): AuthResult {
+export async function validateLoginCredentials(body: {
+  token?: string;
+  username?: string;
+  password?: string;
+}): Promise<AuthResult> {
   const { token, username, password } = body;
 
   if (token) {
@@ -142,7 +150,7 @@ export function validateLoginCredentials(body: { token?: string; username?: stri
       return { success: true, authType: 'permanentServerTokens' };
     }
     // Try as JWT
-    const jwtResult = checkJwtToken({ token });
+    const jwtResult = await checkJwtToken({ token });
     if (!jwtResult.errorReason) {
       return { success: true, authType: 'jwtToken', payload: jwtResult.payload };
     }

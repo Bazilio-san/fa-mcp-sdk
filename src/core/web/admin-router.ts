@@ -235,7 +235,7 @@ export function createAdminRouter(): Router {
       }
 
       const liveTimeSec = timeValue * multiplier;
-      const token = generateToken(user, liveTimeSec, payload || {});
+      const token = await generateToken(user, liveTimeSec, payload || {});
 
       logger.info(
         `Generated token for user: ${user}, duration: ${timeValue} ${timeUnit}, requested by: ${authenticatedUser}`,
@@ -257,7 +257,7 @@ export function createAdminRouter(): Router {
   });
 
   // API: Validate token
-  router.post('/api/validate-token', (req: Request, res: Response) => {
+  router.post('/api/validate-token', async (req: Request, res: Response) => {
     try {
       const username = req.ntlm?.username || 'Unknown';
       const domain = req.ntlm?.domain || 'Unknown';
@@ -273,7 +273,7 @@ export function createAdminRouter(): Router {
         });
       }
 
-      const result = checkJwtToken({ token });
+      const result = await checkJwtToken({ token });
 
       if (result.errorReason) {
         logger.info(`Token validation failed (${result.errorReason}) by: ${authenticatedUser}`);

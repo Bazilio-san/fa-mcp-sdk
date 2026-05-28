@@ -90,7 +90,7 @@ export const generateTokenApp = (port?: number) => {
     });
   });
 
-  app.post('/admin/api/generate-token', (req: Request, res: Response) => {
+  app.post('/admin/api/generate-token', async (req: Request, res: Response) => {
     try {
       const username = req.ntlm?.username || 'Unknown';
       const domain = req.ntlm?.domain || 'Unknown';
@@ -121,7 +121,7 @@ export const generateTokenApp = (port?: number) => {
       }
 
       const liveTimeSec = timeValue * multiplier;
-      const token = generateToken(user, liveTimeSec, payload || {});
+      const token = await generateToken(user, liveTimeSec, payload || {});
 
       logger.info(
         `Generated token for user: ${user}, duration: ${timeValue} ${timeUnit}, requested by: ${authenticatedUser}`,
@@ -142,7 +142,7 @@ export const generateTokenApp = (port?: number) => {
     }
   });
 
-  app.post('/admin/api/validate-token', (req: Request, res: Response) => {
+  app.post('/admin/api/validate-token', async (req: Request, res: Response) => {
     try {
       const username = req.ntlm?.username || 'Unknown';
       const domain = req.ntlm?.domain || 'Unknown';
@@ -158,7 +158,7 @@ export const generateTokenApp = (port?: number) => {
         });
       }
 
-      const result = checkJwtToken({ token });
+      const result = await checkJwtToken({ token });
 
       if (result.errorReason) {
         logger.info(`Token validation failed (${result.errorReason}) by: ${authenticatedUser}`);

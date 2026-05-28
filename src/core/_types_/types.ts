@@ -70,6 +70,11 @@ export interface IPromptData {
   arguments: IPromptArgument[];
   content: IPromptContent;
   requireAuth?: boolean;
+  /**
+   * Standard §7.5 — OAuth-style scopes required to read this prompt.
+   * Checked against `payload.scope` (space-separated). Missing scopes → 403 (forbidden).
+   */
+  requiredScopes?: string[];
 }
 
 export interface IUsedHttpHeader {
@@ -117,6 +122,11 @@ export interface IResourceInfo {
   description: string;
   mimeType: string;
   requireAuth?: boolean;
+  /**
+   * Standard §7.5 — OAuth-style scopes required to read this resource.
+   * Checked against `payload.scope` (space-separated). Missing scopes → 403 (forbidden).
+   */
+  requiredScopes?: string[];
   /**
    * Optional `_meta` block surfaced on `resources/list` and `resources/read`.
    * For MCP Apps resources (`ui://...`) populate `_meta.ui` with

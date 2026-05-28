@@ -39,9 +39,9 @@ function signFixtureJwt(payload, options = {}) {
 // ===== 1. Standard JWT: generate → check → ok =====
 
 {
-  const token = generateToken('alice', 60, { service: expectedAud });
+  const token = await generateToken('alice', 60, { service: expectedAud });
   assert.match(token, standardJwtRE, 'token should be a 3-segment standard JWT');
-  const result = checkJwtToken({ token });
+  const result = await checkJwtToken({ token });
   assert.ok(!result.errorReason, `expected no error, got: ${result.errorReason}`);
   assert.strictEqual(result.payload?.user, 'alice');
   assert.strictEqual(result.payload?.service, expectedAud);
@@ -57,8 +57,8 @@ function signFixtureJwt(payload, options = {}) {
 // ===== 2. Expired standard JWT → errorReason contains "expired" =====
 
 {
-  const token = generateToken('bob', -10, { service: expectedAud });
-  const result = checkJwtToken({ token });
+  const token = await generateToken('bob', -10, { service: expectedAud });
+  const result = await checkJwtToken({ token });
   assert.ok(result.errorReason, 'expected error for expired token');
   assert.match(result.errorReason, /expired/i, `expected "expired" in error: ${result.errorReason}`);
   console.log('  ✅  expired standard JWT detected');
@@ -67,13 +67,13 @@ function signFixtureJwt(payload, options = {}) {
 // ===== 3. Tampered standard JWT → "Invalid signature" =====
 
 {
-  const token = generateToken('eve', 60, { service: expectedAud });
+  const token = await generateToken('eve', 60, { service: expectedAud });
   // Flip a character in the signature segment
   const segments = token.split('.');
   const sigChars = segments[2].split('');
   sigChars[0] = sigChars[0] === 'A' ? 'B' : 'A';
   const tampered = `${segments[0]}.${segments[1]}.${sigChars.join('')}`;
-  const result = checkJwtToken({ token: tampered });
+  const result = await checkJwtToken({ token: tampered });
   assert.ok(result.errorReason, 'tampered token must fail');
   assert.match(result.errorReason, /signature/i, `expected signature error: ${result.errorReason}`);
   console.log('  ✅  tampered standard JWT rejected with signature error');
@@ -84,8 +84,8 @@ function signFixtureJwt(payload, options = {}) {
 {
   const isCheckMCPName = appConfig.webServer?.auth?.jwtToken?.checkMCPName;
   if (isCheckMCPName) {
-    const token = generateToken('carol', 60, { service: 'unexpected-audience' });
-    const result = checkJwtToken({ token });
+    const token = await generateToken('carol', 60, { service: 'unexpected-audience' });
+    const result = await checkJwtToken({ token });
     assert.ok(result.errorReason, 'wrong-audience token must fail when checkMCPName=true');
     assert.match(result.errorReason, /service not match/i, `expected service-mismatch error: ${result.errorReason}`);
     console.log('  ✅  wrong audience rejected (service not match)');
@@ -106,7 +106,7 @@ function signFixtureJwt(payload, options = {}) {
       jwtid: 'multi-aud-fixture',
     },
   );
-  const result = checkJwtToken({ token });
+  const result = await checkJwtToken({ token });
   assert.ok(!result.errorReason, `expected no error, got: ${result.errorReason}`);
   assert.strictEqual(result.payload?.service, expectedAud);
   console.log('  ✅  multi-audience standard JWT accepted when expected service is present');
@@ -123,7 +123,7 @@ function signFixtureJwt(payload, options = {}) {
       jwtid: 'missing-exp-fixture',
     },
   );
-  const result = checkJwtToken({ token });
+  const result = await checkJwtToken({ token });
   assert.ok(result.errorReason, 'token without exp must fail');
   assert.match(result.errorReason, /missing expiration/i, `expected missing-exp error: ${result.errorReason}`);
   console.log('  ✅  standard JWT without exp rejected');
@@ -132,7 +132,7 @@ function signFixtureJwt(payload, options = {}) {
 // ===== 7. Malformed token → "The token is not a JWT" =====
 
 {
-  const result = checkJwtToken({ token: 'definitely-not-a-jwt' });
+  const result = await checkJwtToken({ token: 'definitely-not-a-jwt' });
   assert.ok(result.errorReason, 'malformed token must fail');
   assert.match(result.errorReason, /not a JWT/i, `expected "not a JWT" message: ${result.errorReason}`);
   console.log('  ✅  malformed token rejected');
@@ -152,7 +152,7 @@ function signFixtureJwt(payload, options = {}) {
   const encrypted = legacyEncrypt(payload);
   const legacyToken = `${expire}.${encrypted}`;
   assert.match(legacyToken, legacyJwtRE, 'fixture must match legacy format');
-  const result = checkJwtToken({ token: legacyToken });
+  const result = await checkJwtToken({ token: legacyToken });
   assert.ok(!result.errorReason, `legacy token must pass, got: ${result.errorReason}`);
   assert.strictEqual(result.payload?.user, 'legacy-user');
   console.log('  ✅  legacy token fixture accepted');
@@ -182,12 +182,12 @@ function runSubprocess(name, scenario) {
 }
 
 // We compute revoke list values from the parent process so subprocesses just consume strings.
-const tokenForJtiRevoke = generateToken('rev-jti', 60, { service: expectedAud });
+const tokenForJtiRevoke = await generateToken('rev-jti', 60, { service: expectedAud });
 const decodedSegment = JSON.parse(Buffer.from(tokenForJtiRevoke.split('.')[1], 'base64url').toString('utf8'));
 const jtiToRevoke = decodedSegment.jti;
 assert.ok(jtiToRevoke, 'parent: must have a jti to revoke');
 
-const tokenForExactRevoke = generateToken('rev-exact', 60, { service: expectedAud });
+const tokenForExactRevoke = await generateToken('rev-exact', 60, { service: expectedAud });
 const legacyTokenForRevoke = (() => {
   const expire = Date.now() + 60 * 1000;
   const pl = JSON.stringify({ user: 'legacy-rev', expire, iat: new Date().toISOString(), service: expectedAud });
@@ -206,7 +206,7 @@ runSubprocess('standard JWT revoke by jti', {
   code: `
 import assert from 'node:assert';
 import { checkJwtToken } from './dist/core/auth/jwt.js';
-const r = checkJwtToken({ token: ${JSON.stringify(tokenForJtiRevoke)} });
+const r = await checkJwtToken({ token: ${JSON.stringify(tokenForJtiRevoke)} });
 assert.ok(r.errorReason, 'expected revoke error');
 assert.match(r.errorReason, /revoked/i, 'expected "revoked" in error: ' + r.errorReason);
 `,
@@ -224,7 +224,7 @@ runSubprocess('standard JWT exact-token revoke', {
   code: `
 import assert from 'node:assert';
 import { checkJwtToken } from './dist/core/auth/jwt.js';
-const r = checkJwtToken({ token: ${JSON.stringify(tokenForExactRevoke)} });
+const r = await checkJwtToken({ token: ${JSON.stringify(tokenForExactRevoke)} });
 assert.ok(r.errorReason, 'expected revoke error');
 assert.match(r.errorReason, /revoked/i, 'expected "revoked": ' + r.errorReason);
 `,
@@ -242,7 +242,7 @@ runSubprocess('legacy token revoke by full token', {
   code: `
 import assert from 'node:assert';
 import { checkJwtToken } from './dist/core/auth/jwt.js';
-const r = checkJwtToken({ token: ${JSON.stringify(legacyTokenForRevoke)} });
+const r = await checkJwtToken({ token: ${JSON.stringify(legacyTokenForRevoke)} });
 assert.ok(r.errorReason, 'expected revoke error');
 assert.match(r.errorReason, /revoked/i, 'expected "revoked": ' + r.errorReason);
 `,
@@ -253,7 +253,7 @@ assert.match(r.errorReason, /revoked/i, 'expected "revoked": ' + r.errorReason);
 {
   // We need a token whose payload carries an `ip` field AND a config with isCheckIP=true.
   // Generate token in this process (private claims include `ip`), verify in subprocess with isCheckIP=true.
-  const ipToken = generateToken('ip-user', 60, { service: expectedAud, ip: '10.0.0.0/24' });
+  const ipToken = await generateToken('ip-user', 60, { service: expectedAud, ip: '10.0.0.0/24' });
   runSubprocess('IP check — wrong client IP denied', {
     config: {
       webServer: { auth: { jwtToken: { isCheckIP: true } } },
@@ -261,7 +261,7 @@ assert.match(r.errorReason, /revoked/i, 'expected "revoked": ' + r.errorReason);
     code: `
 import assert from 'node:assert';
 import { checkJwtToken } from './dist/core/auth/jwt.js';
-const r = checkJwtToken({ token: ${JSON.stringify(ipToken)}, clientIp: '192.168.1.1' });
+const r = await checkJwtToken({ token: ${JSON.stringify(ipToken)}, clientIp: '192.168.1.1' });
 assert.ok(r.errorReason, 'expected IP error');
 assert.match(r.errorReason, /not in the allowed list/i, 'expected IP error: ' + r.errorReason);
 `,
@@ -274,7 +274,7 @@ assert.match(r.errorReason, /not in the allowed list/i, 'expected IP error: ' + 
     code: `
 import assert from 'node:assert';
 import { checkJwtToken } from './dist/core/auth/jwt.js';
-const r = checkJwtToken({ token: ${JSON.stringify(ipToken)}, clientIp: '10.0.0.5' });
+const r = await checkJwtToken({ token: ${JSON.stringify(ipToken)}, clientIp: '10.0.0.5' });
 assert.ok(!r.errorReason, 'expected no error, got: ' + r.errorReason);
 assert.strictEqual(r.payload?.user, 'ip-user');
 `,

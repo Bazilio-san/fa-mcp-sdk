@@ -252,6 +252,8 @@ mcp:
     maxRequests: 100
     #> Rate limit window length in milliseconds (1 minute)
     windowMs: 60000
+    scope: subject
+    maxConcurrentPerSubject: 16
   #> Hard ceilings enforced by the HTTP transport (standard §14).
   limits:
     #> Max accepted JSON / urlencoded request body, bytes. Default 1 MiB.
@@ -332,17 +334,13 @@ webServer:
     permanentServerTokens: [ 'token' ]
 
     #> ========================================================================
-    #> JWT TOKEN — standard signed JWT (HS256)
-    #> Tokens issued by this SDK are standard 3-segment JWTs `header.payload.signature`.
-    #> The verifier also temporarily accepts pre-migration legacy tokens
-    #> (`<expire_ms>.<hex>` AES-256-CTR format) for backward compatibility.
-    #> CPU cost: Medium — signature verification + JSON parsing
-    #>
-    #> To enable this authentication, you need to set auth.enabled = true and set
-    #> encryptKey to at least 8 characters (used as the HS256 signing secret).
+    #> JWT TOKEN
+    #> See config/default.yaml for full mode documentation. Modes:
+    #>   legacyAesCtr (default) | embedded | localKey | remoteJwks
     #> ========================================================================
     jwtToken:
-      #> HS256 signing secret used to sign/verify tokens for this MCP (minimum 8 chars)
+      mode: legacyAesCtr
+      #> HS256 signing secret — used ONLY by legacyAesCtr mode (minimum 8 chars).
       encryptKey: {{webServer.auth.token.encryptKey}}
       #> If webServer.auth.enabled and the parameter true, the service name and the service specified in the token will be checked
       checkMCPName: {{webServer.auth.token.checkMCPName}}
@@ -351,6 +349,19 @@ webServer:
       isCheckIP: false
       #> Optional JWT `iss` claim. When non-empty, the generator stamps it and the verifier requires it.
       issuer: ''
+
+      #> -------- Modes embedded / localKey / remoteJwks --------
+      algorithm: ES256
+      keyStoragePath: './keys'
+      publicKeyPath: ''
+      privateKeyPath: ''
+      jwksUri: ''
+      expectedIssuer: ''
+      expectedAudience: ''
+      jwksCacheTtl: 600
+      jwksCooldown: 30
+      clockSkew: 30
+      defaultTtl: 1800
 
     #> ========================================================================
     #> Basic Authentication — Base64 encoded username:password
@@ -384,3 +395,8 @@ webServer:
   #> Requires valid Authorization header (any method configured in webServer.auth).
   #> ========================================================================
   genJwtApiEnable: false
+
+  tokenCheck:
+    allowQueryToken: false
+
+  trustProxy: false

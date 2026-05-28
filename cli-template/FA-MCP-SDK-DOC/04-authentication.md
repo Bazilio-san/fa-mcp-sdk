@@ -12,16 +12,83 @@ interface AuthResult {
   username?: string;
   isTokenDecrypted?: boolean;
   payload?: any;
+  /**
+   * Standard §7.4 — authenticated but not authorized. Triggers HTTP 403
+   * (NO WWW-Authenticate challenge). Set by custom validators or scope checks.
+   */
+  forbidden?: boolean;
 }
 ```
+
+## JWT Modes (since SDK 0.7.0)
+
+`webServer.auth.jwtToken.mode` selects the JWT engine:
+
+| Mode | Algorithm | Issues tokens | Verifies tokens | Discovery | Use case |
+|------|-----------|---------------|-----------------|-----------|----------|
+| `legacyAesCtr` (default) | HS256 + legacy AES-CTR | yes (HS256) | yes | — | Backward-compatible / 0.6.x parity |
+| `embedded` | ES256 / RS256 | yes (autogen keys) | yes | full OIDC + JWKS + `/oauth/token` | Dev / demo |
+| `localKey` | ES256 / RS256 | when `privateKeyPath` set | yes | OIDC + JWKS | Isolated server with PEM keys |
+| `remoteJwks` | ES256 / RS256 | NO (`501`) | yes (remote JWKS) | protected-resource only | Corporate IdP (Keycloak, Okta, Azure AD, …) |
+
+Pre-flight checks (`init-mcp-server.ts`) reject misconfigured non-legacy modes at start:
+
+- `remoteJwks` without `jwksUri` → throws
+- `localKey` without `publicKeyPath` → throws
+- non-legacy without `expectedIssuer` → throws (standard §7.2)
+- `clockSkew > 60s` → throws (standard Прил. A.1)
+- `production` + `legacyAesCtr` + `auth.enabled=true` → warn (asymmetric required by standard)
+
+```yaml
+# config/local.yaml — corporate IdP
+webServer:
+  trustProxy: true   # behind HTTPS reverse proxy
+  auth:
+    enabled: true
+    jwtToken:
+      mode: remoteJwks
+      jwksUri: 'https://idp.corp/.well-known/jwks.json'
+      expectedIssuer: 'https://idp.corp'
+      expectedAudience: '${SERVICE_NAME}'
+      jwksCacheTtl: 600
+      jwksCooldown: 30
+      clockSkew: 30
+```
+
+Discovery endpoints mounted automatically when `mode != 'legacyAesCtr'`:
+
+- `GET /.well-known/oauth-protected-resource` (any non-legacy)
+- `GET /.well-known/openid-configuration` (`embedded` / `localKey`)
+- `GET /.well-known/jwks.json` (`embedded` / `localKey`)
+- `POST /oauth/token` (`embedded` + `localKey` with private key, `grant_type=password`)
+
+On every 401 the server sets:
+
+```
+WWW-Authenticate: Bearer realm="<appConfig.name>",
+                  resource_metadata="<base>/.well-known/oauth-protected-resource"
+```
+
+If the token was decoded but rejected (expired, bad scope), the header additionally carries
+`error="invalid_token", error_description="…"` per RFC 6750.
 
 ## Token Operations
 
 ```typescript
-import { generateToken } from 'fa-mcp-sdk';
+import { generateToken, checkJwtToken } from 'fa-mcp-sdk';
 
-// Generate JWT (liveTimeSec = seconds until expiry)
-const token = generateToken('john_doe', 3600, { role: 'admin' }); // 1 hour
+// Since 0.7.0 — generateToken / checkJwtToken are async (dispatch by jwtToken.mode).
+const token = await generateToken('john_doe', 3600, { role: 'admin' }); // 1 hour
+const r = await checkJwtToken({ token });
+```
+
+Synchronous fallbacks (legacy mode only — never throw on `mode = legacyAesCtr`):
+
+```typescript
+import { generateTokenLegacy, checkJwtTokenLegacy } from 'fa-mcp-sdk';
+
+const token = generateTokenLegacy('john_doe', 3600, { role: 'admin' });
+const r = checkJwtTokenLegacy({ token });
 ```
 
 ## Test Authentication
@@ -29,8 +96,9 @@ const token = generateToken('john_doe', 3600, { role: 'admin' }); // 1 hour
 ```typescript
 import { getAuthHeadersForTests, McpHttpClient, appConfig } from 'fa-mcp-sdk';
 
-// Auto-generates auth headers based on config (permanent → basic → JWT priority)
-const headers = getAuthHeadersForTests();
+// Since 0.7.0 — getAuthHeadersForTests is async. Uses canLocallyIssueJwt() so JWT-based
+// headers work in every mode that can sign locally (legacy / embedded / localKey).
+const headers = await getAuthHeadersForTests();
 
 // Usage
 const response = await fetch(`http://localhost:${appConfig.webServer.port}/mcp`, {
@@ -41,7 +109,62 @@ const response = await fetch(`http://localhost:${appConfig.webServer.port}/mcp`,
 
 // With test client
 const client = new McpHttpClient('http://localhost:3000');
-const result = await client.callTool('tool', args, getAuthHeadersForTests());
+const result = await client.callTool('tool', args, await getAuthHeadersForTests());
+```
+
+## Scope Enforcement (since SDK 0.7.0)
+
+Standard §7.5 — protect specific tools / prompts / resources with `requiredScopes`. The auth
+middleware checks the token's `scope` claim (space-separated) against the declared list and
+returns HTTP 403 (or JSON-RPC `-32004` for tools) when scopes are missing.
+
+```typescript
+// Resource with required scope
+{
+  uri: 'admin://users',
+  name: 'users',
+  description: 'Admin user list',
+  mimeType: 'application/json',
+  requireAuth: true,
+  requiredScopes: ['mcp:admin'],
+  content: async () => ({ ... }),
+}
+
+// Prompt with required scope
+{
+  name: 'admin_brief',
+  description: 'Privileged brief',
+  arguments: [],
+  content: '…',
+  requiredScopes: ['mcp:admin'],
+}
+
+// Tool with required scope (via _meta — SDK Tool type has no native scope field)
+{
+  name: 'delete_user',
+  description: 'Delete a user account',
+  inputSchema: { type: 'object', properties: { id: { type: 'string' } }, required: ['id'] },
+  _meta: { requiredScopes: ['mcp:admin'] },
+}
+```
+
+A token issued via `POST /oauth/token` with `scope=mcp:admin` (or any IdP token carrying that
+scope) passes; everything else hits 403. The full server-side scope map is published via the
+built-in `use://auth` resource — clients can introspect it programmatically.
+
+## Forbidden vs Unauthorized
+
+Custom validators can now signal 403 explicitly via `AuthResult.forbidden`:
+
+```typescript
+const validator: CustomAuthValidator = async (req) => {
+  const token = req.headers['x-api-key'];
+  if (!token) return { success: false, error: 'No API key' };               // → 401
+  if (await tokenIsRevoked(token)) {
+    return { success: false, forbidden: true, error: 'Token revoked' };     // → 403, no challenge
+  }
+  return { success: true, authType: 'custom' };
+};
 ```
 
 ## Admin Panel Authentication
@@ -296,12 +419,31 @@ curl -H "Authorization: Basic $(echo -n 'admin:password' | base64)" http://local
 curl -H "X-API-Key: custom-key" http://localhost:3000/mcp
 ```
 
+## Token Check Endpoint (`/ct`)
+
+Standard §7.1 forbids secrets in URL query strings. Since SDK 0.7.0 `GET /ct?t=<token>` is
+disabled by default and returns HTTP 405. Use `POST /ct` with JSON body instead:
+
+```bash
+curl -X POST http://localhost:3000/ct \
+  -H "Content-Type: application/json" \
+  -d '{"t": "<your-token>"}'
+```
+
+Opt-in for the legacy form (non-production only — flag is ignored when `NODE_ENV=production`):
+
+```yaml
+webServer:
+  tokenCheck:
+    allowQueryToken: true
+```
+
 ## CLI Token Generator
 
 Generate JWT tokens from the command line without starting the server:
 
 ```bash
-node scripts/generate-jwt.js -u <username> -ttl <duration> [-s <service>] [-p <params>]
+node scripts/generate-jwt.js -u <username> -ttl <duration> [-s <service>] [-p <params>] [--key <path>]
 ```
 
 | Option | ENV | Description |
@@ -310,8 +452,16 @@ node scripts/generate-jwt.js -u <username> -ttl <duration> [-s <service>] [-p <p
 | `-ttl` | `JWT_TTL` | Token lifetime: `<N>s` \| `<N>m` \| `<N>d` \| `<N>y` (required) |
 | `-s`, `--service-name` | `JWT_PAYLOAD_SERVICE_NAME` | Service name (optional) |
 | `-p`, `--params` | `JWT_PAYLOAD_PARAMS` | Extra payload `key=value;key=value` (optional) |
+| `--key`, `--private-key` | — | Override private key path (only for embedded / localKey modes) |
 
-The HS256 signing secret is read from config `webServer.auth.jwtToken.encryptKey` (via `config/local.yaml` or ENV `WS_TOKEN_ENCRYPT_KEY`). Generated tokens are standard 3-segment JWTs.
+Behaviour by `webServer.auth.jwtToken.mode`:
+
+| Mode | What the script does |
+|------|----------------------|
+| `legacyAesCtr` | HS256 with `encryptKey` (legacy). |
+| `embedded` | ES256/RS256 with keys from `keyStoragePath/private.pem`. |
+| `localKey` | ES256/RS256 with `privateKeyPath` (must be configured or passed via `--key`). |
+| `remoteJwks` | Exits with error — tokens must be obtained from the external IdP. |
 
 **Examples:**
 

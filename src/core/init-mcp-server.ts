@@ -217,6 +217,34 @@ export async function initMcpServer(data: McpServerData): Promise<void> {
         lgr.warn('webServer.originHosts is empty — CORS will reject every cross-origin request.');
       }
 
+      // Standard Прил. A.1 / §7.2 — JWT mode pre-flight checks.
+      // Fail fast on misconfigured non-legacy modes so a server with broken auth never starts.
+      const jwt = appConfig.webServer?.auth?.jwtToken;
+      const jwtMode = jwt?.mode ?? 'legacyAesCtr';
+      const skewLimit = 60;
+      if (typeof jwt?.clockSkew === 'number' && jwt.clockSkew > skewLimit) {
+        throw new Error(
+          `webServer.auth.jwtToken.clockSkew=${jwt.clockSkew}s exceeds the ${skewLimit}s limit (standard Прил. A.1).`,
+        );
+      }
+      if (jwtMode === 'remoteJwks' && !(jwt?.jwksUri || '').trim()) {
+        throw new Error('webServer.auth.jwtToken.jwksUri is required for mode=remoteJwks (стандарт Прил. A.1).');
+      }
+      if (jwtMode === 'localKey' && !(jwt?.publicKeyPath || '').trim()) {
+        throw new Error('webServer.auth.jwtToken.publicKeyPath is required for mode=localKey.');
+      }
+      if ((jwtMode === 'remoteJwks' || jwtMode === 'localKey') && !(jwt?.expectedIssuer || '').trim()) {
+        throw new Error(
+          `webServer.auth.jwtToken.expectedIssuer is required for mode=${jwtMode} (стандарт §7.2 / Прил. A.2).`,
+        );
+      }
+      if (jwtMode === 'legacyAesCtr' && isProd && appConfig.webServer?.auth?.enabled) {
+        lgr.warn(
+          'Auth profile=legacyAesCtr (HS256) is enabled in production. ' +
+            'Standard Прил. A.1 requires RS256/ES256 — migrate to mode=remoteJwks or mode=localKey.',
+        );
+      }
+
       // Check if port is available before proceeding
       await checkPortAvailability(appConfig.webServer.port, appConfig.webServer.host, true);
 

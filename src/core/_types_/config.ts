@@ -19,10 +19,40 @@ interface IWebServerConfig {
         password: string;
       };
       jwtToken: {
+        // 'legacyAesCtr' — HS256 issue + legacy AES-CTR read (current behavior, default).
+        // 'embedded'     — ES256/RS256 with built-in IdP: server auto-generates keypair on first start,
+        //                  publishes JWKS, accepts oauth/token (grant_type=password).
+        // 'localKey'     — ES256/RS256, public key from PEM file on disk (private key only when issuing).
+        // 'remoteJwks'   — ES256/RS256 verify only; tokens issued by external IdP (Keycloak/Okta/…).
+        mode?: 'legacyAesCtr' | 'embedded' | 'localKey' | 'remoteJwks';
+        // HS256 secret used only by legacyAesCtr mode (kept for backward compatibility).
         encryptKey: string;
         checkMCPName: boolean;
         isCheckIP: boolean;
         issuer?: string;
+        // ES256/RS256 algorithm — applies to embedded/localKey/remoteJwks. Default: ES256.
+        algorithm?: 'ES256' | 'RS256';
+        // Directory for embedded keypair (private.pem + public.pem). Auto-generated on first run.
+        // Used only in mode=embedded. Default: ./keys
+        keyStoragePath?: string;
+        // Path to public key PEM (used only in mode=localKey).
+        publicKeyPath?: string;
+        // Path to private key PEM. Optional — when set, allows local issuance via generate-jwt.js / /gen-jwt.
+        privateKeyPath?: string;
+        // Remote JWKS endpoint (used only in mode=remoteJwks). e.g. https://idp.example.com/.well-known/jwks.json
+        jwksUri?: string;
+        // Expected `iss` claim — required match in modes embedded/localKey/remoteJwks.
+        expectedIssuer?: string;
+        // Expected `aud` claim — token must contain this audience. Defaults to appConfig.name.
+        expectedAudience?: string;
+        // JWKS in-memory cache TTL in seconds. Default: 600.
+        jwksCacheTtl?: number;
+        // Minimum interval (seconds) between repeat JWKS fetches when kid missing. Default: 30.
+        jwksCooldown?: number;
+        // Allowed clock skew (seconds) for exp/nbf checks. Default: 30. Max enforced: 60 (standard Прил. A.1).
+        clockSkew?: number;
+        // Default TTL (seconds) for tokens issued by embedded /oauth/token endpoint. Default: 1800.
+        defaultTtl?: number;
       };
       permanentServerTokens: string[];
       //> Revocation lists — never accepted by MCP, Admin or Agent Tester
@@ -34,6 +64,13 @@ interface IWebServerConfig {
       };
     };
     genJwtApiEnable: boolean;
+    //> Standard §7.1 — POST /ct only by default. allowQueryToken=true re-enables GET /ct?t= (non-prod).
+    tokenCheck?: {
+      allowQueryToken?: boolean;
+    };
+    //> Express `trust proxy` setting (false | true | 'loopback' | number | etc.).
+    //> Required when /.well-known/openid-configuration is built from X-Forwarded-* headers.
+    trustProxy?: boolean | string | number;
   };
 }
 
@@ -62,6 +99,10 @@ interface IMCPConfig {
     rateLimit: {
       maxRequests: number;
       windowMs: number;
+      //> Standard §14 — 'subject' counts per JWT `sub` (falls back to IP). 'ip' = legacy.
+      scope?: 'subject' | 'ip';
+      //> Max concurrent in-flight tools/call per subject. Default 16.
+      maxConcurrentPerSubject?: number;
     };
     /**
      * Hard ceilings enforced by the HTTP transport. Standard §14 defines the defaults;

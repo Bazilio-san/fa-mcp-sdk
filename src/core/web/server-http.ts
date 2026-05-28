@@ -22,6 +22,7 @@ import { createAgentTesterRouter } from '../agent-tester/agent-tester-router.js'
 import { validateAdminAuthConfig } from '../auth/admin-auth.js';
 import { createAgentTesterSessionMW } from '../auth/agent-tester-auth.js';
 import { checkJwtToken, generateToken, MIN_ENCRYPT_KEY_LENGTH } from '../auth/jwt.js';
+import { canLocallyIssueJwt, getJwtRuntimeConfig } from '../auth/key-resolver.js';
 import { createAuthMW } from '../auth/middleware.js';
 import { checkPermanentToken } from '../auth/permanent.js';
 import { appConfig, getProjectData } from '../bootstrap/init-config.js';
@@ -45,6 +46,7 @@ import { createAdminRouter } from './admin-router.js';
 import { applyCors } from './cors.js';
 import { faviconSvg } from './favicon-svg.js';
 import { handleHomeInfo } from './home-api.js';
+import { createOAuthRouter } from './oauth-router.js';
 import { configureOpenAPI, createSwaggerUIAssetsMiddleware } from './openapi.js';
 import { createSvgRouter } from './svg-icons.js';
 
@@ -57,6 +59,27 @@ const staticPath = join(__dirname, 'static');
 const logger = lgr.getSubLogger({ name: chalk.bgYellow('server-http') });
 
 export const isAdminEnabled = appConfig.adminPanel?.enabled === true;
+
+/**
+ * Standard §14 — pick the rate-limit bucket key from the request:
+ *   - `scope: 'subject'` → JWT `sub`/`user` claim, falling back to req.ip when no auth payload
+ *   - `scope: 'ip'`      → req.ip / unknown
+ */
+function resolveRateLimitKey(req: express.Request, suffix: string = ''): string {
+  const scope = appConfig.mcp.rateLimit?.scope ?? 'subject';
+  let key = '';
+  if (scope === 'subject') {
+    const payload = (req as any).auth?.payload ?? (req as any).authInfo?.payload;
+    const sub: string | undefined = payload?.sub ?? payload?.user ?? (req as any).authInfo?.username;
+    if (sub && String(sub).trim()) {
+      key = `sub:${String(sub).trim().toLowerCase()}`;
+    }
+  }
+  if (!key) {
+    key = `ip:${req.ip || 'unknown'}`;
+  }
+  return suffix ? `${suffix}-${key}` : key;
+}
 
 /**
  * Handle rate limiting with consistent error response
@@ -98,6 +121,11 @@ async function handleRateLimit(
  */
 export async function startHttpServer(): Promise<void> {
   const app = express();
+  // Express `trust proxy`. Required for /.well-known/openid-configuration when the server
+  // sits behind HTTPS reverse proxy (X-Forwarded-Proto / X-Forwarded-Host).
+  if (appConfig.webServer.trustProxy !== undefined) {
+    app.set('trust proxy', appConfig.webServer.trustProxy);
+  }
   // Initialize rate limiter
   const rateLimiter = new RateLimiterMemory({
     keyPrefix: appConfig.shortName,
@@ -124,6 +152,12 @@ export async function startHttpServer(): Promise<void> {
   app.use(express.urlencoded({ extended: true, limit: maxPayloadBytes }));
 
   applyCors(app);
+
+  // OAuth discovery + token endpoints (mounted before auth MW so they remain public).
+  // Active only when jwtToken.mode !== 'legacyAesCtr'.
+  if (getJwtRuntimeConfig().mode !== 'legacyAesCtr') {
+    app.use(createOAuthRouter());
+  }
 
   app.use(faviconSvg());
 
@@ -190,13 +224,13 @@ export async function startHttpServer(): Promise<void> {
     });
   });
 
-  // Token check endpoint: GET /ct?t=<token> or POST /ct {"t": "<token>"}
-  // Returns { success, type: 'permanent' | 'JWT', payload? } or { success: false, error }
-  const handleTokenCheck = (req: express.Request, res: express.Response) => {
+  // Token check endpoint: POST /ct {"t": "<token>"}. Standard §7.1 forbids secrets in URL.
+  // GET /ct?t=<token> is gated behind webServer.tokenCheck.allowQueryToken (non-prod only).
+  const handleTokenCheck = async (req: express.Request, res: express.Response) => {
     const raw = req.method === 'GET' ? req.query.t : req.body?.t;
     const token = typeof raw === 'string' ? raw.trim() : '';
     if (!token) {
-      return res.status(400).json({ success: false, error: 'Token not provided. Pass via "t" query/body parameter' });
+      return res.status(400).json({ success: false, error: 'Token not provided. Pass via "t" body parameter' });
     }
 
     const { errorReason: permError } = checkPermanentToken(token);
@@ -207,14 +241,24 @@ export async function startHttpServer(): Promise<void> {
     const xff = req.headers['x-forwarded-for'];
     const xffStr = (Array.isArray(xff) ? (xff[0] ?? '') : (xff ?? '')).split(',').shift() ?? '';
     const clientIp = req.ip ?? (xffStr.trim() || (req.socket?.remoteAddress ?? ''));
-    const jwtResult = checkJwtToken({ token, clientIp });
+    const jwtResult = await checkJwtToken({ token, clientIp });
     if (!jwtResult.errorReason) {
       return res.json({ success: true, type: 'JWT', payload: jwtResult.payload });
     }
 
     return res.status(401).json({ success: false, error: jwtResult.errorReason });
   };
-  app.get('/ct', handleTokenCheck);
+  const allowQueryToken =
+    appConfig.webServer.tokenCheck?.allowQueryToken === true && process.env.NODE_ENV !== 'production';
+  if (allowQueryToken) {
+    app.get('/ct', handleTokenCheck);
+  } else {
+    app.get('/ct', (_req, res) =>
+      res.status(405).json({
+        error: 'GET /ct is disabled by standard §7.1. Use POST /ct with JSON body {"t": "<token>"}.',
+      }),
+    );
+  }
   app.post('/ct', handleTokenCheck);
 
   // Public endpoint: returns used HTTP headers configured in the template (optional)
@@ -257,13 +301,28 @@ export async function startHttpServer(): Promise<void> {
 
   // JWT generation API endpoint
   if (appConfig.webServer.genJwtApiEnable) {
+    const jwtMode = getJwtRuntimeConfig().mode;
     const encryptKey = appConfig.webServer.auth?.jwtToken?.encryptKey;
-    if (!encryptKey || encryptKey.length < MIN_ENCRYPT_KEY_LENGTH || encryptKey === '***') {
+    const legacyKeyMissing =
+      jwtMode === 'legacyAesCtr' && (!encryptKey || encryptKey.length < MIN_ENCRYPT_KEY_LENGTH || encryptKey === '***');
+
+    if (legacyKeyMissing) {
       logger.error('genJwtApiEnable is true but webServer.auth.jwtToken.encryptKey is not configured');
+    } else if (jwtMode === 'remoteJwks') {
+      app.post('/gen-jwt', authMW, (_req: express.Request, res: express.Response) => {
+        const { jwksUri } = getJwtRuntimeConfig();
+        res.status(501).json({
+          success: false,
+          error: 'cannot_issue_token',
+          error_description:
+            'This server runs in mode=remoteJwks and does not issue JWTs. ' +
+            (jwksUri ? `Obtain tokens from the IdP at ${jwksUri}.` : 'Obtain tokens from the configured IdP.'),
+        });
+      });
     } else {
       const TTL_MULTIPLIERS: Record<string, number> = { s: 1, m: 60, d: 86400, y: 31536000 };
 
-      app.post('/gen-jwt', authMW, (req: express.Request, res: express.Response) => {
+      app.post('/gen-jwt', authMW, async (req: express.Request, res: express.Response) => {
         try {
           const { username, ttl, service, params } = req.body as {
             username?: string;
@@ -321,7 +380,15 @@ export async function startHttpServer(): Promise<void> {
             }
           }
 
-          const token = generateToken(username.trim(), liveTimeSec, payload);
+          if (jwtMode !== 'legacyAesCtr' && !canLocallyIssueJwt()) {
+            return res.status(501).json({
+              success: false,
+              error: 'cannot_issue_token',
+              error_description: `Current jwtToken.mode=${jwtMode} cannot sign tokens locally.`,
+            });
+          }
+
+          const token = await generateToken(username.trim(), liveTimeSec, payload);
           const expire = Date.now() + liveTimeSec * 1000;
 
           return res.json({
@@ -436,7 +503,7 @@ export async function startHttpServer(): Promise<void> {
   app.get('/sse', authMW, async (req, res) => {
     try {
       // Apply rate limiting for SSE connection
-      const clientId = `sse-${req.ip || 'unknown'}`;
+      const clientId = resolveRateLimitKey(req, 'sse');
       await handleRateLimit(rateLimiter, clientId, req.ip || 'unknown', 'SSE', res, 1);
 
       logger.info('SSE client connected');
@@ -532,7 +599,7 @@ export async function startHttpServer(): Promise<void> {
       }
 
       // Apply rate limiting
-      const clientId = req.ip || 'unknown';
+      const clientId = resolveRateLimitKey(req);
       await handleRateLimit(rateLimiter, clientId, req.ip || 'unknown', 'SSE POST', res, req.body?.id);
 
       logger.info(`Direct SSE POST request received: ${req.body.method} | id: ${req.body.id}`);
@@ -631,7 +698,7 @@ export async function startHttpServer(): Promise<void> {
   app.post('/mcp', authMW, async (req, res) => {
     try {
       // Rate limiting and the body-size limit stay here, before the transport takes over.
-      const clientId = req.ip || 'unknown';
+      const clientId = resolveRateLimitKey(req);
       await handleRateLimit(rateLimiter, clientId, req.ip || 'unknown', 'HTTP MCP', res, req.body?.id);
       if (res.headersSent) {
         return; // rate limit already responded
@@ -639,7 +706,7 @@ export async function startHttpServer(): Promise<void> {
 
       // Dedicated rate-limit bucket for tool calls (was inline in the old switch).
       if ((req.body as any)?.method === 'tools/call') {
-        const toolCallClientId = `tool-${req.ip || 'unknown'}`;
+        const toolCallClientId = resolveRateLimitKey(req, 'tool');
         await handleRateLimit(
           rateLimiter,
           toolCallClientId,
