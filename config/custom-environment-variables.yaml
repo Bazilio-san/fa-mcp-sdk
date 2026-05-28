@@ -43,6 +43,10 @@ mcp:
   rateLimit:
     maxRequests: MCP_RATE_LIMIT_MAX_REQUESTS
     windowMs: MCP_RATE_LIMIT_WINDOW_MS
+    scope: MCP_RATE_LIMIT_SCOPE
+    maxConcurrentPerSubject:
+      __name: MCP_RATE_LIMIT_MAX_CONCURRENT_PER_SUBJECT
+      __format: number
   limits:
     maxPayloadBytes:
       __name: MCP_LIMITS_MAX_PAYLOAD_BYTES
@@ -83,11 +87,38 @@ webServer:
     enabled: WS_AUTH_ENABLED
     permanentServerTokens: WS_SERVER_TOKENS # comma separated list
     jwtToken:
+      mode: WS_JWT_MODE                      # legacyAesCtr | embedded | localKey | remoteJwks
       encryptKey: WS_TOKEN_ENCRYPT_KEY
       checkMCPName: WS_CHECK_MC_NAME
       isCheckIP: WS_JWT_CHECK_IP
       issuer: WS_JWT_ISSUER
+      algorithm: WS_JWT_ALGORITHM            # ES256 | RS256
+      keyStoragePath: WS_JWT_KEY_STORAGE_PATH
+      publicKeyPath: WS_JWT_PUBLIC_KEY_PATH
+      privateKeyPath: WS_JWT_PRIVATE_KEY_PATH
+      jwksUri: WS_JWT_JWKS_URI
+      expectedIssuer: WS_JWT_EXPECTED_ISSUER
+      expectedAudience: WS_JWT_EXPECTED_AUDIENCE
+      jwksCacheTtl:
+        __name: WS_JWT_JWKS_CACHE_TTL
+        __format: number
+      jwksCooldown:
+        __name: WS_JWT_JWKS_COOLDOWN
+        __format: number
+      clockSkew:
+        __name: WS_JWT_CLOCK_SKEW
+        __format: number
+      defaultTtl:
+        __name: WS_JWT_DEFAULT_TTL
+        __format: number
     basic:
       username: WS_AUTH_BASIC_USERNAME
       password: WS_AUTH_BASIC_PASSWORD
   genJwtApiEnable: WS_GEN_JWT_API_ENABLE
+  tokenCheck:
+    allowQueryToken:
+      __name: WS_TOKEN_CHECK_ALLOW_QUERY
+      __format: boolean
+  trustProxy:
+    __name: WS_TRUST_PROXY
+    __format: boolean

@@ -14,6 +14,7 @@ import { normalizeHeaders, trim } from '../utils/utils.js';
 
 import { checkBasicAuth } from './basic.js';
 import { checkJwtToken, generateToken, jwtTokenRE, MIN_ENCRYPT_KEY_LENGTH } from './jwt.js';
+import { canLocallyIssueJwt } from './key-resolver.js';
 import { checkPermanentToken } from './permanent.js';
 import { AuthDetectionResult, AuthResult, AuthType } from './types.js';
 
@@ -219,7 +220,7 @@ export async function checkMultiAuth(req: Request): Promise<AuthResult> {
         const xff = req.headers['x-forwarded-for'];
         const xffStr = (Array.isArray(xff) ? (xff[0] ?? '') : (xff ?? '')).split(',').shift() ?? '';
         const clientIp = req.ip ?? (xffStr.trim() || (req.socket?.remoteAddress ?? ''));
-        const { errorReason, payload, isTokenDecrypted } = checkJwtToken({ token: credentials, clientIp });
+        const { errorReason, payload, isTokenDecrypted } = await checkJwtToken({ token: credentials, clientIp });
         if (!errorReason) {
           return { success: true, authType: 'jwtToken', payload };
         }
@@ -280,7 +281,7 @@ export function logAuthConfiguration(): void {
  * 3. JWT token - if jwtToken.encryptKey is set, generate token on the fly
  * @returns {Object} Headers object with Authorization header if auth is enabled
  */
-export function getAuthHeadersForTests(): object {
+export async function getAuthHeadersForTests(): Promise<object> {
   const auth = appConfig.webServer?.auth;
 
   // If auth is not enabled, no headers needed
@@ -307,16 +308,15 @@ export function getAuthHeadersForTests(): object {
     return { Authorization: `Basic ${credentials}` };
   }
 
-  // 3. Check JWT token - generate on the fly if encryptKey is set
-  const jwtConfig = auth.jwtToken;
-  if (jwtConfig?.encryptKey && jwtConfig.encryptKey.trim().length > 0) {
-    const token = generateToken('vpupkin', 100, { service: appConfig.name });
+  // 3. JWT token — generate on the fly if we can actually sign one (any non-remoteJwks mode)
+  if (canLocallyIssueJwt()) {
+    const token = await generateToken('vpupkin', 100, { service: appConfig.name });
     console.log('  Using generated JWT token for authentication');
     return { Authorization: `Bearer ${token}` };
   }
 
   // No valid auth method configured but auth is enabled
   console.warn('⚠️  Auth is enabled but no valid authentication method is configured!');
-  console.warn('   Configure one of: permanentServerTokens, basic auth, or jwtToken.encryptKey');
+  console.warn('   Configure one of: permanentServerTokens, basic auth, or jwtToken (with local signing).');
   return {};
 }

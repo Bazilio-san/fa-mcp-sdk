@@ -40,4 +40,9 @@ export interface AuthResult {
   username?: string;
   isTokenDecrypted?: boolean | undefined; // only for JWT
   payload?: any;
+  /**
+   * Standard §7.4 — authenticated but not authorized. Triggers HTTP 403
+   * (NO WWW-Authenticate challenge). Set by custom validators or scope checks.
+   */
+  forbidden?: boolean;
 }

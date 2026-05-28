@@ -1,7 +1,7 @@
 {
   "name": "fa-mcp-sdk",
   "productName": "FA MCP SDK",
-  "version": "0.6.2",
+  "version": "0.7.1",
   "description": "Core infrastructure and templates for building Model Context Protocol (MCP) servers with TypeScript",
   "type": "module",
   "main": "dist/core/index.js",
@@ -51,7 +51,11 @@
     "tsoa:spec": "tsoa spec",
     "check-llm": "node dist/core/agent-tester/check-llm.js",
     "test:ip-check": "npm run build && node tests/ip-check.test.mjs",
-    "test:jwt": "npm run build && node tests/jwt.test.mjs"
+    "test:jwt": "npm run build && node tests/jwt.test.mjs",
+    "test:jwt-v2": "npm run build && node tests/jwt-v2.test.mjs",
+    "test:oauth-endpoints": "npm run build && node tests/oauth-endpoints.test.mjs",
+    "test:agent-tester-modes": "npm run build && node tests/agent-tester-auth-modes.test.mjs",
+    "test:agent-tester-ttl": "npm run build && node tests/agent-tester-ttl-refresh.test.mjs"
   },
   "keywords": [
     "mcp",
@@ -92,6 +96,7 @@
     "express": "^5.2.1",
     "fa-consul": "^1.0.7",
     "helmet": "^8.1.0",
+    "jose": "^5.10.0",
     "js-yaml": "^4.1.1",
     "jsonwebtoken": "^9.0.3",
     "node-cache": "^5.1.2",

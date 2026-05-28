@@ -7,6 +7,7 @@ import chalk from 'chalk';
 
 import { appConfig } from '../../bootstrap/init-config.js';
 import { generateToken } from '../../auth/jwt.js';
+import { canLocallyIssueJwt } from '../../auth/key-resolver.js';
 import { logger as lgr } from '../../logger.js';
 import { MCP_APPS_EXTENSION_ID, MCP_APPS_RESOURCE_MIME_TYPE } from '../../mcp/mcp-apps.js';
 import {
@@ -208,7 +209,7 @@ export class TesterMcpClientService {
       logger.info(`Tool ${toolName} executed successfully`);
       return result;
     } catch (error) {
-      if (this.isAuthError(error) && this.reissueOwnJwt(mcpConfig)) {
+      if (this.isAuthError(error) && (await this.reissueOwnJwt(mcpConfig))) {
         logger.warn(`Tool ${toolName}: 401 received, JWT reissued, retrying once`);
         try {
           const result = await invoke();
@@ -253,9 +254,10 @@ export class TesterMcpClientService {
 
   // Reissue a JWT for our own server when the cached Authorization header has expired.
   // Returns true if the header was rewritten and the cached client purged — caller may retry once.
-  private reissueOwnJwt(mcpConfig: TesterMcpConfig): boolean {
+  // Skips when we cannot sign locally (e.g. mode=remoteJwks delegates issuance to external IdP).
+  private async reissueOwnJwt(mcpConfig: TesterMcpConfig): Promise<boolean> {
     const auth = appConfig.webServer?.auth;
-    if (!auth?.enabled || !auth.jwtToken?.encryptKey) {
+    if (!auth?.enabled || !canLocallyIssueJwt()) {
       return false;
     }
     if (!this.isOwnMcpUrl(mcpConfig.url)) {
@@ -272,7 +274,7 @@ export class TesterMcpClientService {
     }
 
     const ttlSec = appConfig.agentTester?.tokenTTLSec ?? 1800;
-    const jwt = generateToken('agentTester', ttlSec, { service: appConfig.name });
+    const jwt = await generateToken('agentTester', ttlSec, { service: appConfig.name });
 
     const oldKey = this.getConnectionKey(mcpConfig);
     const oldEntry = this.clientCache.get(oldKey);

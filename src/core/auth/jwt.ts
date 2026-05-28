@@ -9,6 +9,8 @@ import { logger as lgr } from '../logger.js';
 import { isObject, trim } from '../utils/utils.js';
 
 import { parseIpList, isIpAllowed } from './ip-check.js';
+import { generateTokenV2, verifyJwtV2 } from './jwt-v2.js';
+import { getJwtRuntimeConfig } from './key-resolver.js';
 import { isJtiRevoked, isJwtTokenRevoked, isUserRevoked } from './revocation.js';
 import { ICheckTokenResult, ITokenPayload } from './types.js';
 
@@ -60,15 +62,26 @@ export const decrypt = (encryptedStr: string) => {
 };
 
 /**
- * Generates a standard signed JWT (HS256).
- * - `user` becomes `sub`
- * - `service` becomes `aud`
- * - `expire` becomes `exp`
- * - `jti` is auto-generated via crypto.randomUUID()
- * - other payload keys are written as private claims
- * - `iss` is added only when webServer.auth.jwtToken.issuer is configured
+ * Generates a signed JWT.
+ *
+ * Dispatches by `appConfig.webServer.auth.jwtToken.mode`:
+ *   - 'legacyAesCtr' (default) → HS256 with appConfig encryptKey (sync impl below)
+ *   - 'embedded' | 'localKey'  → ES256/RS256 with KeyResolver (via generateTokenV2)
+ *   - 'remoteJwks'             → throws — this server does not issue tokens
  */
-export const generateToken = (user: string, liveTimeSec: number, payload?: any): string => {
+export async function generateToken(user: string, liveTimeSec: number, payload?: any): Promise<string> {
+  const { mode } = getJwtRuntimeConfig();
+  if (mode === 'legacyAesCtr') {
+    return generateTokenLegacy(user, liveTimeSec, payload);
+  }
+  return generateTokenV2(user, liveTimeSec, payload);
+}
+
+/**
+ * Legacy HS256 token issuer (used only when mode=legacyAesCtr). Kept synchronous for
+ * minimum-risk parity with prior releases and for use by tests.
+ */
+export const generateTokenLegacy = (user: string, liveTimeSec: number, payload?: any): string => {
   user = trim(user).toLowerCase();
   if (!user) {
     throw new Error('generateToken: Username is empty');
@@ -104,12 +117,29 @@ export const generateToken = (user: string, liveTimeSec: number, payload?: any):
 
 /**
  * Verifies a token.
- * Routes by format:
- *   - `header.payload.signature` → standard JWT verification
- *   - `<expire_ms>.<hex>` → legacy AES-256-CTR fallback
- * Returns a normalized `ITokenPayload`.
+ *
+ * Dispatches by `appConfig.webServer.auth.jwtToken.mode`:
+ *   - 'legacyAesCtr' (default)              → in-process HS256 + AES-CTR fallback
+ *   - 'embedded' | 'localKey' | 'remoteJwks' → ES256/RS256 via verifyJwtV2 (jose-based)
  */
-export const checkJwtToken = (arg: {
+export async function checkJwtToken(arg: {
+  token: string;
+  expectedUser?: string;
+  expectedService?: string;
+  clientIp?: string;
+}): Promise<ICheckTokenResult> {
+  const { mode } = getJwtRuntimeConfig();
+  if (mode === 'legacyAesCtr') {
+    return checkJwtTokenLegacy(arg);
+  }
+  return verifyJwtV2(arg);
+}
+
+/**
+ * Legacy verifier — accepts standard HS256 JWTs and pre-migration AES-CTR tokens.
+ * Used only when mode=legacyAesCtr.
+ */
+export const checkJwtTokenLegacy = (arg: {
   token: string;
   expectedUser?: string;
   expectedService?: string;

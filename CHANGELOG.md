@@ -5,6 +5,190 @@ All notable changes to `fa-mcp-sdk` are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.0] - 2026-05-28
+
+Phase 3 — Auth profile (RS256/ES256 + JWKS + MCP Authorization). Closes the §7 /
+§7.3 / §7.4 / Прил. A gaps in `claudedocs/std/mcp-server-implementation-standard.md`
+through `claudedocs/std/phase-3-auth-profile-with-jwks-reuse-package.md`
+(WI-A1…A4 + WI-B1…B6). Cherry-picks the cryptography stack from the `JWKS` branch
+(commit `a5ed245`) and layers on the validation, scope-enforcement, rate-limit,
+and `/ct` hardening that the standard requires on top of it.
+
+### Added
+
+- **Four-mode JWT runtime** (WI-A1/A2, §7.2 / Прил. A.1). New
+  `webServer.auth.jwtToken.mode`:
+  - `legacyAesCtr` (default) — HS256 issue + legacy AES-CTR read. Bit-for-bit parity
+    with 0.6.x for downstream servers that have not yet migrated.
+  - `embedded` — ES256/RS256 with a built-in IdP: auto-generates a keypair in
+    `keyStoragePath`, publishes JWKS at `/.well-known/jwks.json`, exposes
+    `POST /oauth/token` (grant_type=password).
+  - `localKey` — ES256/RS256 verifying against `publicKeyPath`; optional
+    `privateKeyPath` enables local issuance via `generate-jwt.js` / `/gen-jwt`.
+  - `remoteJwks` — ES256/RS256 verify against an external IdP's
+    `jwksUri` (with `jwksCacheTtl` + `jwksCooldown`); the server refuses to issue
+    tokens itself.
+- **`jose@^5.10.0`** added to `dependencies` as the JWT engine for non-legacy modes.
+  `jsonwebtoken` remains for `legacyAesCtr`.
+- **`src/core/auth/key-resolver.ts`** — uniform `KeyResolver` interface with
+  `Embedded` / `Local` / `RemoteJwks` implementations, `getJwtRuntimeConfig()`,
+  `canLocallyIssueJwt()`, `buildLocalJwks()`.
+- **`src/core/auth/jwt-v2.ts`** — `generateTokenV2()` / `verifyJwtV2()` based on
+  `jose` (`SignJWT` + `jwtVerify`), respecting `expectedIssuer` / `expectedAudience` /
+  `clockSkew`.
+- **OAuth / OIDC discovery endpoints** (WI-A3, §7.3) — mounted automatically when
+  `mode !== 'legacyAesCtr'`:
+  - `GET /.well-known/oauth-protected-resource` (any non-legacy mode, RFC 9728).
+  - `GET /.well-known/openid-configuration` (`embedded` / `localKey`, OIDC Discovery 1.0).
+  - `GET /.well-known/jwks.json` (`embedded` / `localKey`).
+  - `POST /oauth/token` (`embedded` + `localKey` with private key, grant_type=password).
+  Express `trust proxy` honours `webServer.trustProxy` so the issuer URL stays correct
+  behind HTTPS reverse proxies.
+- **Pre-flight start-up validation** (WI-B1, Прил. A.1 / §7.2). `initMcpServer` now
+  throws when `remoteJwks` has no `jwksUri`, `localKey` has no `publicKeyPath`,
+  non-legacy modes have no `expectedIssuer`, or `clockSkew > 60s`. Production +
+  `legacyAesCtr` now emits a warning instructing the operator to migrate to
+  RS256/ES256.
+- **`WWW-Authenticate` on every 401** (WI-A2 + WI-B2, §7.4). Header now carries
+  `realm="<appConfig.name>"`, plus `resource_metadata="…/.well-known/oauth-protected-resource"`
+  in non-legacy modes. When a token verified-but-failed (e.g. expired) the header
+  adds `error="invalid_token", error_description="…"` per RFC 6750.
+- **HTTP 403 for authorization failures** (WI-B3, §7.4 / §7.5). New
+  `AuthResult.forbidden` flag distinguishes "no creds" (401 + challenge) from
+  "creds OK but lacks permission" (403, no challenge). Custom validators may now
+  return `forbidden: true`.
+- **Scope enforcement** (WI-B5, §7.5):
+  - `IResourceData.requiredScopes` / `IPromptData.requiredScopes`. The auth middleware
+    rejects `resources/read` / `prompts/get` whose target declares scopes the token
+    does not carry, returning 403.
+  - Tool dispatch in `create-mcp-server.ts` reads `tool._meta.requiredScopes`
+    (or `tool.requiredScopes`) and raises JSON-RPC `-32004` with
+    `data.missing` on insufficient scope.
+  - `use://auth` now publishes the full server-side `requiredScopes` map for tools,
+    prompts, and resources, plus the live `jwt.mode` / `jwt.algorithm` /
+    `discovery.*` URLs.
+- **Per-subject rate limit + max concurrent in-flight `tools/call`** (WI-B6, §14):
+  - `mcp.rateLimit.scope` (`'subject'` default | `'ip'`). Subject = JWT `sub`/`user`
+    with IP fallback when auth is disabled.
+  - `mcp.rateLimit.maxConcurrentPerSubject` (default 16). Exceeded → `RateLimitedError`
+    (`-32003`/HTTP 429 + `Retry-After`).
+- **JWT generation script** (`scripts/generate-jwt.js`) — mode-aware. `legacyAesCtr`
+  keeps HS256; `embedded` / `localKey` sign with ES256/RS256 from keystore.
+  `remoteJwks` exits with a helpful error pointing at the configured IdP.
+- **Test suites** (WI-A4):
+  - `tests/jwt-v2.test.mjs` — embedded sign/verify (ES256/RS256), tamper, expiry,
+    `remoteJwks` issue refusal.
+  - `tests/oauth-endpoints.test.mjs` — `/.well-known/*`, `POST /oauth/token`
+    success + grant/credential rejections, `WWW-Authenticate` shape on 401.
+  - `tests/agent-tester-auth-modes.test.mjs` — server.auth × useAuth matrix; per-mode
+    refresh endpoint behaviour.
+  - `tests/agent-tester-ttl-refresh.test.mjs` — proactive refresh, expired-token 401,
+    retry-on-401.
+  - `tests/helpers/spawn-server.mjs` — shared spawn-and-await harness.
+
+### Changed
+
+- **`generateToken()` / `checkJwtToken()` are now `async`** (WI-A2, `[BREAKING]`).
+  Both dispatch through `getJwtRuntimeConfig().mode`. Legacy synchronous behaviour is
+  still available via the explicit exports `generateTokenLegacy` /
+  `checkJwtTokenLegacy`. All in-tree callers were migrated (`multi-auth.ts`,
+  `admin-auth.ts`, `agent-tester-auth.ts`, `token-generator/server.ts`,
+  `agent-tester/services/TesterMcpClientService.ts`, admin & agent-tester routers,
+  `server-http.ts:/ct`, `/gen-jwt`).
+- **`getAuthHeadersForTests()` is now `async`** (`[BREAKING]`). Uses
+  `canLocallyIssueJwt()` so JWT-based test headers work in every mode that can
+  sign locally (not just legacy with `encryptKey`).
+- **`/gen-jwt` in `remoteJwks` mode** returns HTTP 501 with `cannot_issue_token`,
+  pointing at the configured IdP.
+- **`GET /ct?t=<token>` is disabled by default** (WI-B4, §7.1, `[BREAKING]`).
+  Standard §7.1 forbids secrets in URL query strings. The endpoint now answers
+  HTTP 405; tokens must be posted to `POST /ct` with JSON body. The opt-in
+  `webServer.tokenCheck.allowQueryToken: true` re-enables the legacy form for
+  non-production deployments (the flag is ignored when `NODE_ENV=production`).
+- **Auth profile (`use://auth`)** now includes `jwt.{mode,algorithm,expectedIssuer,
+  expectedAudience,jwksUri}`, the live `discovery.*` URLs, and a `requiredScopes`
+  snapshot.
+
+### Configuration
+
+Schema additions (mirrored in `config/default.yaml`, `config/_local.yaml`,
+`config/custom-environment-variables.yaml`, and `IWebServerConfig` /
+`IMCPConfig`):
+
+```yaml
+webServer:
+  trustProxy: false       # boolean | string | number — Express trust proxy
+  tokenCheck:
+    allowQueryToken: false   # standard §7.1 — POST /ct only by default
+  auth:
+    jwtToken:
+      mode: legacyAesCtr
+      algorithm: ES256
+      keyStoragePath: './keys'
+      publicKeyPath: ''
+      privateKeyPath: ''
+      jwksUri: ''
+      expectedIssuer: ''
+      expectedAudience: ''
+      jwksCacheTtl: 600
+      jwksCooldown: 30
+      clockSkew: 30
+      defaultTtl: 1800
+mcp:
+  rateLimit:
+    scope: subject              # 'subject' | 'ip'
+    maxConcurrentPerSubject: 16
+```
+
+New ENV overrides: `WS_JWT_MODE`, `WS_JWT_ALGORITHM`, `WS_JWT_KEY_STORAGE_PATH`,
+`WS_JWT_PUBLIC_KEY_PATH`, `WS_JWT_PRIVATE_KEY_PATH`, `WS_JWT_JWKS_URI`,
+`WS_JWT_EXPECTED_ISSUER`, `WS_JWT_EXPECTED_AUDIENCE`, `WS_JWT_JWKS_CACHE_TTL`,
+`WS_JWT_JWKS_COOLDOWN`, `WS_JWT_CLOCK_SKEW`, `WS_JWT_DEFAULT_TTL`,
+`WS_TOKEN_CHECK_ALLOW_QUERY`, `WS_TRUST_PROXY`, `MCP_RATE_LIMIT_SCOPE`,
+`MCP_RATE_LIMIT_MAX_CONCURRENT_PER_SUBJECT`.
+
+### Migration (0.6.x → 0.7.0)
+
+`[BREAKING]` items in summary:
+
+1. `generateToken()` / `checkJwtToken()` are async. Add `await` at every call site —
+   or import `generateTokenLegacy` / `checkJwtTokenLegacy` if synchronous behaviour
+   is mandatory (legacy-mode only).
+2. `getAuthHeadersForTests()` is async. Add `await`.
+3. `GET /ct?t=<token>` is disabled by default. Switch clients to
+   `POST /ct {"t":"<token>"}` or opt in via `webServer.tokenCheck.allowQueryToken`
+   (ignored in production).
+4. Auth profile schema gains the four-mode `jwtToken.mode`. Existing configs continue
+   to work unchanged (default `legacyAesCtr`); production deployments are encouraged
+   to migrate to `mode: remoteJwks` or `mode: localKey`.
+
+Example for moving to a corporate IdP:
+
+```yaml
+webServer:
+  auth:
+    enabled: true
+    jwtToken:
+      mode: remoteJwks
+      jwksUri: 'https://idp.corp/.well-known/jwks.json'
+      expectedIssuer: 'https://idp.corp'
+      expectedAudience: '<mcp-server-name>'
+      jwksCacheTtl: 600
+      clockSkew: 30
+```
+
+A dev-friendly variant with the built-in IdP:
+
+```yaml
+webServer:
+  auth:
+    enabled: true
+    jwtToken:
+      mode: embedded
+      algorithm: ES256
+      keyStoragePath: './keys'
+```
+
 ## [0.6.0] - 2026-05-28
 
 Phase 2 — Tools / Prompts / Resources contract. Closes P1 gaps against the MCP server

@@ -146,11 +146,11 @@ function buildAuthFailureMessage(scheme: string, looksLikeJwt: boolean, allowedT
  * Try authenticating a request against a single auth type.
  * Returns auth result or null if this type doesn't match the request.
  */
-function tryAuthType(
+async function tryAuthType(
   authType: AdminAuthType,
   scheme: string,
   credentials: string,
-): { success: boolean; error?: string; username?: string; payload?: any } | null {
+): Promise<{ success: boolean; error?: string; username?: string; payload?: any } | null> {
   switch (authType) {
     case 'permanentServerTokens': {
       if (scheme === 'basic') {
@@ -173,7 +173,7 @@ function tryAuthType(
       if (scheme === 'basic') {
         return null;
       } // Not a bearer/token
-      const result = checkJwtToken({ token: credentials });
+      const result = await checkJwtToken({ token: credentials });
       if (result.errorReason) {
         return { success: false, error: result.errorReason };
       }
@@ -227,7 +227,7 @@ export function createAdminAuthMW(): RequestHandler[] {
 
   // For standard auth types, create middleware
   return [
-    (req: Request, res: Response, next: NextFunction) => {
+    async (req: Request, res: Response, next: NextFunction) => {
       // Set default NTLM info for compatibility with token-generator templates
       req.ntlm = {
         isAuthenticated: false,
@@ -247,7 +247,7 @@ export function createAdminAuthMW(): RequestHandler[] {
       // Basic-specific for basic-scheme requests) instead of a generic 401.
       const errors: Partial<Record<AdminAuthType, string>> = {};
       for (const authType of standardTypes) {
-        const result = tryAuthType(authType, scheme || '', credentials);
+        const result = await tryAuthType(authType, scheme || '', credentials);
         if (!result) {
           continue;
         }

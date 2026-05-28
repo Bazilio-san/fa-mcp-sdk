@@ -6,6 +6,7 @@ import { appConfig } from '../bootstrap/init-config.js';
 import { debugTokenAuth } from '../debug.js';
 import { getPromptsList } from '../mcp/prompts.js';
 import { getResourcesList } from '../mcp/resources.js';
+import { buildWwwAuthenticateHeader } from '../web/oauth-router.js';
 
 import { checkMultiAuth, logAuthConfiguration } from './multi-auth.js';
 import { AuthResult } from './types.js';
@@ -96,6 +97,50 @@ const isPublicMcpRequest = async (req: Request): Promise<boolean> => {
   }
 };
 
+/**
+ * Standard §7.5 — verify the bearer token carries every scope required by the target
+ * resource / prompt. Returns the missing scopes (empty array when OK).
+ */
+function checkScopes(required: string[] | undefined, payload: any): string[] {
+  if (!Array.isArray(required) || required.length === 0) {
+    return [];
+  }
+  const tokenScopes = String(payload?.scope ?? '')
+    .split(/\s+/)
+    .filter(Boolean);
+  return required.filter((s) => !tokenScopes.includes(s));
+}
+
+/**
+ * Map the MCP method on a successful auth result to a required-scopes list, then verify
+ * the token carries them. Returns an `AuthResult.forbidden` shape when scopes are missing.
+ */
+async function enforceScopes(
+  req: Request,
+  authResult: { success: true; payload?: any },
+): Promise<{ forbidden: true; error: string } | undefined> {
+  const { method } = req.body || {};
+  let required: string[] | undefined;
+  if (method === 'resources/read') {
+    const uri = req.body?.params?.uri;
+    if (uri) {
+      const { resources } = await getResourcesList({ transport: 'http' });
+      required = (resources.find((r) => r.uri === uri) as any)?.requiredScopes;
+    }
+  } else if (method === 'prompts/get') {
+    const name = req.body?.params?.name;
+    if (name) {
+      const { prompts } = await getPromptsList({ transport: 'http' });
+      required = (prompts.find((p) => p.name === name) as any)?.requiredScopes;
+    }
+  }
+  const missing = checkScopes(required, authResult.payload);
+  if (missing.length > 0) {
+    return { forbidden: true, error: `Missing scopes: ${missing.join(',')}` };
+  }
+  return undefined;
+}
+
 // Legacy middleware functions removed - use createAuthMW() instead
 
 /**
@@ -161,7 +206,24 @@ export function createAuthMW(options: AuthMiddlewareOptions = {}) {
       // Use enhanced combined authentication (standard + custom validator)
       const authResult: AuthResult = await checkMultiAuth(req);
       if (!authResult.success) {
+        // Standard §7.4 — forbidden (authenticated but lacking permission) → 403, NO WWW-Authenticate.
+        if (authResult.forbidden) {
+          const errorDetails = debugAuth(req, 403, authResult.error || 'Forbidden');
+          return res.status(errorDetails.code).send(errorDetails.message);
+        }
         const errorDetails = debugAuth(req, 401, authResult.error || 'Authentication failed');
+        const wwwAuth = buildWwwAuthenticateHeader(req, {
+          errorReason: authResult.error,
+          isTokenDecrypted: authResult.isTokenDecrypted,
+        });
+        res.setHeader('WWW-Authenticate', wwwAuth);
+        return res.status(errorDetails.code).send(errorDetails.message);
+      }
+
+      // Standard §7.5 — scope enforcement against the target resource / prompt.
+      const scopeViolation = await enforceScopes(req, authResult as any);
+      if (scopeViolation) {
+        const errorDetails = debugAuth(req, 403, scopeViolation.error);
         return res.status(errorDetails.code).send(errorDetails.message);
       }
 
