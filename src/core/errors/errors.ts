@@ -2,7 +2,7 @@
  * Centralized error handling system for the MCP server
  */
 
-import { BaseMcpError } from './BaseMcpError.js';
+import { BaseMcpError, IMcpErrorData } from './BaseMcpError.js';
 
 export class ToolExecutionError extends BaseMcpError {
   constructor(toolName: string, message: string, printed?: boolean) {
@@ -20,18 +20,37 @@ export class ServerError extends BaseMcpError {
 }
 
 /**
- * Create JSON-RPC 2.0 error response
+ * Create JSON-RPC 2.0 error response.
+ *
+ * `error.data` follows the canonical Appendix B.3 shape — `requestId`, `field`, `reason`,
+ * `retryAfter` (plus implementation-specific keys). The JSON-RPC numeric code is taken from
+ * `error.jsonRpcCode` when present (set by specific-errors), otherwise falls back to `-32000`
+ * for any `BaseMcpError` without an explicit code, and `-32603` for unknown errors.
+ *
+ * Internal stack traces and file paths are NEVER copied into `error.data` — standard §13.3.
  */
-export function createJsonRpcErrorResponse(error: Error | BaseMcpError, requestId?: string | number | null): any {
-  const isCustomError = error instanceof BaseMcpError;
+export function createJsonRpcErrorResponse(
+  error: Error | BaseMcpError,
+  requestId?: string | number | null,
+  extraData?: IMcpErrorData,
+): any {
+  const isMcpError = error instanceof BaseMcpError;
+
+  const jsonRpcCode = isMcpError ? (typeof error.jsonRpcCode === 'number' ? error.jsonRpcCode : -32000) : -32603;
+
+  // Prefer the structured `data` field (Appendix B.3). Fall back to the legacy `details` payload
+  // only when no `data` was supplied — keeps older callers working without leaking arbitrary
+  // shape into the canonical slot.
+  const baseData = isMcpError ? (error.data ?? (error.details as IMcpErrorData | undefined)) : undefined;
+  const mergedData: IMcpErrorData | undefined = baseData || extraData ? { ...baseData, ...extraData } : undefined;
 
   return {
     jsonrpc: '2.0',
     id: requestId ?? 1,
     error: {
-      code: isCustomError ? (typeof error.code === 'number' ? error.code : -32000) : -32603,
+      code: jsonRpcCode,
       message: error.message,
-      data: isCustomError && error.details !== undefined ? error.details : undefined,
+      ...(mergedData ? { data: mergedData } : {}),
     },
   };
 }

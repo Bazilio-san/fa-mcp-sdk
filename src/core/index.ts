@@ -9,6 +9,7 @@ export type {
   TTransportType,
   IGetPromptParams,
   IGetPromptRequest,
+  IPromptArgument,
   IPromptContent,
   IPromptData,
   TPromptContentFunction,
@@ -18,6 +19,7 @@ export type {
   IReadResourceRequest,
   IResourceInfo,
   IResourceData,
+  IResourceTemplateInfo,
   IUiResourceMeta,
   IEndpointsOn404,
   IUsedHttpHeader,
@@ -60,6 +62,7 @@ export {
 export type { IQueryPgArgsCOptional } from './db/pg-db.js';
 
 export { BaseMcpError } from './errors/BaseMcpError.js';
+export type { IMcpErrorData } from './errors/BaseMcpError.js';
 
 export {
   addErrorMessage,
@@ -69,6 +72,14 @@ export {
   ToolExecutionError,
   ServerError,
 } from './errors/errors.js';
+
+export {
+  MCP_ERROR_CODES,
+  PayloadTooLargeError,
+  TimeoutError,
+  RateLimitedError,
+  ResourceNotFoundError,
+} from './errors/specific-errors.js';
 
 export { ValidationError } from './errors/ValidationError.js';
 
@@ -101,6 +112,8 @@ export type {
 } from './auth/types.js';
 
 export { initMcpServer, gracefulShutdown } from './init-mcp-server.js';
+
+export { notifyResourceUpdated } from './mcp/resources.js';
 
 export {
   formatToolResult,

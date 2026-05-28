@@ -43,6 +43,16 @@ mcp:
   rateLimit:
     maxRequests: MCP_RATE_LIMIT_MAX_REQUESTS
     windowMs: MCP_RATE_LIMIT_WINDOW_MS
+  limits:
+    maxPayloadBytes:
+      __name: MCP_LIMITS_MAX_PAYLOAD_BYTES
+      __format: number
+    maxToolResultBytes:
+      __name: MCP_LIMITS_MAX_TOOL_RESULT_BYTES
+      __format: number
+    toolTimeoutMs:
+      __name: MCP_LIMITS_TOOL_TIMEOUT_MS
+      __format: number
   tools:
     answerAs: MCP_TOOLS_ANSWER_AS
     hideAnnotations: MCP_TOOLS_HIDE_ANNOTATIONS
@@ -50,6 +60,17 @@ mcp:
     logFile: MCP_DEBUG_LOG_FILE
     builtinTools:
       __name: MCP_DEBUG_BUILTIN_TOOLS
+      __format: boolean
+  pagination:
+    pageSize:
+      __name: MCP_PAGINATION_PAGE_SIZE
+      __format: number
+  resources:
+    subscribeEnabled:
+      __name: MCP_RESOURCES_SUBSCRIBE_ENABLED
+      __format: boolean
+    templatesEnabled:
+      __name: MCP_RESOURCES_TEMPLATES_ENABLED
       __format: boolean
 
 uiColor:

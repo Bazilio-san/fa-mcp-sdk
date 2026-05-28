@@ -16,6 +16,11 @@ This framework provides complete infrastructure for building enterprise-grade MC
 - **Database Integration**: PostgreSQL with pgvector for vector operations
 - **Service Discovery**: Consul integration for microservices
 - **Rate Limiting**: Configurable rate limiting for all endpoints
+- **Transport Hardening**: Per-tool execution timeout, JSON-RPC request body cap and tool-result truncation —
+  all driven by `mcp.limits` in `config/default.yaml`:
+  - `mcp.limits.maxPayloadBytes` — max accepted request body (default 1 MiB; JSON-RPC `-32005` / HTTP 413 above)
+  - `mcp.limits.maxToolResultBytes` — max serialized tool result (default 10 MiB; truncated with explicit marker)
+  - `mcp.limits.toolTimeoutMs` — per-tool execution timeout (default 30 000 ms; JSON-RPC `-32004` / HTTP 504 above)
 - **API Documentation**: Automatic Swagger/OpenAPI generation
 - **Production Logging**: Structured logging with data masking
 - **Configuration Management**: YAML-based with environment overrides

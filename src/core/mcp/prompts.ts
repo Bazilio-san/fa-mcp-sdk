@@ -84,7 +84,7 @@ export const getPrompt = async (request: IGetPromptRequest, args: ITransportCont
 
   let content: IPromptContent | null = prompts.filter((p) => p.name === name).map((p) => p.content)[0] || null;
   if (typeof content === 'function') {
-    content = await content(request);
+    content = await content(request, request.params?.arguments);
   }
   if (!content) {
     emitTrace('mcp:prompt', { kind: 'get-err', name, ms: Date.now() - startedAt, error: 'unknown-prompt' });

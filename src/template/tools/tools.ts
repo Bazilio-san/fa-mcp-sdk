@@ -5,64 +5,97 @@ import { IToolInputSchema, IToolProperties } from '../../core/index.js';
 /**
  * Template tools configuration for MCP Server
  * Define your tools according to your server's functionality
+ *
+ * Schemas follow JSON Schema draft 2020-12 (`$schema`) and reject unknown fields
+ * (`additionalProperties: false`) — required by standard §9.2.
  */
 
-const getGenericInputSchema = (queryDescription?: string, additionalProperties?: IToolProperties): IToolInputSchema => {
-  const properties = {
+const JSON_SCHEMA_2020_12 = 'https://json-schema.org/draft/2020-12/schema';
+
+const getGenericInputSchema = (
+  queryDescription?: string,
+  additionalProperties?: IToolProperties,
+): IToolInputSchema => ({
+  $schema: JSON_SCHEMA_2020_12,
+  type: 'object',
+  properties: {
     query: {
       type: 'string',
       description: queryDescription || 'Input query or text',
     },
     ...additionalProperties,
-  };
+  },
+  required: ['query'],
+  additionalProperties: false,
+});
 
-  return {
-    type: 'object',
-    properties,
-    required: ['query'],
-  };
-};
+const getSearchInputSchema = (): IToolInputSchema => ({
+  $schema: JSON_SCHEMA_2020_12,
+  type: 'object',
+  properties: {
+    query: {
+      type: 'string',
+      description: 'Search query',
+    },
+    limit: {
+      type: 'number',
+      description: 'Maximum number of results to return (1-100, default: 20)',
+      minimum: 1,
+      maximum: 100,
+    },
+    threshold: {
+      type: 'number',
+      description: 'Minimum similarity threshold (0-1)',
+      minimum: 0,
+      maximum: 1,
+    },
+  },
+  required: ['query'],
+  additionalProperties: false,
+});
 
-const getSearchInputSchema = (): IToolInputSchema => {
-  return {
-    type: 'object',
-    properties: {
-      query: {
-        type: 'string',
-        description: 'Search query',
-      },
-      limit: {
-        type: 'number',
-        description: 'Maximum number of results to return (1-100, default: 20)',
-        minimum: 1,
-        maximum: 100,
-      },
-      threshold: {
-        type: 'number',
-        description: 'Minimum similarity threshold (0-1)',
-        minimum: 0,
-        maximum: 1,
+const exampleSearchOutputSchema = {
+  $schema: JSON_SCHEMA_2020_12,
+  type: 'object',
+  properties: {
+    results: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          id: { type: 'string' },
+          score: { type: 'number' },
+          text: { type: 'string' },
+        },
+        required: ['id'],
+        additionalProperties: true,
       },
     },
-    required: ['query'],
-  };
-};
+    total: { type: 'number' },
+  },
+  required: ['results'],
+  additionalProperties: true,
+} as const;
 
 // Template tools - customize according to your needs
 export const tools: Tool[] = [
   {
     name: 'example_tool',
+    title: 'Example: process text',
     description: 'Example tool that processes text input. Replace with your actual tools.',
     inputSchema: getGenericInputSchema('Text to process'),
   },
   {
     name: 'example_search',
+    title: 'Example: search with filters',
     description: 'Example search tool with pagination and filtering. Template for search-based tools.',
     inputSchema: getSearchInputSchema(),
+    outputSchema: exampleSearchOutputSchema as any,
   },
   // TODO: Add your actual tools here
   // {
   //   name: 'your_tool_name',
+  //   title: 'Human-readable title shown in UI',
   //   description: 'Description of what your tool does',
   //   inputSchema: getGenericInputSchema('Your query description', {
   //     // additional parameters

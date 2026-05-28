@@ -52,10 +52,22 @@ export interface TokenGenAuthInput {
  */
 export type TokenGenAuthHandler = (input: TokenGenAuthInput) => Promise<AuthResult> | AuthResult;
 
+/**
+ * Standard §10.5 — descriptor for a single prompt argument. The host advertises these
+ * to the LLM in `prompts/list`, then passes the resolved values as `request.params.arguments`
+ * (string-keyed map) on `prompts/get`.
+ */
+export interface IPromptArgument {
+  name: string;
+  description?: string;
+  required?: boolean;
+}
+
 export interface IPromptData {
   name: string;
   description: string;
-  arguments: [];
+  /** Per standard §10.5 — list of supported arguments; empty array if the prompt is static. */
+  arguments: IPromptArgument[];
   content: IPromptContent;
   requireAuth?: boolean;
 }
@@ -115,6 +127,19 @@ export interface IResourceInfo {
 
 export interface IResourceData extends IResourceInfo {
   content: IResourceContent;
+}
+
+/**
+ * Standard §11.5 — descriptor returned by `resources/templates/list`.
+ * `uriTemplate` follows RFC 6570 (e.g. `repo://{owner}/{name}`).
+ */
+export interface IResourceTemplateInfo {
+  uriTemplate: string;
+  name: string;
+  title?: string;
+  description?: string;
+  mimeType?: string;
+  _meta?: Record<string, unknown>;
 }
 
 export type TResourceContentFunction = (uri: string) => string | Promise<string>;
@@ -189,6 +214,15 @@ export interface McpServerData {
   // Resources
   usedHttpHeaders?: IUsedHttpHeader[] | null;
   customResources?: IResourceData[] | ((args: ITransportContext) => Promise<IResourceData[]>) | null;
+  /**
+   * Standard §11.5 (MAY) — descriptors served by `resources/templates/list`.
+   * Each entry is an MCP `ResourceTemplate` (`uriTemplate`, `name`, optional `description`, `mimeType`).
+   * Only consumed when `appConfig.mcp.resources.templatesEnabled` is true.
+   */
+  customResourceTemplates?:
+    | IResourceTemplateInfo[]
+    | ((args: ITransportContext) => Promise<IResourceTemplateInfo[]>)
+    | null;
 
   // Optional custom authentication feature
   customAuthValidator?: CustomAuthValidator;
@@ -219,7 +253,10 @@ export interface McpServerData {
   loggerSettings?: Partial<ILoggerSettings>;
 }
 
-export type TPromptContentFunction = (request: IGetPromptRequest) => string | Promise<string>;
+export type TPromptContentFunction = (
+  request: IGetPromptRequest,
+  args?: Record<string, string>,
+) => string | Promise<string>;
 export type IPromptContent = string | TPromptContentFunction;
 
 export interface IGetPromptParams {
@@ -246,9 +283,11 @@ export interface IToolProperties {
 }
 
 export interface IToolInputSchema {
+  $schema?: string;
   type: 'object';
   properties?: IToolProperties | undefined;
   required?: string[] | undefined;
+  additionalProperties?: boolean | Record<string, unknown>;
 
   [x: string]: unknown;
 }

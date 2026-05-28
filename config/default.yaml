@@ -249,6 +249,18 @@ mcp:
     maxRequests: 100
     #> Rate limit window length in milliseconds (1 minute)
     windowMs: 60000
+  #> Hard ceilings enforced by the HTTP transport (standard §14).
+  #> Concrete servers MAY raise or lower these values without patching SDK code.
+  limits:
+    #> Max accepted JSON / urlencoded request body, bytes. Default 1 MiB.
+    #> Bodies above this limit are rejected with JSON-RPC code -32005 / HTTP 413.
+    maxPayloadBytes: 1048576
+    #> Max serialized tool result, bytes. Default 10 MiB.
+    #> Responses above this limit are truncated with an explicit `truncated: true` marker.
+    maxToolResultBytes: 10485760
+    #> Per-tool execution timeout, milliseconds. Default 30 s.
+    #> Exceeded calls return JSON-RPC code -32004 / HTTP 504.
+    toolTimeoutMs: 30000
   #> Tool listing and response behavior
   tools:
     #> Response format configuration.
@@ -273,6 +285,17 @@ mcp:
     #> only callable from MCP App widgets (app.callServerTool(...)) or test
     #> clients. Default: false.
     builtinTools: false
+  #> Standard §8.4 — server-side pagination for tools/list, prompts/list, resources/list.
+  pagination:
+    #> Items per page. Default 100.
+    pageSize: 100
+  #> Standard §11.5 — optional MAY resource capabilities. Off by default.
+  resources:
+    #> Enable resources/subscribe + notifications/resources/updated. Only turn on
+    #> when the project has dynamic resources; static resource sets do not benefit.
+    subscribeEnabled: false
+    #> Enable resources/templates/list (returns empty array if no templates configured).
+    templatesEnabled: false
 
 #> Swagger / OpenAPI documentation settings
 swagger:
@@ -294,8 +317,10 @@ uiColor:
 
 #> HTTP server hosting MCP, admin panel, agent tester, swagger and health endpoints
 webServer:
-  #> Bind address for the HTTP server
-  host: '0.0.0.0'
+  #> Bind address for the HTTP server.
+  #> Default: '127.0.0.1' — loopback only (safer default, standard §6).
+  #> Set to '0.0.0.0' explicitly to listen on every interface (containers, public-facing deployments).
+  host: '127.0.0.1'
   #> TCP port for the HTTP server
   port: {{port}}
   #> Array of hosts that CORS skips

@@ -18,6 +18,7 @@ import { applyLoggerSettings, fileLogger, logger as lgr } from './logger.js';
 import { BUILTIN_MCP_DEBUG_TOOLS, handleBuiltinDebugTool, isBuiltinDebugTool } from './mcp/builtin-debug-tools.js';
 import { emitTrace, initDebugTraceFromConfig, makeCorr } from './mcp/debug-trace.js';
 import { startStdioServer } from './mcp/server-stdio.js';
+import { assertToolNames } from './mcp/validate-tool-names.js';
 import { checkPortAvailability } from './utils/port-checker.js';
 import { DEBUG_TOOL, DEBUG_TOOL_NAME, handleDebugTool } from './utils/testing/debug-tool.js';
 import { isNonEmptyObject } from './utils/utils.js';
@@ -178,6 +179,12 @@ export async function initMcpServer(data: McpServerData): Promise<void> {
   // Open the JSON-lines debug sink before any traffic flows (no-op when unset)
   initDebugTraceFromConfig();
 
+  // Standard §9.1 — eagerly validate static tool names so a misconfigured project fails fast.
+  // Dynamic (function-form) tools are validated lazily in getTools() on first call.
+  if (Array.isArray(data.tools)) {
+    assertToolNames(data.tools as Tool[]);
+  }
+
   // Temporarily store data in a global context for access from _core functions
   global.__MCP_PROJECT_DATA__ = wrapProjectDataWithDebug(data);
 
@@ -194,6 +201,21 @@ export async function initMcpServer(data: McpServerData): Promise<void> {
 
     case 'http': {
       await startupInfo({ dotEnvResult, customStartupInfo: data.customStartupInfo });
+
+      // Standard §6: production refuses an empty `originHosts` (which would degrade CORS to
+      // "allow everything"). Dev / test workflows keep working — the check fires only when
+      // NODE_ENV resolves to `production`.
+      const isProd = (process.env.NODE_CONSUL_ENV || process.env.NODE_ENV) === 'production';
+      const { originHosts } = appConfig.webServer;
+      if (isProd && (!Array.isArray(originHosts) || originHosts.length === 0)) {
+        throw new Error(
+          'webServer.originHosts must list at least one allowed host in production. ' +
+            'Refusing to start with an empty CORS allow-list.',
+        );
+      }
+      if (!isProd && (!Array.isArray(originHosts) || originHosts.length === 0)) {
+        lgr.warn('webServer.originHosts is empty — CORS will reject every cross-origin request.');
+      }
 
       // Check if port is available before proceeding
       await checkPortAvailability(appConfig.webServer.port, appConfig.webServer.host, true);

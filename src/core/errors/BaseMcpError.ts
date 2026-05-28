@@ -1,6 +1,25 @@
+/**
+ * Canonical shape of `error.data` per MCP standard (Appendix B.3).
+ * - `requestId`: correlation id (will surface as X-Request-Id once Phase 7 lands).
+ * - `field` / `reason`: validation diagnostics.
+ * - `retryAfter`: seconds until the next attempt is allowed (rate-limit `-32003`).
+ *
+ * Additional implementation-specific keys are allowed via the index signature, but the four
+ * canonical keys above MUST be honoured by every transport.
+ */
+export interface IMcpErrorData {
+  requestId?: string;
+  field?: string;
+  reason?: string;
+  retryAfter?: number;
+  [key: string]: unknown;
+}
+
 interface IMcpError {
   code: string;
   message: string;
+  data?: IMcpErrorData;
+  /** @deprecated Legacy free-form payload. Prefer the structured `data` field above. */
   details?: Record<string, unknown>;
   stack?: string;
 }
@@ -10,8 +29,10 @@ interface IMcpError {
  */
 export class BaseMcpError extends Error implements IMcpError {
   public readonly code: string;
+  public readonly data?: IMcpErrorData;
   public readonly details?: Record<string, unknown>;
   public readonly statusCode: number;
+  public readonly jsonRpcCode?: number;
   public readonly printed?: boolean;
 
   constructor(
@@ -20,6 +41,8 @@ export class BaseMcpError extends Error implements IMcpError {
     details?: Record<string, unknown>,
     statusCode?: number,
     printed?: boolean,
+    jsonRpcCode?: number,
+    data?: IMcpErrorData,
   ) {
     super(message);
     this.name = this.constructor.name;
@@ -30,7 +53,19 @@ export class BaseMcpError extends Error implements IMcpError {
       // @ts-ignore
       delete this.details;
     }
+    if (data !== undefined) {
+      this.data = data;
+    } else {
+      // @ts-ignore
+      delete this.data;
+    }
     this.statusCode = statusCode || 500;
+    if (jsonRpcCode !== undefined) {
+      this.jsonRpcCode = jsonRpcCode;
+    } else {
+      // @ts-ignore
+      delete this.jsonRpcCode;
+    }
     if (printed) {
       this.printed = true;
     } else {
@@ -49,6 +84,10 @@ export class BaseMcpError extends Error implements IMcpError {
       code: this.code,
       message: this.message,
     };
+
+    if (this.data !== undefined) {
+      result.data = this.data;
+    }
 
     if (this.details !== undefined) {
       result.details = this.details;

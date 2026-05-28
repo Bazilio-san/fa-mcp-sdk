@@ -63,10 +63,39 @@ interface IMCPConfig {
       maxRequests: number;
       windowMs: number;
     };
+    /**
+     * Hard ceilings enforced by the HTTP transport. Standard §14 defines the defaults;
+     * concrete servers MAY raise or lower them via `config/*.yaml`.
+     */
+    limits: {
+      /** Max accepted JSON / urlencoded request body, bytes. Default 1 MiB (1_048_576). */
+      maxPayloadBytes: number;
+      /** Max serialized tool result, bytes. Anything above is truncated with explicit markers. */
+      maxToolResultBytes: number;
+      /** Per-tool execution timeout, milliseconds. */
+      toolTimeoutMs: number;
+    };
     transportType: 'stdio' | 'http';
     tools: {
       answerAs: 'text' | 'structuredContent';
       hideAnnotations: boolean;
+    };
+    /**
+     * Standard §8.4 — server-side pagination for `tools/list`, `prompts/list`, `resources/list`.
+     * Cursor is opaque base64(offset); page is sorted stably by `name` / `uri`.
+     */
+    pagination?: {
+      /** Items per page. Default 100. */
+      pageSize?: number;
+    };
+    /**
+     * Standard §11.5 — optional MAY capabilities. Off by default.
+     */
+    resources?: {
+      /** Enable `resources/subscribe` + `notifications/resources/updated`. */
+      subscribeEnabled?: boolean;
+      /** Enable `resources/templates/list`. */
+      templatesEnabled?: boolean;
     };
     /**
      * Debug & diagnostics. All keys are optional and disabled by default — the

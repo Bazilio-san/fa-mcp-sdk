@@ -27,10 +27,17 @@ import { checkPermanentToken } from '../auth/permanent.js';
 import { appConfig, getProjectData } from '../bootstrap/init-config.js';
 import { getMainDBConnectionStatus } from '../db/pg-db.js';
 import { createJsonRpcErrorResponse, ServerError, toError, toStr } from '../errors/errors.js';
+import {
+  PayloadTooLargeError,
+  RateLimitedError,
+  ResourceNotFoundError,
+  TimeoutError,
+} from '../errors/specific-errors.js';
 import { logger as lgr } from '../logger.js';
 import { createMcpServer } from '../mcp/create-mcp-server.js';
 import { getPromptsList } from '../mcp/prompts.js';
 import { getResource, getResourcesList } from '../mcp/resources.js';
+import { truncateToolResponse, withToolTimeout } from '../mcp/tool-limits.js';
 import { formatRateLimitError, isRateLimitError } from '../utils/rate-limit.js';
 import { getTools, normalizeHeaders } from '../utils/utils.js';
 
@@ -69,18 +76,17 @@ async function handleRateLimit(
       const rateLimitMessage = formatRateLimitError(rateLimitError as any, appConfig.mcp.rateLimit.maxRequests);
       logger.warn(`Rate limit exceeded${context ? ` in ${context}` : ''}: ip: ${ip}`);
 
+      // Standard §14 + Appendix B: HTTP 429, JSON-RPC code -32003, `Retry-After` header in
+      // seconds (also mirrored under `error.data.retryAfter` per Appendix B.3).
+      const retryAfterSec = Math.max(1, Math.ceil(((rateLimitError as any).msBeforeNext ?? 1000) / 1000));
+      const error = new RateLimitedError(rateLimitMessage, retryAfterSec);
+
       if (res) {
-        res.status(200).json({
-          jsonrpc: '2.0',
-          id: id ?? 1,
-          error: {
-            code: -32000,
-            message: rateLimitMessage,
-          },
-        });
+        res.setHeader('Retry-After', String(retryAfterSec));
+        res.status(error.statusCode).json(createJsonRpcErrorResponse(error, id ?? null));
         return;
       } else {
-        throw new Error(rateLimitMessage, { cause: rateLimitError });
+        throw error;
       }
     }
     throw rateLimitError;
@@ -110,9 +116,12 @@ export async function startHttpServer(): Promise<void> {
     }),
   );
 
-  // JSON parsing
-  app.use(express.json({ limit: '10mb' }));
-  app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+  // JSON parsing. Body size is capped by `mcp.limits.maxPayloadBytes` (standard §14, default 1 MiB).
+  // Anything above is intercepted by the error-handling middleware below and converted to
+  // a JSON-RPC `-32005` / HTTP 413 response.
+  const { maxPayloadBytes } = appConfig.mcp.limits;
+  app.use(express.json({ limit: maxPayloadBytes }));
+  app.use(express.urlencoded({ extended: true, limit: maxPayloadBytes }));
 
   applyCors(app);
 
@@ -132,12 +141,14 @@ export async function startHttpServer(): Promise<void> {
     res.sendFile(join(staticPath, 'home', 'index.html'));
   });
 
-  // Health check endpoint
+  // Health check endpoint. Standard §16.1 mandates `status`, `version` and `uptime`. An
+  // `unhealthy` body is paired with HTTP 503 so platform health probes pick up the failure.
   app.get('/health', async (req, res) => {
     let health: any = {
       status: 'healthy',
+      version: appConfig.version,
+      uptime: process.uptime(),
       details: {
-        uptime: process.uptime(),
         timestamp: new Date().toISOString(),
       },
     };
@@ -147,7 +158,36 @@ export async function startHttpServer(): Promise<void> {
         health.status = 'unhealthy';
       }
     }
-    res.json(health);
+    res.status(health.status === 'healthy' ? 200 : 503).json(health);
+  });
+
+  // Readiness probe (standard §16.2) — no authentication; reports whether every dependency
+  // the server needs to serve traffic is up. Empty / sensitive details are NEVER returned —
+  // each check is reduced to `ok` / `error`.
+  app.get('/ready', async (req, res) => {
+    const checks: Record<string, 'ok' | 'error' | 'skipped'> = {};
+    let ready = true;
+
+    if (appConfig.isMainDBUsed) {
+      const dbStatus = await getMainDBConnectionStatus();
+      if (dbStatus === 'connected') {
+        checks.db = 'ok';
+      } else {
+        checks.db = 'error';
+        ready = false;
+      }
+    }
+
+    // Cache singleton: trivially available; surface it for diagnostic completeness.
+    checks.cache = 'ok';
+
+    // JWKS check is a placeholder until Phase 5 introduces the OAuth profile.
+    checks.jwks = 'skipped';
+
+    res.status(ready ? 200 : 503).json({
+      status: ready ? 'ready' : 'not_ready',
+      checks,
+    });
   });
 
   // Token check endpoint: GET /ct?t=<token> or POST /ct {"t": "<token>"}
@@ -378,12 +418,15 @@ export async function startHttpServer(): Promise<void> {
       const toolCallClientId = 'sse-tool-unknown';
       await handleRateLimit(rateLimiter, toolCallClientId, 'unknown', `SSE tool call | tool: ${request.params.name}`);
 
-      // Execute the tool call with preserved headers and payload from SSE connection establishment
+      // Execute the tool call with preserved headers and payload from SSE connection establishment.
+      // Same `mcp.limits` enforcement as the Streamable HTTP path.
       const { toolHandler } = getProjectData();
-      return (await toolHandler({
-        ...request.params,
-        ...sseCtx(),
-      })) as any;
+      const sseToolName = (request.params as any)?.name ?? 'unknown';
+      const response = (await withToolTimeout(
+        sseToolName,
+        () => toolHandler({ ...request.params, ...sseCtx() }) as Promise<any>,
+      )) as any;
+      return truncateToolResponse(response) as any;
     });
 
     return sseServer;
@@ -454,14 +497,8 @@ export async function startHttpServer(): Promise<void> {
 
       const transportData = sseTransports.get(sessionId);
       if (!transportData) {
-        res.status(404).json({
-          jsonrpc: '2.0',
-          error: {
-            code: -32001,
-            message: 'Session not found',
-          },
-          id: null,
-        });
+        const err = new ResourceNotFoundError('SSE session not found');
+        res.status(err.statusCode).json(createJsonRpcErrorResponse(err, null));
         return;
       }
 
@@ -489,14 +526,8 @@ export async function startHttpServer(): Promise<void> {
       }
 
       if (!targetTransport) {
-        res.status(404).json({
-          jsonrpc: '2.0',
-          error: {
-            code: -32001,
-            message: 'No SSE connection established. Connect via GET /sse first.',
-          },
-          id: req.body?.id ?? null,
-        });
+        const err = new ResourceNotFoundError('No SSE connection established. Connect via GET /sse first.');
+        res.status(err.statusCode).json(createJsonRpcErrorResponse(err, req.body?.id ?? null));
         return;
       }
 
@@ -534,6 +565,46 @@ export async function startHttpServer(): Promise<void> {
       const t = mcpTransports.get(oldest);
       mcpTransports.delete(oldest);
       void t?.close();
+    }
+  };
+
+  // Race the underlying transport against `mcp.limits.toolTimeoutMs` for `tools/call` requests.
+  // The standard (§14) requires HTTP 504 + JSON-RPC -32004 on timeout. The SDK's transport
+  // doesn't surface HTTP-level timeouts, so we monitor at this layer — whoever writes the
+  // response first wins. The tool promise itself is still bounded inside the SDK handler by
+  // `withToolTimeout`, which throws an `McpError(-32004)` to keep the JSON-RPC code correct
+  // for the SSE branch and for the (unlikely) case the handler beats the HTTP timer.
+  const runHttpToolCall = async (
+    req: express.Request,
+    res: express.Response,
+    exec: () => Promise<void>,
+  ): Promise<void> => {
+    if ((req.body as any)?.method !== 'tools/call') {
+      await exec();
+      return;
+    }
+    const timeoutMs = appConfig.mcp.limits.toolTimeoutMs;
+    let timer: NodeJS.Timeout | undefined;
+    const timerPromise = new Promise<'timeout'>((resolve) => {
+      timer = setTimeout(() => resolve('timeout'), timeoutMs);
+      if (typeof timer?.unref === 'function') {
+        timer.unref();
+      }
+    });
+    try {
+      const winner = await Promise.race([exec().then(() => 'done' as const), timerPromise]);
+      if (winner === 'timeout' && !res.headersSent) {
+        const toolName = (req.body as any)?.params?.name ?? 'unknown';
+        const err = new TimeoutError(`Tool '${toolName}' exceeded ${timeoutMs} ms timeout`, {
+          reason: 'tool_timeout',
+        });
+        logger.warn(`Tool timeout (${timeoutMs} ms) for tool: ${toolName}`);
+        res.status(err.statusCode).json(createJsonRpcErrorResponse(err, (req.body as any)?.id ?? null));
+      }
+    } finally {
+      if (timer) {
+        clearTimeout(timer);
+      }
     }
   };
 
@@ -585,7 +656,7 @@ export async function startHttpServer(): Promise<void> {
       const sessionId = req.headers[HTTP_SESSION_HEADER] as string | undefined;
       const existing = sessionId ? mcpTransports.get(sessionId) : undefined;
       if (existing) {
-        await existing.handleRequest(req, res, req.body);
+        await runHttpToolCall(req, res, () => existing.handleRequest(req, res, req.body));
         return;
       }
 
@@ -616,7 +687,7 @@ export async function startHttpServer(): Promise<void> {
         // Cast: SDK `Transport` types are stricter under `exactOptionalPropertyTypes`, but
         // `StreamableHTTPServerTransport` is a valid transport.
         await server.connect(transport as any);
-        await transport.handleRequest(req, res, req.body);
+        await runHttpToolCall(req, res, () => transport.handleRequest(req, res, req.body));
         return;
       }
 
@@ -648,6 +719,7 @@ export async function startHttpServer(): Promise<void> {
     const availableEndpoints: any = {
       home: 'GET /',
       health: 'GET /health',
+      ready: 'GET /ready',
       checkToken: 'GET /ct?t=<token>, POST /ct',
       sse: 'GET /sse, POST /sse',
       messages: 'POST /messages',
@@ -676,8 +748,22 @@ export async function startHttpServer(): Promise<void> {
     });
   });
 
-  // Error handling middleware (must have 4 parameters for Express to recognize it)
-  app.use((error: Error, req: express.Request, res: express.Response, _next: express.NextFunction) => {
+  // Error handling middleware (must have 4 parameters for Express to recognize it).
+  // Special case: `express.json()` raises `entity.too.large` with `error.type === 'entity.too.large'`
+  // when the request body exceeds `mcp.limits.maxPayloadBytes`. Standard §14 maps that to
+  // JSON-RPC `-32005` / HTTP 413.
+  app.use((error: any, req: express.Request, res: express.Response, _next: express.NextFunction) => {
+    if (error && error.type === 'entity.too.large') {
+      logger.warn(`Payload too large from ip: ${req.ip}, limit: ${maxPayloadBytes}`);
+      if (!res.headersSent) {
+        const err = new PayloadTooLargeError(`Request body exceeds ${maxPayloadBytes} bytes`, {
+          reason: 'payload_too_large',
+        });
+        res.status(err.statusCode).json(createJsonRpcErrorResponse(err, (req.body as any)?.id ?? null));
+      }
+      return;
+    }
+
     logger.error('Express error handler', error);
 
     if (!res.headersSent) {
@@ -685,10 +771,12 @@ export async function startHttpServer(): Promise<void> {
     }
   });
 
-  // Start HTTP server
-  const { port } = appConfig.webServer;
-  app.listen(port, '0.0.0.0', () => {
-    let msg = `${chalk.magenta(appConfig.productName)} started with ${chalk.blue('HTTP')} transport on port ${chalk.blue(port)}
+  // Start HTTP server. Bind address is driven by config — default is the loopback interface
+  // (`127.0.0.1`) so the server is unreachable from the network until an operator opts in to
+  // `0.0.0.0` or a specific NIC address. Standard §6.
+  const { port, host } = appConfig.webServer;
+  app.listen(port, host || '127.0.0.1', () => {
+    let msg = `${chalk.magenta(appConfig.productName)} started with ${chalk.blue('HTTP')} transport on ${chalk.blue(host)}:${chalk.blue(port)}
 Home page: http://localhost:${port}/`;
     if (isAdminEnabled) {
       msg += `\nAdmin panel: http://localhost:${port}/admin`;

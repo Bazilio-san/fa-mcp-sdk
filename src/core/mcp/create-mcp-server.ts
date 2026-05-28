@@ -5,7 +5,11 @@ import {
   ListPromptsRequestSchema,
   GetPromptRequestSchema,
   ListResourcesRequestSchema,
+  ListResourceTemplatesRequestSchema,
   ReadResourceRequestSchema,
+  SubscribeRequestSchema,
+  UnsubscribeRequestSchema,
+  McpError,
 } from '@modelcontextprotocol/sdk/types.js';
 
 import {
@@ -18,8 +22,17 @@ import {
 import { appConfig, getProjectData } from '../bootstrap/init-config.js';
 import { getTools, normalizeHeaders } from '../utils/utils.js';
 
+import { paginate, parsePageSize } from './pagination.js';
 import { getPrompt, getPromptsList } from './prompts.js';
-import { getResource, getResourcesList } from './resources.js';
+import {
+  getResource,
+  getResourcesList,
+  getResourceTemplatesList,
+  subscribeResource,
+  unsubscribeResource,
+} from './resources.js';
+import { truncateToolResponse, withToolTimeout } from './tool-limits.js';
+import { validateToolInput, validateToolOutput } from './validate-tool-args.js';
 
 /**
  * Create MCP Server instance with registered tool and prompt handlers.
@@ -36,6 +49,15 @@ import { getResource, getResourcesList } from './resources.js';
  *   `ITransportContext.transport`.
  */
 export function createMcpServer(transportType: TTransportType): Server {
+  const resourcesCfg = appConfig.mcp.resources;
+  const subscribeEnabled = resourcesCfg?.subscribeEnabled === true;
+  const templatesEnabled = resourcesCfg?.templatesEnabled === true;
+  const resourceCapability: Record<string, boolean> = {};
+  if (subscribeEnabled) {
+    resourceCapability.subscribe = true;
+    resourceCapability.listChanged = true;
+  }
+
   const server = new Server(
     {
       name: appConfig.name,
@@ -45,7 +67,7 @@ export function createMcpServer(transportType: TTransportType): Server {
       capabilities: {
         tools: {},
         prompts: {},
-        resources: {},
+        resources: resourceCapability,
       },
     },
   );
@@ -62,20 +84,74 @@ export function createMcpServer(transportType: TTransportType): Server {
     };
   };
 
-  // Handler for listing available tools
-  server.setRequestHandler(ListToolsRequestSchema, async (_request, extra) => {
+  const pageSize = parsePageSize(appConfig.mcp.pagination?.pageSize);
+
+  // Handler for listing available tools (standard §8.4 — server-side pagination).
+  server.setRequestHandler(ListToolsRequestSchema, async (request, extra) => {
     const tools = await getTools(ctx(extra));
-    return { tools };
+    const cursor = (request.params as any)?.cursor;
+    const { page, nextCursor } = paginate(tools, cursor, pageSize, (t) => t.name);
+    return nextCursor ? { tools: page, nextCursor } : { tools: page };
   });
 
-  // Handler for tool execution
+  // Handler for tool execution. The call is wrapped by `withToolTimeout` (standard §14 —
+  // `mcp.limits.toolTimeoutMs`) and `truncateToolResponse` (standard §12.2 — oversized
+  // results are surfaced with explicit `truncated: true` markers). Arguments are validated
+  // against the tool's `inputSchema` (standard §9.3); structuredContent is validated against
+  // `outputSchema` (standard §9.4) and mirrored into `content[0]` as JSON text per §12.4.
   server.setRequestHandler(CallToolRequestSchema, async (request, extra) => {
     const { toolHandler } = getProjectData();
-    return (await toolHandler({ ...request.params, ...ctx(extra) })) as any;
+    const toolName = (request.params as any)?.name ?? 'unknown';
+    const args = (request.params as any)?.arguments ?? {};
+
+    const tools = await getTools(ctx(extra));
+    const tool = tools.find((t) => t.name === toolName);
+    if (!tool) {
+      throw new McpError(-32602, `Unknown tool: ${toolName}`, { field: 'name', reason: 'unknown_tool' });
+    }
+
+    const inputCheck = validateToolInput(tool, args);
+    if (!inputCheck.valid) {
+      throw new McpError(-32602, 'Invalid params', { field: inputCheck.field, reason: inputCheck.reason });
+    }
+
+    const response = (await withToolTimeout(
+      toolName,
+      () => toolHandler({ ...request.params, ...ctx(extra) }) as Promise<any>,
+    )) as any;
+
+    if (response && typeof response === 'object' && 'structuredContent' in response) {
+      const outputCheck = validateToolOutput(tool, (response as any).structuredContent);
+      if (!outputCheck.valid) {
+        throw new McpError(-32603, 'Tool produced result that violates outputSchema', {
+          field: outputCheck.field,
+          reason: outputCheck.reason,
+        });
+      }
+      // §12.4 — mirror structuredContent in content[0] as JSON text for legacy clients.
+      const existingContent = Array.isArray((response as any).content) ? (response as any).content : undefined;
+      const hasText = existingContent?.some((p: any) => p?.type === 'text' && typeof p?.text === 'string');
+      if (!hasText) {
+        let serialized: string;
+        try {
+          serialized = JSON.stringify((response as any).structuredContent ?? null, null, 2);
+        } catch {
+          serialized = '';
+        }
+        (response as any).content = [{ type: 'text', text: serialized }, ...(existingContent ?? [])];
+      }
+    }
+
+    return truncateToolResponse(response) as any;
   });
 
-  // Handler for listing available prompts
-  server.setRequestHandler(ListPromptsRequestSchema, async (_request, extra) => getPromptsList(ctx(extra)));
+  // Handler for listing available prompts (standard §8.4 — server-side pagination).
+  server.setRequestHandler(ListPromptsRequestSchema, async (request, extra) => {
+    const result = await getPromptsList(ctx(extra));
+    const cursor = (request.params as any)?.cursor;
+    const { page, nextCursor } = paginate(result.prompts, cursor, pageSize, (p: any) => p.name);
+    return nextCursor ? { prompts: page, nextCursor } : { prompts: page };
+  });
 
   // Handler for getting prompt content
   server.setRequestHandler(
@@ -84,13 +160,42 @@ export function createMcpServer(transportType: TTransportType): Server {
     async (request: IGetPromptRequest, extra) => await getPrompt(request, ctx(extra)),
   );
 
-  // Handler for listing available resources
-  server.setRequestHandler(ListResourcesRequestSchema, async (_request, extra) => getResourcesList(ctx(extra)));
+  // Handler for listing available resources (standard §8.4 — server-side pagination).
+  server.setRequestHandler(ListResourcesRequestSchema, async (request, extra) => {
+    const result = await getResourcesList(ctx(extra));
+    const cursor = (request.params as any)?.cursor;
+    const { page, nextCursor } = paginate(result.resources, cursor, pageSize, (r: any) => r.uri);
+    return nextCursor ? { resources: page, nextCursor } : { resources: page };
+  });
 
   // Handler for reading resource content
   server.setRequestHandler(ReadResourceRequestSchema, async (request: IReadResourceRequest, extra) => {
     return (await getResource(request.params.uri, ctx(extra))) as any;
   });
+
+  // Optional MAY: resources/templates/list — empty list if no templates configured.
+  if (templatesEnabled) {
+    server.setRequestHandler(ListResourceTemplatesRequestSchema, async (request, extra) => {
+      const templates = await getResourceTemplatesList(ctx(extra));
+      const cursor = (request.params as any)?.cursor;
+      const { page, nextCursor } = paginate(templates, cursor, pageSize, (t: any) => t.uriTemplate ?? t.name ?? '');
+      return nextCursor ? { resourceTemplates: page, nextCursor } : { resourceTemplates: page };
+    });
+  }
+
+  // Optional MAY: resources/subscribe + resources/unsubscribe — opt-in via config.
+  if (subscribeEnabled) {
+    server.setRequestHandler(SubscribeRequestSchema, async (request) => {
+      const uri = (request.params as any)?.uri;
+      subscribeResource(server, uri);
+      return {};
+    });
+    server.setRequestHandler(UnsubscribeRequestSchema, async (request) => {
+      const uri = (request.params as any)?.uri;
+      unsubscribeResource(server, uri);
+      return {};
+    });
+  }
 
   return server;
 }

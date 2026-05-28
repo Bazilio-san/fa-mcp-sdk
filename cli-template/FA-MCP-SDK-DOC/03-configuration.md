@@ -113,6 +113,18 @@ mcp:
   rateLimit:
     maxRequests: 100
     windowMs: 60000
+  # Hard ceilings enforced by the HTTP transport (standard §14). Concrete servers MAY raise
+  # or lower these per-environment without patching the SDK.
+  limits:
+    # Max accepted JSON / urlencoded request body, bytes. Above the limit:
+    # JSON-RPC code -32005, HTTP 413 Payload Too Large.
+    maxPayloadBytes: 1048576       # 1 MiB
+    # Max serialized tool result, bytes. Above the limit, the SDK truncates the payload
+    # and marks `structuredContent.truncated: true` + appends "…[truncated]" to text content.
+    maxToolResultBytes: 10485760   # 10 MiB
+    # Per-tool execution timeout, milliseconds. Above the limit:
+    # JSON-RPC code -32004, HTTP 504 Gateway Timeout.
+    toolTimeoutMs: 30000           # 30 seconds
   tools:
     answerAs: text   # text | structuredContent
     hideAnnotations: false  # true — strip `annotations` from tool listings
@@ -135,10 +147,14 @@ uiColor:
   primary: '#0f65dc'
 
 webServer:
-  host: '0.0.0.0'
+  # Bind address. Default: '127.0.0.1' — loopback only (safer default, standard §6).
+  # Set to '0.0.0.0' explicitly when running inside a container / behind a reverse proxy.
+  host: '127.0.0.1'
   port: {{port}}
-  # array of hosts that CORS skips
-  originHosts: ['localhost', '0.0.0.0']
+  # Array of hosts whose `Origin` header bypasses the CORS guard.
+  # CORS now actively rejects unlisted origins with HTTP 403 + JSON-RPC error.
+  # In production an empty list aborts startup.
+  originHosts: ['localhost']
   # Authentication is configured here only when accessing the MCP server
   # Authentication in services that enable tools, resources, and prompts
   # is implemented more deeply. To do this, you need to use the information passed in HTTP headers
@@ -387,3 +403,52 @@ db:
         password: <password>
         usedExtensions: []          # e.g. [pgvector]
 ```
+
+
+## HTTP Transport Hardening (`mcp.limits`)
+
+Standard §14 mandates explicit ceilings on request body, tool result and tool execution time. The
+SDK enforces all three from `mcp.limits` — see the snippet under "config/default.yaml" above.
+
+| Key | Default | What happens above the limit |
+|-----|---------|------------------------------|
+| `mcp.limits.maxPayloadBytes` | 1 MiB | JSON-RPC `-32005` + HTTP **413 Payload Too Large**. The Express `entity.too.large` error is translated automatically — clients never see the default HTML error page. |
+| `mcp.limits.maxToolResultBytes` | 10 MiB | Response is truncated. `structuredContent.truncated: true` is set on structured payloads; `…[truncated]` marker is appended to oversized text content. Standard §12.2. |
+| `mcp.limits.toolTimeoutMs` | 30 000 ms | JSON-RPC `-32004` + HTTP **504 Gateway Timeout** on `/mcp`. The pending tool promise is left running (Node can't synchronously abort user code); your tool SHOULD also self-cancel if it watches the elapsed time. |
+
+Override per-environment in `config/{development,production,local}.yaml` or via env vars
+(`MCP_LIMITS_MAX_PAYLOAD_BYTES`, `MCP_LIMITS_MAX_TOOL_RESULT_BYTES`, `MCP_LIMITS_TOOL_TIMEOUT_MS`).
+
+## Health, Readiness, CORS
+
+| Endpoint / Setting | Behaviour | Standard |
+|--------------------|-----------|----------|
+| `GET /health` | Returns `{ status, version, uptime, details }`. HTTP **503** when `status === 'unhealthy'`, **200** otherwise. | §16.1 |
+| `GET /ready` | No auth. Returns `{ status, checks: { db, cache, jwks } }`. Each check is `'ok' \| 'error' \| 'skipped'` — never leaks credentials or connection strings. HTTP **503** when any check fails, **200** when all green. | §16.2 / §16.3 |
+| `webServer.host` | Default `'127.0.0.1'` (loopback). Containers / k8s pods / public-facing deployments MUST set `'0.0.0.0'` explicitly. | §6 |
+| `webServer.originHosts` | Empty list in production aborts `initMcpServer()`. Unlisted `Origin` headers receive HTTP **403** + JSON-RPC error (no longer silently allowed). | §6 |
+
+## MCP-Specific JSON-RPC Error Codes (Appendix B)
+
+| Code | Class | HTTP | When |
+|------|-------|------|------|
+| `-32002` | `ResourceNotFoundError` | 404 | Session / resource not found (legacy SSE `/messages`, missing JWKS key, etc.) |
+| `-32003` | `RateLimitedError` | 429 | Per-client rate limit exceeded. Response carries the `Retry-After` HTTP header AND `error.data.retryAfter` (seconds). |
+| `-32004` | `TimeoutError` | 504 | Tool execution exceeded `mcp.limits.toolTimeoutMs`. |
+| `-32005` | `PayloadTooLargeError` | 413 | Request body exceeded `mcp.limits.maxPayloadBytes`. |
+
+Import the classes (and the `MCP_ERROR_CODES` map) from the SDK root:
+
+```typescript
+import {
+  PayloadTooLargeError, TimeoutError, RateLimitedError, ResourceNotFoundError,
+  MCP_ERROR_CODES,
+  createJsonRpcErrorResponse,    // accepts (err, requestId?, extraData?)
+  IMcpErrorData,                 // { requestId?, field?, reason?, retryAfter?, [k]: unknown }
+} from 'fa-mcp-sdk';
+```
+
+All four extend `BaseMcpError`. The `createJsonRpcErrorResponse` helper emits the canonical
+`error.data` shape from Appendix B.3 — `{ requestId?, field?, reason?, retryAfter?, … }`.
+Stack traces and internal paths are NEVER included in `error.data` (standard §13.3).
+

@@ -5,6 +5,145 @@ All notable changes to `fa-mcp-sdk` are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.0] - 2026-05-28
+
+Phase 2 — Tools / Prompts / Resources contract. Closes P1 gaps against the MCP server
+implementation standard (`claudedocs/std/phase-2-tools-prompts-resources-package.md`,
+WI-1 … WI-10; standard chapters §8.4, §9, §10, §11, §12).
+
+### Added
+
+- **`arguments` validation against `inputSchema`** (WI-1, §9.3). New module
+  `src/core/mcp/validate-tool-args.ts` compiles each tool's `inputSchema` via `ajv` (draft
+  2020-12 + `ajv-formats`). Invalid `tools/call` arguments return JSON-RPC `-32602`
+  with `error.data.field` and `error.data.reason` (e.g. `"limit"` /
+  `"must be number"`). The domain `toolHandler` is no longer called.
+- **`outputSchema` validation + `structuredContent` mirroring** (WI-4, §9.4, §12.4).
+  When a tool declares `outputSchema`, the server validates `structuredContent` against it
+  after the handler returns; violations surface as JSON-RPC `-32603`. Whenever
+  `structuredContent` is present, the serialised JSON is mirrored into `content[0].text`
+  so legacy clients keep working without code changes.
+- **snake_case enforcement for tool names** (WI-2, §9.1). `initMcpServer()` fails fast
+  on static tool arrays when a name does not match `/^[a-z][a-z0-9_]{0,62}$/`; dynamic
+  (function-form) tools are validated on first `getTools()` call.
+- **Parameterised prompts** (WI-6, §10.5) `[BEHAVIOUR]`. `IPromptData.arguments` now
+  accepts the standard `Array<{ name, description?, required? }>` descriptor. The prompt
+  content function signature is extended with an optional second argument receiving
+  `request.params.arguments`; old single-arg functions remain compatible.
+- **Built-in resources** (WI-7, WI-8, §4 / §11.2):
+  - `project://version` (`text/plain`) — mirrors `serverInfo.version` and `/health.version`.
+  - `use://auth` (`application/json`) — enabled auth schemes, methods, expected JWT claims.
+  - `<appConfig.name>://agent/brief` and `<appConfig.name>://agent/prompt` — service-scheme
+    mirrors of the `agent_brief` / `agent_prompt` prompts (Avatar profile §11.2). Project
+    `customResources` with the same URIs override the built-in mirror.
+- **`title` field** in template tools (WI-5, §9.1). Generated projects now ship with
+  human-readable `title` on every example tool.
+- **Schemas in template tools use draft 2020-12** (WI-3, §9.2). `getGenericInputSchema` and
+  `getSearchInputSchema` set `$schema: 'https://json-schema.org/draft/2020-12/schema'`,
+  `additionalProperties: false`, and explicit `required`. `IToolInputSchema` extended with
+  optional `$schema` and `additionalProperties`.
+- **Optional `resources/templates/list` and `resources/subscribe`** (WI-9, MAY §11.5).
+  Disabled by default. Opt-in via `mcp.resources.subscribeEnabled` /
+  `mcp.resources.templatesEnabled`. When `subscribeEnabled: true`, the server advertises
+  `subscribe` + `listChanged` capabilities and exposes `notifyResourceUpdated(server, uri)`
+  for project code to broadcast updates. Project-supplied templates live in
+  `McpServerData.customResourceTemplates`.
+- **Server-side pagination** (WI-10, §8.4) for `tools/list`, `prompts/list`,
+  `resources/list`. Cursor is opaque base64(offset); items are sorted stably by `name` /
+  `uri`. Page size configurable via `mcp.pagination.pageSize` (default 100). Invalid
+  cursors return JSON-RPC `-32602` with `error.data.field: 'cursor'`.
+- **Dependencies:** `ajv@^8.20`, `ajv-formats@^3.0` added to runtime dependencies (~150 KiB
+  gzipped). Used by WI-1 / WI-4.
+
+### Changed
+
+- **`mcp.resources` and `mcp.pagination` config blocks** added to `config/default.yaml`,
+  mirrored in `_local.yaml` and `custom-environment-variables.yaml`. Defaults preserve
+  the previous behaviour (`subscribeEnabled: false`, `templatesEnabled: false`,
+  `pageSize: 100`).
+
+### Compatibility
+
+Only WI-6 is marked `[BEHAVIOUR]` — user-defined prompts with non-empty `arguments` now
+appear in `prompts/list` and may receive `request.params.arguments`. Static prompts
+remain unchanged. All other changes are additive. Version bumped to **0.6.0** (MINOR).
+
+## [0.5.0] - 2026-05-28
+
+Phase 1 HTTP hardening package — closes MUST-level gaps against the MCP server implementation standard
+(`claudedocs/std/mcp-server-implementation-standard.md`, ch. §4, §6, §12–§16, Appendix B).
+
+### Added
+
+- **`mcp.limits` config section.** Three hard ceilings now configurable per environment
+  (`config/default.yaml`, mirrored in `_local.yaml`, env vars in `custom-environment-variables.yaml`):
+  - `mcp.limits.maxPayloadBytes` — max accepted JSON / urlencoded request body. Default **1 MiB**
+    (was a hardcoded 10 MiB). Above the limit: JSON-RPC `-32005` + HTTP **413**.
+  - `mcp.limits.maxToolResultBytes` — max serialized tool result. Default **10 MiB**. Above the limit:
+    payload is truncated with an explicit marker (`…[truncated]` in `content[].text`, and
+    `structuredContent.truncated: true`).
+  - `mcp.limits.toolTimeoutMs` — per-tool execution timeout. Default **30 000 ms** (30 s). Above the
+    limit: JSON-RPC `-32004` + HTTP **504** on `/mcp`.
+- **Specific error factories** (`src/core/errors/specific-errors.ts`):
+  `PayloadTooLargeError` (-32005/413), `TimeoutError` (-32004/504), `RateLimitedError` (-32003/429),
+  `ResourceNotFoundError` (-32002/404), plus the `MCP_ERROR_CODES` map. Exported from the SDK root.
+- **`error.data` is now structured** per standard Appendix B.3 — `{ requestId?, field?, reason?,
+  retryAfter? }` plus open-ended extensions. Stack traces and internal paths are NEVER copied into
+  `error.data` (standard §13.3). `createJsonRpcErrorResponse(err, requestId?, extraData?)` accepts an
+  optional third `extraData` argument for transport-side enrichment (e.g., `requestId`).
+- **`GET /ready` readiness probe** — no authentication required. Reports per-dependency status
+  (`db` / `cache` / `jwks`) reduced to `ok` / `error` / `skipped`; never returns sensitive details.
+  HTTP **200** when all dependencies are ready, **503** otherwise. Standard §16.2.
+- **`/health` body now includes `version` and `uptime`** as required by standard §16.1. HTTP status
+  becomes **503** when `status === 'unhealthy'` (was always 200).
+- **Tool timeout enforcement.** New module `src/core/mcp/tool-limits.ts` with `withToolTimeout` and
+  `truncateToolResponse`. Wraps the tool handler on both HTTP (Streamable + legacy SSE) and STDIO
+  transports. The HTTP `/mcp` POST also runs a parallel race for `tools/call` so HTTP 504 is delivered
+  even when the SDK transport would otherwise return 200 with the JSON-RPC error inside.
+- **CORS hard-reject middleware.** A second middleware after `cors()` converts the previously generic
+  500 (from the CORS callback rejecting) into a structured **403 Forbidden** with JSON-RPC body.
+
+### Changed
+
+- **[BREAKING] Rate-limit response shape** (`/mcp`, `/sse`, `/messages`). The server now follows
+  standard §14 / Appendix B:
+  - HTTP status: **`200 OK` → `429 Too Many Requests`**
+  - JSON-RPC code: **`-32000` → `-32003`**
+  - Adds **`Retry-After`** HTTP header (seconds) and mirrors the same value under
+    `error.data.retryAfter`.
+- **[BREAKING] Legacy SSE "session not found" / "no connection" responses** on `POST /messages` and
+  `POST /sse` now use JSON-RPC code **`-32002`** (was `-32001`); HTTP status stays **`404 Not Found`**.
+- **CORS now actually rejects unlisted origins.** The previous implementation called
+  `callback(null, true)` in *both* branches, effectively allowing every `Origin`. Requests whose
+  `Origin` is not covered by `webServer.originHosts` now get HTTP **403** + JSON-RPC error
+  (`{ data: { reason: 'origin_not_allowed' } }`). Same-origin requests (no `Origin` header) keep
+  passing through.
+- **Production refuses an empty CORS allow-list.** `initMcpServer()` aborts startup in production
+  (`NODE_ENV === 'production'`) when `webServer.originHosts` is empty or missing. Dev/test environments
+  log a warning instead.
+- **Default HTTP bind address is now loopback (`127.0.0.1`)** in `config/default.yaml` and
+  `_local.yaml` (was `0.0.0.0`). Containers and public-facing deployments must opt in to `0.0.0.0`
+  explicitly. The `app.listen()` call now honours `appConfig.webServer.host` instead of hardcoding
+  `0.0.0.0`. Standard §6.
+- **Body size limit driven by config.** `express.json` / `express.urlencoded` no longer use
+  hardcoded `'10mb'`; both read `mcp.limits.maxPayloadBytes` and the `entity.too.large` Express error
+  is converted to JSON-RPC `-32005` + HTTP 413 instead of leaking the default HTML page.
+- **`BaseMcpError` constructor extended.** New optional parameters `jsonRpcCode` (number) and `data`
+  (`IMcpErrorData`). Legacy `details` continues to work as a fallback when no `data` is supplied.
+  `toJSON()` emits `data` alongside `details`.
+
+### Migration
+
+- Existing servers that read `webServer.host` from config keep working. Projects that relied on the
+  implicit `0.0.0.0` bind from this SDK need to set `webServer.host: '0.0.0.0'` in their own config
+  (containers, docker-compose, k8s).
+- Clients reading the legacy `code: -32000` rate-limit response or `code: -32001` SSE session error
+  must be updated to the new codes (`-32003`, `-32002`). The new `Retry-After` header is now
+  authoritative for backoff scheduling.
+- Tools whose execution legitimately exceeds 30 s must override `mcp.limits.toolTimeoutMs` in
+  `config/*.yaml`. Tools whose results legitimately exceed 10 MiB must override
+  `mcp.limits.maxToolResultBytes`. The standard considers both as legitimate per-server overrides.
+
 ## [0.4.144] - 2026-05-27
 
 ### Changed

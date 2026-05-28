@@ -3,27 +3,53 @@
 ## Error Classes
 
 ```typescript
-import { BaseMcpError, ToolExecutionError, ValidationError, ServerError } from 'fa-mcp-sdk';
+import {
+  BaseMcpError, ToolExecutionError, ValidationError, ServerError,
+  // Phase 1 HTTP hardening — Appendix B specific errors:
+  PayloadTooLargeError, TimeoutError, RateLimitedError, ResourceNotFoundError,
+  MCP_ERROR_CODES, IMcpErrorData,
+} from 'fa-mcp-sdk';
 
 throw new ValidationError('Input validation failed');
 throw new ToolExecutionError('my_tool', 'Execution failed');
 throw new ServerError('Database connection failed', { key: 'value' });
 
-// Custom error
+// Standard §13 / Appendix B — already used by the SDK transport, but exported for tool / API code:
+throw new PayloadTooLargeError('Image exceeds 1 MiB');                   // -32005 / 413
+throw new TimeoutError('Upstream did not respond in time');               // -32004 / 504
+throw new RateLimitedError('Too many calls', 30);                        // -32003 / 429 (retryAfter=30s)
+throw new ResourceNotFoundError('Ticket not found', { field: 'key' });   // -32002 / 404
+
+// Custom error — supply both the legacy string code and the JSON-RPC numeric code
 class MyError extends BaseMcpError {
-  constructor(msg: string) { super(msg, 'MY_ERROR'); }
+  constructor(msg: string) {
+    super('MY_ERROR', msg, undefined, 422, undefined, -32600, { reason: 'my_reason' });
+  }
 }
 ```
 
-**ServerError**: `code: 'SERVER_ERROR'`, `httpStatus: 500`
+| Class | `code` | `jsonRpcCode` | HTTP | Standard |
+|-------|--------|---------------|------|----------|
+| `ServerError` | `SERVER_ERROR` | `-32000` (default) | 500 | — |
+| `ToolExecutionError` | `TOOL_EXECUTION_ERROR` | `-32000` (default) | 400 | — |
+| `ValidationError` | `VALIDATION_ERROR` | `-32000` (default) | 400 | — |
+| `ResourceNotFoundError` | `RESOURCE_NOT_FOUND` | `-32002` | 404 | Appendix B |
+| `RateLimitedError` | `RATE_LIMITED` | `-32003` | 429 | Appendix B |
+| `TimeoutError` | `TIMEOUT` | `-32004` | 504 | Appendix B |
+| `PayloadTooLargeError` | `PAYLOAD_TOO_LARGE` | `-32005` | 413 | Appendix B |
 
 ## Error Utilities
 
 ```typescript
 import { createJsonRpcErrorResponse, toError, toStr, addErrorMessage } from 'fa-mcp-sdk';
 
-// Create JSON-RPC error response
-const response = createJsonRpcErrorResponse(error, 'request-123');
+// Create JSON-RPC error response. Optional third argument injects extra `error.data` keys
+// (standard Appendix B.3 — { requestId?, field?, reason?, retryAfter?, … }).
+const response = createJsonRpcErrorResponse(error, 'request-123', { requestId: 'req-abc' });
+
+// Resulting body:
+// { jsonrpc: '2.0', id: 'request-123',
+//   error: { code: -32004, message: '…', data: { reason: 'tool_timeout', requestId: 'req-abc' } } }
 
 // Safe error conversion
 const err = toError(anything);      // → Error object
