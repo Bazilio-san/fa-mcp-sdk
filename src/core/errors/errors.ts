@@ -2,6 +2,8 @@
  * Centralized error handling system for the MCP server
  */
 
+import { getCurrentRequestId } from '../web/request-id.js';
+
 import { BaseMcpError, IMcpErrorData } from './BaseMcpError.js';
 
 export class ToolExecutionError extends BaseMcpError {
@@ -42,7 +44,14 @@ export function createJsonRpcErrorResponse(
   // only when no `data` was supplied — keeps older callers working without leaking arbitrary
   // shape into the canonical slot.
   const baseData = isMcpError ? (error.data ?? (error.details as IMcpErrorData | undefined)) : undefined;
-  const mergedData: IMcpErrorData | undefined = baseData || extraData ? { ...baseData, ...extraData } : undefined;
+  let mergedData: IMcpErrorData | undefined = baseData || extraData ? { ...baseData, ...extraData } : undefined;
+
+  // Standard §15.1 — surface the correlation id on every error response, but never
+  // overwrite one that the caller already supplied (e.g. cross-process bridges).
+  const currentRequestId = getCurrentRequestId();
+  if (currentRequestId && !mergedData?.requestId) {
+    mergedData = { ...mergedData, requestId: currentRequestId };
+  }
 
   return {
     jsonrpc: '2.0',

@@ -131,6 +131,7 @@ Detailed fa-mcp-sdk docs are in `FA-MCP-SDK-DOC/`:
 | `08-agent-tester-and-headless-api.md` | Agent Tester, Headless API, structured logging, automated testing, MCP Apps mode (capability negotiation, `appCalls[]`, widget rendering, App Inspector) |
 | `09-database.md` | PostgreSQL sugar layer (`queryMAIN`, `execMAIN`, upserts, `mergeByBatch`), `pgvector`, secondary DBs |
 | `10-mcp-apps.md` | Building / extending MCP Apps (UI-augmented tools) — protocol contract, SDK surface, patterns, pitfalls |
+| `11-public-contract.md` | Formal SDK public contract — transports, endpoints, JWT claims, tool/prompt/resource format, error mapping, headers, semver & deprecation policy |
 
 ## Development and Testing Through Agent Tester
 

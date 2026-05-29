@@ -76,6 +76,18 @@ mcp:
     templatesEnabled:
       __name: MCP_RESOURCES_TEMPLATES_ENABLED
       __format: boolean
+  logging:
+    enabled:
+      __name: MCP_LOGGING_ENABLED
+      __format: boolean
+    defaultLevel: MCP_LOGGING_DEFAULT_LEVEL
+    maxBodyBytes:
+      __name: MCP_LOGGING_MAX_BODY_BYTES
+      __format: number
+  progress:
+    throttleMs:
+      __name: MCP_PROGRESS_THROTTLE_MS
+      __format: number
 
 uiColor:
   primary: UI_COLOR_PRIMARY
@@ -122,3 +134,11 @@ webServer:
   trustProxy:
     __name: WS_TRUST_PROXY
     __format: boolean
+  metrics:
+    enabled:
+      __name: WS_METRICS_ENABLED
+      __format: boolean
+    path: WS_METRICS_PATH
+    includeProcessMetrics:
+      __name: WS_METRICS_INCLUDE_PROCESS
+      __format: boolean

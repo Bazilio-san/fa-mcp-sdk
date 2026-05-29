@@ -301,6 +301,21 @@ mcp:
     subscribeEnabled: false
     #> Enable resources/templates/list (returns empty array if no templates configured).
     templatesEnabled: false
+  #> Standard §15.2 + §8.2 — MCP `logging` capability. When enabled (default), the server
+  #> advertises `logging: {}` on initialize and accepts `logging/setLevel` to throttle
+  #> notifications/message emissions.
+  logging:
+    #> Set false to suppress the capability (compat tests against older clients).
+    enabled: true
+    #> Initial severity threshold (Syslog ladder). Levels: debug | info | notice | warning |
+    #> error | critical | alert | emergency. Default: info.
+    defaultLevel: info
+    #> Max serialized `data` payload in bytes. Anything longer is truncated. Default: 4096.
+    maxBodyBytes: 4096
+  #> Standard §8.6 — `notifications/progress` throttling. Minimum gap between successive
+  #> emissions for a single progressToken. Default 100 ms (10 events/s).
+  progress:
+    throttleMs: 100
 
 #> Swagger / OpenAPI documentation settings
 swagger:
@@ -458,3 +473,20 @@ webServer:
   #> from X-Forwarded-Proto / X-Forwarded-Host). Set true behind HTTPS reverse proxy.
   #> ========================================================================
   trustProxy: false
+
+  #> ========================================================================
+  #> Standard §15.3 — Prometheus metrics endpoint.
+  #> Opt-in. Endpoint is PUBLIC (no auth) — protect via network policy / reverse proxy
+  #> when the server is reachable from the network.
+  #> Metrics exposed: mcp_tool_calls_total, mcp_tool_duration_seconds,
+  #> mcp_auth_failures_total, mcp_rate_limit_hits_total, mcp_http_requests_total,
+  #> mcp_concurrent_calls, mcp_payload_bytes, mcp_result_bytes + Node.js process metrics.
+  #> ========================================================================
+  metrics:
+    #> Set true to mount the metrics endpoint. Default: false.
+    enabled: false
+    #> URL path. Default: /metrics.
+    path: '/metrics'
+    #> Include Node.js process metrics (GC, heap, uptime). Default: true. Disable to shed
+    #> ~30 default series when scraping many SDK instances.
+    includeProcessMetrics: true

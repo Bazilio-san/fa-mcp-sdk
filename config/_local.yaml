@@ -284,6 +284,14 @@ mcp:
   resources:
     subscribeEnabled: false
     templatesEnabled: false
+  #> Standard §15.2 + §8.2 — MCP `logging` capability.
+  logging:
+    enabled: true
+    defaultLevel: info
+    maxBodyBytes: 4096
+  #> Standard §8.6 — notifications/progress throttle.
+  progress:
+    throttleMs: 100
 
 #> Swagger / OpenAPI documentation settings
 swagger:
@@ -400,3 +408,9 @@ webServer:
     allowQueryToken: false
 
   trustProxy: false
+
+  #> Standard §15.3 — Prometheus metrics endpoint (opt-in).
+  metrics:
+    enabled: false
+    path: '/metrics'
+    includeProcessMetrics: true

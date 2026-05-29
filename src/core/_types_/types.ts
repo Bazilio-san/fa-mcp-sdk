@@ -75,6 +75,8 @@ export interface IPromptData {
    * Checked against `payload.scope` (space-separated). Missing scopes → 403 (forbidden).
    */
   requiredScopes?: string[];
+  /** Standard §17.2 — deprecation lifecycle. See {@link IDeprecationInfo}. */
+  deprecated?: IDeprecationInfo;
 }
 
 export interface IUsedHttpHeader {
@@ -133,6 +135,8 @@ export interface IResourceInfo {
    * {@link IUiResourceMeta}. Other extensions may add their own keys here.
    */
   _meta?: { ui?: IUiResourceMeta; [key: string]: unknown };
+  /** Standard §17.2 — deprecation lifecycle. See {@link IDeprecationInfo}. */
+  deprecated?: IDeprecationInfo;
 }
 
 export interface IResourceData extends IResourceInfo {
@@ -178,6 +182,19 @@ export type CustomAuthValidator = (req: any) => Promise<AuthResult> | AuthResult
 
 export type TTransportType = 'stdio' | 'sse' | 'http';
 
+/**
+ * Standard §17.2 — structured deprecation block surfaced on tools / prompts / resources.
+ * Authors set this instead of hand-rolling a `[DEPRECATED] …` description prefix.
+ */
+export interface IDeprecationInfo {
+  /** ISO date (YYYY-MM-DD) when the deprecated entry will be removed. */
+  until: string;
+  /** Replacement name or URI. */
+  replacedBy?: string;
+  /** Free-form migration hint shown alongside runtime warnings. */
+  note?: string;
+}
+
 export interface IToolHandlerParams {
   name: string;
   arguments?: any;
@@ -192,6 +209,22 @@ export interface IToolHandlerParams {
    * capabilities" and fall back to the plain text `content[]` contract.
    */
   clientCapabilities?: IClientCapabilities;
+  /**
+   * Standard §8.5 — abort signal flipped when the client sends
+   * `notifications/cancelled` for this request. Tool handlers SHOULD pass it to
+   * downstream AbortSignal-aware APIs (`fetch`, `pg`, etc.). When the signal
+   * aborts, the handler MUST stop work and let the rejection propagate — the
+   * SDK then skips the JSON-RPC response per §8.5.
+   */
+  signal?: AbortSignal;
+  /**
+   * Standard §8.6 — emit a `notifications/progress` for this request. Active only
+   * when the original request carried `_meta.progressToken`. Progress MUST be
+   * monotonically non-decreasing; the SDK throttles emissions to
+   * `mcp.progress.throttleMs` (default 100 ms / 10 events/s).
+   * No-op when `progressToken` is absent — call it unconditionally.
+   */
+  sendProgress?: (progress: number, total?: number, message?: string) => void;
 }
 
 export interface ITransportContext {

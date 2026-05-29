@@ -5,6 +5,122 @@ All notable changes to `fa-mcp-sdk` are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.8.0] - 2026-05-28
+
+Phase 4 — Observability + Contract stability. Closes the §15 / §17 / §8.5 / §8.6 / §15.1 /
+§15.2 / §15.3 / §17.1 / §17.2 gaps in `claudedocs/std/mcp-server-implementation-standard.md`
+through `claudedocs/std/phase-4-observability-and-contract-package.md` (WI-1 … WI-12). The
+release is additive — every new capability is either always-on but backwards compatible, or
+opt-in via configuration. A single `[BEHAVIOUR]` change is called out below.
+
+### Added
+
+- **`X-Request-Id` middleware** (WI-1, §15.1). New `src/core/web/request-id.ts` carries a
+  sticky correlation id end-to-end via `AsyncLocalStorage`:
+  - reads `X-Request-Id` from the request (8-128 visible-ASCII chars), or mints a UUID;
+  - always sets the header on the response (see `[BEHAVIOUR]` below);
+  - surfaces the id under `error.data.requestId` for every JSON-RPC error response;
+  - flows into the JSON-lines debug sink (`emitTrace`) as `requestId`.
+- **W3C trace context** (WI-2, §15.1). The middleware also parses `traceparent` /
+  `tracestate` (per `https://www.w3.org/TR/trace-context/`). Valid contexts surface as
+  `trace_id` / `span_id` in trace events; `tracestate` is echoed back unchanged on the
+  response.
+- **Stdio per-message context** (WI-3, §15.1). Every JSON-RPC handler runs inside an
+  `AsyncLocalStorage` scope with `requestId: stdio-<uuid>` so logs / errors / notifications
+  share a correlation id end-to-end on stdio just like on HTTP.
+- **`logging` capability + `notifications/message`** (WI-4, §15.2 + §8.2). The server
+  advertises `logging: {}` on initialize (opt-out via `mcp.logging.enabled = false`),
+  accepts `logging/setLevel`, and exposes `sendLoggingMessage()` for emitting events. The
+  threshold (Syslog ladder) defaults to `info` (`mcp.logging.defaultLevel`); payloads larger
+  than `mcp.logging.maxBodyBytes` (4 KiB by default) are truncated.
+- **Prometheus metrics** (WI-5, §15.3). New `src/core/metrics/metrics.ts` exposes a private
+  `prom-client` registry. Endpoint `GET /metrics` (configurable path) is mounted when
+  `webServer.metrics.enabled = true` (default `false`). Series:
+  - `mcp_tool_calls_total{tool,status}`
+  - `mcp_tool_duration_seconds{tool}`
+  - `mcp_auth_failures_total{reason}`
+  - `mcp_rate_limit_hits_total{scope}`
+  - `mcp_http_requests_total{method,path,status}`
+  - `mcp_concurrent_calls{subject}`
+  - `mcp_payload_bytes`, `mcp_result_bytes`
+  - plus Node.js process metrics when `includeProcessMetrics` is `true` (default).
+  Dependency: `prom-client@^15`.
+- **Cancellation `AbortSignal`** (WI-6, §8.5). `IToolHandlerParams.signal?: AbortSignal` is
+  now propagated from the SDK transport to every tool handler. Long-running operations
+  should pass it to downstream APIs (`fetch`, `pg`, …).
+- **`notifications/progress`** (WI-7, §8.6). `IToolHandlerParams.sendProgress?` is wired
+  whenever the request carries `_meta.progressToken`. Emissions are server-side throttled
+  by `mcp.progress.throttleMs` (default 100 ms / 10 events/s/token) and forced monotonic.
+  Calls without a `progressToken` get a no-op so handlers can call `sendProgress` blindly.
+- **Deprecation lifecycle** (WI-9, §17.2). New `src/core/mcp/deprecation.ts` reads a
+  structured `IDeprecationInfo` block from `_meta.deprecated` (tools) or a top-level
+  `deprecated` field (prompts / resources). At list time the description is prefixed with
+  `[DEPRECATED until YYYY-MM-DD, use <replacement>]`; at call time the SDK emits a
+  `logger.warn` rate-limited to one event per hour per `(kind, name)`. Past-due `until`
+  dates raise a `logger.error` on registration.
+- **Public-contract document** (WI-8 + WI-10, §17.1). New
+  `cli-template/FA-MCP-SDK-DOC/11-public-contract.md` is the formal contract surface:
+  transports, HTTP endpoints, JWT claims, tool / prompt / resource format, error mapping,
+  limits & headers, semver policy and deprecation process. The
+  `cli-template/FA-MCP-SDK-DOC/00-FA-MCP-SDK-index.md` index, `cli-template/CLAUDE.md`,
+  and the template `README.md` cross-link the new doc.
+- **CHANGELOG template** (WI-12, §17). `cli-template/CHANGELOG.md` showcases `[Unreleased]`
+  with the `Added` / `Changed` / `Deprecated` / `Removed [BREAKING]` / `Fixed` / `Security`
+  shape and ties to the public-contract document.
+- **New configuration keys**:
+  - `mcp.logging.{enabled,defaultLevel,maxBodyBytes}`
+  - `mcp.progress.throttleMs`
+  - `webServer.metrics.{enabled,path,includeProcessMetrics}`
+  All four blocks default to safe-additive values; existing configs continue to load
+  without edits.
+- **Type extensions** in `src/core/_types_/types.ts`:
+  - `IDeprecationInfo`
+  - `IToolHandlerParams.signal`, `IToolHandlerParams.sendProgress`
+  - `IPromptData.deprecated`, `IResourceInfo.deprecated`
+- **Tests** — `tests/request-id.test.mjs`, `tests/deprecation.test.mjs`,
+  `tests/metrics.test.mjs`. Wired so that `node tests/<file>.test.mjs` works directly after
+  `npm run build`.
+
+### Changed [BEHAVIOUR]
+
+- Every HTTP response now carries an `X-Request-Id` header (generated when the client did
+  not supply one). Downstream tests that assert on the *absence* of the header must be
+  updated. This is the only behavioural change in 0.8.0.
+
+### Compatibility
+
+- No removed or renamed exports.
+- No tightened config validation.
+- `prom-client` is a new direct dependency (~70 KB) — required even when metrics are
+  disabled, but it is not initialised until `webServer.metrics.enabled = true`.
+
+### Migration
+
+```bash
+# No code or config changes required:
+npm install fa-mcp-sdk@^0.8.0
+npm run typecheck    # must remain green
+```
+
+To opt-in to the new observability surface:
+
+```yaml
+# config/local.yaml
+webServer:
+  metrics:
+    enabled: true
+    path: '/metrics'
+mcp:
+  logging:
+    enabled: true        # default
+    defaultLevel: info   # default
+  progress:
+    throttleMs: 100      # default
+```
+
+Metrics endpoint is unauthenticated by design (standard §16) — protect via network policy
+or reverse proxy when the server is reachable from the outside.
+
 ## [0.7.0] - 2026-05-28
 
 Phase 3 — Auth profile (RS256/ES256 + JWKS + MCP Authorization). Closes the §7 /

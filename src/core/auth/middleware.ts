@@ -4,6 +4,7 @@ import { NextFunction, Request, Response } from 'express';
 
 import { appConfig } from '../bootstrap/init-config.js';
 import { debugTokenAuth } from '../debug.js';
+import { getMetrics } from '../metrics/metrics.js';
 import { getPromptsList } from '../mcp/prompts.js';
 import { getResourcesList } from '../mcp/resources.js';
 import { buildWwwAuthenticateHeader } from '../web/oauth-router.js';
@@ -208,9 +209,12 @@ export function createAuthMW(options: AuthMiddlewareOptions = {}) {
       if (!authResult.success) {
         // Standard §7.4 — forbidden (authenticated but lacking permission) → 403, NO WWW-Authenticate.
         if (authResult.forbidden) {
+          getMetrics()?.authFailures.inc({ reason: 'forbidden' });
           const errorDetails = debugAuth(req, 403, authResult.error || 'Forbidden');
           return res.status(errorDetails.code).send(errorDetails.message);
         }
+        const reason = (authResult.error ?? 'unauthorized').slice(0, 64);
+        getMetrics()?.authFailures.inc({ reason });
         const errorDetails = debugAuth(req, 401, authResult.error || 'Authentication failed');
         const wwwAuth = buildWwwAuthenticateHeader(req, {
           errorReason: authResult.error,
@@ -223,6 +227,7 @@ export function createAuthMW(options: AuthMiddlewareOptions = {}) {
       // Standard §7.5 — scope enforcement against the target resource / prompt.
       const scopeViolation = await enforceScopes(req, authResult as any);
       if (scopeViolation) {
+        getMetrics()?.authFailures.inc({ reason: 'missing_scope' });
         const errorDetails = debugAuth(req, 403, scopeViolation.error);
         return res.status(errorDetails.code).send(errorDetails.message);
       }
