@@ -23,6 +23,7 @@ npm install fa-mcp-sdk
 | [08-agent-tester-and-headless-api](08-agent-tester-and-headless-api.md) | Agent Tester, Headless API, structured logging, automated testing, UI `data-testid` reference. **MCP Apps mode**: capability negotiation, `appCalls[]` / `app_calls[]`, widget iframe bridge, App Inspector tab | Agent-driven tool development, CLI automation, UI E2E tests, MCP Apps host for development |
 | [09-database](09-database.md) | PostgreSQL sugar layer (`queryMAIN`, `execMAIN`, `getInsertSqlMAIN`, `getMergeSqlMAIN`, `mergeByBatch`), `pgvector`, secondary DBs | Database access, upserts, batching |
 | [10-mcp-apps](10-mcp-apps.md) | Self-contained digest of the MCP Apps protocol + SDK pinned to `@modelcontextprotocol/ext-apps v1.7.2` (spec 2026-01-26): `ui://` resources, `_meta.ui`, JSON-RPC messages, `App` class, host context, patterns, pitfalls. **Canonical example** (`examples/mcp-apps-canonical/`, `npm run example:mcp-apps`) and widget-side debug helpers (`mcp-debug-log`, `mcp-debug-refresh`). Cross-links to Agent Tester as a dev-host (doc 08) | Building / extending MCP Apps (UI-augmented tools) |
+| [11-public-contract](11-public-contract.md) | Formal public-contract surface of `fa-mcp-sdk`: transports, HTTP endpoints, JWT claims, tool/prompt/resource shape, error mapping, limits & headers (`X-Request-Id`, `traceparent`, `Retry-After`, `WWW-Authenticate`, `MCP-Session-Id`), semver policy, deprecation process | Pinning SDK version, planning a SDK upgrade, drafting CHANGELOG entries, deciding MAJOR vs MINOR vs PATCH |
 
 ## Key Exports
 

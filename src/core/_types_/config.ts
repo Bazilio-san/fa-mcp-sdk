@@ -71,6 +71,13 @@ interface IWebServerConfig {
     //> Express `trust proxy` setting (false | true | 'loopback' | number | etc.).
     //> Required when /.well-known/openid-configuration is built from X-Forwarded-* headers.
     trustProxy?: boolean | string | number;
+    //> Standard §15.3 — Prometheus metrics endpoint. Opt-in. Endpoint is public (no auth) —
+    //> protect via network policy / reverse proxy.
+    metrics?: {
+      enabled?: boolean;
+      path?: string;
+      includeProcessMetrics?: boolean;
+    };
   };
 }
 
@@ -137,6 +144,25 @@ interface IMCPConfig {
       subscribeEnabled?: boolean;
       /** Enable `resources/templates/list`. */
       templatesEnabled?: boolean;
+    };
+    /**
+     * Standard §15.2 + §8.2 — MCP `logging` capability. When enabled, the server declares
+     * `logging: {}` on initialize and accepts `logging/setLevel` to throttle emissions.
+     */
+    logging?: {
+      /** Default `true`. Set to `false` to suppress `logging` capability advertisement. */
+      enabled?: boolean;
+      /** Initial severity threshold. Syslog ladder; default `info`. */
+      defaultLevel?: 'debug' | 'info' | 'notice' | 'warning' | 'error' | 'critical' | 'alert' | 'emergency';
+      /** Max serialized `data` payload, bytes. Anything above is truncated. Default 4096. */
+      maxBodyBytes?: number;
+    };
+    /**
+     * Standard §8.6 — `notifications/progress` server-side throttling.
+     */
+    progress?: {
+      /** Minimum gap between successive progress emissions, milliseconds. Default 100 (10 events/s). */
+      throttleMs?: number;
     };
     /**
      * Debug & diagnostics. All keys are optional and disabled by default — the

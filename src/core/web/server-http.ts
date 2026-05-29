@@ -35,6 +35,7 @@ import {
   TimeoutError,
 } from '../errors/specific-errors.js';
 import { logger as lgr } from '../logger.js';
+import { getMetrics, getMetricsRegistry, initMetrics } from '../metrics/metrics.js';
 import { createMcpServer } from '../mcp/create-mcp-server.js';
 import { getPromptsList } from '../mcp/prompts.js';
 import { getResource, getResourcesList } from '../mcp/resources.js';
@@ -48,6 +49,7 @@ import { faviconSvg } from './favicon-svg.js';
 import { handleHomeInfo } from './home-api.js';
 import { createOAuthRouter } from './oauth-router.js';
 import { configureOpenAPI, createSwaggerUIAssetsMiddleware } from './openapi.js';
+import { requestIdMW } from './request-id.js';
 import { createSvgRouter } from './svg-icons.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -99,6 +101,9 @@ async function handleRateLimit(
       const rateLimitMessage = formatRateLimitError(rateLimitError as any, appConfig.mcp.rateLimit.maxRequests);
       logger.warn(`Rate limit exceeded${context ? ` in ${context}` : ''}: ip: ${ip}`);
 
+      const scope = (appConfig.mcp.rateLimit?.scope ?? 'subject') as 'subject' | 'ip';
+      getMetrics()?.rateLimitHits.inc({ scope });
+
       // Standard §14 + Appendix B: HTTP 429, JSON-RPC code -32003, `Retry-After` header in
       // seconds (also mirrored under `error.data.retryAfter` per Appendix B.3).
       const retryAfterSec = Math.max(1, Math.ceil(((rateLimitError as any).msBeforeNext ?? 1000) / 1000));
@@ -135,6 +140,19 @@ export async function startHttpServer(): Promise<void> {
 
   // Create universal auth middleware for all endpoints
   const authMW = createAuthMW();
+
+  // Standard §15.1 — sticky `X-Request-Id` (+ W3C traceparent/tracestate) MUST be installed
+  // before CORS, auth or any handler that may shortcut the chain — otherwise 401/403
+  // responses would land without a correlation id, breaking downstream debugging.
+  app.use(requestIdMW());
+
+  // Standard §15.3 — Prometheus metrics. Opt-in: enabled flag drives both `prom-client`
+  // registry initialisation and `GET /metrics` mounting below.
+  const metricsCfg = appConfig.webServer.metrics;
+  const metricsEnabled = metricsCfg?.enabled === true;
+  if (metricsEnabled) {
+    initMetrics();
+  }
 
   // Security middleware
   app.use(
@@ -194,6 +212,22 @@ export async function startHttpServer(): Promise<void> {
     }
     res.status(health.status === 'healthy' ? 200 : 503).json(health);
   });
+
+  // Standard §15.3 — Prometheus metrics endpoint. Opt-in (default off). Public by design —
+  // protect via network policy / reverse proxy if the server is reachable from the network.
+  if (metricsEnabled) {
+    const metricsPath = metricsCfg?.path || '/metrics';
+    app.get(metricsPath, async (_req, res) => {
+      try {
+        const reg = getMetricsRegistry();
+        res.setHeader('Content-Type', reg.contentType);
+        res.end(await reg.metrics());
+      } catch (err) {
+        logger.error('Failed to render Prometheus metrics', err as Error);
+        res.status(500).send('Failed to render metrics');
+      }
+    });
+  }
 
   // Readiness probe (standard §16.2) — no authentication; reports whether every dependency
   // the server needs to serve traffic is up. Empty / sensitive details are NEVER returned —
@@ -480,7 +514,7 @@ export async function startHttpServer(): Promise<void> {
     });
 
     // Override the tool call handler to include rate limiting, preserved headers and auth payload
-    sseServer.setRequestHandler(CallToolRequestSchema, async (request) => {
+    sseServer.setRequestHandler(CallToolRequestSchema, async (request, extra) => {
       // Apply rate limiting for each SSE tool call
       const toolCallClientId = 'sse-tool-unknown';
       await handleRateLimit(rateLimiter, toolCallClientId, 'unknown', `SSE tool call | tool: ${request.params.name}`);
@@ -491,7 +525,12 @@ export async function startHttpServer(): Promise<void> {
       const sseToolName = (request.params as any)?.name ?? 'unknown';
       const response = (await withToolTimeout(
         sseToolName,
-        () => toolHandler({ ...request.params, ...sseCtx() }) as Promise<any>,
+        () =>
+          toolHandler({
+            ...request.params,
+            ...sseCtx(),
+            signal: extra?.signal,
+          }) as Promise<any>,
       )) as any;
       return truncateToolResponse(response) as any;
     });

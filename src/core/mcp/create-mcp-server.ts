@@ -1,3 +1,5 @@
+import { randomUUID } from 'node:crypto';
+
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import {
   CallToolRequestSchema,
@@ -22,7 +24,16 @@ import {
 import { appConfig, getProjectData } from '../bootstrap/init-config.js';
 import { RateLimitedError } from '../errors/specific-errors.js';
 import { getTools, normalizeHeaders } from '../utils/utils.js';
+import { getCurrentRequestContext, IRequestContext, runWithRequestContext } from '../web/request-id.js';
+import { getMetrics } from '../metrics/metrics.js';
 
+import {
+  applyDeprecationToDescription,
+  assertDeprecationConsistency,
+  readDeprecation,
+  warnDeprecatedUsage,
+} from './deprecation.js';
+import { registerLoggingCapability } from './mcp-logging.js';
 import { paginate, parsePageSize } from './pagination.js';
 import { getPrompt, getPromptsList } from './prompts.js';
 import {
@@ -74,6 +85,8 @@ export function createMcpServer(transportType: TTransportType): Server {
     resourceCapability.listChanged = true;
   }
 
+  const loggingCapEnabled = appConfig.mcp.logging?.enabled !== false;
+
   const server = new Server(
     {
       name: appConfig.name,
@@ -84,9 +97,14 @@ export function createMcpServer(transportType: TTransportType): Server {
         tools: {},
         prompts: {},
         resources: resourceCapability,
+        ...(loggingCapEnabled ? { logging: {} } : {}),
       },
     },
   );
+
+  if (loggingCapEnabled) {
+    registerLoggingCapability(server);
+  }
 
   const ctx = (extra: { requestInfo?: { headers?: Record<string, any> }; authInfo?: any }): ITransportContext => {
     const headers = extra.requestInfo?.headers ? normalizeHeaders(extra.requestInfo.headers) : undefined;
@@ -102,139 +120,298 @@ export function createMcpServer(transportType: TTransportType): Server {
 
   const pageSize = parsePageSize(appConfig.mcp.pagination?.pageSize);
 
+  /**
+   * Standard §15.1 — every handler runs inside an {@link IRequestContext}.
+   * HTTP path: middleware already entered the AsyncLocalStorage scope, so we
+   * only enrich the existing context with `jsonRpcId`.
+   * Stdio path: no middleware ran — we mint a `stdio-<uuid>` request id so
+   * logs, errors and notifications can be correlated end-to-end.
+   */
+  const withRequestContext = <H extends (req: any, extra: any) => Promise<any>>(handler: H): H => {
+    return (async (req: any, extra: any) => {
+      const jsonRpcId = (extra as { requestId?: string | number | null })?.requestId ?? null;
+      const existing = getCurrentRequestContext();
+      const reqCtx: IRequestContext = existing
+        ? { ...existing, jsonRpcId }
+        : { requestId: `stdio-${randomUUID()}`, jsonRpcId };
+      return runWithRequestContext(reqCtx, () => handler(req, extra));
+    }) as unknown as H;
+  };
+
   // Handler for listing available tools (standard §8.4 — server-side pagination).
-  server.setRequestHandler(ListToolsRequestSchema, async (request, extra) => {
-    const tools = await getTools(ctx(extra));
-    const cursor = (request.params as any)?.cursor;
-    const { page, nextCursor } = paginate(tools, cursor, pageSize, (t) => t.name);
-    return nextCursor ? { tools: page, nextCursor } : { tools: page };
-  });
+  server.setRequestHandler(
+    ListToolsRequestSchema,
+    withRequestContext(async (request, extra) => {
+      const raw = await getTools(ctx(extra));
+      const tools = raw.map((t: any) => {
+        const info = readDeprecation(t);
+        if (!info) {
+          return t;
+        }
+        assertDeprecationConsistency('tool', t.name, info);
+        return { ...t, description: applyDeprecationToDescription(t.description, info) };
+      });
+      const cursor = (request.params as any)?.cursor;
+      const { page, nextCursor } = paginate(tools, cursor, pageSize, (t) => t.name);
+      return nextCursor ? { tools: page, nextCursor } : { tools: page };
+    }),
+  );
+
+  const progressThrottleMs = appConfig.mcp.progress?.throttleMs ?? 100;
+
+  /**
+   * Build a `sendProgress` emitter scoped to a single tools/call. Active only when the request
+   * carried `_meta.progressToken`; otherwise returns a no-op so handlers can call it
+   * unconditionally. Enforces monotonic increase and `throttleMs` server-side per §8.6.
+   */
+  const buildSendProgress = (
+    progressToken: string | number | undefined,
+  ): ((progress: number, total?: number, message?: string) => void) => {
+    if (progressToken === undefined || progressToken === null) {
+      return () => {};
+    }
+    let lastEmit = 0;
+    let lastProgress = -Infinity;
+    return (progress: number, total?: number, message?: string) => {
+      if (typeof progress !== 'number' || Number.isNaN(progress)) {
+        return;
+      }
+      if (progress < lastProgress) {
+        return;
+      }
+      const now = Date.now();
+      if (now - lastEmit < progressThrottleMs) {
+        return;
+      }
+      lastEmit = now;
+      lastProgress = progress;
+      const params: Record<string, unknown> = { progressToken, progress };
+      if (total !== undefined) {
+        params.total = total;
+      }
+      if (message !== undefined) {
+        params.message = message;
+      }
+      void server.notification({ method: 'notifications/progress', params }).catch(() => {});
+    };
+  };
 
   // Handler for tool execution. The call is wrapped by `withToolTimeout` (standard §14 —
   // `mcp.limits.toolTimeoutMs`) and `truncateToolResponse` (standard §12.2 — oversized
   // results are surfaced with explicit `truncated: true` markers). Arguments are validated
   // against the tool's `inputSchema` (standard §9.3); structuredContent is validated against
   // `outputSchema` (standard §9.4) and mirrored into `content[0]` as JSON text per §12.4.
-  server.setRequestHandler(CallToolRequestSchema, async (request, extra) => {
-    const { toolHandler } = getProjectData();
-    const toolName = (request.params as any)?.name ?? 'unknown';
-    const args = (request.params as any)?.arguments ?? {};
+  server.setRequestHandler(
+    CallToolRequestSchema,
+    withRequestContext(async (request, extra) => {
+      const { toolHandler } = getProjectData();
+      const toolName = (request.params as any)?.name ?? 'unknown';
+      const args = (request.params as any)?.arguments ?? {};
 
-    const tools = await getTools(ctx(extra));
-    const tool = tools.find((t) => t.name === toolName);
-    if (!tool) {
-      throw new McpError(-32602, `Unknown tool: ${toolName}`, { field: 'name', reason: 'unknown_tool' });
-    }
-
-    // Standard §7.5 — scope enforcement for tool dispatch. Scopes declared on tool._meta.requiredScopes
-    // (preferred) or tool.requiredScopes are matched against the token's `scope` claim.
-    const required: string[] = ((tool as any)._meta?.requiredScopes ?? (tool as any).requiredScopes ?? []) as string[];
-    if (Array.isArray(required) && required.length > 0) {
-      const tokenScopes = String((extra as any)?.authInfo?.payload?.scope ?? '')
-        .split(/\s+/)
-        .filter(Boolean);
-      const missing = required.filter((s) => !tokenScopes.includes(s));
-      if (missing.length > 0) {
-        throw new McpError(-32004, `Missing scopes: ${missing.join(',')}`, {
-          field: 'scope',
-          reason: 'insufficient_scope',
-          missing,
-        });
+      const tools = await getTools(ctx(extra));
+      const tool = tools.find((t) => t.name === toolName);
+      if (!tool) {
+        getMetrics()?.toolCalls.inc({ tool: toolName, status: 'invalid_params' });
+        throw new McpError(-32602, `Unknown tool: ${toolName}`, { field: 'name', reason: 'unknown_tool' });
       }
-    }
 
-    const inputCheck = validateToolInput(tool, args);
-    if (!inputCheck.valid) {
-      throw new McpError(-32602, 'Invalid params', { field: inputCheck.field, reason: inputCheck.reason });
-    }
+      // Standard §17.2 — deprecation warning is emitted at call-time (rate-limited 1/hour).
+      warnDeprecatedUsage('tool', toolName, readDeprecation(tool));
 
-    // Standard §14 — per-subject concurrent in-flight cap.
-    const maxConcurrent = appConfig.mcp.rateLimit?.maxConcurrentPerSubject ?? 16;
-    const subjectKey = subjectKeyFromAuth((extra as any)?.authInfo);
-    const current = inFlightBySubject.get(subjectKey) ?? 0;
-    if (current >= maxConcurrent) {
-      throw new RateLimitedError(
-        `Too many concurrent tool calls for subject "${subjectKey}" (limit ${maxConcurrent})`,
-        1,
-      );
-    }
-    inFlightBySubject.set(subjectKey, current + 1);
-
-    try {
-      const response = (await withToolTimeout(
-        toolName,
-        () => toolHandler({ ...request.params, ...ctx(extra) }) as Promise<any>,
-      )) as any;
-
-      if (response && typeof response === 'object' && 'structuredContent' in response) {
-        const outputCheck = validateToolOutput(tool, (response as any).structuredContent);
-        if (!outputCheck.valid) {
-          throw new McpError(-32603, 'Tool produced result that violates outputSchema', {
-            field: outputCheck.field,
-            reason: outputCheck.reason,
+      // Standard §7.5 — scope enforcement for tool dispatch.
+      const required: string[] = ((tool as any)._meta?.requiredScopes ??
+        (tool as any).requiredScopes ??
+        []) as string[];
+      if (Array.isArray(required) && required.length > 0) {
+        const tokenScopes = String((extra as any)?.authInfo?.payload?.scope ?? '')
+          .split(/\s+/)
+          .filter(Boolean);
+        const missing = required.filter((s) => !tokenScopes.includes(s));
+        if (missing.length > 0) {
+          getMetrics()?.toolCalls.inc({ tool: toolName, status: 'error' });
+          throw new McpError(-32004, `Missing scopes: ${missing.join(',')}`, {
+            field: 'scope',
+            reason: 'insufficient_scope',
+            missing,
           });
         }
-        // §12.4 — mirror structuredContent in content[0] as JSON text for legacy clients.
-        const existingContent = Array.isArray((response as any).content) ? (response as any).content : undefined;
-        const hasText = existingContent?.some((p: any) => p?.type === 'text' && typeof p?.text === 'string');
-        if (!hasText) {
-          let serialized: string;
-          try {
-            serialized = JSON.stringify((response as any).structuredContent ?? null, null, 2);
-          } catch {
-            serialized = '';
+      }
+
+      const inputCheck = validateToolInput(tool, args);
+      if (!inputCheck.valid) {
+        getMetrics()?.toolCalls.inc({ tool: toolName, status: 'invalid_params' });
+        throw new McpError(-32602, 'Invalid params', { field: inputCheck.field, reason: inputCheck.reason });
+      }
+
+      // Standard §14 — per-subject concurrent in-flight cap.
+      const maxConcurrent = appConfig.mcp.rateLimit?.maxConcurrentPerSubject ?? 16;
+      const subjectKey = subjectKeyFromAuth((extra as any)?.authInfo);
+      const current = inFlightBySubject.get(subjectKey) ?? 0;
+      if (current >= maxConcurrent) {
+        getMetrics()?.toolCalls.inc({ tool: toolName, status: 'rate_limited' });
+        getMetrics()?.rateLimitHits.inc({ scope: 'concurrent' });
+        throw new RateLimitedError(
+          `Too many concurrent tool calls for subject "${subjectKey}" (limit ${maxConcurrent})`,
+          1,
+        );
+      }
+      inFlightBySubject.set(subjectKey, current + 1);
+      getMetrics()?.concurrentCalls.set({ subject: subjectKey }, current + 1);
+
+      const stopTimer = getMetrics()?.toolDuration.startTimer({ tool: toolName });
+      const progressToken = (request.params as any)?._meta?.progressToken as string | number | undefined;
+      const sendProgress = buildSendProgress(progressToken);
+
+      let outcome: 'ok' | 'error' | 'timeout' | 'internal_error' = 'ok';
+
+      try {
+        const response = (await withToolTimeout(
+          toolName,
+          () =>
+            toolHandler({
+              ...request.params,
+              ...ctx(extra),
+              // Standard §8.5 — propagate cancellation to user code.
+              signal: extra.signal,
+              // Standard §8.6 — progress emitter (no-op when no progressToken).
+              sendProgress,
+            }) as Promise<any>,
+        )) as any;
+
+        if (response && typeof response === 'object' && 'structuredContent' in response) {
+          const outputCheck = validateToolOutput(tool, (response as any).structuredContent);
+          if (!outputCheck.valid) {
+            outcome = 'internal_error';
+            throw new McpError(-32603, 'Tool produced result that violates outputSchema', {
+              field: outputCheck.field,
+              reason: outputCheck.reason,
+            });
           }
-          (response as any).content = [{ type: 'text', text: serialized }, ...(existingContent ?? [])];
+          // §12.4 — mirror structuredContent in content[0] as JSON text for legacy clients.
+          const existingContent = Array.isArray((response as any).content) ? (response as any).content : undefined;
+          const hasText = existingContent?.some((p: any) => p?.type === 'text' && typeof p?.text === 'string');
+          if (!hasText) {
+            let serialized: string;
+            try {
+              serialized = JSON.stringify((response as any).structuredContent ?? null, null, 2);
+            } catch {
+              serialized = '';
+            }
+            (response as any).content = [{ type: 'text', text: serialized }, ...(existingContent ?? [])];
+          }
+        }
+
+        const truncated = truncateToolResponse(response) as any;
+        try {
+          const resultBytes = JSON.stringify(truncated ?? null).length;
+          getMetrics()?.resultBytes.observe(resultBytes);
+        } catch {
+          // ignore serialization-only failures
+        }
+        return truncated;
+      } catch (err) {
+        if (outcome === 'ok') {
+          const code = (err as { code?: number })?.code;
+          if (code === -32004) {
+            outcome = 'timeout';
+          } else {
+            outcome = 'error';
+          }
+        }
+        throw err;
+      } finally {
+        stopTimer?.();
+        getMetrics()?.toolCalls.inc({ tool: toolName, status: outcome });
+        const after = (inFlightBySubject.get(subjectKey) ?? 1) - 1;
+        if (after <= 0) {
+          inFlightBySubject.delete(subjectKey);
+          getMetrics()?.concurrentCalls.set({ subject: subjectKey }, 0);
+        } else {
+          inFlightBySubject.set(subjectKey, after);
+          getMetrics()?.concurrentCalls.set({ subject: subjectKey }, after);
         }
       }
-
-      return truncateToolResponse(response) as any;
-    } finally {
-      const after = (inFlightBySubject.get(subjectKey) ?? 1) - 1;
-      if (after <= 0) {
-        inFlightBySubject.delete(subjectKey);
-      } else {
-        inFlightBySubject.set(subjectKey, after);
-      }
-    }
-  });
+    }),
+  );
 
   // Handler for listing available prompts (standard §8.4 — server-side pagination).
-  server.setRequestHandler(ListPromptsRequestSchema, async (request, extra) => {
-    const result = await getPromptsList(ctx(extra));
-    const cursor = (request.params as any)?.cursor;
-    const { page, nextCursor } = paginate(result.prompts, cursor, pageSize, (p: any) => p.name);
-    return nextCursor ? { prompts: page, nextCursor } : { prompts: page };
-  });
+  server.setRequestHandler(
+    ListPromptsRequestSchema,
+    withRequestContext(async (request, extra) => {
+      const result = await getPromptsList(ctx(extra));
+      const prompts = result.prompts.map((p: any) => {
+        const info = readDeprecation(p);
+        if (!info) {
+          return p;
+        }
+        assertDeprecationConsistency('prompt', p.name, info);
+        return { ...p, description: applyDeprecationToDescription(p.description, info) };
+      });
+      const cursor = (request.params as any)?.cursor;
+      const { page, nextCursor } = paginate(prompts, cursor, pageSize, (p: any) => p.name);
+      return nextCursor ? { prompts: page, nextCursor } : { prompts: page };
+    }),
+  );
 
   // Handler for getting prompt content
   server.setRequestHandler(
     GetPromptRequestSchema,
     // @ts-ignore
-    async (request: IGetPromptRequest, extra) => await getPrompt(request, ctx(extra)),
+    withRequestContext(async (request: IGetPromptRequest, extra) => {
+      const promptName = (request.params as any)?.name;
+      if (promptName) {
+        const { prompts } = await getPromptsList(ctx(extra));
+        const prompt = prompts.find((p: any) => p.name === promptName);
+        warnDeprecatedUsage('prompt', promptName, readDeprecation(prompt));
+      }
+      return await getPrompt(request, ctx(extra));
+    }),
   );
 
   // Handler for listing available resources (standard §8.4 — server-side pagination).
-  server.setRequestHandler(ListResourcesRequestSchema, async (request, extra) => {
-    const result = await getResourcesList(ctx(extra));
-    const cursor = (request.params as any)?.cursor;
-    const { page, nextCursor } = paginate(result.resources, cursor, pageSize, (r: any) => r.uri);
-    return nextCursor ? { resources: page, nextCursor } : { resources: page };
-  });
+  server.setRequestHandler(
+    ListResourcesRequestSchema,
+    withRequestContext(async (request, extra) => {
+      const result = await getResourcesList(ctx(extra));
+      const resources = result.resources.map((r: any) => {
+        const info = readDeprecation(r);
+        if (!info) {
+          return r;
+        }
+        assertDeprecationConsistency('resource', r.uri, info);
+        return { ...r, description: applyDeprecationToDescription(r.description, info) };
+      });
+      const cursor = (request.params as any)?.cursor;
+      const { page, nextCursor } = paginate(resources, cursor, pageSize, (r: any) => r.uri);
+      return nextCursor ? { resources: page, nextCursor } : { resources: page };
+    }),
+  );
 
   // Handler for reading resource content
-  server.setRequestHandler(ReadResourceRequestSchema, async (request: IReadResourceRequest, extra) => {
-    return (await getResource(request.params.uri, ctx(extra))) as any;
-  });
+  server.setRequestHandler(
+    ReadResourceRequestSchema,
+    withRequestContext(async (request: IReadResourceRequest, extra) => {
+      const { uri } = request.params;
+      if (uri) {
+        const { resources } = await getResourcesList(ctx(extra));
+        const resource = resources.find((r: any) => r.uri === uri);
+        warnDeprecatedUsage('resource', uri, readDeprecation(resource));
+      }
+      return (await getResource(uri, ctx(extra))) as any;
+    }),
+  );
 
   // Optional MAY: resources/templates/list — empty list if no templates configured.
   if (templatesEnabled) {
-    server.setRequestHandler(ListResourceTemplatesRequestSchema, async (request, extra) => {
-      const templates = await getResourceTemplatesList(ctx(extra));
-      const cursor = (request.params as any)?.cursor;
-      const { page, nextCursor } = paginate(templates, cursor, pageSize, (t: any) => t.uriTemplate ?? t.name ?? '');
-      return nextCursor ? { resourceTemplates: page, nextCursor } : { resourceTemplates: page };
-    });
+    server.setRequestHandler(
+      ListResourceTemplatesRequestSchema,
+      withRequestContext(async (request, extra) => {
+        const templates = await getResourceTemplatesList(ctx(extra));
+        const cursor = (request.params as any)?.cursor;
+        const { page, nextCursor } = paginate(templates, cursor, pageSize, (t: any) => t.uriTemplate ?? t.name ?? '');
+        return nextCursor ? { resourceTemplates: page, nextCursor } : { resourceTemplates: page };
+      }),
+    );
   }
 
   // Optional MAY: resources/subscribe + resources/unsubscribe — opt-in via config.

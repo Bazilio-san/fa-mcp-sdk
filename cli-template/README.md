@@ -208,3 +208,40 @@ Generate an admin-capable JWT:
 node scripts/generate-jwt.js -u admin -ttl 30d -p "allow=gen-token"
 ```
 
+## Public Contract
+
+The runtime contract surfaced by this server (transports, HTTP endpoints, JWT claims, tool /
+prompt / resource shape, error mapping, headers, semver and deprecation policy) is documented
+in [FA-MCP-SDK-DOC/11-public-contract.md](FA-MCP-SDK-DOC/11-public-contract.md).
+
+Tools, prompts and resources exposed by this project are listed in the table below — update
+this section whenever you add, rename, or remove an entry.
+
+### Tools
+
+| Name | Description |
+|------|-------------|
+| `<tool_name>` | Short description |
+
+### Prompts
+
+| Name | Description |
+|------|-------------|
+| `agent_brief` | Short agent description (built-in) |
+| `agent_prompt` | Full system prompt (built-in) |
+
+### Resources
+
+| URI | Description |
+|-----|-------------|
+| `project://version` | SDK / project version (built-in) |
+| `use://auth` | Authentication self-description (built-in) |
+| `<service>://agent/brief` | Mirror of `agent_brief` (built-in) |
+| `<service>://agent/prompt` | Mirror of `agent_prompt` (built-in) |
+
+## Versioning policy
+
+This project follows the semver contract documented in
+[FA-MCP-SDK-DOC/11-public-contract.md](FA-MCP-SDK-DOC/11-public-contract.md#8-versioning-policy-171).
+Mark every `MAJOR` change with `[BREAKING]` in `CHANGELOG.md`.
+

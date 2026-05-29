@@ -21,6 +21,7 @@ import { appendFile, mkdir } from 'node:fs/promises';
 import * as path from 'node:path';
 
 import { appConfig } from '../bootstrap/init-config.js';
+import { getCurrentRequestContext } from '../web/request-id.js';
 
 type Sink = (event: Record<string, unknown>) => void;
 
@@ -59,14 +60,28 @@ export function configureDebugSink(logFile: string | undefined | null): void {
 }
 
 /**
- * Emit a single trace event. Always adds `ts` (ISO timestamp) and `ch` (channel).
+ * Emit a single trace event. Always adds `ts` (ISO timestamp), `ch` (channel),
+ * plus correlation fields drawn from {@link getCurrentRequestContext} so
+ * post-mortem analysis can stitch together every event of a request.
  * No-op when the sink is not configured.
  */
 export function emitTrace(channel: string, event: Record<string, unknown>): void {
   if (!sink) {
     return;
   }
-  sink({ ts: new Date().toISOString(), ch: channel, ...event });
+  const reqCtx = getCurrentRequestContext();
+  const corr: Record<string, unknown> = {};
+  if (reqCtx?.requestId) {
+    corr.requestId = reqCtx.requestId;
+  }
+  if (reqCtx?.jsonRpcId !== undefined && reqCtx?.jsonRpcId !== null) {
+    corr.jsonRpcId = reqCtx.jsonRpcId;
+  }
+  if (reqCtx?.traceContext) {
+    corr.traceId = reqCtx.traceContext.traceId;
+    corr.spanId = reqCtx.traceContext.parentId;
+  }
+  sink({ ts: new Date().toISOString(), ch: channel, ...corr, ...event });
 }
 
 /**
