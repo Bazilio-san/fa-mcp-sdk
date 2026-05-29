@@ -53,6 +53,20 @@ export interface TokenGenAuthInput {
 export type TokenGenAuthHandler = (input: TokenGenAuthInput) => Promise<AuthResult> | AuthResult;
 
 /**
+ * Standard §10.5 / §11.3 (MAY) — a single icon descriptor for display in the client UI, per
+ * MCP 2025-11-25. Used by prompts ({@link IPromptData.icons}) and resources
+ * ({@link IResourceInfo.icons}). All fields except `src` are optional.
+ */
+export interface IIcon {
+  /** Icon source: an absolute URL, or a `data:` URI with the inlined bytes. */
+  src: string;
+  /** Optional MIME type of the icon (e.g. `image/png`, `image/svg+xml`). */
+  mimeType?: string;
+  /** Optional size hint as an HTML `sizes` string (e.g. `'48x48'`, `'any'`). */
+  sizes?: string;
+}
+
+/**
  * Standard §10.5 — descriptor for a single prompt argument. The host advertises these
  * to the LLM in `prompts/list`, then passes the resolved values as `request.params.arguments`
  * (string-keyed map) on `prompts/get`.
@@ -65,9 +79,13 @@ export interface IPromptArgument {
 
 export interface IPromptData {
   name: string;
+  /** Standard §10.5 (MAY) — human-readable name shown in the client UI; falls back to `name`. */
+  title?: string;
   description: string;
   /** Per standard §10.5 — list of supported arguments; empty array if the prompt is static. */
   arguments: IPromptArgument[];
+  /** Standard §10.5 (MAY) — icons for display in the client UI. See {@link IIcon}. */
+  icons?: IIcon[];
   content: IPromptContent;
   requireAuth?: boolean;
   /**
@@ -123,6 +141,10 @@ export interface IResourceInfo {
   title?: string;
   description: string;
   mimeType: string;
+  /** Standard §11.3 (MAY) — content size in bytes, surfaced on `resources/list`. */
+  size?: number;
+  /** Standard §11.3 (MAY) — icons for display in the client UI. See {@link IIcon}. */
+  icons?: IIcon[];
   requireAuth?: boolean;
   /**
    * Standard §7.5 — OAuth-style scopes required to read this resource.

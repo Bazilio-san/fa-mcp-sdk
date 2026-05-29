@@ -111,6 +111,13 @@ mcp:
     maxTasks:
       __name: MCP_TASKS_MAX_TASKS
       __format: number
+  sse:
+    resumability:
+      __name: MCP_SSE_RESUMABILITY
+      __format: boolean
+    maxStoredEvents:
+      __name: MCP_SSE_MAX_STORED_EVENTS
+      __format: number
 
 uiColor:
   primary: UI_COLOR_PRIMARY

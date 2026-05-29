@@ -344,6 +344,15 @@ mcp:
     #> Max number of simultaneously retained tasks across all subjects. Oldest finished tasks are
     #> evicted first when the cap is reached. Default 1000.
     maxTasks: 1000
+  #> Standard §6 (MAY) — Streamable HTTP SSE stream resumability via the `Last-Event-ID` header.
+  #> Off by default. When enabled, the server keeps recent SSE events in process memory so a
+  #> reconnecting client can replay missed messages. The buffer is in-memory only: it is lost on
+  #> restart and does not span multiple server instances.
+  sse:
+    #> Set true to attach the in-memory EventStore to the Streamable HTTP transport. Default false.
+    resumability: false
+    #> Max number of events retained per process for replay. Default 1000.
+    maxStoredEvents: 1000
 
 #> Swagger / OpenAPI documentation settings
 swagger:

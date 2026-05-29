@@ -9,6 +9,7 @@ export type {
   TTransportType,
   IGetPromptParams,
   IGetPromptRequest,
+  IIcon,
   IPromptArgument,
   IPromptContent,
   IPromptData,
@@ -159,6 +160,13 @@ export { eventEmitter } from './ee.js';
 export { logger, fileLogger, applyLoggerSettings } from './logger.js';
 
 export { getCache, CacheManager } from './cache/cache.js';
+
+// Standard §6 (MAY) — in-memory EventStore for SSE resumability (opt-in via mcp.sse.resumability).
+export { InMemoryEventStore } from './web/event-store.js';
+
+// Standard §12.2 — optional helper to mask sensitive fields/values in tool results before returning.
+export { maskSensitive } from './utils/mask-sensitive.js';
+export type { IMaskRules } from './utils/mask-sensitive.js';
 
 export { McpHttpClient } from './utils/testing/McpHttpClient.js';
 export { McpSseClient } from './utils/testing/McpSseClient.js';

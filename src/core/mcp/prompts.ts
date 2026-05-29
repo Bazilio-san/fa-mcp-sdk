@@ -35,6 +35,7 @@ async function getPrompts(args: ITransportContext): Promise<IPromptData[]> {
   return [
     {
       name: 'agent_brief',
+      title: 'Agent brief',
       description: 'Brief description of the agent to be selected in the agent system',
       arguments: [],
       content: agentBrief,
@@ -42,6 +43,7 @@ async function getPrompts(args: ITransportContext): Promise<IPromptData[]> {
     },
     {
       name: 'agent_prompt',
+      title: 'Agent prompt',
       description: 'Detailed prompt of the agent',
       arguments: [],
       content: agentPrompt,

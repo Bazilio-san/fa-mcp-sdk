@@ -149,6 +149,10 @@ mcp:
     maxTtlMs: 86400000           # hard retention ceiling (24 h)
     pollIntervalMs: 1000         # suggested client poll interval, surfaced in every task object
     maxTasks: 1000               # retained tasks cap; oldest finished evicted first
+  # Standard §6 (MAY) — Streamable HTTP SSE resumability via Last-Event-ID. Off by default.
+  sse:
+    resumability: false          # wire in-memory EventStore into the transport for replay on reconnect
+    maxStoredEvents: 1000        # ring-buffer size: recent events retained per process for replay
 
 swagger:
   servers:
@@ -478,6 +482,21 @@ Standard §11.5 — opt-in templates and subscriptions. Defaults keep the server
 
 See [02-2-prompts-and-resources → "Optional MAY capabilities"](./02-2-prompts-and-resources.md#optional-may-capabilities-templates--subscribe-standard-115)
 for end-to-end examples.
+
+## SSE stream resumability (`mcp.sse`)
+
+Standard §6 (MAY) — opt-in replay of missed Streamable HTTP SSE events after a reconnect. Off by
+default; when off the transport behaves exactly as before. Only relevant for the HTTP transport.
+
+| Key | Default | Notes |
+|-----|---------|-------|
+| `mcp.sse.resumability` | `false` | When `true`, an in-memory `InMemoryEventStore` is wired into the Streamable HTTP transport. A client reconnecting to `GET /mcp` with a `Last-Event-ID` header replays the events it missed. Env `MCP_SSE_RESUMABILITY`. |
+| `mcp.sse.maxStoredEvents` | `1000` | Ring-buffer size — how many recent events are retained per process for replay. Env `MCP_SSE_MAX_STORED_EVENTS`. |
+
+The store is a per-process ring buffer: it does not survive a restart and is not shared across
+instances. For multi-replica deployments either pin reconnects to the same instance (sticky sessions
+by `Mcp-Session-Id`) or implement a shared `EventStore`. Events evicted past `maxStoredEvents` are not
+replayed — the client simply resumes from the current moment, without error.
 
 ## HTTP Transport Hardening (`mcp.limits`)
 

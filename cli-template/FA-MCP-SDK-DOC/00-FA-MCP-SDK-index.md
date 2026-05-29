@@ -49,9 +49,14 @@ import {
 // Prompts (parameterised — standard §10.5) & Resources (templates/subscribe — §11.5)
 import {
   IPromptArgument, IPromptData,
+  IIcon,                                              // §10.5/§11.3 — optional title/icons UI metadata
   IResourceTemplateInfo,
   notifyResourceUpdated,                              // call to broadcast `notifications/resources/updated`
 } from 'fa-mcp-sdk';
+
+// SSE resumability (standard §6) — opt-in via mcp.sse.resumability; maskSensitive (§12.2) — opt-in
+// result masking, applied by the server inside a tool handler.
+import { InMemoryEventStore, maskSensitive, IMaskRules } from 'fa-mcp-sdk';
 
 // Task-augmented execution (standard §8.7) — opt-in via mcp.tasks.enabled; declare a long-running
 // tool with execution.taskSupport. Storage is pluggable (default: in-memory, per-process).

@@ -4,6 +4,7 @@ import { fileURLToPath } from 'url';
 
 import { SSEServerTransport } from '@modelcontextprotocol/sdk/server/sse.js';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
+import { InMemoryEventStore } from './event-store.js';
 import {
   CallToolRequestSchema,
   ListToolsRequestSchema,
@@ -662,6 +663,16 @@ export async function startHttpServer(): Promise<void> {
   // Soft cap to bound memory; oldest session is evicted (FIFO via Map insertion order).
   const MAX_HTTP_SESSIONS = 4096;
   const mcpTransports = new Map<string, StreamableHTTPServerTransport>();
+  // Standard §6 (MAY) — SSE resumability. A single in-memory EventStore is shared across sessions
+  // (each stream owns its own streamId). Created only when opted in; otherwise the transport is
+  // built without an eventStore and behavior is unchanged.
+  const sseResumability = appConfig.mcp.sse?.resumability === true;
+  const sseEventStore = sseResumability
+    ? new InMemoryEventStore(appConfig.mcp.sse?.maxStoredEvents ?? 1000)
+    : undefined;
+  if (sseResumability) {
+    logger.info(`MCP SSE resumability enabled (in-memory, max ${appConfig.mcp.sse?.maxStoredEvents ?? 1000} events)`);
+  }
   const evictOldestSession = (keep: string) => {
     while (mcpTransports.size > MAX_HTTP_SESSIONS) {
       const oldest = mcpTransports.keys().next().value;
@@ -772,6 +783,8 @@ export async function startHttpServer(): Promise<void> {
         );
         const transport = new StreamableHTTPServerTransport({
           sessionIdGenerator: () => randomUUID(),
+          // Standard §6 (MAY) — attach the EventStore only when resumability is enabled.
+          ...(sseEventStore ? { eventStore: sseEventStore } : {}),
           onsessioninitialized: (sid: string) => {
             mcpTransports.set(sid, transport);
             evictOldestSession(sid);
