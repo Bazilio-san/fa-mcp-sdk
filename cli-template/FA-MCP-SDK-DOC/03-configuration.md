@@ -139,6 +139,16 @@ mcp:
   resources:
     subscribeEnabled: false      # advertise `subscribe` + `listChanged`; emit notifications/resources/updated
     templatesEnabled: false      # advertise + serve resources/templates/list
+  # Standard §8.7 (MAY) — task-augmented execution (long-running / pollable tool calls). Off by
+  # default. When enabled, advertises the `tasks` capability and serves tasks/list|get|result|cancel.
+  # Long-running tools opt in per-tool via `execution.taskSupport`. Default store is in-memory only.
+  tasks:
+    enabled: false               # advertise `tasks` capability and accept the lifecycle methods
+    defaultTtlMs: 3600000        # finished-task retention from creation (clamped to [minTtlMs, maxTtlMs])
+    minTtlMs: 0                  # lower bound a client-requested ttl is clamped to
+    maxTtlMs: 86400000           # hard retention ceiling (24 h)
+    pollIntervalMs: 1000         # suggested client poll interval, surfaced in every task object
+    maxTasks: 1000               # retained tasks cap; oldest finished evicted first
 
 swagger:
   servers:

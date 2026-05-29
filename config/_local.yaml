@@ -295,6 +295,14 @@ mcp:
   #> Standard §8.2 (MAY) — completion/complete capability. Off by default; see default.yaml.
   completions:
     enabled: false
+  #> Standard §8.7 (MAY) — task-augmented execution. Off by default; see default.yaml.
+  tasks:
+    enabled: false
+    defaultTtlMs: 3600000
+    minTtlMs: 0
+    maxTtlMs: 86400000
+    pollIntervalMs: 1000
+    maxTasks: 1000
 
 #> Swagger / OpenAPI documentation settings
 swagger:

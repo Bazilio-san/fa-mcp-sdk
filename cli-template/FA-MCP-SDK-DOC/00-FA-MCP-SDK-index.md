@@ -53,6 +53,13 @@ import {
   notifyResourceUpdated,                              // call to broadcast `notifications/resources/updated`
 } from 'fa-mcp-sdk';
 
+// Task-augmented execution (standard §8.7) — opt-in via mcp.tasks.enabled; declare a long-running
+// tool with execution.taskSupport. Storage is pluggable (default: in-memory, per-process).
+import {
+  getTaskStore, resetTaskStore, InMemoryTaskStore, toTaskDto, isTerminalTaskStatus,
+  ITaskStore, ITaskRecord, ITaskCreateInput, ITaskStoreOptions, TTaskStatus, TTaskPatch,
+} from 'fa-mcp-sdk';
+
 // Database & Cache
 import {
   queryMAIN, queryRsMAIN, oneRowMAIN, execMAIN,

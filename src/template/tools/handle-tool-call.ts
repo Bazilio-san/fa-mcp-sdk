@@ -19,8 +19,13 @@ const logger = lgr.getSubLogger({ name: chalk.bgGrey('tools') });
  * channels have their own switches: `DEBUG=mcp:resource`, `DEBUG=mcp:prompt`,
  * `DEBUG=mcp:notification`. Use `DEBUG=mcp:*` to enable them all at once.
  */
-export const handleToolCall = async (params: { name: string; arguments?: any }): Promise<any> => {
-  const { name, arguments: args } = params;
+export const handleToolCall = async (params: {
+  name: string;
+  arguments?: any;
+  signal?: AbortSignal;
+  sendProgress?: (progress: number, total?: number, message?: string) => void;
+}): Promise<any> => {
+  const { name, arguments: args, signal, sendProgress } = params;
 
   logger.info(`Tool called: ${name}`);
 
@@ -30,6 +35,10 @@ export const handleToolCall = async (params: { name: string; arguments?: any }):
     switch (name) {
       case 'example_tool':
         result = await handleExampleTool(args);
+        break;
+
+      case 'example_long_task':
+        result = await handleExampleLongTask(args, { signal, sendProgress });
         break;
 
       default:
@@ -72,6 +81,42 @@ async function handleExampleTool(args: any): Promise<TToolHandlerResponse> {
   };
 
   return formatToolResult(result);
+}
+
+/**
+ * Example long-running tool (standard §8.7). Processes a number of steps with an artificial delay,
+ * emitting `sendProgress` after each step and aborting early when the client cancels.
+ *
+ * The same handler runs whether the tool is called synchronously or as a task — the SDK supplies
+ * `signal` and `sendProgress` in both cases. As a task, `signal` is flipped by `tasks/cancel` and
+ * progress is delivered via `notifications/progress`; synchronously, the 30s tool timeout applies,
+ * which is exactly why long work should be invoked as a task.
+ */
+async function handleExampleLongTask(
+  args: any,
+  {
+    signal,
+    sendProgress,
+  }: {
+    signal?: AbortSignal | undefined;
+    sendProgress?: ((p: number, total?: number, m?: string) => void) | undefined;
+  },
+): Promise<TToolHandlerResponse> {
+  const steps = Math.min(20, Math.max(1, Number(args?.steps) || 5));
+
+  for (let i = 1; i <= steps; i++) {
+    if (signal?.aborted) {
+      throw new ToolExecutionError('example_long_task', 'Cancelled by client');
+    }
+    await new Promise((resolve) => setTimeout(resolve, 200));
+    sendProgress?.(i, steps, `Completed step ${i} of ${steps}`);
+  }
+
+  return formatToolResult({
+    message: `Completed ${steps} steps`,
+    steps,
+    finishedAt: new Date().toISOString(),
+  });
 }
 
 // TODO: Add more tool handlers here

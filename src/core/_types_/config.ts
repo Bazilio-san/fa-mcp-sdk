@@ -173,6 +173,34 @@ interface IMCPConfig {
       enabled?: boolean;
     };
     /**
+     * Standard §8.7 (MAY) — task-augmented execution. Off by default. When enabled, the server
+     * advertises the `tasks` capability and accepts the task lifecycle methods (`tasks/list`,
+     * `tasks/get`, `tasks/result`, `tasks/cancel`). Individual long-running tools opt in via
+     * `execution.taskSupport` in their declaration (§9.1). The default task store keeps records in
+     * process memory only — it does not survive a restart.
+     */
+    tasks?: {
+      /** Default `false`. Set `true` to advertise `tasks` capability and accept task methods. */
+      enabled?: boolean;
+      /**
+       * Default retention of a finished task, milliseconds, measured from creation. A client may
+       * request a different `ttl`; the server clamps it to `[minTtlMs ?? 0, maxTtlMs]`.
+       * Default 3_600_000 (1 hour).
+       */
+      defaultTtlMs?: number;
+      /** Lower bound a client-requested `ttl` is clamped to, milliseconds. Default 0 (no floor). */
+      minTtlMs?: number;
+      /** Hard upper bound on retention, milliseconds. Default 86_400_000 (24 hours). */
+      maxTtlMs?: number;
+      /** Recommended poll interval suggested to the client in every task object. Default 1000. */
+      pollIntervalMs?: number;
+      /**
+       * Max number of simultaneously retained tasks across all subjects. When the cap is reached,
+       * the oldest finished tasks are evicted first. Default 1000.
+       */
+      maxTasks?: number;
+    };
+    /**
      * Debug & diagnostics. All keys are optional and disabled by default — the
      * stderr `DEBUG=mcp:*` stream keeps working independently of this section.
      */

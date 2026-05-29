@@ -39,7 +39,7 @@ async function main() {
   console.log('='.repeat(60));
 
   // Get authentication headers based on config
-  const headers = getAuthHeadersForTests();
+  const headers = await getAuthHeadersForTests();
   if (Object.keys(headers).length) {
     console.log('  Authentication enabled');
   } else if (appConfig.webServer?.auth?.enabled) {

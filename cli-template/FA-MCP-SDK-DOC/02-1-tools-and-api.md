@@ -273,6 +273,63 @@ The client receives:
 Choose `total` only when the upper bound is known up-front; otherwise omit it and the client
 will render an indeterminate spinner.
 
+### Task-augmented execution (long-running tools) — standard §8.7
+
+A normal `tools/call` is synchronous: the client holds the connection open until the tool returns,
+and the call is bound by the tool timeout (`mcp.limits.toolTimeoutMs`, 30 seconds by default). For
+operations that legitimately take minutes — bulk exports, report generation, long searches — the
+SDK supports **task-augmented execution**: the server returns a task identifier immediately and runs
+the tool in the background; the client then polls for status and fetches the result when ready.
+
+This feature is **opt-in and off by default**. To enable it:
+
+1. Set `mcp.tasks.enabled: true` in the configuration. The server then advertises the `tasks`
+   capability and accepts the lifecycle methods `tasks/list`, `tasks/get`, `tasks/result` and
+   `tasks/cancel`.
+2. Mark the long-running tool with `execution.taskSupport` in its declaration:
+
+```typescript
+{
+  name: 'generate_report',
+  title: 'Generate a large report',
+  description: 'Builds a multi-page report. Long-running — call it as a task.',
+  inputSchema: { /* … */ },
+  // 'optional' — the client MAY ask for a task but can still call synchronously.
+  // 'required' — the tool runs only as a task (a synchronous call is rejected with -32602).
+  // 'forbidden' / omitted — synchronous only.
+  execution: { taskSupport: 'optional' },
+}
+```
+
+The same handler runs whether the tool is invoked synchronously or as a task — the SDK always
+supplies `signal` and `sendProgress`. When the tool runs as a task, `signal` is flipped by
+`tasks/cancel`, progress is delivered through `notifications/progress`, and the SDK emits a
+`notifications/tasks/status` on every status change. On completion the task transitions to
+`completed` (carrying the same result a synchronous call would return); on a thrown error it
+transitions to `failed` with a sanitized message; on cancellation it transitions to `cancelled`.
+
+The client drives the lifecycle by sending a `task` parameter on `tools/call` and then polling:
+
+```jsonc
+// 1. Create — returns immediately with { task: { taskId, status: "working", … } }
+{ "method": "tools/call", "params": { "name": "generate_report", "arguments": {}, "task": {} } }
+
+// 2. Poll status until terminal
+{ "method": "tasks/get",    "params": { "taskId": "…" } }   // → { status: "working" | "completed" | … }
+
+// 3. Fetch the result once completed (same shape a synchronous tools/call returns)
+{ "method": "tasks/result", "params": { "taskId": "…" } }
+
+// Optional — abort a running task
+{ "method": "tasks/cancel", "params": { "taskId": "…" } }
+```
+
+The default task store keeps records **in process memory only** — it does not survive a server
+restart, and it is scoped to a single instance (no shared store across a cluster). Retention,
+poll interval and the retained-task cap are configured under `mcp.tasks.*` (see
+[03-configuration.md](./03-configuration.md)); the full method contract is in
+[11-public-contract.md](./11-public-contract.md) §4.
+
 ### MCP Apps — Reading Client Capabilities
 
 `params.clientCapabilities` carries the client's `initialize`-time capabilities (including the

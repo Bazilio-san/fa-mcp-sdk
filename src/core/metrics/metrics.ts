@@ -25,6 +25,8 @@ export interface IMcpMetrics {
   concurrentCalls: Gauge<'subject'>;
   payloadBytes: Histogram<never>;
   resultBytes: Histogram<never>;
+  /** Standard §8.7 — task lifecycle transitions by status (created/completed/failed/cancelled). */
+  tasks: Counter<'status'>;
 }
 
 let metrics: IMcpMetrics | undefined;
@@ -106,6 +108,12 @@ export function initMetrics(): IMcpMetrics {
       name: 'mcp_result_bytes',
       help: 'Size of serialized MCP tool results in bytes.',
       buckets: BYTES_BUCKETS,
+      registers: [reg],
+    }),
+    tasks: new Counter({
+      name: 'mcp_tasks_total',
+      help: 'Number of task lifecycle transitions by status.',
+      labelNames: ['status'] as const,
       registers: [reg],
     }),
   };

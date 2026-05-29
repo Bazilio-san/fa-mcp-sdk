@@ -121,6 +121,17 @@ export { initMcpServer, gracefulShutdown } from './init-mcp-server.js';
 
 export { notifyResourceUpdated } from './mcp/resources.js';
 
+// Standard §8.7 — task-augmented execution storage (opt-in via mcp.tasks.enabled).
+export { getTaskStore, resetTaskStore, InMemoryTaskStore, toTaskDto, isTerminalTaskStatus } from './mcp/task-store.js';
+export type {
+  ITaskStore,
+  ITaskRecord,
+  ITaskCreateInput,
+  ITaskStoreOptions,
+  TTaskStatus,
+  TTaskPatch,
+} from './mcp/task-store.js';
+
 export {
   formatToolResult,
   formatToolError,
