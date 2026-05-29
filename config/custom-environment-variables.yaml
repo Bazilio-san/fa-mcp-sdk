@@ -88,6 +88,10 @@ mcp:
     throttleMs:
       __name: MCP_PROGRESS_THROTTLE_MS
       __format: number
+  completions:
+    enabled:
+      __name: MCP_COMPLETIONS_ENABLED
+      __format: boolean
 
 uiColor:
   primary: UI_COLOR_PRIMARY

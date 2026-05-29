@@ -15,6 +15,8 @@ export type {
   TPromptContentFunction,
   IResource,
   TResourceContentFunction,
+  TResourceBinaryContentFunction,
+  IResourceBinaryContent,
   IResourceContent,
   IReadResourceRequest,
   IResourceInfo,
@@ -67,7 +69,9 @@ export type { IMcpErrorData } from './errors/BaseMcpError.js';
 export {
   addErrorMessage,
   createJsonRpcErrorResponse,
+  sanitizeOutwardMessage,
   toError,
+  toMcpError,
   toStr,
   ToolExecutionError,
   ServerError,
@@ -79,6 +83,8 @@ export {
   TimeoutError,
   RateLimitedError,
   ResourceNotFoundError,
+  UpstreamUnavailableError,
+  ConflictError,
 } from './errors/specific-errors.js';
 
 export { ValidationError } from './errors/ValidationError.js';

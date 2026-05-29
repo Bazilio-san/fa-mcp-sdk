@@ -6,6 +6,7 @@ import { QueryResult, QueryResultRow } from 'pg';
 import pgvector from 'pgvector/pg';
 
 import { appConfig } from '../bootstrap/init-config.js';
+import { UpstreamUnavailableError } from '../errors/specific-errors.js';
 import { logger } from '../logger.js';
 
 export interface IQueryPgArgsCOptional extends Omit<IQueryPgArgs, 'connectionId'> {
@@ -13,6 +14,48 @@ export interface IQueryPgArgsCOptional extends Omit<IQueryPgArgs, 'connectionId'
 }
 
 const connectionId = 'main';
+
+/**
+ * Network-level errno codes and PostgreSQL SQLSTATE classes that mean "the database is
+ * unreachable" rather than "the query was bad". Class 08 = connection_exception; 57P0x =
+ * server shutting down / not accepting connections; 53300 = too_many_connections.
+ */
+const UPSTREAM_ERRNO = new Set(['ECONNREFUSED', 'ETIMEDOUT', 'ENOTFOUND', 'EHOSTUNREACH', 'ECONNRESET', 'EPIPE']);
+const UPSTREAM_SQLSTATE = new Set([
+  '08000',
+  '08003',
+  '08006',
+  '08001',
+  '08004',
+  '08007',
+  '08P01',
+  '57P01',
+  '57P02',
+  '57P03',
+  '53300',
+]);
+
+/**
+ * Map a raw driver/network error to {@link UpstreamUnavailableError} (JSON-RPC -32006 / HTTP 503)
+ * when it signals an unreachable database, so downstream MCP servers get the correct retryable
+ * status instead of a generic -32603 / 500. Non-connection errors (bad SQL, constraint violations)
+ * pass through unchanged.
+ */
+export const mapDbError = (err: any): Error => {
+  if (err instanceof UpstreamUnavailableError) {
+    return err;
+  }
+  const code = err?.code != null ? String(err.code) : '';
+  const msg = String(err?.message ?? '');
+  const looksUnreachable =
+    UPSTREAM_ERRNO.has(code) ||
+    UPSTREAM_SQLSTATE.has(code) ||
+    /Connection terminated|timeout exceeded when trying to connect|terminating connection|no pg_hba/i.test(msg);
+  if (looksUnreachable) {
+    return new UpstreamUnavailableError(`Database "${connectionId}" unavailable`, { dependency: 'postgres' });
+  }
+  return err instanceof Error ? err : new Error(msg || 'Unknown database error');
+};
 
 export const queryMAIN = async <R extends QueryResultRow = any>(
   arg: string | IQueryPgArgsCOptional,
@@ -26,8 +69,12 @@ export const queryMAIN = async <R extends QueryResultRow = any>(
   if (appConfig.db.postgres!.dbs[connectionId]?.usedExtensions?.includes('pgvector')) {
     arg.registerTypesFunctions = [pgvector.registerType];
   }
-  const res = await queryPg<R>(arg as IQueryPgArgs);
-  return res;
+  try {
+    const res = await queryPg<R>(arg as IQueryPgArgs);
+    return res;
+  } catch (err) {
+    throw mapDbError(err);
+  }
 };
 
 export const getMainDBConnectionStatus = async (): Promise<string> => {
@@ -64,7 +111,12 @@ export const execMAIN = async (arg: string | IQueryPgArgsCOptional): Promise<num
   } else {
     arg.connectionId = connectionId;
   }
-  const res = await queryPg(arg as IQueryPgArgs);
+  let res;
+  try {
+    res = await queryPg(arg as IQueryPgArgs);
+  } catch (err) {
+    throw mapDbError(err);
+  }
   // If a batch of SQL statements is executed, recordset is returned
   return Array.isArray(res)
     ? res.reduce((accum, item) => accum + (item?.rowCount ?? 0), 0)

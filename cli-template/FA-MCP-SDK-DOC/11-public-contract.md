@@ -89,12 +89,13 @@ from MCP endpoints per §7.4. 403 responses (authenticated but forbidden) carry 
 | `notifications/initialized`           | MUST   |                                                           |
 | `tools/list`                          | MUST   | Server-side pagination via `mcp.pagination.pageSize`      |
 | `tools/call`                          | MUST   | Honours `signal`, `_meta.progressToken`, `requiredScopes` |
-| `prompts/list`                        | MUST   | Same pagination contract                                  |
-| `prompts/get`                         | MUST   |                                                           |
+| `prompts/list`                        | MUST   | Capability advertised only when the server has prompts (§8.2) |
+| `prompts/get`                         | MUST   | Returns `-32601` when no prompts are configured           |
 | `resources/list`                      | MUST   | Same pagination contract                                  |
-| `resources/read`                      | MUST   |                                                           |
+| `resources/read`                      | MUST   | Returns `text` or base64 `blob` per entry (§11.4)         |
 | `resources/templates/list`            | MAY    | `mcp.resources.templatesEnabled`                          |
 | `resources/subscribe` / `unsubscribe` | MAY    | `mcp.resources.subscribeEnabled`                          |
+| `completion/complete`                 | MAY    | `mcp.completions.enabled` + `completionProvider` (§8.2)   |
 | `logging/setLevel`                    | SHOULD | Capability `logging: {}` (default ON)                     |
 | `notifications/message`               | SHOULD | Emitted by `sendLoggingMessage()`                         |
 | `notifications/progress`              | SHOULD | Emitted by `IToolHandlerParams.sendProgress()` (§8.6)     |
@@ -129,7 +130,10 @@ from MCP endpoints per §7.4. 403 responses (authenticated but forbidden) carry 
 ### Resource (`IResourceData` / `IResourceInfo`)
 
 `uri`, `name`, `description`, `mimeType`, optional `title`, `requireAuth`, `requiredScopes`,
-`_meta`, `deprecated`. Built-in URI schemes are guaranteed by the SDK:
+`_meta`, `deprecated`. `content` is a string / object / function for text resources, or
+`IResourceBinaryContent` (`{ blob: Buffer | base64-string, base64?: boolean }`) for binary
+resources — `resources/read` then returns base64 `contents[0].blob` (no `text`) with the
+resource's `mimeType` (§11.4 / §12.2). Built-in URI schemes are guaranteed by the SDK:
 
 | URI                                        | Purpose                                        |
 |--------------------------------------------|------------------------------------------------|
@@ -156,6 +160,13 @@ JSON-RPC errors follow Appendix B of the standard. Mapping (JSON-RPC → HTTP):
 | `-32003`      | 429  | `RateLimitedError`   | Rate limit / concurrent-call cap (+ `Retry-After`) |
 | `-32004`      | 504  | `TimeoutError`       | `mcp.limits.toolTimeoutMs` exceeded           |
 | `-32005`      | 413  | `PayloadTooLargeError` | `mcp.limits.maxPayloadBytes` exceeded       |
+| `-32006`      | 503  | `UpstreamUnavailableError` | Dependency (DB / downstream) unreachable  |
+| `-32007`      | 409  | `ConflictError`      | State conflict (duplicate / optimistic lock)  |
+
+Unrecognized internal errors are sanitized (§13.3 / Appendix C.3): the outward `error.message`
+collapses to `Internal error`, the full text is written to the internal log keyed by `requestId`,
+and absolute filesystem paths are scrubbed from any outward message. Recognized domain errors (any
+class above) keep their message verbatim.
 
 `error.data` is structured per Appendix B.3:
 
@@ -184,6 +195,7 @@ JSON-RPC errors follow Appendix B of the standard. Mapping (JSON-RPC → HTTP):
 | `mcp.pagination.pageSize`    | 100                                                                     |
 | `mcp.logging.defaultLevel`   | `info` (Syslog ladder)                                                  |
 | `mcp.progress.throttleMs`    | 100 (10 events/s/token)                                                 |
+| `mcp.completions.enabled`    | `false` (opt-in; needs `completionProvider`)                            |
 | `webServer.metrics.enabled`  | `false` (opt-in)                                                        |
 | `X-Request-Id` (response)    | Always present — generated when client did not supply one (§15.1)       |
 | `tracestate` (response)      | Echoed back unchanged when client supplied a valid value                |
@@ -224,6 +236,7 @@ JSON-RPC errors follow Appendix B of the standard. Mapping (JSON-RPC → HTTP):
 | 0.6.0   | MAJOR | Tools/Prompts/Resources contract (`additionalProperties:false`, mirror)|
 | 0.7.0   | MAJOR | RS256/ES256 JWT runtime, OAuth/OIDC discovery, scope enforcement       |
 | 0.8.x   | MINOR | Observability (X-Request-Id, traceparent, logging, metrics, progress)  |
+| 0.9.0   | MINOR | Conditional capabilities, `-32006`/`-32007`, binary `blob`, error sanitization, opt-in completions |
 
 ---
 

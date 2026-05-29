@@ -9,6 +9,8 @@ export const MCP_ERROR_CODES = {
   RESOURCE_NOT_FOUND: -32002,
   TIMEOUT: -32004,
   PAYLOAD_TOO_LARGE: -32005,
+  UPSTREAM_UNAVAILABLE: -32006,
+  CONFLICT: -32007,
 } as const;
 
 /**
@@ -52,6 +54,33 @@ export class RateLimitedError extends BaseMcpError {
 export class ResourceNotFoundError extends BaseMcpError {
   constructor(reason: string = 'Resource not found', data?: IMcpErrorData) {
     super('RESOURCE_NOT_FOUND', reason, undefined, 404, undefined, MCP_ERROR_CODES.RESOURCE_NOT_FOUND, {
+      reason,
+      ...data,
+    });
+  }
+}
+
+/**
+ * A dependency this server relies on (database pool, downstream HTTP service, message broker)
+ * is unreachable or refused the connection. Standard Appendix B.2 — JSON-RPC `-32006`, HTTP 503.
+ * Clients MAY retry after a back-off. The human-readable `reason` is safe to surface.
+ */
+export class UpstreamUnavailableError extends BaseMcpError {
+  constructor(reason: string = 'Upstream dependency unavailable', data?: IMcpErrorData) {
+    super('UPSTREAM_UNAVAILABLE', reason, undefined, 503, undefined, MCP_ERROR_CODES.UPSTREAM_UNAVAILABLE, {
+      reason,
+      ...data,
+    });
+  }
+}
+
+/**
+ * The request collides with the current state of a resource (optimistic-locking failure,
+ * duplicate key, concurrent edit). Standard Appendix B.2 — JSON-RPC `-32007`, HTTP 409.
+ */
+export class ConflictError extends BaseMcpError {
+  constructor(reason: string = 'State conflict', data?: IMcpErrorData) {
+    super('CONFLICT', reason, undefined, 409, undefined, MCP_ERROR_CODES.CONFLICT, {
       reason,
       ...data,
     });
