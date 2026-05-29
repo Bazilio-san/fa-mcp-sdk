@@ -4,6 +4,7 @@ import {
   debugMcpTool,
   formatToolResult,
   logger as lgr,
+  maskSensitive,
   ToolExecutionError,
   TToolHandlerResponse,
 } from '../../core/index.js';
@@ -80,7 +81,17 @@ async function handleExampleTool(args: any): Promise<TToolHandlerResponse> {
     timestamp: new Date().toISOString(),
   };
 
-  return formatToolResult(result);
+  // Standard §12.2 — masking personal / sensitive data is the server's responsibility. For domains
+  // with such data, run the result through `maskSensitive` before returning. It is opt-in: the SDK
+  // never masks automatically. Rules are explicit (field names + regex), nothing is guessed.
+  // Example (no-op here, since the sample result has no sensitive fields):
+  const safeResult = maskSensitive(result, {
+    fieldNames: ['password', 'token', 'ssn'],
+    patterns: [/\b\d{13,19}\b/g], // card-like number sequences
+    replacement: '***',
+  });
+
+  return formatToolResult(safeResult);
 }
 
 /**

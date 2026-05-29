@@ -50,6 +50,18 @@ export const customPrompts: IPromptData[] = [
 
   { name: 'admin_only', description: 'Admin instructions', arguments: [],
     content: 'Admin-only content', requireAuth: true },
+
+  // Standard §10.5 (MAY) — optional UI metadata. `title` is a human-facing label (falls back to
+  // `name`); `icons` is an `IIcon[]` (`{ src; mimeType?; sizes? }`, `src` = absolute URL or data: URI).
+  // Both only affect display in the client UI and pass through prompts/list unchanged.
+  {
+    name: 'release_notes',
+    title: 'Release notes',
+    icons: [{ src: 'https://cdn.example.com/notes.png', mimeType: 'image/png', sizes: '48x48' }],
+    description: 'Release change summary',
+    arguments: [],
+    content: 'Summary of changes for the current release.',
+  },
 ];
 ```
 
@@ -166,6 +178,15 @@ export const customResources: IResourceData[] = [
 
   { uri: 'custom://secrets', name: 'Secrets', description: 'Protected',
     mimeType: 'application/json', content: {}, requireAuth: true },
+
+  // Standard §11.3 (MAY) — optional UI metadata. `title` is a human-facing label; `icons` is an
+  // `IIcon[]` (same shape as prompts). `size` (bytes) is optional: on resources/list the SDK
+  // computes it from the content (UTF-8 byte length for text/objects, buffer length for blobs) when
+  // not set; lazy (function) content omits `size`. An author-supplied `size` is preserved.
+  { uri: 'custom://logo', name: 'logo', title: 'Brand logo', description: 'SVG logo',
+    mimeType: 'image/svg+xml', size: 1234,
+    icons: [{ src: 'https://cdn.example.com/logo.svg', mimeType: 'image/svg+xml' }],
+    content: '<svg …>' },
 ];
 ```
 

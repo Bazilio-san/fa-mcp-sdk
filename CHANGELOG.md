@@ -5,6 +5,53 @@ All notable changes to `fa-mcp-sdk` are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.11.0] - 2026-05-29
+
+Phase 7 — residual MAY-level capabilities + final §18 acceptance. Closes the remaining optional
+(MAY) items of `claudedocs/std/mcp-server-implementation-standard.md` that fall within the SDK's
+responsibility, via `claudedocs/std/phase-7-residual-may-and-acceptance-package.md` (WI-1 … WI-5).
+The release is fully additive — new fields are optional and new capabilities are off by default, so
+servers that do not use them are unaffected. No `[BREAKING]` or `[BEHAVIOUR]` entries.
+
+### Added
+
+- **`title` / `icons` on prompts** (WI-1, §10.5 MAY). `IPromptData` gains optional `title?: string`
+  and `icons?: IIcon[]` (new `IIcon` type: `{ src; mimeType?; sizes? }`, exported from the barrel).
+  Built-in prompts now carry a title (`agent_brief` → `Agent brief`, `agent_prompt` → `Agent
+  prompt`); declared fields pass through `prompts/list` unchanged. Prompts without them serialize as
+  before. The template `custom-prompts.ts` shows `title` + `icons`.
+- **`size` / `icons` on resources** (WI-2, §11.3 MAY). `IResourceInfo` gains optional `size?: number`
+  (bytes) and `icons?: IIcon[]` (`title?` existed since Phase 2). Built-in resources get a `title`
+  (`doc://readme` → `README`, `project://version` → `Server version`). `resources/list` computes
+  `size` from the content (UTF-8 byte length for text/objects, buffer length for blobs); lazy
+  (function) content is not measured and simply omits `size`. An author-supplied `size` is preserved.
+- **SSE stream resumability (opt-in)** (WI-3, §6 MAY). New `mcp.sse` config block (`resumability`
+  default `false`, env `MCP_SSE_RESUMABILITY`; `maxStoredEvents` default `1000`, env
+  `MCP_SSE_MAX_STORED_EVENTS`). When enabled, an in-memory `InMemoryEventStore` (new
+  `web/event-store.ts`, exported from the barrel) is wired into the Streamable HTTP transport so a
+  client reconnecting to `GET /mcp` with a `Last-Event-ID` header replays the events it missed. The
+  store is a per-process ring buffer — it does not survive a restart and does not span instances.
+  When disabled (default), the transport is created without an event store and behaviour is unchanged.
+- **`maskSensitive` helper** (WI-4, §12.2). New `utils/mask-sensitive.ts` (exported from the barrel,
+  with the `IMaskRules` type) masks personal / sensitive data in tool results by explicit rules:
+  field names (case-insensitive) and regular expressions applied at any depth, with a string or
+  function replacement (supports partial masking like `4111********1111`). It never mutates the
+  input and is **not** wired into the `tools/call` path — applying it and choosing the rules remains
+  the server's responsibility, per §12.2. The template `handle-tool-call.ts` shows its use.
+
+### Docs
+
+- New acceptance artefact `claudedocs/std/made/phase-7-acceptance-checklist.md` — full run of the
+  standard's §18 checklist as a single acceptance gate (every MUST ✅).
+- `standard-vs-implementation-gap-analysis.md` and `standard-compliance-remediation-plan.md` updated:
+  §6 / §10.5 / §11.3 raised to ✅, §12.2 helper noted (server responsibility retained), Phase 11
+  marked done, implementation version raised to `0.11.0`.
+
+### Tests
+
+- `tests/prompt-resource-metadata.test.mjs` (WI-1/WI-2), `tests/sse-resumability.test.mjs` (WI-3),
+  `tests/mask-sensitive.test.mjs` (WI-4).
+
 ## [0.10.0] - 2026-05-29
 
 Phase 6 — Task-augmented execution (`tasks` capability + `execution.taskSupport`). Closes the last

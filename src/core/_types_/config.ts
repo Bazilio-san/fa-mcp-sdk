@@ -201,6 +201,18 @@ interface IMCPConfig {
       maxTasks?: number;
     };
     /**
+     * Standard §6 (MAY) — Streamable HTTP SSE stream resumability via the `Last-Event-ID` header.
+     * Off by default. When enabled, the server wires an in-memory `EventStore` into the transport
+     * so a reconnecting client can replay the messages it missed. The store lives in process memory
+     * only — it does not survive a restart and does not span multiple server instances.
+     */
+    sse?: {
+      /** Default `false`. Set `true` to attach the in-memory EventStore to the Streamable HTTP transport. */
+      resumability?: boolean;
+      /** Max number of events retained per process for replay. Default 1000. */
+      maxStoredEvents?: number;
+    };
+    /**
      * Debug & diagnostics. All keys are optional and disabled by default — the
      * stderr `DEBUG=mcp:*` stream keeps working independently of this section.
      */

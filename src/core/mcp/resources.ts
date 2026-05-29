@@ -69,6 +69,7 @@ Used:
     {
       uri: 'project://version',
       name: 'project-version',
+      title: 'Server version',
       description: 'Current server version (semver). Mirrors GET /health.version and serverInfo.version.',
       mimeType: 'text/plain',
       content: appConfig.version,
@@ -77,6 +78,7 @@ Used:
     {
       uri: 'doc://readme',
       name: 'README.md',
+      title: 'README',
       description: `Documentation of project '${appConfig.productName}':
 Project description, purpose, features, data sources, installation, launch (STDIO/HTTP), MCP API, configuration, testing, deployment.
 This information is used by searching for this MCP server and its information in the RAG system of the "MCP registry"
@@ -137,6 +139,27 @@ This information is used by searching for this MCP server and its information in
   return [...resources, ...resolvedCustomResources];
 };
 
+/**
+ * Standard §11.3 (MAY) — compute the byte size of a resource's content for `resources/list`.
+ * Strings and objects are measured as they will be serialized; binary blobs by their byte length.
+ * Returns `undefined` for lazy (function) content — computing it would require running the
+ * function ahead of `resources/read`, so the size is simply not published in that case.
+ */
+function computeResourceSize(content: IResourceData['content']): number | undefined {
+  if (typeof content === 'function') {
+    return undefined;
+  }
+  if (typeof content === 'string') {
+    return Buffer.byteLength(content, 'utf-8');
+  }
+  if (content && typeof content === 'object' && 'blob' in content) {
+    const { blob } = content as IResourceBinaryContent;
+    return Buffer.isBuffer(blob) ? blob.length : Buffer.byteLength(String(blob), 'utf-8');
+  }
+  // Plain object — measured as the JSON the transport will emit.
+  return Buffer.byteLength(JSON.stringify(content), 'utf-8');
+}
+
 export const getResourcesList = async (args: ITransportContext): Promise<{ resources: IResourceInfo[] }> => {
   const startedAt = Date.now();
   if (debugMcpResource.enabled) {
@@ -144,7 +167,14 @@ export const getResourcesList = async (args: ITransportContext): Promise<{ resou
   }
   emitTrace('mcp:resource', { kind: 'list-req' });
   const resources: IResourceData[] = await createResources(args);
-  const result = { resources: resources.map(({ content, ...rest }) => ({ ...rest })) };
+  const result = {
+    resources: resources.map(({ content, ...rest }) => {
+      // Publish `size` only when not already set by the author and computable without running
+      // lazy content (standard §11.3).
+      const size = rest.size ?? computeResourceSize(content);
+      return size === undefined ? { ...rest } : { ...rest, size };
+    }),
+  };
   const ms = Date.now() - startedAt;
   if (debugMcpResource.enabled) {
     debugMcpResource(`← resources/list (${result.resources.length})\n${JSON.stringify(result, null, 2)}`);

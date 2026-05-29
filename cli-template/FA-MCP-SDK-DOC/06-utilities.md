@@ -150,6 +150,41 @@ function getJsonFromResult<T = any>(result: TToolHandlerResponse | any): T;
   ignore `tools.answerAs`. Use when a specific shape is required.
 - **`getJsonFromResult()`** — Inverse of `formatToolResult()`. Extracts JSON from either format. Use in tests.
 
+## Masking Sensitive Data (`maskSensitive`, standard §12.2)
+
+Masking personal / sensitive data in tool results is the **server's** responsibility — the SDK never
+masks automatically (it does not know the domain model). `maskSensitive(value, rules)` is an optional,
+reusable helper: call it inside a tool handler before returning the result.
+
+```typescript
+import { maskSensitive } from 'fa-mcp-sdk';
+
+const result = await fetchUserRecord(args);
+// Mask by field name (case-insensitive) and/or regex on string values at any depth.
+const safe = maskSensitive(result, {
+  fieldNames: ['password', 'token', 'ssn', 'emailAddress'],
+  patterns: [/\b\d{13,19}\b/g],                 // card-like number sequences
+  replacement: '***',                            // default; or a function for partial masking
+});
+return formatToolResult(safe);
+
+// Partial masking via a replacement function:
+maskSensitive({ card: '4111111111111111' }, {
+  fieldNames: ['card'],
+  replacement: (v) => `${v.slice(0, 4)}********${v.slice(-4)}`,  // → '4111********1111'
+});
+```
+
+`IMaskRules`: `fieldNames?: string[]` (whole value of a matching key is replaced), `patterns?: RegExp[]`
+(matches in string values are replaced; use a global flag to replace all in one string), `replacement?:
+string | ((original: string) => string)` (default `'***'`). The input is never mutated; primitives pass
+through unchanged. It is **not** wired into `tools/call` — applying it and choosing the rules stays with
+the server.
+
+> **Caveat.** Mask what genuinely must not leave the server (secrets, raw emails, account ids). Avoid
+> blanket-masking display names the assistant actually needs to be useful (e.g. an issue's assignee) —
+> that trades correctness for nothing. Pick field names deliberately.
+
 ## Network Utilities
 
 ```typescript

@@ -303,6 +303,10 @@ mcp:
     maxTtlMs: 86400000
     pollIntervalMs: 1000
     maxTasks: 1000
+  #> Standard §6 (MAY) — Streamable HTTP SSE stream resumability via Last-Event-ID. Off by default.
+  sse:
+    resumability: false
+    maxStoredEvents: 1000
 
 #> Swagger / OpenAPI documentation settings
 swagger:

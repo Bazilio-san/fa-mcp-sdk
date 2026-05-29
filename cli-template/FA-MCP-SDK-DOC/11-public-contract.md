@@ -19,6 +19,12 @@ is considered an implementation detail and may change in any release.
 
 All HTTP routes hosted by the SDK are listed in §2.
 
+**SSE resumability (opt-in, §6 MAY).** With `mcp.sse.resumability: true` the Streamable HTTP transport
+keeps recent SSE events in a per-process in-memory ring buffer (`mcp.sse.maxStoredEvents`, default 1000),
+so a client reconnecting to `GET /mcp` with a `Last-Event-ID` header replays the events it missed. Off by
+default. The buffer does not survive a restart and does not span multiple server instances — a persistent
+store would be required for that.
+
 ---
 
 ## 2. HTTP endpoints
@@ -142,12 +148,17 @@ default) the capability is not advertised and all four `tasks/*` methods return 
 ### Prompt (`IPromptData`)
 
 `name`, `description`, `arguments[]` (each `IPromptArgument`), `content` (string or function),
-`requireAuth`, `requiredScopes`, `deprecated`.
+`requireAuth`, `requiredScopes`, `deprecated`. Optional UI metadata (§10.5, MAY): `title` (human-facing
+label, falls back to `name`) and `icons` (`IIcon[]` — `{ src; mimeType?; sizes? }`). Both pass through
+`prompts/list` unchanged; built-in `agent_brief` / `agent_prompt` carry a `title`.
 
 ### Resource (`IResourceData` / `IResourceInfo`)
 
-`uri`, `name`, `description`, `mimeType`, optional `title`, `requireAuth`, `requiredScopes`,
-`_meta`, `deprecated`. `content` is a string / object / function for text resources, or
+`uri`, `name`, `description`, `mimeType`, optional `title`, `size` (bytes, §11.3 MAY),
+`icons` (`IIcon[]`, §11.3 MAY), `requireAuth`, `requiredScopes`, `_meta`, `deprecated`. On
+`resources/list` the SDK computes `size` from the content (UTF-8 byte length for text/objects, buffer
+length for blobs) when the author did not set it; lazy (function) content omits `size`. `content` is a
+string / object / function for text resources, or
 `IResourceBinaryContent` (`{ blob: Buffer | base64-string, base64?: boolean }`) for binary
 resources — `resources/read` then returns base64 `contents[0].blob` (no `text`) with the
 resource's `mimeType` (§11.4 / §12.2). Built-in URI schemes are guaranteed by the SDK:
@@ -159,6 +170,17 @@ resource's `mimeType` (§11.4 / §12.2). Built-in URI schemes are guaranteed by 
 | `<service>://agent/brief`                  | Mirrors `agent_brief` prompt                   |
 | `<service>://agent/prompt`                 | Mirrors `agent_prompt` prompt                  |
 | `doc://...`                                | Application docs                               |
+
+### Sensitive data masking (`maskSensitive`, §12.2)
+
+Masking personal / sensitive data in tool results is the server's responsibility — the SDK never masks
+automatically. The optional helper `maskSensitive(value, rules)` (exported from the barrel, with the
+`IMaskRules` type) is a reusable building block: it walks an object / array / string and applies explicit
+rules — `fieldNames` (case-insensitive field-name match) and `patterns` (regular expressions on string
+values at any depth) — replacing matches with `replacement` (a string, default `'***'`, or a function for
+partial masking like `4111********1111`). It returns a new value and never mutates the input. Call it
+inside a tool handler before returning the result; choosing the rules and where to apply them stays with
+the server.
 
 ---
 
