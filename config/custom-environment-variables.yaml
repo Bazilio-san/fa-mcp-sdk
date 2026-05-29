@@ -92,6 +92,25 @@ mcp:
     enabled:
       __name: MCP_COMPLETIONS_ENABLED
       __format: boolean
+  tasks:
+    enabled:
+      __name: MCP_TASKS_ENABLED
+      __format: boolean
+    defaultTtlMs:
+      __name: MCP_TASKS_DEFAULT_TTL_MS
+      __format: number
+    minTtlMs:
+      __name: MCP_TASKS_MIN_TTL_MS
+      __format: number
+    maxTtlMs:
+      __name: MCP_TASKS_MAX_TTL_MS
+      __format: number
+    pollIntervalMs:
+      __name: MCP_TASKS_POLL_INTERVAL_MS
+      __format: number
+    maxTasks:
+      __name: MCP_TASKS_MAX_TASKS
+      __format: number
 
 uiColor:
   primary: UI_COLOR_PRIMARY

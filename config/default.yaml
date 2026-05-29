@@ -323,6 +323,27 @@ mcp:
     #> Set true (and provide completionProvider) to advertise `completions: {}` and accept
     #> completion/complete requests. Default: false.
     enabled: false
+  #> Standard §8.7 (MAY) — task-augmented execution (long-running / pollable tool calls). Off by
+  #> default. When enabled, the server advertises the `tasks` capability and accepts tasks/list,
+  #> tasks/get, tasks/result, tasks/cancel. Long-running tools opt in per-tool via
+  #> `execution.taskSupport` in their declaration. The default store keeps tasks in process memory
+  #> only and does not survive a restart.
+  tasks:
+    #> Set true to advertise `tasks` capability and accept the task lifecycle methods. Default false.
+    enabled: false
+    #> Default retention of a finished task, milliseconds, from creation. A client-requested ttl is
+    #> clamped to [minTtlMs, maxTtlMs]. Default 3600000 (1 hour).
+    defaultTtlMs: 3600000
+    #> Lower bound a client-requested ttl is clamped to, milliseconds. Default 0 (no floor).
+    minTtlMs: 0
+    #> Hard upper bound on retention, milliseconds. Default 86400000 (24 hours).
+    maxTtlMs: 86400000
+    #> Recommended poll interval suggested to the client in every task object, milliseconds.
+    #> Default 1000.
+    pollIntervalMs: 1000
+    #> Max number of simultaneously retained tasks across all subjects. Oldest finished tasks are
+    #> evicted first when the cap is reached. Default 1000.
+    maxTasks: 1000
 
 #> Swagger / OpenAPI documentation settings
 swagger:

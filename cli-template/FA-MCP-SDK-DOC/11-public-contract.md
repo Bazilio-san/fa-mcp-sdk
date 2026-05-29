@@ -96,10 +96,24 @@ from MCP endpoints per §7.4. 403 responses (authenticated but forbidden) carry 
 | `resources/templates/list`            | MAY    | `mcp.resources.templatesEnabled`                          |
 | `resources/subscribe` / `unsubscribe` | MAY    | `mcp.resources.subscribeEnabled`                          |
 | `completion/complete`                 | MAY    | `mcp.completions.enabled` + `completionProvider` (§8.2)   |
+| `tasks/list`                          | MAY    | `mcp.tasks.enabled`; caller's own tasks, newest first, paginated (§8.7) |
+| `tasks/get`                           | MAY    | `mcp.tasks.enabled`; current task metadata (§8.7)        |
+| `tasks/result`                        | MAY    | `mcp.tasks.enabled`; the `tools/call` result once completed (§8.7) |
+| `tasks/cancel`                        | MAY    | `mcp.tasks.enabled`; aborts a running task, idempotent (§8.7) |
 | `logging/setLevel`                    | SHOULD | Capability `logging: {}` (default ON)                     |
 | `notifications/message`               | SHOULD | Emitted by `sendLoggingMessage()`                         |
 | `notifications/progress`              | SHOULD | Emitted by `IToolHandlerParams.sendProgress()` (§8.6)     |
 | `notifications/cancelled`             | SHOULD | Aborts `IToolHandlerParams.signal` (§8.5)                 |
+| `notifications/tasks/status`          | MAY    | Emitted on every task status transition (§8.7)           |
+
+When `mcp.tasks.enabled` is `true`, the server advertises the `tasks` capability
+(`{ list, cancel, requests: { tools: { call } } }`) and a `tools/call` carrying a `task` parameter
+is executed as a task: the server returns a `CreateTaskResult` (`{ task: { taskId, status, … } }`)
+immediately and runs the tool in the background. A tool opts in via `execution.taskSupport`
+(`optional` / `required` / `forbidden`, see §5) — sending `task` to a tool that does not support it,
+or omitting `task` for a `required` tool, returns `-32602`. The default task store keeps records in
+process memory only; it does **not** survive a restart. When `mcp.tasks.enabled` is `false` (the
+default) the capability is not advertised and all four `tasks/*` methods return `-32601`.
 
 ---
 
@@ -116,6 +130,9 @@ from MCP endpoints per §7.4. 403 responses (authenticated but forbidden) carry 
 - `outputSchema` — MAY; when present, the SDK validates `structuredContent` against it and
   mirrors the value into `content[0]` as JSON text (§12.4).
 - `title` — SHOULD; user-facing label.
+- `execution.taskSupport` — MAY; one of `optional` / `required` / `forbidden` (default — absence is
+  treated as `forbidden`, i.e. synchronous only). Controls task-augmented execution (§8.7); passed
+  through verbatim in `tools/list`. Effective only when `mcp.tasks.enabled` is `true`.
 - `annotations` — MAY; may be hidden via `mcp.tools.hideAnnotations`.
 - `_meta._meta.requiredScopes` (or top-level `requiredScopes`) — MAY; OAuth scopes enforced
   before dispatch.
@@ -196,6 +213,11 @@ class above) keep their message verbatim.
 | `mcp.logging.defaultLevel`   | `info` (Syslog ladder)                                                  |
 | `mcp.progress.throttleMs`    | 100 (10 events/s/token)                                                 |
 | `mcp.completions.enabled`    | `false` (opt-in; needs `completionProvider`)                            |
+| `mcp.tasks.enabled`          | `false` (opt-in; advertises `tasks` capability)                        |
+| `mcp.tasks.defaultTtlMs`     | 3 600 000 ms (finished-task retention; clamped to `[minTtlMs, maxTtlMs]`) |
+| `mcp.tasks.maxTtlMs`         | 86 400 000 ms (hard retention ceiling)                                  |
+| `mcp.tasks.pollIntervalMs`   | 1000 ms (suggested to client in every task object)                     |
+| `mcp.tasks.maxTasks`         | 1000 (retained tasks; oldest finished evicted first)                   |
 | `webServer.metrics.enabled`  | `false` (opt-in)                                                        |
 | `X-Request-Id` (response)    | Always present — generated when client did not supply one (§15.1)       |
 | `tracestate` (response)      | Echoed back unchanged when client supplied a valid value                |
@@ -237,6 +259,7 @@ class above) keep their message verbatim.
 | 0.7.0   | MAJOR | RS256/ES256 JWT runtime, OAuth/OIDC discovery, scope enforcement       |
 | 0.8.x   | MINOR | Observability (X-Request-Id, traceparent, logging, metrics, progress)  |
 | 0.9.1   | MINOR | Conditional capabilities, `-32006`/`-32007`, binary `blob`, error sanitization, opt-in completions |
+| 0.10.0  | MINOR | Opt-in `tasks` capability (task-augmented execution), `execution.taskSupport`, in-memory task store |
 
 ---
 
@@ -286,6 +309,7 @@ The runtime sources of the contract above are:
 - `src/core/_types_/config.ts` — `AppConfig` (every documented configuration key).
 - `src/core/errors/BaseMcpError.ts` + `src/core/errors/specific-errors.ts` — error codes.
 - `src/core/mcp/create-mcp-server.ts` — handler contract.
+- `src/core/mcp/task-store.ts` — `ITaskStore` / `InMemoryTaskStore`, task lifecycle (§8.7).
 - `src/core/web/server-http.ts` — HTTP endpoints, headers, response shape.
 - `src/core/web/request-id.ts` — `X-Request-Id` + W3C trace context middleware.
 - `src/core/mcp/mcp-logging.ts` — `logging` capability.

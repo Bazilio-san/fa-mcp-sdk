@@ -5,6 +5,48 @@ All notable changes to `fa-mcp-sdk` are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.10.0] - 2026-05-29
+
+Phase 6 — Task-augmented execution (`tasks` capability + `execution.taskSupport`). Closes the last
+open item of `claudedocs/std/mcp-server-implementation-standard.md` (§8.7 / §9.1, both MAY) through
+`claudedocs/std/phase-6-tasks-capability-package.md` (WI-1 … WI-6). The release is fully additive
+and the feature is **off by default** — with `mcp.tasks.enabled: false` server behaviour is
+unchanged, so there are no `[BREAKING]` or `[BEHAVIOUR]` entries.
+
+### Added
+
+- **`tasks` capability (opt-in)** (WI-1, §8.7 MAY). New `mcp.tasks` config block (default
+  `enabled: false`, env `MCP_TASKS_ENABLED`) with `defaultTtlMs`, `minTtlMs`, `maxTtlMs`,
+  `pollIntervalMs` and `maxTasks`. When enabled, the server advertises
+  `tasks: { list, cancel, requests: { tools: { call } } }` on `initialize` and registers the
+  lifecycle methods. When disabled, the capability is not advertised and the `tasks/*` methods
+  return `-32601`.
+- **Task store** (WI-2). New `ITaskStore` abstraction with a process-memory default
+  `InMemoryTaskStore`: task creation, status polling, result retrieval, cancellation, TTL expiry
+  and oldest-finished eviction at the `maxTasks` cap. Exposed via `getTaskStore()` (plus
+  `resetTaskStore`, `toTaskDto`, `isTerminalTaskStatus` and the `ITaskStore` / `ITaskRecord` /
+  `TTaskStatus` types) from the package barrel. The default store is in-memory only and does not
+  survive a process restart — documented as a limitation; a consumer may implement `ITaskStore` over
+  an external store.
+- **`execution.taskSupport` on tools** (WI-3, §9.1). A tool declares `execution: { taskSupport:
+  'optional' | 'required' | 'forbidden' }` to control task-augmented dispatch. The field passes
+  through `tools/list` unchanged. Sending a `task` parameter to a tool that does not support tasks,
+  or omitting it for a `required` tool, returns `-32602`.
+- **Task lifecycle methods + status notification** (WI-4, §8.7). `tasks/list` (caller's own tasks,
+  newest first, paginated), `tasks/get`, `tasks/result` and `tasks/cancel` are served when the
+  capability is enabled; the server emits `notifications/tasks/status` on every transition. A
+  task-augmented `tools/call` returns a `CreateTaskResult` immediately and runs the tool in the
+  background. Unknown / non-owned task ids return `-32002` without leaking existence.
+- **Cancellation / progress / correlation / concurrency for tasks** (WI-5, §8.5/§8.6/§14/§15.1).
+  `tasks/cancel` aborts the handler's `AbortSignal`; long-running tasks deliver progress via
+  `notifications/progress`; the originating `requestId` is restored for background logging; an active
+  task occupies a per-subject in-flight slot and creation past `maxConcurrentPerSubject` is rejected
+  with `-32003`. New `mcp_tasks_total{status}` Prometheus counter.
+- **Template example + docs** (WI-6). The CLI template ships an `example_long_task` tool
+  (`taskSupport: 'optional'`) that emits progress and honours cancellation. The public contract,
+  tools guide, configuration guide and index docs document the methods, the `taskSupport` field, the
+  `mcp.tasks.*` limits and the in-memory-store restriction.
+
 ## [0.9.1] - 2026-05-29
 
 Phase 5 — Capabilities precision, error-code completeness, binary resources and message

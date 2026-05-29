@@ -92,6 +92,34 @@ export const tools: Tool[] = [
     inputSchema: getSearchInputSchema(),
     outputSchema: exampleSearchOutputSchema as any,
   },
+  {
+    // Standard §8.7 / §9.1 — example of a long-running tool that opts in to task-augmented
+    // execution. With `mcp.tasks.enabled: true`, a client MAY send a `task` param to tools/call:
+    // the server returns a taskId immediately, runs this handler in the background (reporting
+    // progress and honouring cancellation), and the client polls tasks/get + tasks/result.
+    // `taskSupport: 'optional'` keeps the tool callable synchronously too — choose a task when the
+    // work can exceed the 30s tool timeout or you want a cancellable, pollable operation.
+    name: 'example_long_task',
+    title: 'Example: long-running task',
+    description:
+      'Example long-running tool that emits progress and supports cancellation. ' +
+      'Demonstrates task-augmented execution (§8.7) — call it with a `task` param to run it as a task.',
+    inputSchema: {
+      $schema: JSON_SCHEMA_2020_12,
+      type: 'object',
+      properties: {
+        steps: {
+          type: 'number',
+          description: 'Number of processing steps to simulate (1-20, default 5)',
+          minimum: 1,
+          maximum: 20,
+        },
+      },
+      required: [],
+      additionalProperties: false,
+    },
+    execution: { taskSupport: 'optional' },
+  } as Tool,
   // TODO: Add your actual tools here
   // {
   //   name: 'your_tool_name',
