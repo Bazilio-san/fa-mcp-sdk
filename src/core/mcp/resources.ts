@@ -7,10 +7,18 @@ import * as path from 'node:path';
 
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 
-import { IUsedHttpHeader, IResource, IResourceData, IResourceInfo, ITransportContext } from '../_types_/types.js';
+import {
+  IUsedHttpHeader,
+  IResource,
+  IResourceBinaryContent,
+  IResourceData,
+  IResourceInfo,
+  ITransportContext,
+} from '../_types_/types.js';
 import { collectAuthProfile } from '../auth/auth-profile.js';
 import { appConfig, getProjectData } from '../bootstrap/init-config.js';
 import { ROOT_PROJECT_DIR } from '../constants.js';
+import { ResourceNotFoundError } from '../errors/specific-errors.js';
 import { debugMcpResource } from '../debug.js';
 import { emitTrace } from './debug-trace.js';
 import { assembleReadmeWithSatellites } from './readme-assembler.js';
@@ -202,6 +210,21 @@ export async function notifyResourceUpdated(server: Server, uri: string): Promis
   }
 }
 
+/**
+ * Normalize {@link IResourceBinaryContent} to a base64 string for `contents[0].blob`.
+ * Buffer → base64; string with `base64:false` → encode raw bytes; string otherwise → assumed
+ * already base64 and passed through.
+ */
+function encodeBlob(bin: IResourceBinaryContent): string {
+  if (Buffer.isBuffer(bin.blob)) {
+    return bin.blob.toString('base64');
+  }
+  if (bin.base64 === false) {
+    return Buffer.from(String(bin.blob), 'utf-8').toString('base64');
+  }
+  return String(bin.blob);
+}
+
 export const getResource = async (uri: string, args: ITransportContext): Promise<IResource> => {
   const startedAt = Date.now();
   if (debugMcpResource.enabled) {
@@ -212,29 +235,36 @@ export const getResource = async (uri: string, args: ITransportContext): Promise
   const resource = resources.find((r) => r.uri === uri);
   if (!resource) {
     emitTrace('mcp:resource', { kind: 'read-err', uri, ms: Date.now() - startedAt, error: 'unknown-resource' });
-    throw new Error(`Unknown resource: ${uri}`);
+    // Standard §13 / Appendix B.2 — classify as -32002 (HTTP 404), not a generic -32603.
+    throw new ResourceNotFoundError('Unknown resource', { uri, reason: 'unknown_resource' });
   }
   let { content } = resource;
   if (typeof content === 'function') {
-    content = await content(uri);
+    content = await (content as (u: string) => any)(uri);
   }
   if (!content) {
     emitTrace('mcp:resource', { kind: 'read-err', uri, ms: Date.now() - startedAt, error: 'no-content' });
-    throw new Error(`Can not get content of resource '${uri}' by custom handler`);
+    throw new ResourceNotFoundError('Resource has no content', { uri, reason: 'empty_content' });
   }
+
+  // Standard §11.4 / §12.2 — a resource entry carries exactly one of `text` or `blob`. Binary
+  // content is declared as { blob: Buffer | base64-string } and emitted as base64 `blob`.
+  const isBinary = typeof content === 'object' && content !== null && 'blob' in (content as any);
+  const baseEntry = {
+    uri: resource.uri,
+    mimeType: resource.mimeType,
+    ...(resource._meta ? { _meta: resource._meta } : {}),
+  };
   const result: IResource = {
     contents: [
-      {
-        uri: resource.uri,
-        mimeType: resource.mimeType,
-        text: content,
-        ...(resource._meta ? { _meta: resource._meta } : {}),
-      },
+      isBinary
+        ? { ...baseEntry, blob: encodeBlob(content as IResourceBinaryContent) }
+        : { ...baseEntry, text: content as string | object },
     ],
   };
   const ms = Date.now() - startedAt;
   if (debugMcpResource.enabled) {
-    const body = typeof content === 'string' ? content : JSON.stringify(content, null, 2);
+    const body = isBinary ? '[binary blob]' : typeof content === 'string' ? content : JSON.stringify(content, null, 2);
     debugMcpResource(`← resources/read ${uri}\n${body}`);
   }
   emitTrace('mcp:resource', { kind: 'read-res', uri, ms });

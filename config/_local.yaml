@@ -292,6 +292,9 @@ mcp:
   #> Standard §8.6 — notifications/progress throttle.
   progress:
     throttleMs: 100
+  #> Standard §8.2 (MAY) — completion/complete capability. Off by default; see default.yaml.
+  completions:
+    enabled: false
 
 #> Swagger / OpenAPI documentation settings
 swagger:

@@ -5,6 +5,77 @@ All notable changes to `fa-mcp-sdk` are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.9.0] - 2026-05-29
+
+Phase 5 — Capabilities precision, error-code completeness, binary resources and message
+sanitization. Closes the remaining §8.2 / §11.4 / §12.2 / §13.3 / Appendix B.2 / Appendix C.3
+gaps in `claudedocs/std/mcp-server-implementation-standard.md` through
+`claudedocs/std/phase-5-capabilities-errors-binary-package.md` (WI-1 … WI-5). The release is
+additive; two `[BEHAVIOUR]` changes are called out below.
+
+### Added
+
+- **Error codes `-32006` / `-32007`** (WI-4, Appendix B.2). New `UpstreamUnavailableError`
+  (`-32006` / HTTP 503, for an unreachable database or downstream service) and `ConflictError`
+  (`-32007` / HTTP 409, for state conflicts). Both carry `error.data.reason` and are exported
+  from the package barrel. The PostgreSQL helpers (`queryMAIN`, `execMAIN`) now translate
+  connection-class failures (network errno, SQLSTATE class 08, server-shutdown codes) into
+  `UpstreamUnavailableError` via the new exported `mapDbError`, so a downed database surfaces as
+  `-32006` / 503 instead of a generic `-32603` / 500.
+- **Binary resources — `blob`** (WI-3, §11.4 / §12.2). `IResourceContent` accepts
+  `IResourceBinaryContent` (`{ blob: Buffer | base64-string, base64?: boolean }`); `resources/read`
+  returns base64 `contents[0].blob` with the resource's `mimeType` (no `text`). Buffers are
+  base64-encoded by the SDK; an already-base64 string is passed through. The CLI template ships a
+  sample PNG binary resource. New types `IResourceBinaryContent` / `TResourceBinaryContentFunction`
+  are exported.
+- **`completions` capability (opt-in)** (WI-5, §8.2 MAY). New `mcp.completions.enabled` config
+  (default `false`, env `MCP_COMPLETIONS_ENABLED`) plus `McpServerData.completionProvider`. When
+  both are present the server advertises `completions: {}` and serves `completion/complete`,
+  returning the provider's candidate values capped at 100 with a correct `hasMore`. Without a
+  provider the capability is not advertised.
+- **`toMcpError` / `sanitizeOutwardMessage`** (WI-2) exported from the barrel for downstream reuse.
+
+### Changed
+
+- **Outward error sanitization** (WI-2, §13.3 / Appendix C.3). Every MCP request-handler error is
+  now mapped through `toMcpError`, and `createJsonRpcErrorResponse` runs `sanitizeOutwardMessage`:
+  recognized domain errors (those with an explicit `jsonRpcCode`) keep their message; unrecognized
+  internal errors collapse to `Internal error` outward, with the full text written to the internal
+  log keyed by `requestId`. Absolute filesystem paths are scrubbed from any outward message as a
+  belt-and-suspenders measure. `resources/read` for a missing or empty resource now raises
+  `ResourceNotFoundError` (`-32002`) instead of a generic `-32603`.
+- **`ValidationError` now carries an explicit `-32602`** (was implicitly `-32000`), matching the
+  public-contract table. This also marks its (developer-authored) message as safe so it survives
+  the new sanitization instead of collapsing to `Internal error`. Generic `ServerError` /
+  `ToolExecutionError` without an explicit code remain `-32000` and now sanitize to `Internal
+  error` outward — wrap raw upstream failures in `UpstreamUnavailableError` (or another explicit
+  class) when the message must reach the client.
+
+### `[BEHAVIOUR]`
+
+- **WI-1 (§8.2): conditional `prompts` capability.** A server configured without agent briefs and
+  without `customPrompts` no longer advertises `capabilities.prompts`, and its `prompts/*` methods
+  return `-32601`. Servers with prompts (the typical case — `agent_brief` / `agent_prompt`) are
+  unaffected. `tools` and `resources` remain always advertised (built-in resources exist in every
+  configuration). Downstream tests that asserted `capabilities.prompts` on a prompt-less server
+  must be updated.
+- **WI-2 (§13.3): generic text for internal errors.** The `error.message` of an unexpected internal
+  error is now `Internal error` over the wire (full detail in the internal log by `requestId`).
+  Downstream tests asserting the exact text of an internal error in an MCP response must be updated
+  — such an assertion was itself a §13.3 violation.
+
+### Config schema
+
+- Added `mcp.completions.enabled` to `config/default.yaml`, `config/_local.yaml`,
+  `config/custom-environment-variables.yaml` (`MCP_COMPLETIONS_ENABLED`) and `AppConfig`.
+
+### Tests
+
+- New suites: `tests/capabilities.test.mjs`, `tests/error-sanitize.test.mjs`,
+  `tests/binary-resource.test.mjs`, `tests/error-codes.test.mjs`, `tests/completions.test.mjs`
+  (npm scripts `test:capabilities`, `test:error-sanitize`, `test:binary-resource`,
+  `test:error-codes`, `test:completions`).
+
 ## [0.8.1] - 2026-05-29
 
 Phase 4 — Observability + Contract stability. Closes the §15 / §17 / §8.5 / §8.6 / §15.1 /

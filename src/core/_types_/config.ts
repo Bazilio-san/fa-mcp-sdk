@@ -165,6 +165,14 @@ interface IMCPConfig {
       throttleMs?: number;
     };
     /**
+     * Standard §8.2 (MAY) — `completion/complete` capability. Off by default. Even when enabled,
+     * the capability is advertised only if `McpServerData.completionProvider` is also supplied.
+     */
+    completions?: {
+      /** Default `false`. Set `true` (plus a `completionProvider`) to advertise `completions: {}`. */
+      enabled?: boolean;
+    };
+    /**
      * Debug & diagnostics. All keys are optional and disabled by default — the
      * stderr `DEBUG=mcp:*` stream keeps working independently of this section.
      */

@@ -3,6 +3,7 @@ import { randomUUID } from 'node:crypto';
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import {
   CallToolRequestSchema,
+  CompleteRequestSchema,
   ListToolsRequestSchema,
   ListPromptsRequestSchema,
   GetPromptRequestSchema,
@@ -22,6 +23,7 @@ import {
   TTransportType,
 } from '../_types_/types.js';
 import { appConfig, getProjectData } from '../bootstrap/init-config.js';
+import { toMcpError } from '../errors/errors.js';
 import { RateLimitedError } from '../errors/specific-errors.js';
 import { getTools, normalizeHeaders } from '../utils/utils.js';
 import { getCurrentRequestContext, IRequestContext, runWithRequestContext } from '../web/request-id.js';
@@ -87,6 +89,27 @@ export function createMcpServer(transportType: TTransportType): Server {
 
   const loggingCapEnabled = appConfig.mcp.logging?.enabled !== false;
 
+  // Standard §8.2 — advertise only the capabilities the server actually supports.
+  //
+  // `resources` and `tools` are always advertised: built-in resources (project://*, use://auth,
+  // doc://readme) are present in every configuration, and an MCP SDK without tools has no purpose.
+  //
+  // `prompts` is conditional: a server configured without agent briefs and without customPrompts
+  // serves no prompts, so advertising the capability (and registering its handlers) would violate
+  // §8.2 — instead the prompts/* methods stay unregistered and return -32601 per §8.3.
+  const projectData = getProjectData();
+  const hasPrompts = Boolean(
+    (projectData?.agentBrief && projectData?.agentPrompt) ||
+    typeof projectData?.customPrompts === 'function' ||
+    (Array.isArray(projectData?.customPrompts) && projectData.customPrompts.length > 0),
+  );
+
+  // Standard §8.2 (MAY) — completion/complete is opt-in: requires both the config flag and a
+  // project-supplied provider. Without a provider there is nothing to serve, so the capability
+  // is not advertised and completion/complete returns -32601.
+  const completionsEnabled =
+    appConfig.mcp.completions?.enabled === true && typeof projectData?.completionProvider === 'function';
+
   const server = new Server(
     {
       name: appConfig.name,
@@ -95,9 +118,10 @@ export function createMcpServer(transportType: TTransportType): Server {
     {
       capabilities: {
         tools: {},
-        prompts: {},
+        ...(hasPrompts ? { prompts: {} } : {}),
         resources: resourceCapability,
         ...(loggingCapEnabled ? { logging: {} } : {}),
+        ...(completionsEnabled ? { completions: {} } : {}),
       },
     },
   );
@@ -134,7 +158,15 @@ export function createMcpServer(transportType: TTransportType): Server {
       const reqCtx: IRequestContext = existing
         ? { ...existing, jsonRpcId }
         : { requestId: `stdio-${randomUUID()}`, jsonRpcId };
-      return runWithRequestContext(reqCtx, () => handler(req, extra));
+      return runWithRequestContext(reqCtx, async () => {
+        try {
+          return await handler(req, extra);
+        } catch (err) {
+          // Standard §13.3 — every handler error is mapped to an SDK McpError with the correct
+          // numeric JSON-RPC code and a sanitized message before the transport serializes it.
+          throw toMcpError(err);
+        }
+      });
     }) as unknown as H;
   };
 
@@ -334,39 +366,43 @@ export function createMcpServer(transportType: TTransportType): Server {
     }),
   );
 
-  // Handler for listing available prompts (standard §8.4 — server-side pagination).
-  server.setRequestHandler(
-    ListPromptsRequestSchema,
-    withRequestContext(async (request, extra) => {
-      const result = await getPromptsList(ctx(extra));
-      const prompts = result.prompts.map((p: any) => {
-        const info = readDeprecation(p);
-        if (!info) {
-          return p;
-        }
-        assertDeprecationConsistency('prompt', p.name, info);
-        return { ...p, description: applyDeprecationToDescription(p.description, info) };
-      });
-      const cursor = (request.params as any)?.cursor;
-      const { page, nextCursor } = paginate(prompts, cursor, pageSize, (p: any) => p.name);
-      return nextCursor ? { prompts: page, nextCursor } : { prompts: page };
-    }),
-  );
+  // Handlers for prompts are registered only when the server actually has prompts (standard §8.2).
+  // When absent, prompts/list and prompts/get fall through to the SDK's -32601 (method not found).
+  if (hasPrompts) {
+    // Handler for listing available prompts (standard §8.4 — server-side pagination).
+    server.setRequestHandler(
+      ListPromptsRequestSchema,
+      withRequestContext(async (request, extra) => {
+        const result = await getPromptsList(ctx(extra));
+        const prompts = result.prompts.map((p: any) => {
+          const info = readDeprecation(p);
+          if (!info) {
+            return p;
+          }
+          assertDeprecationConsistency('prompt', p.name, info);
+          return { ...p, description: applyDeprecationToDescription(p.description, info) };
+        });
+        const cursor = (request.params as any)?.cursor;
+        const { page, nextCursor } = paginate(prompts, cursor, pageSize, (p: any) => p.name);
+        return nextCursor ? { prompts: page, nextCursor } : { prompts: page };
+      }),
+    );
 
-  // Handler for getting prompt content
-  server.setRequestHandler(
-    GetPromptRequestSchema,
-    // @ts-ignore
-    withRequestContext(async (request: IGetPromptRequest, extra) => {
-      const promptName = (request.params as any)?.name;
-      if (promptName) {
-        const { prompts } = await getPromptsList(ctx(extra));
-        const prompt = prompts.find((p: any) => p.name === promptName);
-        warnDeprecatedUsage('prompt', promptName, readDeprecation(prompt));
-      }
-      return await getPrompt(request, ctx(extra));
-    }),
-  );
+    // Handler for getting prompt content
+    server.setRequestHandler(
+      GetPromptRequestSchema,
+      // @ts-ignore
+      withRequestContext(async (request: IGetPromptRequest, extra) => {
+        const promptName = (request.params as any)?.name;
+        if (promptName) {
+          const { prompts } = await getPromptsList(ctx(extra));
+          const prompt = prompts.find((p: any) => p.name === promptName);
+          warnDeprecatedUsage('prompt', promptName, readDeprecation(prompt));
+        }
+        return await getPrompt(request, ctx(extra));
+      }),
+    );
+  }
 
   // Handler for listing available resources (standard §8.4 — server-side pagination).
   server.setRequestHandler(
@@ -410,6 +446,31 @@ export function createMcpServer(transportType: TTransportType): Server {
         const cursor = (request.params as any)?.cursor;
         const { page, nextCursor } = paginate(templates, cursor, pageSize, (t: any) => t.uriTemplate ?? t.name ?? '');
         return nextCursor ? { resourceTemplates: page, nextCursor } : { resourceTemplates: page };
+      }),
+    );
+  }
+
+  // Standard §8.2 (MAY) — completion/complete. Registered only when opt-in config + provider are
+  // both present, so the capability advertisement and the handler stay in lock-step.
+  if (completionsEnabled) {
+    const completionProvider = projectData!.completionProvider!;
+    server.setRequestHandler(
+      CompleteRequestSchema,
+      withRequestContext(async (request) => {
+        const params = (request.params ?? {}) as {
+          ref: { type: 'ref/prompt' | 'ref/resource'; name?: string; uri?: string };
+          argument: { name: string; value: string };
+          context?: Record<string, unknown>;
+        };
+        const raw = await completionProvider({
+          ref: params.ref,
+          argument: params.argument,
+          ...(params.context ? { context: params.context } : {}),
+        });
+        const all = Array.isArray(raw) ? raw.map(String) : [];
+        // MCP caps completion results at 100 values; `hasMore` flags truncation.
+        const values = all.slice(0, 100);
+        return { completion: { values, total: all.length, hasMore: all.length > values.length } };
       }),
     );
   }

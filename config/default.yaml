@@ -316,6 +316,13 @@ mcp:
   #> emissions for a single progressToken. Default 100 ms (10 events/s).
   progress:
     throttleMs: 100
+  #> Standard §8.2 (MAY) — `completion/complete` capability (argument autocompletion).
+  #> Off by default. Even when enabled, the capability is advertised only if the project also
+  #> supplies a `completionProvider` in McpServerData — otherwise there is nothing to serve.
+  completions:
+    #> Set true (and provide completionProvider) to advertise `completions: {}` and accept
+    #> completion/complete requests. Default: false.
+    enabled: false
 
 #> Swagger / OpenAPI documentation settings
 swagger:

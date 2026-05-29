@@ -156,15 +156,41 @@ export interface IResourceTemplateInfo {
   _meta?: Record<string, unknown>;
 }
 
+/**
+ * Standard §11.4 / §12.2 — binary resource payload. Use this instead of a plain string when the
+ * resource is an image, PDF, archive or any other non-text artefact. The SDK base64-encodes it
+ * into `contents[0].blob` (with the resource's `mimeType`) so clients can decode the original
+ * bytes; the `text` field is omitted for binary resources.
+ */
+export interface IResourceBinaryContent {
+  /** Raw bytes as a Buffer, or an already-base64-encoded string (set {@link base64} to `true`). */
+  blob: Buffer | string;
+  /**
+   * `true`  — `blob` is already a base64 string, emitted as-is.
+   * `false` — `blob` is a string of raw bytes; the SDK base64-encodes it.
+   * Omitted — a Buffer is base64-encoded; a string is assumed to be base64 already.
+   */
+  base64?: boolean;
+}
+
 export type TResourceContentFunction = (uri: string) => string | Promise<string>;
-export type IResourceContent = string | object | TResourceContentFunction;
+export type TResourceBinaryContentFunction = (uri: string) => IResourceBinaryContent | Promise<IResourceBinaryContent>;
+export type IResourceContent =
+  | string
+  | object
+  | TResourceContentFunction
+  | IResourceBinaryContent
+  | TResourceBinaryContentFunction;
 
 export interface IResource {
   contents: [
     {
       uri: string;
       mimeType: string;
-      text: string | object;
+      /** Present for text resources. Exactly one of `text` / `blob` is set per standard §11.4. */
+      text?: string | object;
+      /** Present for binary resources — base64-encoded bytes (standard §12.2). */
+      blob?: string;
       /** Mirrors `_meta` from the resource definition; see {@link IResourceInfo._meta}. */
       _meta?: { ui?: IUiResourceMeta; [key: string]: unknown };
     },
@@ -266,6 +292,19 @@ export interface McpServerData {
     | IResourceTemplateInfo[]
     | ((args: ITransportContext) => Promise<IResourceTemplateInfo[]>)
     | null;
+
+  /**
+   * Standard §8.2 (MAY) — autocompletion provider for `completion/complete`. Opt-in: served only
+   * when `appConfig.mcp.completions.enabled` is true AND this provider is set. Receives the ref
+   * being completed (a prompt or resource) and the partial argument value; returns candidate
+   * values (the SDK caps the response at 100 and sets `hasMore`). Example: suggest valid project
+   * ids for a prompt argument named `project`.
+   */
+  completionProvider?: (params: {
+    ref: { type: 'ref/prompt' | 'ref/resource'; name?: string; uri?: string };
+    argument: { name: string; value: string };
+    context?: Record<string, unknown>;
+  }) => Promise<string[]> | string[];
 
   // Optional custom authentication feature
   customAuthValidator?: CustomAuthValidator;

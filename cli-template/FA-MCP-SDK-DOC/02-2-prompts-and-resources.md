@@ -174,6 +174,35 @@ Pass to server:
 const serverData: McpServerData = { ..., customResources };
 ```
 
+### Binary Resources (`blob`)
+
+A resource whose payload is not text (image, PDF, archive, …) declares `content` as
+`IResourceBinaryContent` instead of a string. `resources/read` then returns the bytes as base64
+`contents[0].blob` (with the resource's `mimeType`) and omits `text` — exactly one of `text` /
+`blob` is present per standard §11.4 / §12.2.
+
+```typescript
+import { readFileSync } from 'node:fs';
+import { IResourceData } from 'fa-mcp-sdk';
+
+export const customResources: IResourceData[] = [
+  // Raw bytes — the SDK base64-encodes the Buffer for you:
+  { uri: 'custom://logo.png', name: 'Logo', description: 'Brand logo',
+    mimeType: 'image/png', content: { blob: readFileSync('assets/logo.png') } },
+
+  // Already-base64 string — pass it through with base64: true:
+  { uri: 'custom://icon.png', name: 'Icon', description: 'App icon',
+    mimeType: 'image/png', content: { blob: PNG_BASE64, base64: true } },
+
+  // A function may return binary content too (sync or async):
+  { uri: 'custom://report.pdf', name: 'Report', description: 'Generated PDF',
+    mimeType: 'application/pdf', content: async () => ({ blob: await buildPdf() }) },
+];
+```
+
+`{ blob: string }` is assumed to be base64 unless you set `base64: false` (then the SDK encodes the
+string's raw bytes). Clients decode `contents[0].blob` from base64 to recover the original file.
+
 ### Dynamic Resources (Function)
 
 For dynamic resource lists based on transport type, headers, or user:
@@ -278,6 +307,38 @@ await notifyResourceUpdated(server, 'project://version');
 
 The helper emits `notifications/resources/updated` only to clients that previously called
 `resources/subscribe` for the given URI on that `Server`.
+
+## Optional MAY capability — argument completion (standard §8.2)
+
+`completion/complete` lets a client ask the server to suggest values for a prompt or resource
+argument (for example, the valid project ids for a `project` argument). Disabled by default; the
+capability is advertised only when **both** the config flag is on **and** a `completionProvider`
+is supplied on `McpServerData` — otherwise `completion/complete` returns `-32601`.
+
+```yaml
+mcp:
+  completions:
+    enabled: true   # MAY §8.2 — also requires a completionProvider (see below)
+```
+
+```typescript
+import { McpServerData } from 'fa-mcp-sdk';
+
+const completionProvider: McpServerData['completionProvider'] = async ({ ref, argument }) => {
+  // ref: { type: 'ref/prompt' | 'ref/resource'; name?; uri? }
+  // argument: { name; value }  — value is what the user has typed so far
+  if (ref.type === 'ref/prompt' && argument.name === 'project') {
+    const all = await listProjectIds();
+    return all.filter((id) => id.startsWith(argument.value));
+  }
+  return [];
+};
+
+const serverData: McpServerData = { ..., completionProvider };
+```
+
+The SDK caps the response at 100 values and sets `completion.hasMore` / `completion.total`
+accordingly.
 
 ## Pagination (standard §8.4)
 
