@@ -236,7 +236,7 @@ class above) keep their message verbatim.
 | 0.6.0   | MAJOR | Tools/Prompts/Resources contract (`additionalProperties:false`, mirror)|
 | 0.7.0   | MAJOR | RS256/ES256 JWT runtime, OAuth/OIDC discovery, scope enforcement       |
 | 0.8.x   | MINOR | Observability (X-Request-Id, traceparent, logging, metrics, progress)  |
-| 0.9.0   | MINOR | Conditional capabilities, `-32006`/`-32007`, binary `blob`, error sanitization, opt-in completions |
+| 0.9.1   | MINOR | Conditional capabilities, `-32006`/`-32007`, binary `blob`, error sanitization, opt-in completions |
 
 ---
 
