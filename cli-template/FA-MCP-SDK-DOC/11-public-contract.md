@@ -223,7 +223,7 @@ JSON-RPC errors follow Appendix B of the standard. Mapping (JSON-RPC → HTTP):
 | 0.5.0   | MAJOR | HTTP hardening (default bind `127.0.0.1`, error codes, rate-limit)     |
 | 0.6.0   | MAJOR | Tools/Prompts/Resources contract (`additionalProperties:false`, mirror)|
 | 0.7.0   | MAJOR | RS256/ES256 JWT runtime, OAuth/OIDC discovery, scope enforcement       |
-| 0.8.0   | MINOR | Observability (X-Request-Id, traceparent, logging, metrics, progress)  |
+| 0.8.x   | MINOR | Observability (X-Request-Id, traceparent, logging, metrics, progress)  |
 
 ---
 

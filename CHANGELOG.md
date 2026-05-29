@@ -5,7 +5,7 @@ All notable changes to `fa-mcp-sdk` are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.8.0] - 2026-05-28
+## [0.8.1] - 2026-05-29
 
 Phase 4 — Observability + Contract stability. Closes the §15 / §17 / §8.5 / §8.6 / §15.1 /
 §15.2 / §15.3 / §17.1 / §17.2 gaps in `claudedocs/std/mcp-server-implementation-standard.md`
@@ -85,7 +85,7 @@ opt-in via configuration. A single `[BEHAVIOUR]` change is called out below.
 
 - Every HTTP response now carries an `X-Request-Id` header (generated when the client did
   not supply one). Downstream tests that assert on the *absence* of the header must be
-  updated. This is the only behavioural change in 0.8.0.
+  updated. This is the only behavioural change in 0.8.x.
 
 ### Compatibility
 
