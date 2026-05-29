@@ -188,6 +188,91 @@ const clientIP = headers?.['x-real-ip'] || headers?.['x-forwarded-for'];
 `clientCapabilities`). See
 [ITransportContext](./02-2-prompts-and-resources.md#itransportcontext).
 
+### Cancellation (`signal`) — standard §8.5
+
+`IToolHandlerParams.signal?: AbortSignal` is flipped when the client sends
+`notifications/cancelled` for the current request. Pass it straight to any downstream
+`AbortSignal`-aware API (`fetch`, `pg`, `axios` ≥ 0.22, …) — they will abort their work and
+let the rejection propagate. Tool handlers MUST stop work once the signal aborts; the SDK
+then suppresses the JSON-RPC response per §8.5.
+
+```typescript
+export const handleToolCall = async (params: IToolHandlerParams): Promise<TToolHandlerResponse> => {
+  const { name, arguments: args, signal } = params;
+
+  switch (name) {
+    case 'search_documents': {
+      // Native AbortSignal forwarding — fetch will throw AbortError when the client cancels.
+      const res = await fetch(`https://docs.example.com/search?q=${encodeURIComponent(args.q)}`, {
+        signal,
+      });
+      const items = await res.json();
+      return formatToolResult({ items });
+    }
+  }
+};
+```
+
+For libraries that do not understand `AbortSignal` natively, gate the work with
+`signal.aborted` checks at safe seams (between DB pages, loop iterations, retry attempts):
+
+```typescript
+case 'long_running': {
+  for (const chunk of chunks) {
+    if (signal?.aborted) {
+      throw signal.reason ?? new Error('cancelled');
+    }
+    await process(chunk);
+  }
+  return formatToolResult({ ok: true });
+}
+```
+
+When `signal` is `undefined` (legacy transports or older SDK consumers), behave as if it were
+never aborted — handlers should remain forward-compatible.
+
+### Progress (`sendProgress`) — standard §8.6
+
+`IToolHandlerParams.sendProgress?` emits `notifications/progress` whenever the request
+carried `_meta.progressToken`. When the client did not request progress, the SDK passes a
+no-op so the handler can call it unconditionally — no `if` guard needed.
+
+Rules enforced server-side:
+
+- progress values MUST be monotonically non-decreasing (smaller values are silently dropped);
+- emissions are throttled by `mcp.progress.throttleMs` (default 100 ms → max 10 events/s).
+
+```typescript
+case 'bulk_import': {
+  const rows = await loadRows(args.source);
+  for (let i = 0; i < rows.length; i++) {
+    if (signal?.aborted) {
+      throw signal.reason ?? new Error('cancelled');
+    }
+    await importRow(rows[i]);
+    sendProgress?.(i + 1, rows.length, `imported ${rows[i].id}`);
+  }
+  return formatToolResult({ inserted: rows.length });
+}
+```
+
+The client receives:
+
+```json
+{
+  "method": "notifications/progress",
+  "params": {
+    "progressToken": "abc-123",
+    "progress": 42,
+    "total": 100,
+    "message": "imported acct-42"
+  }
+}
+```
+
+Choose `total` only when the upper bound is known up-front; otherwise omit it and the client
+will render an indeterminate spinner.
+
 ### MCP Apps — Reading Client Capabilities
 
 `params.clientCapabilities` carries the client's `initialize`-time capabilities (including the
