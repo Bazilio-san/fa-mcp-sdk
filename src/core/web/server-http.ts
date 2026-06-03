@@ -660,6 +660,29 @@ export async function startHttpServer(): Promise<void> {
   // SDK transport handles protocol-version negotiation, error codes, notifications (202) and the
   // GET-SSE / DELETE-teardown semantics for us.
   const HTTP_SESSION_HEADER = 'mcp-session-id';
+  // Verbose connection/handshake tracing. Per-request dumps (method, headers, session routing)
+  // are gated behind `DEBUG=mcp-handshake` so they don't flood logs on every tool call; the
+  // key lifecycle events (initialize, session created/closed, no-session rejection) always log.
+  const HANDSHAKE_DEBUG = (process.env.DEBUG || '').split(',').some((d) => d.trim() === 'mcp-handshake');
+  // Short session id for log lines (full UUID is noisy). Empty header → 'none'.
+  const shortSid = (sid?: string): string => (sid ? sid.slice(0, 8) : 'none');
+  // Summarize the request line for handshake tracing: JSON-RPC method, id, session header,
+  // and presence of the headers that matter for the MCP transport contract.
+  const describeMcpRequest = (req: express.Request): string => {
+    const body = req.body as any;
+    const h = req.headers;
+    const hasAuth = !!(h.authorization || h['x-on-behalf-of-user']);
+    return [
+      `method=${body?.method ?? '(none)'}`,
+      `id=${body?.id ?? '(none)'}`,
+      `session=${shortSid(h[HTTP_SESSION_HEADER] as string | undefined)}`,
+      `protocolVersion=${(h['mcp-protocol-version'] as string) || body?.params?.protocolVersion || '(none)'}`,
+      `accept=${(h.accept as string) || '(none)'}`,
+      `contentType=${(h['content-type'] as string) || '(none)'}`,
+      `auth=${hasAuth ? 'yes' : 'no'}`,
+      `ip=${req.ip || 'unknown'}`,
+    ].join(' | ');
+  };
   // Soft cap to bound memory; oldest session is evicted (FIFO via Map insertion order).
   const MAX_HTTP_SESSIONS = 4096;
   const mcpTransports = new Map<string, StreamableHTTPServerTransport>();
@@ -726,6 +749,16 @@ export async function startHttpServer(): Promise<void> {
   };
 
   const noSessionError = (req: express.Request, res: express.Response) => {
+    // Always log: this path is otherwise silent, which is exactly why "-32600" appears on the
+    // client with nothing on the server. We surface why the session was rejected.
+    const sessionHeader = req.headers[HTTP_SESSION_HEADER] as string | undefined;
+    logger.warn(
+      `MCP rejected with -32600 (no valid session). The client must send an \`initialize\` request first, ` +
+        `or include a valid \`mcp-session-id\` header. Request: ${describeMcpRequest(req)}` +
+        (sessionHeader && !mcpTransports.get(sessionHeader)
+          ? ` — session id ${shortSid(sessionHeader)} is unknown/expired (known sessions: ${mcpTransports.size})`
+          : ''),
+    );
     res.status(400).json({
       jsonrpc: '2.0',
       id: (req.body as any)?.id ?? null,
@@ -737,6 +770,12 @@ export async function startHttpServer(): Promise<void> {
   const routeToSession = async (req: express.Request, res: express.Response): Promise<void> => {
     const sessionId = req.headers[HTTP_SESSION_HEADER] as string | undefined;
     const transport = sessionId ? mcpTransports.get(sessionId) : undefined;
+    if (HANDSHAKE_DEBUG) {
+      logger.info(
+        `MCP ${req.method} /mcp routing to session ${shortSid(sessionId)}: ` +
+          `${transport ? 'found' : 'NOT FOUND'} | ${describeMcpRequest(req)}`,
+      );
+    }
     if (!transport) {
       noSessionError(req, res);
       return;
@@ -747,6 +786,9 @@ export async function startHttpServer(): Promise<void> {
   // POST endpoint for MCP requests — handshake + all JSON-RPC calls go through the SDK transport.
   app.post('/mcp', authMW, async (req, res) => {
     try {
+      if (HANDSHAKE_DEBUG) {
+        logger.info(`POST /mcp ← ${describeMcpRequest(req)}`);
+      }
       // Rate limiting and the body-size limit stay here, before the transport takes over.
       const clientId = resolveRateLimitKey(req);
       await handleRateLimit(rateLimiter, clientId, req.ip || 'unknown', 'HTTP MCP', res, req.body?.id);
@@ -773,13 +815,17 @@ export async function startHttpServer(): Promise<void> {
       const sessionId = req.headers[HTTP_SESSION_HEADER] as string | undefined;
       const existing = sessionId ? mcpTransports.get(sessionId) : undefined;
       if (existing) {
+        if (HANDSHAKE_DEBUG) {
+          logger.info(`POST /mcp reusing session ${shortSid(sessionId)} for method=${(req.body as any)?.method}`);
+        }
         await runHttpToolCall(req, res, () => existing.handleRequest(req, res, req.body));
         return;
       }
 
       if (isInitializeRequest(req.body)) {
         logger.info(
-          `MCP client initializing: protocolVersion: ${(req.body as any)?.params?.protocolVersion} | clientInfo: ${JSON.stringify((req.body as any)?.params?.clientInfo)}`,
+          `MCP client initializing: protocolVersion: ${(req.body as any)?.params?.protocolVersion} | clientInfo: ${JSON.stringify((req.body as any)?.params?.clientInfo)}` +
+            (HANDSHAKE_DEBUG ? ` | ${describeMcpRequest(req)}` : ''),
         );
         const transport = new StreamableHTTPServerTransport({
           sessionIdGenerator: () => randomUUID(),
@@ -788,9 +834,11 @@ export async function startHttpServer(): Promise<void> {
           onsessioninitialized: (sid: string) => {
             mcpTransports.set(sid, transport);
             evictOldestSession(sid);
+            logger.info(`MCP session created: ${sid} (active sessions: ${mcpTransports.size})`);
           },
           onsessionclosed: (sid: string) => {
             mcpTransports.delete(sid);
+            logger.info(`MCP session closed by client: ${shortSid(sid)} (active sessions: ${mcpTransports.size})`);
           },
         });
         // SDK `Transport` exposes `onclose` as a plain setter (not an EventTarget), so
@@ -800,6 +848,7 @@ export async function startHttpServer(): Promise<void> {
           const sid = transport.sessionId;
           if (sid) {
             mcpTransports.delete(sid);
+            logger.info(`MCP transport closed: ${shortSid(sid)} (active sessions: ${mcpTransports.size})`);
           }
         };
         const server = createMcpServer('http');
