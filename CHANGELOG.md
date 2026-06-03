@@ -5,6 +5,54 @@ All notable changes to `fa-mcp-sdk` are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.11.7] - 2026-06-03
+
+JSON-RPC response tracing for the Streamable HTTP transport — so a `-32xxx` error that previously
+only surfaced on the client now leaves a meaningful trace on the server. Additive and off by
+default for success traffic; error traces are always on.
+
+### Added
+
+- **JSON-RPC response tracing** (`web/server-http.ts`). A response tee on `POST /mcp` and on the
+  `GET`/`DELETE` session routes captures the outgoing payload and parses it into JSON-RPC messages.
+  The parser auto-detects the response shape from the body (plain `application/json` object/array,
+  or the `data:` frames of an `text/event-stream` SSE stream) rather than the `Content-Type` header,
+  because Node has already cleared the outgoing headers by the time the response `finish`es. Every
+  JSON-RPC **error** is logged unconditionally with its HTTP status, request id, `code`, `message`,
+  and (truncated) `data`, alongside the originating request summary. Successful results are logged
+  only under `DEBUG=mcp-rpc` as a one-line summary, to avoid dumping large tool payloads. Capture is
+  capped at 256 KB per response to bound memory on long SSE streams (the line is marked
+  `[capture truncated]` when the cap is hit), and trace logging is wrapped so it can never break the
+  actual response.
+
+## [0.11.6] - 2026-06-03
+
+Detailed connection / handshake tracing and session-lifecycle logging for the Streamable HTTP
+transport, to diagnose why a client gets `-32600` ("no valid session") with nothing on the server.
+Per-request dumps are gated behind a debug switch; the key lifecycle events always log.
+
+### Added
+
+- **Handshake tracing and session-lifecycle logging** (`web/server-http.ts`). Session creation,
+  closure (by the client and on transport close), and the no-session rejection now always log,
+  including the active-session count and a short (8-char) session id. The `-32600` rejection path,
+  previously silent, now explains *why* the session was rejected — the client must send `initialize`
+  first or echo a valid `mcp-session-id` header — and reports when the supplied session id is
+  unknown or expired. Verbose per-request dumps (JSON-RPC method, id, session routing, protocol
+  version, `Accept` / `Content-Type`, auth presence, client IP) are gated behind `DEBUG=mcp-handshake`
+  so they do not flood the log on every tool call.
+
+## [0.11.5] - 2026-06-03
+
+### Fixed
+
+- **Agent Tester: tools lost after a page reload.** When the page was reloaded while the backend
+  kept the MCP server connection alive, the Tool Tester still worked but the Chat path sent
+  `mcpConfig: undefined` to the LLM, so the model received zero tools (logs showed `Tools: 0` /
+  `MCP Server: None`). On startup the UI now rebuilds `this.mcpConfig` (url, transport, headers,
+  name, app mode) from the backend-held connection whenever the current server reports
+  `isConnected`. (`web/static/agent-tester/script.js`)
+
 ## [0.11.0] - 2026-05-29
 
 Phase 7 — residual MAY-level capabilities + final §18 acceptance. Closes the remaining optional
