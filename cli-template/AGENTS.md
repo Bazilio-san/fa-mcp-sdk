@@ -132,6 +132,7 @@ Detailed fa-mcp-sdk docs are in `FA-MCP-SDK-DOC/`:
 | `09-database.md` | PostgreSQL sugar layer (`queryMAIN`, `execMAIN`, upserts, `mergeByBatch`), `pgvector`, secondary DBs |
 | `10-mcp-apps.md` | Building / extending MCP Apps (UI-augmented tools) — protocol contract, SDK surface, patterns, pitfalls |
 | `11-public-contract.md` | Formal SDK public contract — transports, endpoints, JWT claims, tool/prompt/resource format, error mapping, headers, semver & deprecation policy |
+| `12-implementation-standard.md` | Corporate MCP server implementation standard (Avatar profile over MCP 2025-11-25) — tool side-effects & risk level, error codes, limits, observability, deprecation, compliance checklist |
 
 ## Development and Testing Through Agent Tester
 
