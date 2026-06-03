@@ -2275,6 +2275,19 @@ class McpAgentTester {
 
       if (servers && servers.length > 0) {
         this.currentServer = servers[0];
+        // Restore mcpConfig from the backend-held connection. Without this, after a
+        // page reload the server stays connected on the backend (so Tool Tester works),
+        // but this.mcpConfig.url is null, so the Chat path sends mcpConfig: undefined
+        // and the LLM receives zero tools (logs show "Tools: 0" / "MCP Server: None").
+        if (this.currentServer.isConnected) {
+          this.mcpConfig = {
+            url: this.currentServer.url,
+            transport: this.currentServer.transport,
+            headers: this.currentServer.headers || {},
+            name: this.currentServer.name,
+            appMode: this.appMode,
+          };
+        }
         this.updateConnectionStatus();
         this.renderServerInfo();
       } else {
