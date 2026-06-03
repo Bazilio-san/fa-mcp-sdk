@@ -663,7 +663,11 @@ export async function startHttpServer(): Promise<void> {
   // Verbose connection/handshake tracing. Per-request dumps (method, headers, session routing)
   // are gated behind `DEBUG=mcp-handshake` so they don't flood logs on every tool call; the
   // key lifecycle events (initialize, session created/closed, no-session rejection) always log.
-  const HANDSHAKE_DEBUG = (process.env.DEBUG || '').split(',').some((d) => d.trim() === 'mcp-handshake');
+  const debugNamespaces = (process.env.DEBUG || '').split(',').map((d) => d.trim());
+  const HANDSHAKE_DEBUG = debugNamespaces.includes('mcp-handshake');
+  // Separate namespace for successful RPC response summaries (`result=ok`), kept apart from the
+  // connection/handshake trace so each can be enabled independently. Errors always log regardless.
+  const RPC_DEBUG = debugNamespaces.includes('mcp-rpc');
   // Short session id for log lines (full UUID is noisy). Empty header → 'none'.
   const shortSid = (sid?: string): string => (sid ? sid.slice(0, 8) : 'none');
   // Summarize the request line for handshake tracing: JSON-RPC method, id, session header,
@@ -683,6 +687,127 @@ export async function startHttpServer(): Promise<void> {
       `ip=${req.ip || 'unknown'}`,
     ].join(' | ');
   };
+  // Parse outgoing MCP payloads into JSON-RPC message objects. The SDK transport answers either
+  // as plain JSON (`application/json`) or as an SSE stream (`text/event-stream`), where each frame
+  // carries the JSON in a `data:` line. We auto-detect the shape FROM THE BODY rather than the
+  // Content-Type header: by the time the response `finish`es, Node has already cleared the outgoing
+  // headers, so `res.getHeader('content-type')` returns undefined at that point.
+  const parseRpcMessages = (raw: string): any[] => {
+    const out: any[] = [];
+    const tryPush = (s: string) => {
+      const t = s.trim();
+      if (!t) {
+        return;
+      }
+      try {
+        const parsed = JSON.parse(t);
+        if (Array.isArray(parsed)) {
+          out.push(...parsed);
+        } else {
+          out.push(parsed);
+        }
+      } catch {
+        /* not JSON — ignore */
+      }
+    };
+    // Plain-JSON answer: the whole body parses as one object/array.
+    const trimmed = raw.trimStart();
+    if (trimmed.startsWith('{') || trimmed.startsWith('[')) {
+      tryPush(raw);
+      if (out.length > 0) {
+        return out;
+      }
+    }
+    // SSE answer: collect every `data:` frame line.
+    for (const line of raw.split('\n')) {
+      if (line.startsWith('data:')) {
+        tryPush(line.slice(5));
+      }
+    }
+    return out;
+  };
+
+  // Tee the response stream so we can log what is actually sent back — in particular every
+  // JSON-RPC error (code + message + data), to verify the error message is meaningful. Errors
+  // are logged ALWAYS; successful results are summarized only under `DEBUG=mcp-rpc` to avoid
+  // dumping large tool payloads. Capture is capped to bound memory on long SSE streams.
+  const installRpcResponseTrace = (req: express.Request, res: express.Response): void => {
+    const MAX_CAPTURE = 256 * 1024;
+    const chunks: Buffer[] = [];
+    let captured = 0;
+    let truncated = false;
+    const collect = (chunk: any) => {
+      if (!chunk || captured >= MAX_CAPTURE) {
+        if (chunk && captured >= MAX_CAPTURE) {
+          truncated = true;
+        }
+        return;
+      }
+      // The SDK transport writes `Uint8Array` (SSE) or strings; `Buffer.isBuffer` is false for a
+      // Uint8Array, so we must NOT fall back to `String(chunk)` (that yields a comma-joined list of
+      // byte codes). `Buffer.from` accepts Buffer, string, and Uint8Array/ArrayBuffer views directly.
+      let buf: Buffer;
+      if (Buffer.isBuffer(chunk)) {
+        buf = chunk;
+      } else if (typeof chunk === 'string') {
+        buf = Buffer.from(chunk);
+      } else {
+        buf = Buffer.from(chunk);
+      }
+      chunks.push(buf);
+      captured += buf.length;
+    };
+    const origWrite = res.write.bind(res);
+    const origEnd = res.end.bind(res);
+    // Cast to any: the write/end overloads are complex; we only tee the first (chunk) argument.
+    (res as any).write = (chunk: any, ...args: any[]) => {
+      collect(chunk);
+      return (origWrite as any)(chunk, ...args);
+    };
+    (res as any).end = (chunk: any, ...args: any[]) => {
+      collect(chunk);
+      return (origEnd as any)(chunk, ...args);
+    };
+    res.on('finish', () => {
+      try {
+        const raw = Buffer.concat(chunks).toString('utf8');
+        if (!raw) {
+          return;
+        }
+        const messages = parseRpcMessages(raw);
+        const errors = messages.filter((m) => m && m.error);
+        if (errors.length > 0) {
+          for (const m of errors) {
+            const data = m.error.data === undefined ? '' : ` | data=${JSON.stringify(m.error.data).slice(0, 800)}`;
+            logger.warn(
+              `MCP RPC error response → HTTP ${res.statusCode} | id=${m.id ?? '(none)'} | ` +
+                `code=${m.error.code} | message=${JSON.stringify(m.error.message)}${data} ` +
+                `| for: ${describeMcpRequest(req)}`,
+            );
+          }
+        } else if (RPC_DEBUG) {
+          const summary = messages
+            .map((m) =>
+              m.error
+                ? `error ${m.error.code}`
+                : m.result !== undefined
+                  ? `id=${m.id} result=ok`
+                  : m.method
+                    ? `notif ${m.method}`
+                    : `id=${m.id ?? '(none)'}`,
+            )
+            .join('; ');
+          logger.info(
+            `MCP RPC response → HTTP ${res.statusCode} | ${summary || `${raw.length} bytes`}` +
+              (truncated ? ' | [capture truncated]' : ''),
+          );
+        }
+      } catch {
+        /* never let trace logging break the response */
+      }
+    });
+  };
+
   // Soft cap to bound memory; oldest session is evicted (FIFO via Map insertion order).
   const MAX_HTTP_SESSIONS = 4096;
   const mcpTransports = new Map<string, StreamableHTTPServerTransport>();
@@ -768,6 +893,7 @@ export async function startHttpServer(): Promise<void> {
 
   // GET (server→client SSE stream) and DELETE (session teardown) operate on an existing session.
   const routeToSession = async (req: express.Request, res: express.Response): Promise<void> => {
+    installRpcResponseTrace(req, res);
     const sessionId = req.headers[HTTP_SESSION_HEADER] as string | undefined;
     const transport = sessionId ? mcpTransports.get(sessionId) : undefined;
     if (HANDSHAKE_DEBUG) {
@@ -786,6 +912,7 @@ export async function startHttpServer(): Promise<void> {
   // POST endpoint for MCP requests — handshake + all JSON-RPC calls go through the SDK transport.
   app.post('/mcp', authMW, async (req, res) => {
     try {
+      installRpcResponseTrace(req, res);
       if (HANDSHAKE_DEBUG) {
         logger.info(`POST /mcp ← ${describeMcpRequest(req)}`);
       }
