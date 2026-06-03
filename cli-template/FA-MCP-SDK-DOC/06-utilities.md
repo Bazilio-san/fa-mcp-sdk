@@ -336,6 +336,48 @@ echo "DEBUG=mcp:tool,mcp:resource" >> .env
 > `stdout` via `console.log`, so enabling `DEBUG=mcp:*` in STDIO mode **will corrupt the framing**
 > the client sees. Use these switches with HTTP/SSE transport, or redirect stdout.
 
+## HTTP Connection & RPC Tracing (`DEBUG=mcp-handshake`, `DEBUG=mcp-rpc`)
+
+Separate from the `mcp:*` channel switches above, the **Streamable HTTP transport** carries its own
+connection- and response-level tracing in `web/server-http.ts`. These switches use hyphenated names
+(`mcp-handshake`, `mcp-rpc`) and are read straight from the comma-split `DEBUG` env var — they do
+**not** go through the `af-tools-ts` `Debug()` machinery, so they are not covered by `mcp:*` or `*`.
+List them explicitly, e.g. `DEBUG=mcp-handshake,mcp-rpc`. They exist to answer the two questions the
+`mcp:*` taps cannot: *why did the client get a session/protocol error?* and *what did the server
+actually send back?*
+
+| Env value             | What it logs                                                                          |
+|-----------------------|---------------------------------------------------------------------------------------|
+| *(always on)*         | Session created / closed / transport-closed (with active-session count); the `-32600` "no valid session" rejection with the reason. |
+| `DEBUG=mcp-handshake` | Per-request dump for every `/mcp` call: JSON-RPC method + id, short session id, routing hit/miss, protocol version, `Accept` / `Content-Type`, whether an auth header is present, and client IP. |
+| `DEBUG=mcp-rpc`       | One-line summary of every **successful** JSON-RPC response (status, ids, `result=ok` / notifications). |
+
+Two things always log regardless of the switches, because they are otherwise silent failure modes:
+
+- **The `-32600` rejection.** When a request reaches `/mcp` without a valid session and is not an
+  `initialize`, the server now logs *why* — the client must send `initialize` first or echo a valid
+  `mcp-session-id` header — and notes when the supplied session id is unknown or expired (with the
+  count of known sessions). This is the trace to look for when the client reports `-32600` but the
+  server log was previously empty.
+- **Every JSON-RPC error response.** A response tee on `POST /mcp` and the `GET`/`DELETE` session
+  routes captures the outgoing body, parses it (auto-detecting a plain `application/json` answer vs.
+  the `data:` frames of an SSE stream), and logs each error's HTTP status, request id, `code`,
+  `message`, and truncated `data`, together with the originating request summary. The capture is
+  capped at 256 KB per response so a long SSE stream cannot exhaust memory (`[capture truncated]`
+  marks a hit), and the trace is wrapped so it can never break the real response.
+
+```bash
+# Why is the client getting "no valid session" / -32600? (handshake dump on every request)
+DEBUG=mcp-handshake yarn start
+
+# Also summarise successful responses (otherwise only errors are logged)
+DEBUG=mcp-handshake,mcp-rpc yarn start
+```
+
+> These switches are HTTP-transport only — STDIO never opens sessions, so they have no effect there.
+> They are safe to leave off in production; the always-on session-lifecycle and error lines are the
+> ones worth keeping in normal operation.
+
 ### Extending with Custom Debug Categories
 
 Add your own switches with the same `Debug()` helper from `af-tools-ts`:
