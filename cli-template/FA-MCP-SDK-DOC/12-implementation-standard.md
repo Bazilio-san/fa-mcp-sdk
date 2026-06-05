@@ -2,9 +2,9 @@
 
 | Parameter                  | Value                              |
 |----------------------------|------------------------------------|
-| Version                    | 1.2                                |
+| Version                    | 1.3                                |
 | Status                     | Active                             |
-| Date                       | 2026-06-03                         |
+| Date                       | 2026-06-05                         |
 | Scope                      | All internal company MCP servers   |
 | Base MCP                   | MCP 2025-11-25                      |
 | Starter SDK (optional)     | `fa-mcp-sdk`                       |
@@ -13,7 +13,8 @@
 > This document is the English translation of the corporate implementation standard. It restates the
 > explicit MCP 2025-11-25 requirements plus the corporate Avatar / AI Platform profile in a single
 > self-contained document. Version 1.2 adds the side-effect tools and risk-level rules and fixes the
-> `-32007` error-code inconsistency.
+> `-32007` error-code inconsistency. Version 1.3 adds §13.4 on mapping upstream (downstream API) errors
+> to typed error classes and the rule for surfacing model-correctable errors via `result.isError=true`.
 
 ## Table of Contents
 
@@ -764,6 +765,50 @@ An error returned externally MUST NOT contain:
 - internal filesystem paths;
 - raw SQL/expression text with user data;
 - internal service names that are not part of the public contract.
+
+### 13.4. Mapping upstream (downstream API) errors
+
+This section is a corporate recommendation for servers that proxy a downstream HTTP API (Jira, GitLab, an
+internal microservice, etc.). It defines how a failed upstream call is translated into the two error types
+of §13.1 so that the model receives an actionable reason instead of one opaque `-32603 Internal error`.
+
+When a tool calls a downstream API, the server SHOULD translate the upstream HTTP status into the matching
+typed error class from [Appendix B](#appendix-b-error-codes) rather than collapsing every failure into a
+generic internal error. The recommended mapping is:
+
+| Upstream HTTP                     | Typed error class      | JSON-RPC | Returned to the model |
+| --------------------------------- | ---------------------- | -------- | --------------------- |
+| 400                               | `ValidationError`      | -32602   | `isError=true`        |
+| 401 / 403                         | `ServerError` (with upstream status in `data`) | -32000 | `isError=true` |
+| 404                               | `ResourceNotFoundError`| -32002   | `isError=true`        |
+| 409                               | `ConflictError`        | -32007   | `isError=true`        |
+| 429                               | `RateLimitedError`     | -32003   | thrown (see below)    |
+| 502 / 503 / 504 / no response     | `UpstreamUnavailableError` | -32006 | `isError=true`      |
+| other 5xx                         | `ServerError`          | -32000   | thrown                |
+
+The decision whether to surface an error to the model or to throw it follows three rules:
+
+- An error whose message is **safe to expose and actionable** — built from the structured upstream error
+  body, not from internal state — SHOULD be returned as a tool execution result with `result.isError=true`
+  (§9.4, §13.1). The model reads the upstream reason (for example `Issue AITECH-123 does not exist`) and
+  self-corrects instead of treating the call as a hard sandbox failure. A `404` raised by the downstream
+  API is the canonical case: it MUST reach the model as `result.isError=true`, not as a thrown protocol
+  error.
+- `-32003 Rate limited` MUST remain a **thrown** protocol error and MUST carry the `Retry-After` header /
+  `retryAfter` value (§14, Appendix B.3). It MUST NOT be flattened into an `isError` text result, because
+  clients rely on the numeric code and the retry hint to schedule a retry.
+- An internal failure with **no upstream status** (the catch-all wrapper around an unexpected exception)
+  MUST stay a thrown protocol error and MUST be sanitized per §13.3 — typically `-32603 Internal error`
+  with no stack trace and no secrets.
+
+A reference implementation of this pattern — a pure `normalizeToolError()` that converts any thrown value
+into a typed error without throwing, an `isLlmVisibleError()` predicate that applies the three rules above,
+and the `formatToolError()` call that surfaces the message — is documented in
+[02-1-tools-and-api.md → "Normalizing upstream API errors"](./02-1-tools-and-api.md).
+
+Whatever message is exposed (via `isError=true` or a thrown error) MUST still satisfy the §13.3
+prohibitions: the upstream error body is forwarded only after it has been reduced to its human-readable
+text, never as a raw payload that could carry internal paths, tokens, or stack traces.
 
 ## 14. Limits and protection
 
