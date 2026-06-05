@@ -37,6 +37,26 @@ class MyError extends BaseMcpError {
 | `RateLimitedError` | `RATE_LIMITED` | `-32003` | 429 | Appendix B |
 | `TimeoutError` | `TIMEOUT` | `-32004` | 504 | Appendix B |
 | `PayloadTooLargeError` | `PAYLOAD_TOO_LARGE` | `-32005` | 413 | Appendix B |
+| `UpstreamUnavailableError` | `UPSTREAM_UNAVAILABLE` | `-32006` | 503 | Appendix B |
+| `ConflictError` | `CONFLICT` | `-32007` | 409 | Appendix B |
+
+### Mapping a Downstream API Status to a Typed Error
+
+When a tool proxies a downstream HTTP API, translate the upstream status into one of these classes instead
+of a single opaque `ServerError`. This gives the JSON-RPC layer a meaningful code and lets the surfacing
+logic (next) decide whether the model should see the message. This is standard §13.4; the end-to-end
+`normalizeToolError` / `isLlmVisibleError` / `formatToolError` pattern is in
+[02-1-tools-and-api.md → "Normalizing upstream API errors"](./02-1-tools-and-api.md).
+
+| Upstream HTTP                 | Throw                       | Surfaced to model as `isError`? |
+|-------------------------------|-----------------------------|---------------------------------|
+| 400                           | `ValidationError`           | yes                             |
+| 401 / 403                     | `ServerError` (status in data) | yes                          |
+| 404                           | `ResourceNotFoundError`     | yes                             |
+| 409                           | `ConflictError`             | yes                             |
+| 429                           | `RateLimitedError`          | no — thrown, keeps `retryAfter` |
+| 502 / 503 / 504 / no response | `UpstreamUnavailableError`  | yes                             |
+| other 5xx / unexpected        | `ServerError` (no status)   | no — thrown, sanitized          |
 
 ## Error Utilities
 

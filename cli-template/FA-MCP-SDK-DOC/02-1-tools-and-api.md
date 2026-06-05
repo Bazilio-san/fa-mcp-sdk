@@ -172,6 +172,92 @@ asJsonError({ code: 'NOT_FOUND', key: 'X' });  // { structuredContent: {...},   
 > for missing resources, convert those branches to `return formatToolError('Not found: ...')`. The
 > LLM will start surfacing "Such an issue does not exist" to the user instead of failing the call.
 
+### Normalizing upstream API errors
+
+The `isError` vs `throw` decision above is easy when the handler discovers the problem itself (a `null`
+issue). It is harder when the failure surfaces as a raw error thrown deep inside an HTTP client — a 404
+from the upstream API arrives as an Axios/`fetch` rejection, not as a clean `formatToolError`. Catching
+that in every handler is repetitive and easy to get wrong. The pattern below centralizes it in the single
+`catch` of `handleToolCall`, and implements standard
+[§13.4 "Mapping upstream errors"](./12-implementation-standard.md#134-mapping-upstream-downstream-api-errors).
+
+It has three pure steps — translate, classify, surface:
+
+```typescript
+import {
+  formatToolError, ToolExecutionError, ServerError, RateLimitedError,
+  UpstreamUnavailableError, ValidationError, ConflictError, ResourceNotFoundError, toStr,
+} from 'fa-mcp-sdk';
+
+// 1. TRANSLATE — convert a raw upstream HTTP error into a typed error class (no throw here).
+//    Map the upstream status onto the Appendix B error set instead of one opaque ServerError.
+function handleAxiosError(error: any, toolName: string): never {
+  const status = error?.response?.status;
+  const msg = extractUpstreamMessage(error?.response?.data) ?? error?.message ?? 'Unknown error';
+  const data = { toolName, status };                       // safe: no body, no headers, no stack
+
+  if (!status || status >= 502) throw new UpstreamUnavailableError(`Upstream unavailable: ${msg}`, data);
+  if (status === 400)           throw new ValidationError(`Invalid request: ${msg}`);
+  if (status === 404)           throw new ResourceNotFoundError(msg, data);
+  if (status === 409)           throw new ConflictError(`State conflict: ${msg}`, data);
+  if (status === 429) {
+    const retryAfter = parseInt(error?.response?.headers?.['retry-after'], 10) || 60;
+    throw new RateLimitedError(`Rate limited: ${msg}`, retryAfter);
+  }
+  // 401/403 and other 5xx — keep the upstream status in `data.status` so step 2 can recognize it.
+  throw new ServerError(`Upstream error (HTTP ${status}): ${msg}`, data);
+}
+
+// 2. NORMALIZE — turn ANY thrown value into a concrete Error, still WITHOUT throwing.
+//    A pure function lets the MCP path (may surface to the LLM) and a REST path (always throws)
+//    share one step.
+export function normalizeToolError(error: any, toolName: string): Error {
+  if (error instanceof ToolExecutionError || error instanceof ServerError ||
+      typeof error?.jsonRpcCode === 'number') {
+    return error;                                          // already a domain error
+  }
+  if (isAxiosError(error)) {
+    try { handleAxiosError(error, toolName); } catch (converted) { return converted as Error; }
+  }
+  return new ServerError(toStr(error), { toolName }, true); // catch-all, sanitized (no upstream status)
+}
+
+// 3. CLASSIFY — decide whether the model should SEE the message (isError) or get a thrown protocol error.
+export function isLlmVisibleError(error: any): boolean {
+  if (error instanceof RateLimitedError) return false;     // retry contract — keep -32003 thrown
+  if (error instanceof ToolExecutionError) return true;    // JQL/validation written for the model
+  if (typeof error?.jsonRpcCode === 'number') return true; // ValidationError/NotFound/Conflict/Upstream
+  if (error instanceof ServerError && error?.details?.status != null) return true; // upstream 401/403/5xx
+  return false;                                            // catch-all ServerError → "Internal error"
+}
+```
+
+Wire all three into the single `catch`, so every handler benefits without its own try/catch:
+
+```typescript
+} catch (error: any) {
+  const normalized = normalizeToolError(error, toolName);
+  if (isLlmVisibleError(normalized)) {
+    // The model reads the upstream reason ("Issue AITECH-123 does not exist") and self-corrects.
+    return formatToolError(normalized.message);
+  }
+  throw normalized;                                        // RateLimitedError / internal → protocol error
+}
+```
+
+Why this split matters:
+
+- A **404 raised by the upstream API** becomes `ResourceNotFoundError` (numeric `jsonRpcCode`), so
+  `isLlmVisibleError` returns `true` and the model gets `result.isError=true` — exactly like the manual
+  `formatToolError` branch in the previous section, but for an error it never saw directly.
+- **`RateLimitedError` stays thrown** as `-32003` with `retryAfter` — clients depend on that contract, so
+  it must not collapse into an `isError` text result.
+- A **catch-all `ServerError`** (no `details.status`) stays thrown and is sanitized by the SDK to
+  `Internal error` — its text may carry internal detail and MUST NOT reach the model (standard §13.3).
+
+> Keep `normalizeToolError` **pure** (never throws). A throwing normalizer forces every call site into its
+> own try/catch and defeats the point of centralizing the logic.
+
 ### Headers Access
 
 Headers are normalized to lowercase. Available in HTTP/SSE transports:
