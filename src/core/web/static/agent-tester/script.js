@@ -800,6 +800,22 @@ class McpAgentTester {
     }
 
     this.refreshToolListAppIcons();
+    this.applyAppModeVisibility();
+  }
+
+  /**
+   * Show the Inspector tab only while MCP Apps mode is ON. When the mode is
+   * turned off while the Inspector tab is active, fall back to the Chat tab so
+   * the user is not left on a hidden pane.
+   */
+  applyAppModeVisibility() {
+    const appEl = document.querySelector('.app');
+    if (appEl) {
+      appEl.classList.toggle('apps-mode-on', !!this.appMode);
+    }
+    if (!this.appMode && this.activeTab === 'inspector') {
+      this.switchTab('chat');
+    }
   }
 
   /**
@@ -1395,6 +1411,7 @@ class McpAgentTester {
       this.appModeToggle.addEventListener('change', () => this.handleAppModeToggle());
       this.updateAppModeToggleAvailability();
     }
+    this.applyAppModeVisibility();
 
     this.mcpConnectionForm.addEventListener('submit', (e) => this.handleMcpConnection(e));
 
