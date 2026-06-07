@@ -7,7 +7,7 @@
  * Finally runs `git init / add / commit / remote add / push -u origin <branch>`.
  *
  * Environment / flags:
- *   --base-url  <url>    (e.g. https://gitlab.finam.ru/api/v4) — required
+ *   --base-url  <url>    (e.g. https://gitlab.corp.com/api/v4) — required
  *   --token     <tok>    GitLab private token — required
  *   --group     <name>   Group name or full path (e.g. "mcp-servers") — required unless --group-id is given
  *   --group-id  <n>      Numeric group id — overrides --group lookup
@@ -54,7 +54,7 @@ function die (msg, code = 1) {
   process.exit(code);
 }
 
-if (!baseUrl)     die('Missing --base-url (or GITLAB_BASE_URL). Example: https://gitlab.finam.ru/api/v4');
+if (!baseUrl)     die('Missing --base-url (or GITLAB_BASE_URL). Example: https://gitlab.corp.com/api/v4');
 if (!token)       die('Missing --token (or GITLAB_TOKEN).');
 if (!projectName) die('Missing --name (project name).');
 if (!groupId && !groupArg) die('Missing --group or --group-id.');

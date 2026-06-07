@@ -185,7 +185,7 @@ with an auth error, surface it to the user; do not attempt API-token workarounds
 Collect GitLab credentials — prefer values already in the accompanying text, ask only for what's
 missing:
 
-- `baseUrl` — e.g. `https://gitlab.finam.ru/api/v4`
+- `baseUrl` — e.g. `https://gitlab.corp.com/api/v4`
 - `token` — GitLab private token with `api` scope
 - `group` — group name or full path (e.g. `mcp-servers` or `ai/mcp`), OR `groupId` numeric
 
