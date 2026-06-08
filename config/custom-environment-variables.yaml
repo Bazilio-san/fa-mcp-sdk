@@ -11,6 +11,9 @@ agentTester:
   tokenTTLSec:
     __name: AGENT_TESTER_TOKEN_TTL_SEC
     __format: number
+  toolCallTimeoutMs:
+    __name: AGENT_TESTER_TOOL_CALL_TIMEOUT_MS
+    __format: number
   openAi:
     apiKey: AGENT_TESTER_OPENAI_API_KEY
     baseURL: AGENT_TESTER_OPENAI_BASE_URL
