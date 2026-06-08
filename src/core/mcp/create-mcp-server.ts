@@ -147,6 +147,11 @@ export function createMcpServer(transportType: TTransportType): Server {
   // list and cancel tasks, and that task creation is supported for `tools/call`.
   const tasksEnabled = appConfig.mcp.tasks?.enabled === true;
 
+  // Standard §8.3 — validate tools/call arguments against the tool's inputSchema before dispatch.
+  // On by default; set `mcp.tools.validateInput: false` to skip it (e.g. when tools validate their
+  // own arguments, or to shave latency in trusted internal deployments).
+  const validateInput = appConfig.mcp.tools?.validateInput !== false;
+
   const server = new Server(
     {
       name: appConfig.name,
@@ -286,9 +291,11 @@ export function createMcpServer(transportType: TTransportType): Server {
     if (response && typeof response === 'object' && 'structuredContent' in response) {
       const outputCheck = validateToolOutput(tool, response.structuredContent);
       if (!outputCheck.valid) {
-        throw new McpError(-32603, 'Tool produced result that violates outputSchema', {
+        throw new McpError(-32603, `Tool produced result that violates outputSchema: ${outputCheck.summary}`, {
           field: outputCheck.field,
           reason: outputCheck.reason,
+          errors: outputCheck.errors,
+          errorCount: outputCheck.errorCount,
         });
       }
       // §12.4 — mirror structuredContent in content[0] as JSON text for legacy clients.
@@ -444,10 +451,17 @@ export function createMcpServer(transportType: TTransportType): Server {
         }
       }
 
-      const inputCheck = validateToolInput(tool, args);
-      if (!inputCheck.valid) {
-        getMetrics()?.toolCalls.inc({ tool: toolName, status: 'invalid_params' });
-        throw new McpError(-32602, 'Invalid params', { field: inputCheck.field, reason: inputCheck.reason });
+      if (validateInput) {
+        const inputCheck = validateToolInput(tool, args);
+        if (!inputCheck.valid) {
+          getMetrics()?.toolCalls.inc({ tool: toolName, status: 'invalid_params' });
+          throw new McpError(-32602, `Invalid params: ${inputCheck.summary}`, {
+            field: inputCheck.field,
+            reason: inputCheck.reason,
+            errors: inputCheck.errors,
+            errorCount: inputCheck.errorCount,
+          });
+        }
       }
 
       // Standard §14 — per-subject concurrent in-flight cap.

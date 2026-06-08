@@ -127,6 +127,12 @@ interface IMCPConfig {
     tools: {
       answerAs: 'text' | 'structuredContent';
       hideAnnotations: boolean;
+      /**
+       * Standard §8.3 — validate `tools/call` arguments against the tool's `inputSchema` before
+       * dispatch. Default true. Set false to skip input validation (tools self-validate, or trusted
+       * internal deployment). Does not affect `outputSchema` validation.
+       */
+      validateInput?: boolean;
     };
     /**
      * Standard §8.4 — server-side pagination for `tools/list`, `prompts/list`, `resources/list`.

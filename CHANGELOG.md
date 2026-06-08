@@ -5,6 +5,25 @@ All notable changes to `fa-mcp-sdk` are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.12.1] - 2026-06-08
+
+Precise diagnostics for `tools/call` input-schema violations, plus a config switch to disable input
+validation entirely.
+
+### Added
+
+- **Per-field validation diagnostics** (`mcp/validate-tool-args.ts`, `mcp/create-mcp-server.ts`). A
+  `-32602 Invalid params` error now carries a precise English diagnostic instead of the bare
+  `"Invalid params"`. `error.message` reads `Invalid params: <field>: <reason>; …` and `error.data`
+  gains `errorCount` plus an `errors[]` array (up to 8 items) of `{ field, reason, message }`. The
+  `reason` is a stable ajv keyword (`type`, `required`, `enum`, `pattern`, …). Diagnostics name the
+  field and the violated constraint, and report the actual JS type for type mismatches, but never echo
+  the offending value (§13.3). The same enrichment applies to `outputSchema` violations (`-32603`).
+  Ajv now runs with `allErrors: true` and `verbose: true`.
+- **`mcp.tools.validateInput`** config flag (default `true`; env `MCP_TOOLS_VALIDATE_INPUT`). Set
+  `false` to skip server-side validation of `tools/call` arguments against `inputSchema` — useful when
+  tools self-validate or in trusted internal deployments. Does not affect `outputSchema` validation.
+
 ## [0.11.7] - 2026-06-03
 
 JSON-RPC response tracing for the Streamable HTTP transport — so a `-32xxx` error that previously

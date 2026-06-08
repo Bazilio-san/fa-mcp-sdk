@@ -2,8 +2,15 @@ import Ajv2020, { ValidateFunction, ErrorObject } from 'ajv/dist/2020.js';
 import addFormats from 'ajv-formats';
 import { Tool } from '@modelcontextprotocol/sdk/types.js';
 
-const ajv = new Ajv2020({ allErrors: false, strict: false, useDefaults: false });
+// allErrors:true — collect every violation in one pass instead of only the first.
+// verbose:true   — attach the offending value to each error so `type` failures can report the
+//                  actual JS type (only the type name is surfaced, never the value itself — §13.3).
+const ajv = new Ajv2020({ allErrors: true, verbose: true, strict: false, useDefaults: false });
 addFormats(ajv as any);
+
+// Upper bound on the number of failures echoed back to the client. A badly-shaped payload can
+// produce hundreds of errors; we report at most this many and flag the overflow.
+const MAX_FAILURES = 8;
 
 const inputCache = new WeakMap<object, ValidateFunction>();
 const outputCache = new WeakMap<object, ValidateFunction>();
@@ -26,29 +33,116 @@ function compile(schema: object, cache: WeakMap<object, ValidateFunction>): Vali
 }
 
 export interface IValidationFailure {
+  /** JSON Pointer to the offending location, e.g. `/items/0/price`, or the property name. */
   field: string;
+  /** Stable Ajv keyword: `required` | `type` | `enum` | `pattern` | … — safe for machine routing. */
   reason: string;
+  /** Human-readable explanation (English). Never echoes the offending value, only its type. */
+  message: string;
 }
 
-function firstError(errors: ErrorObject[] | null | undefined): IValidationFailure {
-  const e = errors?.[0];
-  if (!e) {
-    return { field: '', reason: 'schema_violation' };
+export interface IValidationOk {
+  valid: true;
+}
+
+export interface IValidationErr extends IValidationFailure {
+  valid: false;
+  /** Up to {@link MAX_FAILURES} individual failures. */
+  errors: IValidationFailure[];
+  /** Total number of violations Ajv reported, before truncation to {@link MAX_FAILURES}. */
+  errorCount: number;
+  /** Combined one-line summary of the reported failures, suitable for an error message. */
+  summary: string;
+}
+
+function jsType(value: unknown): string {
+  if (value === null) {
+    return 'null';
   }
-  const fieldFromParams =
-    (e.params as any)?.missingProperty ||
-    (e.params as any)?.additionalProperty ||
-    (e.params as any)?.propertyName ||
-    '';
-  const path = e.instancePath || '';
-  const field = fieldFromParams ? (path ? `${path}/${fieldFromParams}` : fieldFromParams) : path || 'root';
-  return { field, reason: e.message || e.keyword || 'schema_violation' };
+  if (Array.isArray(value)) {
+    return 'array';
+  }
+  return typeof value;
 }
 
-export function validateToolInput(
-  tool: Tool,
-  args: unknown,
-): { valid: true } | ({ valid: false } & IValidationFailure) {
+/** Field path: instance path plus the specific offending property for keyword-level errors. */
+function fieldOf(e: ErrorObject): string {
+  const p = (e.params as any) ?? {};
+  const sub = p.missingProperty || p.additionalProperty || p.propertyName || '';
+  const path = e.instancePath || '';
+  if (sub) {
+    return path ? `${path}/${sub}` : sub;
+  }
+  return path || 'root';
+}
+
+/** Map a raw Ajv error to a concise English reason that names the constraint and the actual type. */
+function reasonOf(e: ErrorObject): string {
+  const p = (e.params as any) ?? {};
+  switch (e.keyword) {
+    case 'required':
+      return `missing required property "${p.missingProperty}"`;
+    case 'additionalProperties':
+      return `unexpected property "${p.additionalProperty}"`;
+    case 'type':
+      return `expected ${p.type}, got ${jsType(e.data)}`;
+    case 'enum':
+      return `must be one of: ${(p.allowedValues ?? []).join(', ')}`;
+    case 'const':
+      return `must equal ${JSON.stringify(p.allowedValue)}`;
+    case 'minimum':
+    case 'maximum':
+    case 'exclusiveMinimum':
+    case 'exclusiveMaximum':
+      return `must be ${p.comparison} ${p.limit}`;
+    case 'multipleOf':
+      return `must be a multiple of ${p.multipleOf}`;
+    case 'minLength':
+      return `string length must be >= ${p.limit}`;
+    case 'maxLength':
+      return `string length must be <= ${p.limit}`;
+    case 'minItems':
+      return `array length must be >= ${p.limit}`;
+    case 'maxItems':
+      return `array length must be <= ${p.limit}`;
+    case 'minProperties':
+      return `object must have >= ${p.limit} properties`;
+    case 'maxProperties':
+      return `object must have <= ${p.limit} properties`;
+    case 'pattern':
+      return `must match pattern ${p.pattern}`;
+    case 'format':
+      return `invalid format, expected ${p.format}`;
+    case 'uniqueItems':
+      return 'array items must be unique';
+    default:
+      return e.message || e.keyword || 'schema violation';
+  }
+}
+
+function toFailure(e: ErrorObject): IValidationFailure {
+  const field = fieldOf(e);
+  return { field, reason: e.keyword || 'schema_violation', message: `${field}: ${reasonOf(e)}` };
+}
+
+function fail(errors: ErrorObject[] | null | undefined): IValidationErr {
+  const all = errors ?? [];
+  const list = all.slice(0, MAX_FAILURES).map(toFailure);
+  const first = list[0] ?? { field: 'root', reason: 'schema_violation', message: 'schema violation' };
+  const overflow = all.length - list.length;
+  const summary = list.map((f) => f.message).join('; ') + (overflow > 0 ? ` (+${overflow} more)` : '');
+  return {
+    valid: false,
+    field: first.field,
+    reason: first.reason,
+    message: first.message,
+    errors: list,
+    errorCount: all.length,
+    summary,
+  };
+}
+
+export function validateToolInput(tool: Tool, args: unknown): IValidationOk | IValidationErr {
   const schema = tool.inputSchema;
   if (!schema || typeof schema !== 'object') {
     return { valid: true };
@@ -57,17 +151,10 @@ export function validateToolInput(
   if (!validate) {
     return { valid: true };
   }
-  const ok = validate(args ?? {});
-  if (ok) {
-    return { valid: true };
-  }
-  return { valid: false, ...firstError(validate.errors) };
+  return validate(args ?? {}) ? { valid: true } : fail(validate.errors);
 }
 
-export function validateToolOutput(
-  tool: Tool,
-  structuredContent: unknown,
-): { valid: true } | ({ valid: false } & IValidationFailure) {
+export function validateToolOutput(tool: Tool, structuredContent: unknown): IValidationOk | IValidationErr {
   const schema = (tool as any).outputSchema;
   if (!schema || typeof schema !== 'object') {
     return { valid: true };
@@ -76,9 +163,5 @@ export function validateToolOutput(
   if (!validate) {
     return { valid: true };
   }
-  const ok = validate(structuredContent ?? null);
-  if (ok) {
-    return { valid: true };
-  }
-  return { valid: false, ...firstError(validate.errors) };
+  return validate(structuredContent ?? null) ? { valid: true } : fail(validate.errors);
 }

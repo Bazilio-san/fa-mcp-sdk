@@ -271,6 +271,9 @@ mcp:
     #> When true, strips `annotations` from tool listings returned to clients
     #> (hides hints like readOnlyHint / destructiveHint). Default: false.
     hideAnnotations: false
+    #> Standard §8.3 — validate tools/call arguments against each tool's inputSchema. Default true.
+    #> Set false to skip input validation. See default.yaml for full documentation.
+    validateInput: true
   #> Debug & diagnostics. See default.yaml for full documentation.
   debug:
     #> Absolute path to a JSON-lines log file. Empty = file logging disabled.

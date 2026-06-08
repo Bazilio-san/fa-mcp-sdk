@@ -275,6 +275,11 @@ mcp:
     #> When true, strips `annotations` from tool listings returned to clients
     #> (hides hints like readOnlyHint / destructiveHint). Default: false.
     hideAnnotations: false
+    #> Standard §8.3 — validate tools/call arguments against each tool's inputSchema before dispatch.
+    #> On invalid input the call is rejected with JSON-RPC code -32602 (Invalid params) and an
+    #> `error.data` payload listing the offending fields. Set false to skip input validation (tools
+    #> validate their own args, or trusted internal deployment). Does not affect outputSchema checks.
+    validateInput: true
   #> Debug & diagnostics. All keys optional. The stderr `DEBUG=mcp:*` stream
   #> is independent of this section — these flags only add file logging and
   #> built-in helper tools.

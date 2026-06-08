@@ -212,12 +212,21 @@ class above) keep their message verbatim.
 ```jsonc
 {
   "requestId": "uuid…",         // §15.1, always set by the SDK if absent
-  "field": "name",              // input validation diagnostics
-  "reason": "invalid_type",     // machine-readable hint
-  "retryAfter": 12              // seconds, for -32003
+  "field": "name",              // first offending field (input validation diagnostics)
+  "reason": "required",         // machine-readable hint — stable ajv keyword for schema violations
+  "retryAfter": 12,             // seconds, for -32003
+  // input-schema violations (-32602) additionally include (implementation-specific, not contractual):
+  "errorCount": 2,              // total violations before truncation
+  "errors": [                   // up to 8 per-field failures: { field, reason, message }
+    { "field": "name", "reason": "required", "message": "root: missing required property \"name\"" }
+  ]
   // …implementation-specific keys are allowed but not part of the contract
 }
 ```
+
+Input-argument validation against `inputSchema` is on by default and can be disabled per deployment
+via `mcp.tools.validateInput: false` (env `MCP_TOOLS_VALIDATE_INPUT`). When off, malformed arguments
+reach the tool handler unchecked — only the JSON-RPC envelope shape is still enforced.
 
 ---
 

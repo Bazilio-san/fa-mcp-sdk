@@ -60,6 +60,9 @@ mcp:
   tools:
     answerAs: MCP_TOOLS_ANSWER_AS
     hideAnnotations: MCP_TOOLS_HIDE_ANNOTATIONS
+    validateInput:
+      __name: MCP_TOOLS_VALIDATE_INPUT
+      __format: boolean
   debug:
     logFile: MCP_DEBUG_LOG_FILE
     builtinTools:
