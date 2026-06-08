@@ -486,6 +486,14 @@ to the shape of the JSON-RPC request are returned as a JSON-RPC error. Tool exec
 errors are returned as a tool execution result with `isError: true` if that helps the model adjust the
 request.
 
+A schema violation produces `-32602` with a precise diagnostic: `error.message` reads
+`Invalid params: <field>: <reason>; …` and `error.data` carries `field`, `reason` (a stable ajv keyword
+such as `type` / `required` / `enum`), `errorCount`, and an `errors[]` array of up to 8 individual
+failures (`{ field, reason, message }`). Diagnostics report the field and the violated constraint, plus
+the actual JS type for type mismatches, but never the offending value (§13.3). The SDK enforces this
+validation by default; it MAY be disabled per deployment via `mcp.tools.validateInput: false` when tools
+self-validate their arguments.
+
 Example of a tool execution error:
 
 ```json
@@ -728,8 +736,13 @@ Protocol error example:
   "id": "<request-id>",
   "error": {
     "code": -32602,
-    "message": "Invalid params",
-    "data": { "field": "name", "reason": "required" }
+    "message": "Invalid params: root: missing required property \"name\"",
+    "data": {
+      "field": "name",
+      "reason": "required",
+      "errorCount": 1,
+      "errors": [{ "field": "name", "reason": "required", "message": "root: missing required property \"name\"" }]
+    }
   }
 }
 ```

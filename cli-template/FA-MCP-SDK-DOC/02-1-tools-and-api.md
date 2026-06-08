@@ -34,10 +34,37 @@ violation throws with the offending name printed.
 
 **Standard §9.3 (MUST) — arguments are validated server-side.** Before `toolHandler` is
 called, the SDK validates `request.params.arguments` against `inputSchema` via ajv (draft
-2020-12). On failure the response is JSON-RPC `-32602` with
-`error.data = { field, reason }`; the handler is **not** invoked. This means tool code
-no longer needs to repeat shape checks — by the time the handler runs, `args` already
-matches the schema.
+2020-12). On failure the response is JSON-RPC `-32602` and the handler is **not** invoked.
+This means tool code no longer needs to repeat shape checks — by the time the handler runs,
+`args` already matches the schema.
+
+The error carries a precise, English diagnostic. The `message` reads
+`Invalid params: <field>: <reason>; …` and `error.data` lists every violation:
+
+```jsonc
+{
+  "code": -32602,
+  "message": "Invalid params: /amount: expected number, got string; root: missing required property \"currency\"",
+  "data": {
+    "field": "/amount",          // first offending location (JSON Pointer or property name)
+    "reason": "type",            // stable ajv keyword: type | required | enum | pattern | …
+    "errorCount": 2,             // total violations before truncation
+    "errors": [                  // up to 8 individual failures
+      { "field": "/amount",   "reason": "type",     "message": "/amount: expected number, got string" },
+      { "field": "/currency", "reason": "required", "message": "root: missing required property \"currency\"" }
+    ]
+  }
+}
+```
+
+Diagnostics name the field, the violated constraint, and (for type errors) the actual JS type — never
+the offending value itself, so no caller-supplied data leaks outward (standard §13.3). At most 8
+failures are reported; the remainder are summarised as `(+N more)` in `message` and counted in
+`errorCount`.
+
+Input validation is on by default. It can be disabled with `mcp.tools.validateInput: false`
+(or the `MCP_TOOLS_VALIDATE_INPUT` environment variable) — useful when tools validate their own
+arguments or in a trusted internal deployment. The toggle does not affect `outputSchema` validation.
 
 ### Output schema and `structuredContent` (standard §9.4 / §12.4)
 

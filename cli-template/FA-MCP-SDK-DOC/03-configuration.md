@@ -132,6 +132,11 @@ mcp:
   tools:
     answerAs: text   # text | structuredContent
     hideAnnotations: false  # true — strip `annotations` from tool listings
+    # Standard §8.3/§9.3 — validate tools/call arguments against each tool's inputSchema before
+    # dispatch. Default true. On failure the call is rejected with -32602 and a per-field diagnostic
+    # in error.data (field, reason, errors[]). Set false to skip input validation (tools self-validate,
+    # or trusted internal deployment); does not affect outputSchema checks. ENV: MCP_TOOLS_VALIDATE_INPUT.
+    validateInput: true
   # Standard §8.4 — server-side pagination for tools/list, prompts/list, resources/list.
   pagination:
     pageSize: 100                # items per page (cursor is opaque base64(offset))
