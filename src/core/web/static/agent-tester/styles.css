@@ -138,6 +138,27 @@ body {
   height: 100vh;
 }
 
+/* --- Sidebar (pinned settings) --- */
+.sidebar {
+  width: 384px;
+  flex-shrink: 0;
+  background: var(--bg-sidebar);
+  border-right: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.sidebar-content {
+  flex: 1;
+  padding: 16px;
+  overflow-y: auto;
+}
+
+.sidebar-content .config-section:last-child {
+  margin-bottom: 0;
+}
+
 /* --- Section Labels --- */
 .section-label {
   font-size: 0.68rem;
@@ -1752,26 +1773,26 @@ body {
 
 /* --- Scrollbar --- */
 .chat-messages::-webkit-scrollbar,
-.settings-modal-body::-webkit-scrollbar,
+.sidebar-content::-webkit-scrollbar,
 .dropdown-list::-webkit-scrollbar {
   width: 6px;
 }
 
 .chat-messages::-webkit-scrollbar-track,
-.settings-modal-body::-webkit-scrollbar-track,
+.sidebar-content::-webkit-scrollbar-track,
 .dropdown-list::-webkit-scrollbar-track {
   background: transparent;
 }
 
 .chat-messages::-webkit-scrollbar-thumb,
-.settings-modal-body::-webkit-scrollbar-thumb,
+.sidebar-content::-webkit-scrollbar-thumb,
 .dropdown-list::-webkit-scrollbar-thumb {
   background: var(--scrollbar-thumb);
   border-radius: 3px;
 }
 
 .chat-messages::-webkit-scrollbar-thumb:hover,
-.settings-modal-body::-webkit-scrollbar-thumb:hover,
+.sidebar-content::-webkit-scrollbar-thumb:hover,
 .dropdown-list::-webkit-scrollbar-thumb:hover {
   background: var(--scrollbar-hover);
 }
@@ -1820,6 +1841,17 @@ body {
 @media (max-width: 768px) {
   .mobile-only {
     display: flex !important;
+  }
+
+  .app {
+    flex-direction: column;
+  }
+
+  .sidebar {
+    width: 100%;
+    max-height: 40vh;
+    border-right: none;
+    border-bottom: 1px solid var(--border);
   }
 
   .chat-title h1 {
@@ -2085,66 +2117,6 @@ textarea.prompt-modified {
 
 [data-theme="dark"] .api-key-warning {
   color: #f28b82;
-}
-
-/* ============================================
-   Settings Modal (former sidebar)
-   ============================================ */
-
-.settings-modal-overlay {
-  position: fixed;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.5);
-  backdrop-filter: blur(4px);
-  z-index: 900;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 24px;
-}
-
-.settings-modal {
-  background: var(--bg-sidebar);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-lg);
-  width: 100%;
-  max-width: 560px;
-  max-height: 90vh;
-  display: flex;
-  flex-direction: column;
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
-}
-
-.settings-modal-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 14px 20px;
-  border-bottom: 1px solid var(--border);
-}
-
-.settings-modal-header h3 {
-  font-size: 0.95rem;
-  font-weight: 600;
-  color: var(--text);
-  margin: 0;
-}
-
-.settings-modal-body {
-  padding: 16px 20px;
-  overflow-y: auto;
-  flex: 1;
-}
-
-.settings-modal-body .config-section:last-child {
-  margin-bottom: 0;
-}
-
-.settings-modal-footer {
-  display: flex;
-  justify-content: flex-end;
-  padding: 12px 20px;
-  border-top: 1px solid var(--border);
 }
 
 /* ============================================

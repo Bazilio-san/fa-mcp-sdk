@@ -62,8 +62,8 @@ export interface IIcon {
   src: string;
   /** Optional MIME type of the icon (e.g. `image/png`, `image/svg+xml`). */
   mimeType?: string;
-  /** Optional size hint as an HTML `sizes` string (e.g. `'48x48'`, `'any'`). */
-  sizes?: string;
+  /** Optional size hints as HTML `sizes` strings (e.g. `['48x48', '96x96']`, `['any']`). */
+  sizes?: string[];
 }
 
 /**
