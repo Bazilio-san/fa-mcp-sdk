@@ -133,6 +133,15 @@
                     </button>
                 </div>
 
+                <!-- MCP Apps mode toggle — placed before the mode (tab) switcher -->
+                <label id="appModeToggleLabel" class="app-mode-toggle" title="MCP Apps mode: advertises UI capability and renders widgets" data-testid="at-app-mode-toggle-label">
+                    <input type="checkbox" id="appModeToggle" data-testid="at-app-mode-toggle">
+                    <span class="app-mode-toggle-text">
+                        <span class="material-icons-round app-mode-icon">grid_view</span>
+                        <span class="app-mode-label">Apps</span>
+                    </span>
+                </label>
+
                 <!-- Tabs moved into header -->
                 <div class="tabs-bar header-tabs" data-testid="at-tabs-bar">
                     <button type="button" class="tab-btn active" data-tab="chat" data-testid="at-tab-chat">
@@ -177,17 +186,6 @@
                 </form>
 
                 <div class="chat-actions">
-                    <label id="appModeToggleLabel" class="app-mode-toggle" title="MCP Apps mode: advertises UI capability and renders widgets" data-testid="at-app-mode-toggle-label">
-                        <input type="checkbox" id="appModeToggle" data-testid="at-app-mode-toggle">
-                        <span class="app-mode-toggle-text">
-                            <span class="material-icons-round app-mode-icon">grid_view</span>
-                            <span class="app-mode-label">Apps</span>
-                        </span>
-                    </label>
-                    <select id="defaultDisplayFormat" class="header-format-select chat-only" title="Default display format" data-testid="at-default-format">
-                        <option value="HTML">HTML</option>
-                        <option value="MD">MD</option>
-                    </select>
                     <button id="clearChat" class="btn-icon chat-only" title="Clear Chat" data-testid="at-clear-chat">
                         <span class="material-icons-round">delete_outline</span>
                     </button>
@@ -204,6 +202,11 @@
             <div class="tab-pane active" id="tabPaneChat" data-testid="at-tab-pane-chat">
             <!-- Chat Messages -->
             <div class="chat-container">
+                <!-- Floating HTML/MD display format toggle — applies to chat only -->
+                <select id="defaultDisplayFormat" class="chat-format-float" title="Default display format" data-testid="at-default-format">
+                    <option value="HTML">HTML</option>
+                    <option value="MD">MD</option>
+                </select>
                 <div id="chatMessages" class="chat-messages" data-testid="at-chat-messages">
                     <div class="message assistant welcome" data-testid="at-welcome-message">
                         <div class="message-avatar">
