@@ -887,7 +887,12 @@ body {
   display: none !important;
 }
 
-.header-format-select {
+/* Floating HTML/MD display format toggle, pinned to the chat window's top-right */
+.chat-format-float {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  z-index: 5;
   font-size: 12px;
   padding: 4px 6px;
   border: 1px solid var(--border);
@@ -895,6 +900,13 @@ body {
   background: var(--bg-surface);
   color: var(--text-primary);
   cursor: pointer;
+  opacity: 0.85;
+  box-shadow: var(--shadow-sm, 0 1px 3px rgba(0, 0, 0, 0.15));
+  transition: opacity 0.15s;
+}
+
+.chat-format-float:hover {
+  opacity: 1;
 }
 
 /* MCP Apps toggle — global, visible on every tab */
@@ -1290,12 +1302,14 @@ body {
   overflow: auto;
 }
 
-/* Inspector tab visibility tied to MCP Apps mode */
-.app-only-tab {
+/* Inspector tab visibility tied to MCP Apps mode.
+   Specificity must beat the base `.tab-btn { display: inline-flex }` rule, so the
+   hide selector is scoped under `.tabs-bar`. */
+.tabs-bar .app-only-tab {
   display: none;
 }
 
-.app.apps-mode-on .app-only-tab {
+.app.apps-mode-on .tabs-bar .app-only-tab {
   display: inline-flex;
 }
 
