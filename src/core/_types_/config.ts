@@ -257,6 +257,7 @@ interface IAgentTesterConfig {
     useAuth: boolean; // true — protect Agent Tester with full multi-auth (permanentTokens/basic/JWT/custom); browser users see a login dialog, headless clients pass Authorization header
     sessionTtlMs?: number; // Session lifetime in milliseconds for browser login sessions. Default: 28_800_000 (8h). Applies only when useAuth is true.
     tokenTTLSec?: number; // JWT TTL (seconds) for tokens auto-issued via /agent-tester/api/auth-token. Default: 1800 (30 min).
+    toolCallTimeoutMs?: number; // Per-tool-call timeout (ms) the Agent Tester MCP client waits for a tool result. Default: 60000. Set above the target server's mcp.limits.toolTimeoutMs so the client does not abort long-running tools before the server.
     logJson?: boolean; // true — emit structured JSON events (tool_call, tool_result, llm_response, response) to stdout during agent execution
     openAi?: {
       apiKey: string;

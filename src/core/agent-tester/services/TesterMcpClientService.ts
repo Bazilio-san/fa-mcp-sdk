@@ -196,12 +196,18 @@ export class TesterMcpClientService {
   public async callToolWithConfig(mcpConfig: TesterMcpConfig, toolName: string, parameters: any): Promise<any> {
     logger.info(`Calling tool ${toolName} via cached client`, { parameters });
 
+    const timeout = appConfig.agentTester?.toolCallTimeoutMs ?? 60000;
+
     const invoke = async () => {
       const cached = await this.getOrCreateClient(mcpConfig);
-      return cached.client.callTool({
-        name: toolName,
-        arguments: parameters || {},
-      });
+      return cached.client.callTool(
+        {
+          name: toolName,
+          arguments: parameters || {},
+        },
+        undefined,
+        { timeout },
+      );
     };
 
     try {
