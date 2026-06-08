@@ -586,6 +586,7 @@ class McpAgentTester {
     this.usedHeaders = [];
     this.pendingConnectionData = null;
     this._headersUpdateTimer = null;
+    this._headersApplyPromise = null;
     this.defaultMcpUrl = null;
     this.authEnabled = false;
     this.configHttpHeaders = {};
@@ -1074,6 +1075,8 @@ class McpAgentTester {
       this.showToast('Invalid JSON: ' + e.message, 'error');
       return;
     }
+
+    await this.flushPendingHeaders();
 
     try {
       const resp = await apiFetch(`${API_BASE}/api/mcp/call-tool`, {
@@ -2016,8 +2019,34 @@ class McpAgentTester {
       clearTimeout(this._headersUpdateTimer);
     }
     this._headersUpdateTimer = setTimeout(() => {
-      this.applyHeadersUpdate().catch((err) => console.warn('Apply headers failed:', err));
+      this._headersUpdateTimer = null;
+      this._runHeadersUpdate();
     }, 600);
+  }
+
+  _runHeadersUpdate() {
+    this._headersApplyPromise = this.applyHeadersUpdate()
+      .catch((err) => console.warn('Apply headers failed:', err))
+      .finally(() => {
+        this._headersApplyPromise = null;
+      });
+    return this._headersApplyPromise;
+  }
+
+  // Flush any pending (debounced or in-flight) header update so a direct tool
+  // call sees the latest header values on the server. Without this, a fast
+  // "Send Request" click races the 600 ms debounce and the call goes out with
+  // the previously applied (or empty) headers — e.g. a missing
+  // x-on-behalf-of-user yields MISSING_USER_IDENTITY.
+  async flushPendingHeaders() {
+    if (this._headersUpdateTimer) {
+      clearTimeout(this._headersUpdateTimer);
+      this._headersUpdateTimer = null;
+      this._runHeadersUpdate();
+    }
+    if (this._headersApplyPromise) {
+      await this._headersApplyPromise;
+    }
   }
 
   async applyHeadersUpdate() {
@@ -3595,6 +3624,9 @@ class McpAgentTester {
     this.ttRequestStatus.className = 'tt-status tt-status-progress';
     this.ttResponseContent.innerHTML = '';
     this.ttResponseContent.textContent = '⏳ Waiting for response…';
+
+    // Ensure debounced header edits reach the server before the direct call.
+    await this.flushPendingHeaders();
 
     const startedAt = performance.now();
     try {
