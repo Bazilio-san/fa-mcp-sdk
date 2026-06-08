@@ -1314,12 +1314,6 @@ class McpAgentTester {
     this.headersSection = document.getElementById('headersSection');
     this.dynamicHeaders = document.getElementById('dynamicHeaders');
 
-    // Settings modal (former sidebar)
-    this.settingsModal = document.getElementById('settingsModal');
-    this.settingsBtn = document.getElementById('settingsBtn');
-    this.settingsModalClose = document.getElementById('settingsModalClose');
-    this.settingsModalOk = document.getElementById('settingsModalOk');
-
     // LLM settings — collapsed view + modal
     this.modelDisplay = document.getElementById('modelDisplay');
     this.llmSettingsBtn = document.getElementById('llmSettingsBtn');
@@ -1472,22 +1466,6 @@ class McpAgentTester {
       sdkVersionBtn.addEventListener('click', (e) => this.toggleSdkVersionTooltip(e));
     }
 
-    // --- Settings modal (former sidebar) ---
-    if (this.settingsBtn) {
-      this.settingsBtn.addEventListener('click', () => this.openSettingsModal());
-    }
-    if (this.settingsModalClose) {
-      this.settingsModalClose.addEventListener('click', () => this.closeSettingsModal());
-    }
-    if (this.settingsModalOk) {
-      this.settingsModalOk.addEventListener('click', () => this.closeSettingsModal());
-    }
-    document.addEventListener('keydown', (e) => {
-      if (e.key === 'Escape' && this.settingsModal && this.settingsModal.style.display === 'flex') {
-        this.closeSettingsModal();
-      }
-    });
-
     // --- Tool Tester tab events ---
     if (this.tabsBar) {
       this.tabsBar.querySelectorAll('.tab-btn').forEach((btn) => {
@@ -1606,20 +1584,6 @@ class McpAgentTester {
       this.style.height = 'auto';
       this.style.height = Math.min(this.scrollHeight, 240) + 'px';
     });
-  }
-
-  openSettingsModal() {
-    if (!this.settingsModal) {
-      return;
-    }
-    this.settingsModal.style.display = 'flex';
-  }
-
-  closeSettingsModal() {
-    if (!this.settingsModal) {
-      return;
-    }
-    this.settingsModal.style.display = 'none';
   }
 
   async loadInitialData() {
