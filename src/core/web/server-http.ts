@@ -873,6 +873,39 @@ export async function startHttpServer(): Promise<void> {
     }
   };
 
+  const SESSIONLESS_LIST_METHODS = new Set(['tools/list', 'prompts/list', 'resources/list']);
+
+  const isSessionlessListRequest = (body: unknown): boolean => {
+    const messages = Array.isArray(body) ? body : [body];
+    return (
+      messages.length > 0 &&
+      messages.every((message) => {
+        if (!message || typeof message !== 'object' || Array.isArray(message)) {
+          return false;
+        }
+        const rpc = message as { id?: unknown; method?: unknown };
+        return Object.hasOwn(rpc, 'id') && typeof rpc.method === 'string' && SESSIONLESS_LIST_METHODS.has(rpc.method);
+      })
+    );
+  };
+
+  const handleSessionlessListRequest = async (req: express.Request, res: express.Response): Promise<void> => {
+    if (HANDSHAKE_DEBUG) {
+      logger.info(`POST /mcp handling sessionless list request: ${describeMcpRequest(req)}`);
+    }
+
+    // Omit `sessionIdGenerator` to use the MCP SDK's stateless Streamable HTTP mode for this
+    // one-off catalog request. Stateful sessions are still created only by `initialize`.
+    const transport = new StreamableHTTPServerTransport();
+    const server = createMcpServer('http');
+    await server.connect(transport as any);
+    try {
+      await transport.handleRequest(req, res, req.body);
+    } finally {
+      await transport.close();
+    }
+  };
+
   const noSessionError = (req: express.Request, res: express.Response) => {
     // Always log: this path is otherwise silent, which is exactly why "-32600" appears on the
     // client with nothing on the server. We surface why the session was rejected.
@@ -983,6 +1016,11 @@ export async function startHttpServer(): Promise<void> {
         // `StreamableHTTPServerTransport` is a valid transport.
         await server.connect(transport as any);
         await runHttpToolCall(req, res, () => transport.handleRequest(req, res, req.body));
+        return;
+      }
+
+      if (!sessionId && isSessionlessListRequest(req.body)) {
+        await handleSessionlessListRequest(req, res);
         return;
       }
 
