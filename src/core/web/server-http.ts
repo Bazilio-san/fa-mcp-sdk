@@ -873,7 +873,16 @@ export async function startHttpServer(): Promise<void> {
     }
   };
 
-  const SESSIONLESS_LIST_METHODS = new Set(['tools/list', 'prompts/list', 'resources/list']);
+  // Read-only catalog methods served statelessly (no session). The list methods power the home-page
+  // catalog; `resources/read` and `prompts/get` power "view content" on the same page — without them
+  // here, clicking a resource/prompt in the UI fails with -32600 because the browser holds no session.
+  const SESSIONLESS_CATALOG_METHODS = new Set([
+    'tools/list',
+    'prompts/list',
+    'prompts/get',
+    'resources/list',
+    'resources/read',
+  ]);
 
   const isSessionlessListRequest = (body: unknown): boolean => {
     const messages = Array.isArray(body) ? body : [body];
@@ -884,7 +893,9 @@ export async function startHttpServer(): Promise<void> {
           return false;
         }
         const rpc = message as { id?: unknown; method?: unknown };
-        return Object.hasOwn(rpc, 'id') && typeof rpc.method === 'string' && SESSIONLESS_LIST_METHODS.has(rpc.method);
+        return (
+          Object.hasOwn(rpc, 'id') && typeof rpc.method === 'string' && SESSIONLESS_CATALOG_METHODS.has(rpc.method)
+        );
       })
     );
   };
