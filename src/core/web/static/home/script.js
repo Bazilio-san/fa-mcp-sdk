@@ -3,6 +3,31 @@ let toolsData = [];
 let resourcesData = [];
 let promptsData = [];
 
+// Parse an /mcp response. The Streamable HTTP transport may answer either as plain JSON or as a
+// Server-Sent Events stream ("event: message\ndata: {...}"), depending on negotiation. Handle both so
+// the catalog viewer works regardless of which form the server returns.
+async function parseMcpJsonResponse(response) {
+  const raw = await response.text();
+  const contentType = response.headers.get('content-type') || '';
+  if (contentType.includes('text/event-stream') || raw.startsWith('event:') || raw.startsWith('data:')) {
+    let parsed = null;
+    for (const line of raw.split('\n')) {
+      const trimmed = line.trim();
+      if (trimmed.startsWith('data:')) {
+        const payload = trimmed.slice(5).trim();
+        if (payload && payload !== '[DONE]') {
+          parsed = JSON.parse(payload);
+        }
+      }
+    }
+    if (parsed === null) {
+      throw new Error('Empty SSE response from /mcp');
+    }
+    return parsed;
+  }
+  return JSON.parse(raw);
+}
+
 // Set primary color CSS variable
 function setPrimaryColor(color) {
   if (color) {
@@ -387,7 +412,7 @@ async function togglePromptDetails(sectionName, index, displayType) {
         const promptName = promptsData[index].name;
         const response = await fetch('/mcp', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 'Content-Type': 'application/json', Accept: 'application/json, text/event-stream' },
           body: JSON.stringify({
             jsonrpc: '2.0',
             id: Date.now(),
@@ -407,7 +432,7 @@ async function togglePromptDetails(sectionName, index, displayType) {
           throw new Error('HTTP ' + response.status + (errorData ? ': ' + errorData : ''));
         }
 
-        const result = await response.json();
+        const result = await parseMcpJsonResponse(response);
         const messages = result.result?.messages || [];
         let promptText = '';
 
@@ -483,7 +508,7 @@ async function toggleResourceDetails(sectionName, index, displayType) {
         const resourceUri = resourcesData[index].uri;
         const response = await fetch('/mcp', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 'Content-Type': 'application/json', Accept: 'application/json, text/event-stream' },
           body: JSON.stringify({
             jsonrpc: '2.0',
             id: Date.now(),
@@ -503,7 +528,7 @@ async function toggleResourceDetails(sectionName, index, displayType) {
           throw new Error('HTTP ' + response.status + (errorData ? ': ' + errorData : ''));
         }
 
-        const result = await response.json();
+        const result = await parseMcpJsonResponse(response);
         const contents = result.result?.contents || [];
         let resourceText = '';
 
