@@ -101,9 +101,8 @@ export const tools: Tool[] = [
     // work can exceed the 30s tool timeout or you want a cancellable, pollable operation.
     name: 'example_long_task',
     title: 'Example: long-running task',
-    description:
-      'Example long-running tool that emits progress and supports cancellation. ' +
-      'Demonstrates task-augmented execution (§8.7) — call it with a `task` param to run it as a task.',
+    description: `Example long-running tool that emits progress and supports cancellation. 
+Demonstrates task-augmented execution — call it with a 'task' param to run it as a task.`,
     inputSchema: {
       $schema: JSON_SCHEMA_2020_12,
       type: 'object',

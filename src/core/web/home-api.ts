@@ -47,7 +47,32 @@ export async function handleHomeInfo(_req: Request, res: Response): Promise<void
     const { httpComponents } = global.__MCP_PROJECT_DATA__;
     const toolsOrFn = global.__MCP_PROJECT_DATA__.tools;
     let tools: Tool[] = typeof toolsOrFn === 'function' ? await toolsOrFn(httpArgs) : toolsOrFn;
-    const { getConsulUIAddress = (_s: string) => '' } = getProjectData();
+    const { getConsulUIAddress = (_s: string) => '', toolPrompt } = getProjectData();
+
+    // Honestly probe every tool for a non-empty tool-specific prompt. The `tool_prompt` prompt is
+    // advertised over MCP unconditionally, but on the home page it should appear only when at least
+    // one tool actually returns a non-empty prompt. We collect the names of such tools so the viewer
+    // can offer a dropdown, and drop `tool_prompt` from the home prompt list when none qualify.
+    const toolPromptTools: string[] = [];
+    let homePrompts = prompts;
+    if (typeof toolPrompt === 'function') {
+      for (const tool of tools) {
+        try {
+          const text = await toolPrompt(
+            { method: 'prompts/get', params: { name: 'tool_prompt', arguments: { tool: tool.name } } },
+            { tool: tool.name },
+          );
+          if (typeof text === 'string' && text.trim()) {
+            toolPromptTools.push(tool.name);
+          }
+        } catch {
+          // A tool whose prompt resolver throws is treated as having no prompt.
+        }
+      }
+    }
+    if (toolPromptTools.length === 0) {
+      homePrompts = prompts.filter((p) => p.name !== 'tool_prompt');
+    }
 
     // Build footer HTML
     const footerParts: string[] = [];
@@ -126,10 +151,11 @@ export async function handleHomeInfo(_req: Request, res: Response): Promise<void
       logoSvg,
       toolsCount: tools.length,
       resourcesCount: resources.length,
-      promptsCount: prompts.length,
+      promptsCount: homePrompts.length,
       tools,
       resources,
-      prompts,
+      prompts: homePrompts,
+      toolPromptTools,
       db,
       openAPI: !!httpComponents?.apiRouter,
       consul,
