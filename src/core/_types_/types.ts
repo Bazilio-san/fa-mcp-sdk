@@ -300,6 +300,13 @@ export interface McpServerData {
   // Prompts
   agentBrief: string;
   agentPrompt: string;
+  /**
+   * Optional tool-specific prompt served by the `tool_prompt` prompt. Receives the required
+   * `tool` argument (the MCP tool name) in `args.tool` and returns instructions scoped to that
+   * tool. The whole logic lives in the child project. When omitted, a built-in stub returns an
+   * empty string.
+   */
+  toolPrompt?: TPromptContentFunction;
   customPrompts?: IPromptData[] | ((args: ITransportContext) => Promise<IPromptData[]>);
 
   // Resources

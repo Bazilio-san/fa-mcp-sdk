@@ -5,11 +5,27 @@ All notable changes to `fa-mcp-sdk` are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.12.13] - 2026-06-19
+
+### Added
+
+- **`tool_prompt` built-in prompt.** Returns a prompt scoped to one MCP tool. Has a required `tool`
+  argument; content comes from the new optional `McpServerData.toolPrompt` function (gets the tool
+  name in `args.tool`). Without it, a stub returns an empty string. `agent_prompt` is unchanged.
+
+## [0.12.12] - 2026-06-19
+
+### Fixed
+
+- **Stateless "view content" in the home-page catalog.** `resources/read` and `prompts/get` are now
+  sessionless too, so clicking a resource/prompt no longer fails with `-32600`. The viewer parses
+  both JSON and SSE responses.
+
 ## [0.12.11] - 2026-06-15
 
 ### Fixed
 
-- **Streamable HTTP catalog discovery without a session** (`web/server-http.ts`). Allow
+- **Streamable HTTP catalog discovery without a session.** Allow
   `tools/list`, `resources/list`, and `prompts/list` requests without `MCP-Session-Id` by routing
   them through a one-shot stateless Streamable HTTP transport. Stateful requests, including
   `tools/call`, still require `initialize` and a valid session; requests carrying an unknown
@@ -22,7 +38,7 @@ validation entirely.
 
 ### Added
 
-- **Per-field validation diagnostics** (`mcp/validate-tool-args.ts`, `mcp/create-mcp-server.ts`). A
+- **Per-field validation diagnostics.** A
   `-32602 Invalid params` error now carries a precise English diagnostic instead of the bare
   `"Invalid params"`. `error.message` reads `Invalid params: <field>: <reason>; …` and `error.data`
   gains `errorCount` plus an `errors[]` array (up to 8 items) of `{ field, reason, message }`. The
@@ -42,7 +58,7 @@ default for success traffic; error traces are always on.
 
 ### Added
 
-- **JSON-RPC response tracing** (`web/server-http.ts`). A response tee on `POST /mcp` and on the
+- **JSON-RPC response tracing.** A response tee on `POST /mcp` and on the
   `GET`/`DELETE` session routes captures the outgoing payload and parses it into JSON-RPC messages.
   The parser auto-detects the response shape from the body (plain `application/json` object/array,
   or the `data:` frames of an `text/event-stream` SSE stream) rather than the `Content-Type` header,
@@ -62,7 +78,7 @@ Per-request dumps are gated behind a debug switch; the key lifecycle events alwa
 
 ### Added
 
-- **Handshake tracing and session-lifecycle logging** (`web/server-http.ts`). Session creation,
+- **Handshake tracing and session-lifecycle logging.** Session creation,
   closure (by the client and on transport close), and the no-session rejection now always log,
   including the active-session count and a short (8-char) session id. The `-32600` rejection path,
   previously silent, now explains *why* the session was rejected — the client must send `initialize`
@@ -80,13 +96,13 @@ Per-request dumps are gated behind a debug switch; the key lifecycle events alwa
   `mcpConfig: undefined` to the LLM, so the model received zero tools (logs showed `Tools: 0` /
   `MCP Server: None`). On startup the UI now rebuilds `this.mcpConfig` (url, transport, headers,
   name, app mode) from the backend-held connection whenever the current server reports
-  `isConnected`. (`web/static/agent-tester/script.js`)
+  `isConnected`.
 
 ## [0.11.0] - 2026-05-29
 
 Phase 7 — residual MAY-level capabilities + final §18 acceptance. Closes the remaining optional
-(MAY) items of `claudedocs/std/mcp-server-implementation-standard.md` that fall within the SDK's
-responsibility, via `claudedocs/std/phase-7-residual-may-and-acceptance-package.md` (WI-1 … WI-5).
+(MAY) items of the MCP server implementation standard that fall within the SDK's
+responsibility (WI-1 … WI-5).
 The release is fully additive — new fields are optional and new capabilities are off by default, so
 servers that do not use them are unaffected. No `[BREAKING]` or `[BEHAVIOUR]` entries.
 
@@ -96,7 +112,7 @@ servers that do not use them are unaffected. No `[BREAKING]` or `[BEHAVIOUR]` en
   and `icons?: IIcon[]` (new `IIcon` type: `{ src; mimeType?; sizes? }`, exported from the barrel).
   Built-in prompts now carry a title (`agent_brief` → `Agent brief`, `agent_prompt` → `Agent
   prompt`); declared fields pass through `prompts/list` unchanged. Prompts without them serialize as
-  before. The template `custom-prompts.ts` shows `title` + `icons`.
+  before. The CLI template shows `title` + `icons`.
 - **`size` / `icons` on resources** (WI-2, §11.3 MAY). `IResourceInfo` gains optional `size?: number`
   (bytes) and `icons?: IIcon[]` (`title?` existed since Phase 2). Built-in resources get a `title`
   (`doc://readme` → `README`, `project://version` → `Server version`). `resources/list` computes
@@ -104,36 +120,28 @@ servers that do not use them are unaffected. No `[BREAKING]` or `[BEHAVIOUR]` en
   (function) content is not measured and simply omits `size`. An author-supplied `size` is preserved.
 - **SSE stream resumability (opt-in)** (WI-3, §6 MAY). New `mcp.sse` config block (`resumability`
   default `false`, env `MCP_SSE_RESUMABILITY`; `maxStoredEvents` default `1000`, env
-  `MCP_SSE_MAX_STORED_EVENTS`). When enabled, an in-memory `InMemoryEventStore` (new
-  `web/event-store.ts`, exported from the barrel) is wired into the Streamable HTTP transport so a
+  `MCP_SSE_MAX_STORED_EVENTS`). When enabled, an in-memory `InMemoryEventStore`
+  (exported from the barrel) is wired into the Streamable HTTP transport so a
   client reconnecting to `GET /mcp` with a `Last-Event-ID` header replays the events it missed. The
   store is a per-process ring buffer — it does not survive a restart and does not span instances.
   When disabled (default), the transport is created without an event store and behaviour is unchanged.
-- **`maskSensitive` helper** (WI-4, §12.2). New `utils/mask-sensitive.ts` (exported from the barrel,
+- **`maskSensitive` helper** (WI-4, §12.2). New helper (exported from the barrel,
   with the `IMaskRules` type) masks personal / sensitive data in tool results by explicit rules:
   field names (case-insensitive) and regular expressions applied at any depth, with a string or
   function replacement (supports partial masking like `4111********1111`). It never mutates the
   input and is **not** wired into the `tools/call` path — applying it and choosing the rules remains
-  the server's responsibility, per §12.2. The template `handle-tool-call.ts` shows its use.
-
-### Docs
-
-- New acceptance artefact `claudedocs/std/made/phase-7-acceptance-checklist.md` — full run of the
-  standard's §18 checklist as a single acceptance gate (every MUST ✅).
-- `standard-vs-implementation-gap-analysis.md` and `standard-compliance-remediation-plan.md` updated:
-  §6 / §10.5 / §11.3 raised to ✅, §12.2 helper noted (server responsibility retained), Phase 11
-  marked done, implementation version raised to `0.11.0`.
+  the server's responsibility, per §12.2. The CLI template shows its use.
 
 ### Tests
 
-- `tests/prompt-resource-metadata.test.mjs` (WI-1/WI-2), `tests/sse-resumability.test.mjs` (WI-3),
-  `tests/mask-sensitive.test.mjs` (WI-4).
+- New test suites cover prompt/resource metadata (WI-1/WI-2), SSE resumability (WI-3),
+  and the `maskSensitive` helper (WI-4).
 
 ## [0.10.0] - 2026-05-29
 
 Phase 6 — Task-augmented execution (`tasks` capability + `execution.taskSupport`). Closes the last
-open item of `claudedocs/std/mcp-server-implementation-standard.md` (§8.7 / §9.1, both MAY) through
-`claudedocs/std/phase-6-tasks-capability-package.md` (WI-1 … WI-6). The release is fully additive
+open item of the MCP server implementation standard (§8.7 / §9.1, both MAY)
+(WI-1 … WI-6). The release is fully additive
 and the feature is **off by default** — with `mcp.tasks.enabled: false` server behaviour is
 unchanged, so there are no `[BREAKING]` or `[BEHAVIOUR]` entries.
 
@@ -166,17 +174,14 @@ unchanged, so there are no `[BREAKING]` or `[BEHAVIOUR]` entries.
   `notifications/progress`; the originating `requestId` is restored for background logging; an active
   task occupies a per-subject in-flight slot and creation past `maxConcurrentPerSubject` is rejected
   with `-32003`. New `mcp_tasks_total{status}` Prometheus counter.
-- **Template example + docs** (WI-6). The CLI template ships an `example_long_task` tool
-  (`taskSupport: 'optional'`) that emits progress and honours cancellation. The public contract,
-  tools guide, configuration guide and index docs document the methods, the `taskSupport` field, the
-  `mcp.tasks.*` limits and the in-memory-store restriction.
+- **Template example** (WI-6). The CLI template ships an `example_long_task` tool
+  (`taskSupport: 'optional'`) that emits progress and honours cancellation.
 
 ## [0.9.1] - 2026-05-29
 
 Phase 5 — Capabilities precision, error-code completeness, binary resources and message
 sanitization. Closes the remaining §8.2 / §11.4 / §12.2 / §13.3 / Appendix B.2 / Appendix C.3
-gaps in `claudedocs/std/mcp-server-implementation-standard.md` through
-`claudedocs/std/phase-5-capabilities-errors-binary-package.md` (WI-1 … WI-5). The release is
+gaps in the MCP server implementation standard (WI-1 … WI-5). The release is
 additive; two `[BEHAVIOUR]` changes are called out below.
 
 ### Added
@@ -232,27 +237,25 @@ additive; two `[BEHAVIOUR]` changes are called out below.
 
 ### Config schema
 
-- Added `mcp.completions.enabled` to `config/default.yaml`, `config/_local.yaml`,
-  `config/custom-environment-variables.yaml` (`MCP_COMPLETIONS_ENABLED`) and `AppConfig`.
+- Added `mcp.completions.enabled` (with the `MCP_COMPLETIONS_ENABLED` env-var override) and `AppConfig`.
 
 ### Tests
 
-- New suites: `tests/capabilities.test.mjs`, `tests/error-sanitize.test.mjs`,
-  `tests/binary-resource.test.mjs`, `tests/error-codes.test.mjs`, `tests/completions.test.mjs`
-  (npm scripts `test:capabilities`, `test:error-sanitize`, `test:binary-resource`,
+- New suites cover the `completions` capability, outward error sanitization, binary resources, and
+  the new error codes (npm scripts `test:capabilities`, `test:error-sanitize`, `test:binary-resource`,
   `test:error-codes`, `test:completions`).
 
 ## [0.8.1] - 2026-05-29
 
 Phase 4 — Observability + Contract stability. Closes the §15 / §17 / §8.5 / §8.6 / §15.1 /
-§15.2 / §15.3 / §17.1 / §17.2 gaps in `claudedocs/std/mcp-server-implementation-standard.md`
-through `claudedocs/std/phase-4-observability-and-contract-package.md` (WI-1 … WI-12). The
+§15.2 / §15.3 / §17.1 / §17.2 gaps in the MCP server implementation standard
+(WI-1 … WI-12). The
 release is additive — every new capability is either always-on but backwards compatible, or
 opt-in via configuration. A single `[BEHAVIOUR]` change is called out below.
 
 ### Added
 
-- **`X-Request-Id` middleware** (WI-1, §15.1). New `src/core/web/request-id.ts` carries a
+- **`X-Request-Id` middleware** (WI-1, §15.1). New middleware carries a
   sticky correlation id end-to-end via `AsyncLocalStorage`:
   - reads `X-Request-Id` from the request (8-128 visible-ASCII chars), or mints a UUID;
   - always sets the header on the response (see `[BEHAVIOUR]` below);
@@ -270,8 +273,8 @@ opt-in via configuration. A single `[BEHAVIOUR]` change is called out below.
   accepts `logging/setLevel`, and exposes `sendLoggingMessage()` for emitting events. The
   threshold (Syslog ladder) defaults to `info` (`mcp.logging.defaultLevel`); payloads larger
   than `mcp.logging.maxBodyBytes` (4 KiB by default) are truncated.
-- **Prometheus metrics** (WI-5, §15.3). New `src/core/metrics/metrics.ts` exposes a private
-  `prom-client` registry. Endpoint `GET /metrics` (configurable path) is mounted when
+- **Prometheus metrics** (WI-5, §15.3). A private
+  `prom-client` registry is exposed. Endpoint `GET /metrics` (configurable path) is mounted when
   `webServer.metrics.enabled = true` (default `false`). Series:
   - `mcp_tool_calls_total{tool,status}`
   - `mcp_tool_duration_seconds{tool}`
@@ -289,34 +292,24 @@ opt-in via configuration. A single `[BEHAVIOUR]` change is called out below.
   whenever the request carries `_meta.progressToken`. Emissions are server-side throttled
   by `mcp.progress.throttleMs` (default 100 ms / 10 events/s/token) and forced monotonic.
   Calls without a `progressToken` get a no-op so handlers can call `sendProgress` blindly.
-- **Deprecation lifecycle** (WI-9, §17.2). New `src/core/mcp/deprecation.ts` reads a
+- **Deprecation lifecycle** (WI-9, §17.2). A new module reads a
   structured `IDeprecationInfo` block from `_meta.deprecated` (tools) or a top-level
   `deprecated` field (prompts / resources). At list time the description is prefixed with
   `[DEPRECATED until YYYY-MM-DD, use <replacement>]`; at call time the SDK emits a
   `logger.warn` rate-limited to one event per hour per `(kind, name)`. Past-due `until`
   dates raise a `logger.error` on registration.
-- **Public-contract document** (WI-8 + WI-10, §17.1). New
-  `cli-template/FA-MCP-SDK-DOC/11-public-contract.md` is the formal contract surface:
-  transports, HTTP endpoints, JWT claims, tool / prompt / resource format, error mapping,
-  limits & headers, semver policy and deprecation process. The
-  `cli-template/FA-MCP-SDK-DOC/00-FA-MCP-SDK-index.md` index, `cli-template/CLAUDE.md`,
-  and the template `README.md` cross-link the new doc.
-- **CHANGELOG template** (WI-12, §17). `cli-template/CHANGELOG.md` showcases `[Unreleased]`
-  with the `Added` / `Changed` / `Deprecated` / `Removed [BREAKING]` / `Fixed` / `Security`
-  shape and ties to the public-contract document.
 - **New configuration keys**:
   - `mcp.logging.{enabled,defaultLevel,maxBodyBytes}`
   - `mcp.progress.throttleMs`
   - `webServer.metrics.{enabled,path,includeProcessMetrics}`
   All four blocks default to safe-additive values; existing configs continue to load
   without edits.
-- **Type extensions** in `src/core/_types_/types.ts`:
+- **Type extensions**:
   - `IDeprecationInfo`
   - `IToolHandlerParams.signal`, `IToolHandlerParams.sendProgress`
   - `IPromptData.deprecated`, `IResourceInfo.deprecated`
-- **Tests** — `tests/request-id.test.mjs`, `tests/deprecation.test.mjs`,
-  `tests/metrics.test.mjs`. Wired so that `node tests/<file>.test.mjs` works directly after
-  `npm run build`.
+- **Tests** — new suites cover the `X-Request-Id` middleware, the deprecation lifecycle, and
+  Prometheus metrics. Wired so that a single suite runs directly after `npm run build`.
 
 ### Changed [BEHAVIOUR]
 
@@ -361,8 +354,7 @@ or reverse proxy when the server is reachable from the outside.
 ## [0.7.0] - 2026-05-28
 
 Phase 3 — Auth profile (RS256/ES256 + JWKS + MCP Authorization). Closes the §7 /
-§7.3 / §7.4 / Прил. A gaps in `claudedocs/std/mcp-server-implementation-standard.md`
-through `claudedocs/std/phase-3-auth-profile-with-jwks-reuse-package.md`
+§7.3 / §7.4 / Прил. A gaps in the MCP server implementation standard
 (WI-A1…A4 + WI-B1…B6). Cherry-picks the cryptography stack from the `JWKS` branch
 (commit `a5ed245`) and layers on the validation, scope-enforcement, rate-limit,
 and `/ct` hardening that the standard requires on top of it.
@@ -377,16 +369,16 @@ and `/ct` hardening that the standard requires on top of it.
     `keyStoragePath`, publishes JWKS at `/.well-known/jwks.json`, exposes
     `POST /oauth/token` (grant_type=password).
   - `localKey` — ES256/RS256 verifying against `publicKeyPath`; optional
-    `privateKeyPath` enables local issuance via `generate-jwt.js` / `/gen-jwt`.
+    `privateKeyPath` enables local issuance via the JWT generation script / `/gen-jwt`.
   - `remoteJwks` — ES256/RS256 verify against an external IdP's
     `jwksUri` (with `jwksCacheTtl` + `jwksCooldown`); the server refuses to issue
     tokens itself.
 - **`jose@^5.10.0`** added to `dependencies` as the JWT engine for non-legacy modes.
   `jsonwebtoken` remains for `legacyAesCtr`.
-- **`src/core/auth/key-resolver.ts`** — uniform `KeyResolver` interface with
+- **Key resolver** — uniform `KeyResolver` interface with
   `Embedded` / `Local` / `RemoteJwks` implementations, `getJwtRuntimeConfig()`,
   `canLocallyIssueJwt()`, `buildLocalJwks()`.
-- **`src/core/auth/jwt-v2.ts`** — `generateTokenV2()` / `verifyJwtV2()` based on
+- **JWT v2 engine** — `generateTokenV2()` / `verifyJwtV2()` based on
   `jose` (`SignJWT` + `jwtVerify`), respecting `expectedIssuer` / `expectedAudience` /
   `clockSkew`.
 - **OAuth / OIDC discovery endpoints** (WI-A3, §7.3) — mounted automatically when
@@ -414,7 +406,7 @@ and `/ct` hardening that the standard requires on top of it.
   - `IResourceData.requiredScopes` / `IPromptData.requiredScopes`. The auth middleware
     rejects `resources/read` / `prompts/get` whose target declares scopes the token
     does not carry, returning 403.
-  - Tool dispatch in `create-mcp-server.ts` reads `tool._meta.requiredScopes`
+  - Tool dispatch reads `tool._meta.requiredScopes`
     (or `tool.requiredScopes`) and raises JSON-RPC `-32004` with
     `data.missing` on insufficient scope.
   - `use://auth` now publishes the full server-side `requiredScopes` map for tools,
@@ -425,29 +417,23 @@ and `/ct` hardening that the standard requires on top of it.
     with IP fallback when auth is disabled.
   - `mcp.rateLimit.maxConcurrentPerSubject` (default 16). Exceeded → `RateLimitedError`
     (`-32003`/HTTP 429 + `Retry-After`).
-- **JWT generation script** (`scripts/generate-jwt.js`) — mode-aware. `legacyAesCtr`
+- **JWT generation script** — mode-aware. `legacyAesCtr`
   keeps HS256; `embedded` / `localKey` sign with ES256/RS256 from keystore.
   `remoteJwks` exits with a helpful error pointing at the configured IdP.
 - **Test suites** (WI-A4):
-  - `tests/jwt-v2.test.mjs` — embedded sign/verify (ES256/RS256), tamper, expiry,
-    `remoteJwks` issue refusal.
-  - `tests/oauth-endpoints.test.mjs` — `/.well-known/*`, `POST /oauth/token`
-    success + grant/credential rejections, `WWW-Authenticate` shape on 401.
-  - `tests/agent-tester-auth-modes.test.mjs` — server.auth × useAuth matrix; per-mode
-    refresh endpoint behaviour.
-  - `tests/agent-tester-ttl-refresh.test.mjs` — proactive refresh, expired-token 401,
-    retry-on-401.
-  - `tests/helpers/spawn-server.mjs` — shared spawn-and-await harness.
+  - embedded sign/verify (ES256/RS256), tamper, expiry, `remoteJwks` issue refusal.
+  - `/.well-known/*`, `POST /oauth/token` success + grant/credential rejections,
+    `WWW-Authenticate` shape on 401.
+  - server.auth × useAuth matrix; per-mode refresh endpoint behaviour.
+  - proactive refresh, expired-token 401, retry-on-401.
+  - a shared spawn-and-await harness.
 
 ### Changed
 
 - **`generateToken()` / `checkJwtToken()` are now `async`** (WI-A2, `[BREAKING]`).
   Both dispatch through `getJwtRuntimeConfig().mode`. Legacy synchronous behaviour is
   still available via the explicit exports `generateTokenLegacy` /
-  `checkJwtTokenLegacy`. All in-tree callers were migrated (`multi-auth.ts`,
-  `admin-auth.ts`, `agent-tester-auth.ts`, `token-generator/server.ts`,
-  `agent-tester/services/TesterMcpClientService.ts`, admin & agent-tester routers,
-  `server-http.ts:/ct`, `/gen-jwt`).
+  `checkJwtTokenLegacy`. All in-tree callers were migrated.
 - **`getAuthHeadersForTests()` is now `async`** (`[BREAKING]`). Uses
   `canLocallyIssueJwt()` so JWT-based test headers work in every mode that can
   sign locally (not just legacy with `encryptKey`).
@@ -464,8 +450,7 @@ and `/ct` hardening that the standard requires on top of it.
 
 ### Configuration
 
-Schema additions (mirrored in `config/default.yaml`, `config/_local.yaml`,
-`config/custom-environment-variables.yaml`, and `IWebServerConfig` /
+Schema additions (with matching env-var overrides, mirrored in `IWebServerConfig` /
 `IMCPConfig`):
 
 ```yaml
@@ -545,13 +530,12 @@ webServer:
 ## [0.6.0] - 2026-05-28
 
 Phase 2 — Tools / Prompts / Resources contract. Closes P1 gaps against the MCP server
-implementation standard (`claudedocs/std/phase-2-tools-prompts-resources-package.md`,
-WI-1 … WI-10; standard chapters §8.4, §9, §10, §11, §12).
+implementation standard (WI-1 … WI-10; standard chapters §8.4, §9, §10, §11, §12).
 
 ### Added
 
-- **`arguments` validation against `inputSchema`** (WI-1, §9.3). New module
-  `src/core/mcp/validate-tool-args.ts` compiles each tool's `inputSchema` via `ajv` (draft
+- **`arguments` validation against `inputSchema`** (WI-1, §9.3). Each tool's
+  `inputSchema` is now compiled via `ajv` (draft
   2020-12 + `ajv-formats`). Invalid `tools/call` arguments return JSON-RPC `-32602`
   with `error.data.field` and `error.data.reason` (e.g. `"limit"` /
   `"must be number"`). The domain `toolHandler` is no longer called.
@@ -594,9 +578,8 @@ WI-1 … WI-10; standard chapters §8.4, §9, §10, §11, §12).
 
 ### Changed
 
-- **`mcp.resources` and `mcp.pagination` config blocks** added to `config/default.yaml`,
-  mirrored in `_local.yaml` and `custom-environment-variables.yaml`. Defaults preserve
-  the previous behaviour (`subscribeEnabled: false`, `templatesEnabled: false`,
+- **`mcp.resources` and `mcp.pagination` config blocks** added (with matching env-var overrides).
+  Defaults preserve the previous behaviour (`subscribeEnabled: false`, `templatesEnabled: false`,
   `pageSize: 100`).
 
 ### Compatibility
@@ -608,12 +591,12 @@ remain unchanged. All other changes are additive. Version bumped to **0.6.0** (M
 ## [0.5.0] - 2026-05-28
 
 Phase 1 HTTP hardening package — closes MUST-level gaps against the MCP server implementation standard
-(`claudedocs/std/mcp-server-implementation-standard.md`, ch. §4, §6, §12–§16, Appendix B).
+(ch. §4, §6, §12–§16, Appendix B).
 
 ### Added
 
 - **`mcp.limits` config section.** Three hard ceilings now configurable per environment
-  (`config/default.yaml`, mirrored in `_local.yaml`, env vars in `custom-environment-variables.yaml`):
+  (with matching env-var overrides):
   - `mcp.limits.maxPayloadBytes` — max accepted JSON / urlencoded request body. Default **1 MiB**
     (was a hardcoded 10 MiB). Above the limit: JSON-RPC `-32005` + HTTP **413**.
   - `mcp.limits.maxToolResultBytes` — max serialized tool result. Default **10 MiB**. Above the limit:
@@ -621,7 +604,7 @@ Phase 1 HTTP hardening package — closes MUST-level gaps against the MCP server
     `structuredContent.truncated: true`).
   - `mcp.limits.toolTimeoutMs` — per-tool execution timeout. Default **30 000 ms** (30 s). Above the
     limit: JSON-RPC `-32004` + HTTP **504** on `/mcp`.
-- **Specific error factories** (`src/core/errors/specific-errors.ts`):
+- **Specific error factories:**
   `PayloadTooLargeError` (-32005/413), `TimeoutError` (-32004/504), `RateLimitedError` (-32003/429),
   `ResourceNotFoundError` (-32002/404), plus the `MCP_ERROR_CODES` map. Exported from the SDK root.
 - **`error.data` is now structured** per standard Appendix B.3 — `{ requestId?, field?, reason?,
@@ -633,7 +616,7 @@ Phase 1 HTTP hardening package — closes MUST-level gaps against the MCP server
   HTTP **200** when all dependencies are ready, **503** otherwise. Standard §16.2.
 - **`/health` body now includes `version` and `uptime`** as required by standard §16.1. HTTP status
   becomes **503** when `status === 'unhealthy'` (was always 200).
-- **Tool timeout enforcement.** New module `src/core/mcp/tool-limits.ts` with `withToolTimeout` and
+- **Tool timeout enforcement.** New module with `withToolTimeout` and
   `truncateToolResponse`. Wraps the tool handler on both HTTP (Streamable + legacy SSE) and STDIO
   transports. The HTTP `/mcp` POST also runs a parallel race for `tools/call` so HTTP 504 is delivered
   even when the SDK transport would otherwise return 200 with the JSON-RPC error inside.
@@ -658,8 +641,8 @@ Phase 1 HTTP hardening package — closes MUST-level gaps against the MCP server
 - **Production refuses an empty CORS allow-list.** `initMcpServer()` aborts startup in production
   (`NODE_ENV === 'production'`) when `webServer.originHosts` is empty or missing. Dev/test environments
   log a warning instead.
-- **Default HTTP bind address is now loopback (`127.0.0.1`)** in `config/default.yaml` and
-  `_local.yaml` (was `0.0.0.0`). Containers and public-facing deployments must opt in to `0.0.0.0`
+- **Default HTTP bind address is now loopback (`127.0.0.1`)** (was `0.0.0.0`).
+  Containers and public-facing deployments must opt in to `0.0.0.0`
   explicitly. The `app.listen()` call now honours `appConfig.webServer.host` instead of hardcoding
   `0.0.0.0`. Standard §6.
 - **Body size limit driven by config.** `express.json` / `express.urlencoded` no longer use
@@ -678,7 +661,7 @@ Phase 1 HTTP hardening package — closes MUST-level gaps against the MCP server
   must be updated to the new codes (`-32003`, `-32002`). The new `Retry-After` header is now
   authoritative for backoff scheduling.
 - Tools whose execution legitimately exceeds 30 s must override `mcp.limits.toolTimeoutMs` in
-  `config/*.yaml`. Tools whose results legitimately exceed 10 MiB must override
+  config. Tools whose results legitimately exceed 10 MiB must override
   `mcp.limits.maxToolResultBytes`. The standard considers both as legitimate per-server overrides.
 
 ## [0.4.144] - 2026-05-27
@@ -686,7 +669,7 @@ Phase 1 HTTP hardening package — closes MUST-level gaps against the MCP server
 ### Changed
 
 - **Streamable HTTP `/mcp` now runs on the SDK transport (BREAKING).** The hand-rolled `switch(method)`
-  router in `server-http.ts` was replaced with `@modelcontextprotocol/sdk`'s
+  router was replaced with `@modelcontextprotocol/sdk`'s
   `StreamableHTTPServerTransport`, driving the same `Server` instance as STDIO (one code path). Each
   MCP session is **stateful** — its own `Server` + transport, keyed by a server-generated
   `Mcp-Session-Id`, stored in an in-memory `Map` with a FIFO soft cap (`MAX_HTTP_SESSIONS = 4096`) and
@@ -780,10 +763,10 @@ Phase 1 HTTP hardening package — closes MUST-level gaps against the MCP server
   helper that attaches `debug-tool` to any `McpServer` with a
   `registerTool(name, def, handler)` method, so the SDK does not pull in a
   hard dependency on `@modelcontextprotocol/sdk/server/mcp.js`).
-- **Canonical MCP Apps example.** New `cli-template/examples/mcp-apps-canonical/`
-  with `server.ts` + single-file widget + README is now part of every
-  generated project; `npm run example:mcp-apps` (added to `cli-template/
-  package.json`, runs via `cross-env WS_PORT=7080 tsx`) starts the example
+- **Canonical MCP Apps example.** A new canonical example
+  (server + single-file widget + README) is now part of every
+  generated project; `npm run example:mcp-apps` (runs via
+  `cross-env WS_PORT=7080 tsx`) starts the example
   server on port 7080 and is the documented reference for the
   `mcp-app-create` and `mcp-app-add-to-server` skills. Demonstrates the three
   patterns to copy: `tools[i]._meta.ui.resourceUri`, `customResources[i]`
@@ -796,36 +779,17 @@ Phase 1 HTTP hardening package — closes MUST-level gaps against the MCP server
 
 ### Changed
 
-- `wrapProjectDataWithDebug()` in `init-mcp-server.ts` now generates a `corr`
+- `wrapProjectDataWithDebug()` now generates a `corr`
   ID at call entry and emits `{kind: 'req'|'res'|'err', name, args?, ms?,
   corr}` events into the JSON-lines sink in addition to the existing
   `debugMcpTool` stderr writes. When `mcp.debug.builtinTools=true`, the
   wrapper also routes calls to `mcp-debug-log` / `mcp-debug-refresh` /
   `debug-tool` to their SDK-internal handlers before falling back to the
-  user-supplied `toolHandler`. Same `emitTrace` hooks landed in
-  `mcp/resources.ts` (`list-req` / `list-res` / `read-req` / `read-res` /
-  `read-err`) and `mcp/prompts.ts` (`list-req` / `list-res` / `get-req` /
+  user-supplied `toolHandler`. The same `emitTrace` hooks landed in the
+  resource handlers (`list-req` / `list-res` / `read-req` / `read-res` /
+  `read-err`) and the prompt handlers (`list-req` / `list-res` / `get-req` /
   `get-res` / `get-err`). All hooks are no-ops when neither `DEBUG=mcp:*`
   is set nor `mcp.debug.logFile` is configured.
-
-### Documentation
-
-- `cli-template/FA-MCP-SDK-DOC/06-utilities.md` — new sections "JSON-lines
-  Sink (`mcp.debug.logFile`)" (per-channel event shape table, `corr`
-  pairing explained, `jq` recipes for p95 latency / error filtering /
-  widget logs, programmatic `emitTrace` example) and "Built-in Debug Tools
-  (`mcp.debug.builtinTools`)".
-- `cli-template/FA-MCP-SDK-DOC/07-testing-and-operations.md` — new section
-  "Universal `debug-tool` for Integration Tests" with the full input schema
-  table, jest examples covering mixed content / `isError` / `delayMs` /
-  large payload, and standalone `registerDebugTool(server)` usage.
-- `cli-template/FA-MCP-SDK-DOC/10-mcp-apps.md` — new "Canonical example"
-  block under "Hosts that ship with this SDK", and two new pattern
-  subsections: `§ 8.14 Widget-side debug helpers
-  (mcp-debug-log / mcp-debug-refresh)` and `§ 8.15 Canonical example`.
-- `cli-template/FA-MCP-SDK-DOC/00-FA-MCP-SDK-index.md` — doc-structure rows
-  06 / 07 / 10 expanded to mention the new surface; Key Exports block lists
-  the JSON-lines sink helpers and every built-in tool export.
 
 ## [0.4.130]
 
@@ -839,48 +803,35 @@ Phase 1 HTTP hardening package — closes MUST-level gaps against the MCP server
   protocol error that most clients treat as a hard sandbox failure. `IToolHandlerTextResponse`
   and `IToolHandlerStructuredResponse` now carry an optional `isError?: boolean` field.
 
-### Documentation
-
-- New "Returning errors — `isError: true` vs `throw`" section in
-  `cli-template/FA-MCP-SDK-DOC/02-1-tools-and-api.md` explains when to return a tool-level error
-  vs throw `ToolExecutionError`, with a side-by-side table and a migration tip.
-- `06-utilities.md` lists the new helpers in the Tool Utilities block; `00-FA-MCP-SDK-index.md`
-  surfaces them in the key-exports import example.
-
 ## [0.4.122]
 
 ### Added
 
 - **Built-in MCP debug switches.** Four independent `af-tools-ts` `Debug()` categories trace every MCP channel; both HTTP and STDIO transports route through the same hooks so output is transport-agnostic.
-  - `DEBUG=mcp:tool` — `tools/call` request (name + arguments) and response (text or JSON). Wired up in `init-mcp-server.ts` via a `toolHandler` wrapper so it intercepts the user-supplied handler once and covers every transport.
-  - `DEBUG=mcp:resource` — `resources/list` and `resources/read` request/response in `src/core/mcp/resources.ts`.
-  - `DEBUG=mcp:prompt` — `prompts/list` and `prompts/get` request/response in `src/core/mcp/prompts.ts`.
-  - `DEBUG=mcp:notification` — every incoming `notifications/*` (method + params) in `src/core/web/server-http.ts`.
+  - `DEBUG=mcp:tool` — `tools/call` request (name + arguments) and response (text or JSON). Wired up via a `toolHandler` wrapper so it intercepts the user-supplied handler once and covers every transport.
+  - `DEBUG=mcp:resource` — `resources/list` and `resources/read` request/response.
+  - `DEBUG=mcp:prompt` — `prompts/list` and `prompts/get` request/response.
+  - `DEBUG=mcp:notification` — every incoming `notifications/*` (method + params).
   - `DEBUG=mcp:*` enables all four at once.
 - New exports from `fa-mcp-sdk`: `debugMcpTool`, `debugMcpResource`, `debugMcpPrompt`, `debugMcpNotification` (and the pre-existing `debugTokenAuth`), so handlers can guard custom debug output with `if (debugMcpTool.enabled) { ... }`.
-- `src/template/tools/handle-tool-call.ts` now demonstrates the `if (debugMcpTool.enabled)` pattern for per-handler tracing inside user code.
+- The template tool handler now demonstrates the `if (debugMcpTool.enabled)` pattern for per-handler tracing inside user code.
 
 ### Changed
 
-- **Agent Tester UI redesign (commit `ff8916e`).** The left sidebar that held connection, model, agent-prompt and custom-prompt panels has been removed; all of those controls now live in a Settings modal opened by a gear button (`#settingsBtn`, `data-testid="at-settings-btn"`) in the header. The MCP Server URL field, transport selector and a new combined Connect/Disconnect button (`#connectionToggleBtn`, `data-testid="at-connect-btn"`) sit directly in the header, along with the tab bar (Chat / Tool Tester) — the chat area now uses the full viewport width. The dedicated `Connect` button, `sidebar`/`sidebarToggleMobile` markup and their JS handlers (`toggleSidebar`) are gone; the new flow is `openSettingsModal()` / `closeSettingsModal()` (Esc + backdrop click close it) and a single submit handler on `mcpConnectionForm` that calls `disconnectServer()` when already connected. The `Clear Chat` and default-format selector were marked `.chat-only` so they hide on the Tool Tester tab. `styles.css` was rewritten to support the new header layout and modal styling.
-- Minor refactor in `src/core/mcp/mcp-apps.ts`: `getUiCapability()` now uses `isObject()` from `utils` instead of an inline `typeof === 'object'` check (same semantics, consistent with the rest of the codebase). `src/core/index.ts` re-orders the `appConfig` / `getProjectData` / `getSafeAppConfig` export block ahead of the MCP Apps helpers — purely cosmetic.
-
-### Documentation
-
-- New "MCP Debug Output (`DEBUG=mcp:*`)" section in `cli-template/FA-MCP-SDK-DOC/06-utilities.md` describes each switch, the STDIO caveat (`stdout` is the JSON-RPC framing channel — Debug writes there too), and how to add project-specific `Debug()` categories.
-- Index file `cli-template/FA-MCP-SDK-DOC/00-FA-MCP-SDK-index.md` lists the new exports and the row pointer for `06-utilities.md` now mentions request tracing.
+- **Agent Tester UI redesign (commit `ff8916e`).** The left sidebar that held connection, model, agent-prompt and custom-prompt panels has been removed; all of those controls now live in a Settings modal opened by a gear button (`#settingsBtn`, `data-testid="at-settings-btn"`) in the header. The MCP Server URL field, transport selector and a new combined Connect/Disconnect button (`#connectionToggleBtn`, `data-testid="at-connect-btn"`) sit directly in the header, along with the tab bar (Chat / Tool Tester) — the chat area now uses the full viewport width. The dedicated `Connect` button, `sidebar`/`sidebarToggleMobile` markup and their JS handlers (`toggleSidebar`) are gone; the new flow is `openSettingsModal()` / `closeSettingsModal()` (Esc + backdrop click close it) and a single submit handler on `mcpConnectionForm` that calls `disconnectServer()` when already connected. The `Clear Chat` and default-format selector were marked `.chat-only` so they hide on the Tool Tester tab. The stylesheet was rewritten to support the new header layout and modal styling.
+- Minor refactor in the MCP Apps helpers: `getUiCapability()` now uses `isObject()` from `utils` instead of an inline `typeof === 'object'` check (same semantics, consistent with the rest of the codebase). The barrel re-orders the `appConfig` / `getProjectData` / `getSafeAppConfig` export block ahead of the MCP Apps helpers — purely cosmetic.
 
 ## [0.4.112] - 2026-05-18
 
 ### Added
 
-- Add `scripts/+x.js` to restore executable bits on bundled helper scripts.
-- Add `cli-template/preferred-language.txt` so generated projects default project guidance to English.
+- Add a helper to restore executable bits on bundled helper scripts.
+- Add a preferred-language marker so generated projects default project guidance to English.
 
 ### Changed
 
-- Rename the Codex skill-link helper to `scripts/claude-2-agents-symlink.js`.
-- Point `agents:link*` scripts and `scripts/update-sdk.js` at the renamed helper in generated projects.
+- Rename the Codex skill-link helper.
+- Point the `agents:link*` scripts and the SDK update helper at the renamed helper in generated projects.
 
 ## [0.4.110] - 2026-05-17
 
@@ -891,7 +842,7 @@ Phase 1 HTTP hardening package — closes MUST-level gaps against the MCP server
   - SSE: `sseServer.getClientCapabilities()` is read on every dispatched call (lazy via the new `sseCtx()` closure) — the per-connection MCP server already holds capabilities after handshake.
   - Streamable HTTP: capabilities reported on `initialize` are cached in an in-memory `Map` keyed by the `Mcp-Session-Id` header (soft FIFO cap of 4096 sessions, oldest evicted first). Subsequent stateless POSTs from the same session receive the cached value; sessions without the header get `undefined` (handler MUST fall back to text-only).
 - New type `IClientCapabilities = ClientCapabilities & { extensions?: Record<string, unknown> }` re-exported from `fa-mcp-sdk` — covers the open-ended `extensions` envelope MCP Apps and future SEPs publish alongside the standard fields.
-- New helpers `getUiCapability(clientCapabilities)`, `hostSupportsMcpApps(clientCapabilities)`, `MCP_APPS_EXTENSION_ID`, `MCP_APPS_RESOURCE_MIME_TYPE`, and type `IMcpUiClientCapabilities` exported from `fa-mcp-sdk` (`src/core/mcp/mcp-apps.ts`). Mirror of `@modelcontextprotocol/ext-apps/server`'s `getUiCapability` / `RESOURCE_MIME_TYPE` / `EXTENSION_ID` — implemented inline so the SDK doesn't take a hard runtime dependency on ext-apps.
+- New helpers `getUiCapability(clientCapabilities)`, `hostSupportsMcpApps(clientCapabilities)`, `MCP_APPS_EXTENSION_ID`, `MCP_APPS_RESOURCE_MIME_TYPE`, and type `IMcpUiClientCapabilities` exported from `fa-mcp-sdk`. Mirror of `@modelcontextprotocol/ext-apps/server`'s `getUiCapability` / `RESOURCE_MIME_TYPE` / `EXTENSION_ID` — implemented inline so the SDK doesn't take a hard runtime dependency on ext-apps.
 
 ### Changed
 
@@ -905,7 +856,7 @@ Phase 1 HTTP hardening package — closes MUST-level gaps against the MCP server
 - Tool Tester request editor: `Generate JSON` button builds a skeleton from the selected tool's `inputSchema` (honours `required`, `default`, `enum`, `examples`); `Validate` button runs a client-side JSON-Schema validator (`type` incl. `integer⊂number`, `required`, `properties`, `additionalProperties`, `enum`, `minimum`/`maximum`/`exclusiveMinimum`/`exclusiveMaximum`, `minLength`/`maxLength`/`pattern`, `items`/`minItems`/`maxItems`). Request JSON is persisted in `localStorage` under `mcpAgentTesterToolJson_<toolName>` with a 600 ms debounce and restored when the tool is reselected.
 - Tool Tester response viewer: toggle button extracts the first `content[].text` entry into a light-blue panel; if the text parses as JSON, it is rendered as pretty-printed JSON (otherwise plain text). Status line shows `Success in Nms` / `Error in Nms`.
 - New HTTP endpoint `POST /agent-tester/api/mcp/call-tool` — body `{ serverName, toolName, parameters }`, returns `{ success, result, durationMs }`. Reuses the cached MCP client via `TesterMcpClientService.callToolWithConfig`; auto-reissues the agent-tester JWT on 401 when targeting the SDK's own server.
-- New static asset `src/core/web/static/agent-tester/pretty-print-json.js` — browser port of `prettyPrintJson` from `af-tools-ts` (extended variant: deserializes JSON escape sequences, wraps strings longer than `maxTextLength` in a scrollable `.json-long-text-content` container). Exposed as `window.prettyPrintJson`; used to syntax-highlight both the parameter schema and the response.
+- New static asset — browser port of `prettyPrintJson` from `af-tools-ts` (extended variant: deserializes JSON escape sequences, wraps strings longer than `maxTextLength` in a scrollable `.json-long-text-content` container). Exposed as `window.prettyPrintJson`; used to syntax-highlight both the parameter schema and the response.
 
 ### Changed
 
@@ -915,57 +866,42 @@ Phase 1 HTTP hardening package — closes MUST-level gaps against the MCP server
 
 ### Added
 
-- New public export `applyLoggerSettings(overrides: Partial<ILoggerSettings>)` from `src/core/index.ts` — applies a shallow merge of user-supplied logger settings on top of the built-in defaults. Specified fields override defaults; the cached logger and all sub-loggers are reset so subsequent log calls pick up the new settings. No-op in STDIO mode.
-- `McpServerData.loggerSettings?: Partial<ILoggerSettings>` — pass overrides from `start.ts` via `initMcpServer({ ..., loggerSettings: { level: 'silly', maskValuesRegEx: [] } })`. Applied automatically at the top of `initMcpServer` before any further logging.
-- New config key `logger.disableMasking: boolean` (default `false`) — when `true`, disables the built-in secret/email/URL masking by setting `maskValuesRegEx = []`. Override via env `LOGGER_NO_MASK_VALUES=true`. Mirrored in `config/default.yaml`, `_local.yaml`, `local.yaml`, `test.yaml`, and `custom-environment-variables.yaml`.
+- New public export `applyLoggerSettings(overrides: Partial<ILoggerSettings>)` from `fa-mcp-sdk` — applies a shallow merge of user-supplied logger settings on top of the built-in defaults. Specified fields override defaults; the cached logger and all sub-loggers are reset so subsequent log calls pick up the new settings. No-op in STDIO mode.
+- `McpServerData.loggerSettings?: Partial<ILoggerSettings>` — pass overrides via `initMcpServer({ ..., loggerSettings: { level: 'silly', maskValuesRegEx: [] } })`. Applied automatically at the top of `initMcpServer` before any further logging.
+- New config key `logger.disableMasking: boolean` (default `false`) — when `true`, disables the built-in secret/email/URL masking by setting `maskValuesRegEx = []`. Override via env `LOGGER_NO_MASK_VALUES=true`.
 - `appConfig.sdkVersion: string` — version of the `fa-mcp-sdk` package itself (resolved from the SDK's own `package.json`, not the consumer project's). Exposed alongside `appConfig.version`.
 - Agent Tester UI: info button (ⓘ) next to the `MCP Agent Tester` header. Click toggles a tooltip showing the SDK version (`fa-mcp-sdk v<X.Y.Z>`); clicking outside or on the icon again hides it. The version is served by `GET /agent-tester/api/config` as `sdkVersion`.
-- New `.claude/settings.local-example.json` template (Claude Code `defaultMode: bypassPermissions` + notification env defaults) shipped at the SDK root and in `cli-template/.claude/`. Copy to `settings.local.json` as a starting point; `settings.local.json` is preserved by `/upgrade-sdk`.
+- New Claude Code settings template (`defaultMode: bypassPermissions` + notification env defaults) shipped at the SDK root and in the CLI template. Copy to a local settings file as a starting point; the local settings file is preserved by `/upgrade-sdk`.
 
 ### Changed
 
-- `src/core/logger.ts` rewritten with lazy proxy-based initialization. The exported `logger` is now a `Proxy` that resolves the real `af-logger-ts` logger on first access; `logger.getSubLogger(opts)` returns a per-key cached sub-logger proxy. Calling `applyLoggerSettings()` clears the cache so existing top-level `const logger = lgr.getSubLogger(...)` bindings transparently pick up the new settings on next use — no need to re-import. `fileLogger` is also proxied and remains compatible with the existing `fileLogger?.asyncFinish` / `fileLogger?.logDir` access patterns.
-- Agent Tester UI: `#systemPrompt` (Agent Prompt) textarea grown from `rows="3"` to `rows="8"` (~170 px initial height). `#messageInput` (chat input) grown from `rows="1"` / `min-height: 56 px` / `max-height: 120 px` to `rows="2"` / `min-height: 112 px` / `max-height: 240 px`; the auto-resize ceiling in `script.js` updated to match.
-- `scripts/update-sdk.js`: `preserve` list for `.claude/` now includes `settings.local.json` so a local-only override is never overwritten by `/upgrade-sdk`. The `individualScripts` list refreshed by `/upgrade-sdk` expanded to also pull `cc-hook-oxlint-oxfmt-fix.cjs`, `clone-mcp-ext-apps.js`, `fcp.js`, `kill-port.js`, `pre-commit`, `remove-nul.js`, and `update-sdk.js` itself — generated projects now receive the full helper script set on upgrade.
+- The logger was rewritten with lazy proxy-based initialization. The exported `logger` is now a `Proxy` that resolves the real `af-logger-ts` logger on first access; `logger.getSubLogger(opts)` returns a per-key cached sub-logger proxy. Calling `applyLoggerSettings()` clears the cache so existing top-level `const logger = lgr.getSubLogger(...)` bindings transparently pick up the new settings on next use — no need to re-import. `fileLogger` is also proxied and remains compatible with the existing `fileLogger?.asyncFinish` / `fileLogger?.logDir` access patterns.
+- Agent Tester UI: `#systemPrompt` (Agent Prompt) textarea grown from `rows="3"` to `rows="8"` (~170 px initial height). `#messageInput` (chat input) grown from `rows="1"` / `min-height: 56 px` / `max-height: 120 px` to `rows="2"` / `min-height: 112 px` / `max-height: 240 px`; the auto-resize ceiling updated to match.
+- The SDK update helper: the `preserve` list for `.claude/` now includes the local settings file so a local-only override is never overwritten by `/upgrade-sdk`. The `individualScripts` list refreshed by `/upgrade-sdk` expanded to also pull the full helper script set (lint/format hook, ext-apps clone helper, temp-copy helper, port killer, pre-commit hook, NUL-stripper, and the update helper itself) — generated projects now receive the full helper script set on upgrade.
 
 ## [0.4.102] - 2026-05-16
 
 ### Added
 
-- New helper `scripts/claude-2-agents-symlink.js` and npm scripts `agents:link` / `agents:link:status` / `agents:link:remove` create a cross-platform symlink `.agents/skills -> .claude/skills` (NTFS junction on Windows, relative symlink elsewhere) so OpenAI Codex can reuse Claude Code skills from one canonical storage. Setup is idempotent and supports `--dry-run` and `--force` (replace a mismatched link). Only skills are linked because Codex agents (`.codex/agents/*.toml`), MCP config (`.codex/config.toml`), hooks, and settings use formats that are not compatible with `.claude/`. The script and the three `agents:*` npm scripts are copied verbatim into projects generated by `fa-mcp`, so any downstream MCP server gets the same workflow out of the box.
-- New `AGENTS.md` files at the repo root and in `cli-template/` hold the full project guidance — this is the document Codex reads natively, and it contains the content that previously lived in `CLAUDE.md`.
-- `README.md` and `cli-template/README.md` document the Codex-sharing workflow (the three `agents:link*` npm commands, what is linked vs. excluded, and the `CLAUDE.md` → `AGENTS.md` import setup).
-
-### Changed
-
-- `CLAUDE.md` (repo root and `cli-template/`) reduced to a single-line `@AGENTS.md` import so one guidance document now feeds both Claude Code and Codex without duplication. Downstream projects on 0.4.101 that customised `CLAUDE.md` should migrate the customisation into `AGENTS.md` after upgrading; `CLAUDE.md` itself stays as a thin import.
+- New helper and npm scripts `agents:link` / `agents:link:status` / `agents:link:remove` create a cross-platform symlink `.agents/skills -> .claude/skills` (NTFS junction on Windows, relative symlink elsewhere) so OpenAI Codex can reuse Claude Code skills from one canonical storage. Setup is idempotent and supports `--dry-run` and `--force` (replace a mismatched link). Only skills are linked because Codex agents, MCP config, hooks, and settings use formats that are not compatible with `.claude/`. The helper and the three `agents:*` npm scripts are copied verbatim into projects generated by `fa-mcp`, so any downstream MCP server gets the same workflow out of the box.
 
 ## [0.4.101] - 2026-05-16
 
 ### Added
 
-- New maintainer skill `/update-mcp-apps-spec` (`.claude/skills/update-mcp-apps-spec/`) — regenerates `cli-template/FA-MCP-SDK-DOC/10-mcp-apps.md` from the upstream `modelcontextprotocol/ext-apps` repository pinned to the latest released tag of `@modelcontextprotocol/ext-apps`. Walks the normative spec (`apps.mdx`), SDK source (`src/app.ts`, `src/server/index.ts`, `src/spec.types.ts`, React hooks, transport, styles), supporting docs, and the full `examples/` tree, then produces a self-contained digest with verbatim lifecycle mermaid diagrams, the protocol contract (MUST/SHOULD/MAY), the SDK API surface, host context schema, recipes, common pitfalls, an examples-by-use-case map, and a reference index. Every external link is pinned to the same upstream tag as the digest header, so the LLM consuming the digest can fetch the exact corresponding source. The skill also refreshes matching rows in `00-FA-MCP-SDK-index.md` and `cli-template/CLAUDE.md` automatically and explicitly does not modify `src/core/**` or scaffold MCP App tools.
-- `cli-template/FA-MCP-SDK-DOC/10-mcp-apps.md` — first generation of the MCP Apps digest, pinned to `@modelcontextprotocol/ext-apps` v1.7.2 (spec 2026-01-26, commit `9a37ad7`). 13 sections covering: protocol contract (`ui://` URIs, `_meta.ui` location matrix, capability negotiation, CSP rules, all Host↔View JSON-RPC messages including the `ui/notifications/sandbox-*` proxy reservation), the four canonical lifecycle diagrams reproduced verbatim from the spec, the full `App` class API including every `on*` event handler and host-bound method, server helpers (`registerAppTool`, `registerAppResource`, `getUiCapability`), the React hook surface, every `McpUiHostContext` field and the standardized CSS-variable list, 13 worked recipes, an authorization section (per-server, per-tool, UI-initiated step-up), a testing section centred on `basic-host`, a common-pitfalls list, an examples-by-use-case classification (smallest skeleton, mixed tool patterns, per-framework starters, 13 domain references with per-server "what it shows" descriptions), and a reference index with 22 tag-pinned GitHub URLs.
-- `scripts/clone-mcp-ext-apps.js` — shared helper that clones or refreshes `modelcontextprotocol/ext-apps` into a persistent `./mcp-ext-apps/` checkout at the project root (gitignored, never deleted by the script). On first run it clones the default branch; on subsequent runs it pulls main and re-fetches tags. `--tag latest` resolves the latest published `@modelcontextprotocol/ext-apps` version via `npm view` and checks out `v<version>`; `--tag v1.7.2` checks out a specific tag. `--json` emits machine-readable metadata (`path`, `ref`, `refType`, `commit`, `latestNpmVersion`). `--list-examples` adds an `examples[]` array with `{ name, relativePath, description, readmeHeading, readmeOpening }` for each `examples/*` directory, pre-collected from `package.json` and `README.md` so downstream skills can classify examples in one JSON walk instead of dozens of sequential reads. The script is copied verbatim into projects scaffolded by `fa-mcp`, so the relative path is identical in the SDK repo and in any generated MCP server.
-- JetBrains IDE project codestyle now tracked in version control (`.idea/codeStyles/Project.xml`, `.idea/codeStyles/codeStyleConfig.xml`, `.idea/inspectionProfiles/Project_Default.xml`, `.idea/misc.xml`, `.idea/modules.xml`, `.idea/vcs.xml`, `.idea/fa-mcp-sdk.iml`, `.idea/.gitignore`) so WebStorm / IDEA users get the project-specific formatting rules on clone.
+- New shared helper that clones or refreshes `modelcontextprotocol/ext-apps` into a persistent `./mcp-ext-apps/` checkout at the project root (gitignored, never deleted by the script). On first run it clones the default branch; on subsequent runs it pulls main and re-fetches tags. `--tag latest` resolves the latest published `@modelcontextprotocol/ext-apps` version via `npm view` and checks out `v<version>`; `--tag v1.7.2` checks out a specific tag. `--json` emits machine-readable metadata (`path`, `ref`, `refType`, `commit`, `latestNpmVersion`). `--list-examples` adds an `examples[]` array with `{ name, relativePath, description, readmeHeading, readmeOpening }` for each example directory, pre-collected from project manifests and READMEs so downstream skills can classify examples in one JSON walk instead of dozens of sequential reads. The helper is copied verbatim into projects scaffolded by `fa-mcp`, so the relative path is identical in the SDK repo and in any generated MCP server.
+- JetBrains IDE project codestyle now tracked in version control so WebStorm / IDEA users get the project-specific formatting rules on clone.
 
 ### Changed
 
 - `McpServerData.toolHandler` signature tightened from `<T = TToolHandlerResponse>(params) => Promise<T>` to `<T = unknown>(params) => Promise<TToolHandlerResponse<T>>`. Previously `T` sat in return position, letting bidirectional inference silently coerce `T` into whatever shape the caller expected — a latent typing hole. The return shape is now fixed as `IToolHandlerTextResponse | IToolHandlerStructuredResponse<T>`, and `T` narrows only `structuredContent`.
-- MCP Apps skills (`/update-mcp-apps-spec` in the SDK; `/mcp-app-create` and `/mcp-app-add-to-server` in `cli-template/`) now delegate cloning to `scripts/clone-mcp-ext-apps.js` instead of running an inline `git clone --depth 1 --branch v<ver>` into a throwaway `mktemp -d`. The reference checkout is reused across skill runs and across sibling skills, so an `/update-mcp-apps-spec` run leaves the same `./mcp-ext-apps/` available for `/mcp-app-create` without re-cloning.
-- `/update-mcp-apps-spec` skill: `Step 5: Cleanup` (which deleted the temp dir) replaced with `Step 5: Keep the Clone` — the folder is intentionally persistent now. Sections 12.1–12.4 of the digest are built from the helper's `examples[]` JSON (one walk) instead of `ls examples/` + per-directory `package.json` / `README.md` reads. Cross-checks #4 and #8 also diff against the JSON array. The tool-composition row in section 12.2 still requires reading the example's `server.ts` directly, since `package.json` / `README.md` rarely list tool names verbatim.
-- `.gitignore`: `.idea/` removed (IDE config files are now tracked — see Added above), `/mcp-ext-apps/` added (helper's persistent checkout must never be committed). `cli-template/gitignore` mirrors the `/mcp-ext-apps/` addition.
+- MCP Apps skills (`/update-mcp-apps-spec` in the SDK; `/mcp-app-create` and `/mcp-app-add-to-server` in the CLI template) now delegate cloning to the shared clone helper instead of running an inline `git clone --depth 1 --branch v<ver>` into a throwaway `mktemp -d`. The reference checkout is reused across skill runs and across sibling skills, so an `/update-mcp-apps-spec` run leaves the same `./mcp-ext-apps/` available for `/mcp-app-create` without re-cloning.
+- The `/update-mcp-apps-spec` skill's reference clone is now persistent: `Step 5: Cleanup` (which deleted the temp dir) was replaced with `Step 5: Keep the Clone`.
+- Version-control ignore rules: `.idea/` is no longer ignored (IDE config files are now tracked — see Added above), and `/mcp-ext-apps/` is now ignored (helper's persistent checkout must never be committed). The CLI template mirrors the `/mcp-ext-apps/` addition.
 
 ### Fixed
 
-- TypeScript compilation errors at the MCP SDK boundary in `src/core/mcp/create-mcp-server.ts:47` and `src/core/web/server-http.ts:343` (the `setRequestHandler(CallToolRequestSchema, ...)` handlers) — return value is now cast through `as any`, mirroring the existing cast already used for `ReadResourceRequestSchema`. The SDK expects `Result | ServerResult`, and TS does not resolve the correct branch of the target union when both source and target are unions.
-
-### Docs
-
-- `cli-template/FA-MCP-SDK-DOC/01-getting-started.md` — updated the `McpServerData.toolHandler` signature in the Core Types section to match the new declaration.
-- `cli-template/FA-MCP-SDK-DOC/00-FA-MCP-SDK-index.md` — added the entry pointing at `10-mcp-apps.md` (MCP Apps digest, pinned to `@modelcontextprotocol/ext-apps` v1.7.2).
-- `cli-template/CLAUDE.md` — added rows for `09-database.md` (previously missing from the Framework Documentation table) and `10-mcp-apps.md`; new section "MCP Apps Reference Clone (`scripts/clone-mcp-ext-apps.js`)" documenting the helper available in generated projects and listing all CLI flags.
-- `CLAUDE.md` (root SDK) — new section "MCP Apps Spec Digest (Skill /update-mcp-apps-spec)" documenting the maintainer skill: triggers, what it touches (digest + two index files only — never `src/core/**`), and what it produces. Adjacent new section "MCP Apps Reference Clone (`scripts/clone-mcp-ext-apps.js`)" introduces the shared helper used by every MCP Apps skill and shows all CLI flags; the spec-digest description now references the helper invocation explicitly (`scripts/clone-mcp-ext-apps.js --tag latest --json --list-examples`) instead of vague "clones the latest released tag".
+- TypeScript compilation errors at the MCP SDK boundary (the `setRequestHandler(CallToolRequestSchema, ...)` handlers) — return value is now cast through `as any`, mirroring the existing cast already used for `ReadResourceRequestSchema`. The SDK expects `Result | ServerResult`, and TS does not resolve the correct branch of the target union when both source and target are unions.
 
 ## [0.4.98] - 2026-05-15
 
@@ -977,7 +913,7 @@ Phase 1 HTTP hardening package — closes MUST-level gaps against the MCP server
 
 - `McpServerData.toolHandler` is now generic: `<T = TToolHandlerResponse>(params: IToolHandlerParams) => Promise<T>` — replaces the previous `Promise<any>` signature.
 - `formatToolResult<T>()` now returns `TToolHandlerResponse<T>`; `asTextContent()` returns `IToolHandlerTextResponse`; `asJson<T>()` returns `IToolHandlerStructuredResponse<T>`.
-- Template `handle-tool-call.ts` example now types the handler return as `TToolHandlerResponse`.
+- The template tool handler example now types the handler return as `TToolHandlerResponse`.
 
 ### Fixed
 
@@ -1001,7 +937,7 @@ Phase 1 HTTP hardening package — closes MUST-level gaps against the MCP server
 
 ### Added
 
-- `scripts/update-sdk.js` now also syncs `scripts/generate-jwt.js` from the SDK into downstream projects alongside `FA-MCP-SDK-DOC/` and `.claude/`.
+- The SDK update helper now also syncs the JWT generation script from the SDK into downstream projects alongside the framework docs and `.claude/`.
 
 ## [0.4.95] - 2026-05-13
 
@@ -1042,10 +978,10 @@ Phase 1 HTTP hardening package — closes MUST-level gaps against the MCP server
 
 ### Changed
 
-- Replace cli-template `update-doc.js` with `update-sdk.js`; preserves pinned folders during SDK template updates.
+- Replace the CLI-template doc-update helper with an SDK-update helper; preserves pinned folders during SDK template updates.
 - Rename cli-template `deploy-mcp` skill to `create-mcp-wizard`.
-- Switch CLI scaffolder/template tooling from ESLint to Oxlint + Oxfmt (`.oxlintrc.json`, `.oxfmtrc.json`).
-- Remove `NODE_ENV` handling from the `fa-mcp` CLI scaffolder and `cli-config.example.yaml`.
+- Switch CLI scaffolder/template tooling from ESLint to Oxlint + Oxfmt.
+- Remove `NODE_ENV` handling from the `fa-mcp` CLI scaffolder and the example CLI config.
 
 ## [0.4.61] - 2026-04-21
 
@@ -1059,26 +995,25 @@ Phase 1 HTTP hardening package — closes MUST-level gaps against the MCP server
 ### Added
 
 - Admin panel multi-auth: `adminPanel.authType` accepts an array (e.g. `['jwtToken','basic']`) or `'none'` for local use.
-- JWT generation CLI `scripts/generate-jwt.js` and opt-in HTTP endpoint `POST /gen-jwt` via `webServer.genJwtApiEnable`.
-- Optional JWT IP restriction: `webServer.auth.jwtToken.isCheckIP` (env `WS_JWT_CHECK_IP`); new `src/core/auth/ip-check.ts`.
+- JWT generation CLI and opt-in HTTP endpoint `POST /gen-jwt` via `webServer.genJwtApiEnable`.
+- Optional JWT IP restriction: `webServer.auth.jwtToken.isCheckIP` (env `WS_JWT_CHECK_IP`).
 - Revocation lists `webServer.auth.revoked.{jwtTokens,users}` reject matching credentials in MCP, admin and Agent Tester.
 - Agent Tester session auth: `agentTester.useAuth` (full multi-auth) and `agentTester.sessionTtlMs` (default 8h).
 - Agent Tester structured logging via `agentTester.logJson` for tool/LLM/response events to stdout.
 - `agentTester.openAi.exposeToClient` (default `false`) sends LLM defaults to the browser on trusted deployments.
-- Export `checkLlm` from `agent-tester/check-llm.js` for connectivity checks.
+- Export `checkLlm` for connectivity checks.
 - `agentTester.showFooterLink` to hide the Agent Tester link in the home footer without disabling the tester.
 - `homePage.helpLink` and `homePage.maintainer` config for footer links on the service home page.
 - `mcp.tools.hideAnnotations` flag (env `MCP_TOOLS_HIDE_ANNOTATIONS`) to suppress tool annotations in responses.
 - Export `AdminAuthType` and `AdminAuthTypeInput` from the package barrel.
 - Lazy, memoized evaluation for authentication configuration and custom validators.
 - Outbound webhooks support in tools.
-- Satellite-based README assembly via `src/core/mcp/readme-assembler.ts`.
 
 ### Changed
 
-- Switch CLI scaffolder and templates from npm to yarn across scripts and documentation.
+- Switch CLI scaffolder and templates from npm to yarn across scripts.
 - Refactor Agent Tester LLM-settings modal UX; add GPT-5.4 and GPT-5.3-Codex to model selection.
-- Heavily annotate `config/default.yaml` with inline operator documentation.
+- Heavily annotate the default config with inline operator documentation.
 
 ### Security
 
