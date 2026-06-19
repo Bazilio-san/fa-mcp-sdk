@@ -2,6 +2,9 @@
 let toolsData = [];
 let resourcesData = [];
 let promptsData = [];
+// Names of tools that expose a non-empty `tool_prompt`, computed honestly on the server by probing
+// every tool. Drives the dropdown shown for the `tool_prompt` row in the prompts modal.
+let toolPromptTools = [];
 
 // Parse an /mcp response. The Streamable HTTP transport may answer either as plain JSON or as a
 // Server-Sent Events stream ("event: message\ndata: {...}"), depending on negotiation. Handle both so
@@ -187,6 +190,7 @@ async function loadPageData() {
     toolsData = data.tools || [];
     resourcesData = data.resources || [];
     promptsData = data.prompts || [];
+    toolPromptTools = data.toolPromptTools || [];
 
     // Render page info
     renderPageInfo(data);
@@ -300,14 +304,19 @@ function generatePromptsTableRows(prompts) {
     return '<tr><td colspan="2" class="loading-cell">No prompts available</td></tr>';
   }
   return prompts
-    .map(
-      (prompt, index) =>
-        `<tr>
+    .map((prompt, index) => {
+      // The `tool_prompt` row gets a tool picker instead of a static "prompt" link: choosing a tool
+      // fetches that tool's prompt. The list of tools is restricted to those with a non-empty prompt.
+      const actions =
+        prompt.name === 'tool_prompt'
+          ? `<span class="tool-prompt-actions"><a class="detail-link" id="prompts-toggle-details-${index}" onclick="togglePromptDetails('prompts', ${index}, 'details')">details</a> / <select class="tool-prompt-select" id="tool-prompt-select-${index}" onchange="loadToolPrompt(${index}, this.value)"><option value="">— select tool —</option>${toolPromptTools.map((name) => `<option value="${escapeAttr(name)}">${escapeHtml(name)}</option>`).join('')}</select></span>`
+          : `<a class="detail-link" id="prompts-toggle-details-${index}" onclick="togglePromptDetails('prompts', ${index}, 'details')">details</a>
+ /
+<a class="detail-link" id="prompts-toggle-prompt-${index}" onclick="togglePromptDetails('prompts', ${index}, 'prompt')">prompt</a>`;
+      return `<tr>
 <td><code>${prompt.name}</code></td>
 <td>
-<a class="detail-link" id="prompts-toggle-details-${index}" onclick="togglePromptDetails('prompts', ${index}, 'details')">details</a>
- /
-<a class="detail-link" id="prompts-toggle-prompt-${index}" onclick="togglePromptDetails('prompts', ${index}, 'prompt')">prompt</a>
+${actions}
 </td>
 </tr>
 <tr id="prompts-detail-${index}" class="detail-row" style="display: none;">
@@ -318,8 +327,8 @@ function generatePromptsTableRows(prompts) {
 <div class="prompt-content" style="display: none;"></div>
 </div>
 </td>
-</tr>`,
-    )
+</tr>`;
+    })
     .join('');
 }
 
@@ -391,7 +400,10 @@ async function togglePromptDetails(sectionName, index, displayType) {
     // Show the detail row with loading state
     detailRow.style.display = 'table-row';
     currentToggleLink.textContent = 'hide';
-    otherToggleLink.textContent = displayType === 'details' ? 'prompt' : 'details';
+    // The `tool_prompt` row has no separate "prompt" link (it uses a dropdown), so guard against null.
+    if (otherToggleLink) {
+      otherToggleLink.textContent = displayType === 'details' ? 'prompt' : 'details';
+    }
     loadingSpinner.style.display = 'block';
     jsonContent.style.display = 'none';
     promptContent.style.display = 'none';
@@ -465,7 +477,89 @@ async function togglePromptDetails(sectionName, index, displayType) {
     // Hide the detail row
     detailRow.style.display = 'none';
     toggleLinkDetails.textContent = 'details';
-    toggleLinkPrompt.textContent = 'prompt';
+    if (toggleLinkPrompt) {
+      toggleLinkPrompt.textContent = 'prompt';
+    }
+  }
+}
+
+// Fetch and display the prompt of a specific tool via the `tool_prompt` MCP prompt. Triggered by the
+// tool dropdown in the prompts modal; passes the selected tool name in the `tool` argument.
+// eslint-disable-next-line unused-imports/no-unused-vars
+async function loadToolPrompt(index, toolName) {
+  const detailRow = document.getElementById('prompts-detail-' + index);
+  const loadingSpinner = detailRow.querySelector('.loading-spinner');
+  const jsonContent = detailRow.querySelector('.json-content');
+  const promptContent = detailRow.querySelector('.prompt-content');
+  const toggleLinkDetails = document.getElementById('prompts-toggle-details-' + index);
+
+  // Empty selection collapses the detail row and restores the "details" link label.
+  if (!toolName) {
+    detailRow.style.display = 'none';
+    if (toggleLinkDetails) {
+      toggleLinkDetails.textContent = 'details';
+    }
+    return;
+  }
+
+  detailRow.style.display = 'table-row';
+  if (toggleLinkDetails) {
+    toggleLinkDetails.textContent = 'details';
+  }
+  loadingSpinner.style.display = 'block';
+  jsonContent.style.display = 'none';
+  promptContent.style.display = 'none';
+
+  try {
+    const response = await fetch('/mcp', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Accept: 'application/json, text/event-stream' },
+      body: JSON.stringify({
+        jsonrpc: '2.0',
+        id: Date.now(),
+        method: 'prompts/get',
+        params: { name: 'tool_prompt', arguments: { tool: toolName } },
+      }),
+    });
+
+    if (!response.ok) {
+      let errorData = '';
+      try {
+        errorData = await response.text();
+      } catch {
+        //
+      }
+      errorData = [response.statusText || '', errorData].join('. ');
+      throw new Error('HTTP ' + response.status + (errorData ? ': ' + errorData : ''));
+    }
+
+    const result = await parseMcpJsonResponse(response);
+    const messages = result.result?.messages || [];
+    let promptText = '';
+
+    messages.forEach((msg, i) => {
+      if (i > 0) {
+        promptText += '\n\n---\n\n';
+      }
+      promptText += 'Role: ' + msg.role + '\n\n';
+      if (typeof msg.content === 'string') {
+        promptText += msg.content;
+      } else if (msg.content?.text) {
+        promptText += msg.content.text;
+      } else {
+        promptText += JSON.stringify(msg.content, null, 2);
+      }
+    });
+
+    loadingSpinner.style.display = 'none';
+    promptContent.style.display = 'block';
+    promptContent.innerHTML = '<pre class="json-content">' + escapeHtml(promptText) + '</pre>';
+    addCopyButton(promptContent.querySelector('.json-content'));
+  } catch (error) {
+    loadingSpinner.style.display = 'none';
+    promptContent.style.display = 'block';
+    promptContent.innerHTML =
+      '<div class="error-message">Failed to load tool prompt: ' + escapeHtml(error.message) + '</div>';
   }
 }
 
@@ -623,6 +717,11 @@ function escapeHtml(text) {
   const div = document.createElement('div');
   div.textContent = text;
   return div.innerHTML;
+}
+
+// Escape a string for safe use inside a double-quoted HTML attribute (e.g. <option value="...">).
+function escapeAttr(text) {
+  return escapeHtml(text).replace(/"/g, '&quot;');
 }
 
 // Copy to clipboard functionality

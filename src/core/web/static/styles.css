@@ -273,6 +273,17 @@ select {
   padding: 3px 6px;
 }
 
+.tool-prompt-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+}
+
+.tool-prompt-select {
+  vertical-align: middle;
+}
+
 input:focus, select:focus, textarea:focus {
   outline: none;
   border-color: #0065ff;
