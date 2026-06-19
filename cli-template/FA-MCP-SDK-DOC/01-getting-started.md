@@ -30,6 +30,7 @@ interface McpServerData {
   toolHandler: <T = unknown>(params: IToolHandlerParams) => Promise<TToolHandlerResponse<T>>;
   agentBrief: string;                                 // Brief description
   agentPrompt: string;                                // System prompt
+  toolPrompt?: TPromptContentFunction;                // tool_prompt content (args.tool); default → ''
   customPrompts?: IPromptData[];                      // Additional prompts
   usedHttpHeaders?: IUsedHttpHeader[] | null;         // HTTP headers for auth
   customResources?: IResourceData[] | null;           // Custom resources

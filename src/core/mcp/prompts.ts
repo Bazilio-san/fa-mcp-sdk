@@ -14,7 +14,7 @@ async function getPrompts(args: ITransportContext): Promise<IPromptData[]> {
     return [];
   }
 
-  const { agentBrief, agentPrompt, customPrompts } = projectData;
+  const { agentBrief, agentPrompt, toolPrompt, customPrompts } = projectData;
 
   // Validate that required prompts are available
   if (!agentBrief || !agentPrompt) {
@@ -47,6 +47,21 @@ async function getPrompts(args: ITransportContext): Promise<IPromptData[]> {
       description: 'Detailed prompt of the agent',
       arguments: [],
       content: agentPrompt,
+      requireAuth: false,
+    },
+    {
+      name: 'tool_prompt',
+      title: 'Tool prompt',
+      description: 'Tool-specific prompt. Requires the "tool" argument (the MCP tool name).',
+      arguments: [
+        {
+          name: 'tool',
+          description: 'Name of the MCP tool to get the prompt for.',
+          required: true,
+        },
+      ],
+      // Logic lives in the child project (projectData.toolPrompt); default stub returns empty string.
+      content: toolPrompt ?? (() => ''),
       requireAuth: false,
     },
     ...resolvedCustomPrompts,

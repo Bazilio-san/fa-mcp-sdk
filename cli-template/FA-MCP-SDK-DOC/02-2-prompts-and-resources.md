@@ -23,6 +23,35 @@ export const AGENT_PROMPT = `You are a database management assistant.
 - Return results in JSON format`;
 ```
 
+#### Tool Prompt (`toolPrompt` on `McpServerData`)
+
+The standard `tool_prompt` prompt returns instructions scoped to a single MCP tool. It declares a
+**required** `tool` argument (the tool name) and delegates the whole content logic to the child
+project through the optional `toolPrompt` field on `McpServerData`. The function receives the tool
+name in `args.tool` and returns the prompt for that tool. When `toolPrompt` is not supplied, a
+built-in stub returns an empty string — the `tool_prompt` prompt is still advertised, it just
+yields nothing.
+
+```typescript
+import { McpServerData, TPromptContentFunction } from 'fa-mcp-sdk';
+
+const TOOL_PROMPTS: Record<string, string> = {
+  run_query: 'Always wrap multi-statement SQL in a transaction. Return rows as JSON.',
+  describe_table: 'List columns with types and nullability. Omit internal system columns.',
+};
+
+const toolPrompt: TPromptContentFunction = (_req, args) => {
+  const tool = args?.tool;
+  if (!tool) return '';
+  return TOOL_PROMPTS[tool] ?? '';
+};
+
+const serverData: McpServerData = { ..., toolPrompt };
+```
+
+The values arrive via `request.params.arguments` on `prompts/get`, exactly like the parameterised
+custom prompts below; `tool` is marked `required: true` in `prompts/list`.
+
 ### Custom Prompts
 
 Add in `src/prompts/custom-prompts.ts`:

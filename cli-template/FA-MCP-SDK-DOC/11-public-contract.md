@@ -150,7 +150,10 @@ default) the capability is not advertised and all four `tasks/*` methods return 
 `name`, `description`, `arguments[]` (each `IPromptArgument`), `content` (string or function),
 `requireAuth`, `requiredScopes`, `deprecated`. Optional UI metadata (§10.5, MAY): `title` (human-facing
 label, falls back to `name`) and `icons` (`IIcon[]` — `{ src; mimeType?; sizes? }`). Both pass through
-`prompts/list` unchanged; built-in `agent_brief` / `agent_prompt` carry a `title`.
+`prompts/list` unchanged; built-in `agent_brief` / `agent_prompt` carry a `title`. The built-in
+`tool_prompt` prompt is also guaranteed: it has a required `tool` argument (the MCP tool name) and
+returns the tool-specific prompt supplied by the project through `McpServerData.toolPrompt`; without
+that field a stub returns an empty string.
 
 ### Resource (`IResourceData` / `IResourceInfo`)
 
