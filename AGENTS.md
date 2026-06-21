@@ -124,9 +124,25 @@ The Agent Tester UI (`/agent-tester`) and other visual components must be tested
 
 ## Editing files in `.claude/` (Skill /edit-claude-files)
 
-Any edit or new file under `.claude/**` (SKILL.md, scripts, hooks, agents, `settings.json`) is blocked
-by `settings.json` — direct `Write`/`Edit` will fail. Invoke the `/edit-claude-files` skill, which
-describes the required `scripts/fcp.js` temp-copy protocol.
+**Never touch anything under `.claude/**` directly — and never even attempt it.** This is absolute and covers
+**every kind of change**: creating a new file, editing an existing one, **deleting**, renaming or moving — for
+`SKILL.md`, scripts, hooks, agents, supporting files, `settings.json`, anything in the tree. Two layers block
+direct access on purpose, so a direct attempt always fails (it is not a glitch, and trying it first is the mistake
+to avoid):
+
+- `settings.json` denies the `Write` and `Edit` tools on `.claude/**`.
+- The harness blocks direct shell modification of `.claude/` too — `rm`, `mv`, `cp`, `>`/`>>` redirection,
+  `sed -i`, and the like. (Reading is fine.)
+
+Do **not** reach for `Write`/`Edit`/`rm` on a `.claude/` path and fall back when it is denied. The FIRST action for
+any `.claude/` change is to invoke the `/edit-claude-files` skill and use its `scripts/fcp.js` channel from the
+start — `fcp.js` runs as `node` (allowlisted) and is the ONLY sanctioned way in:
+
+- Create or overwrite: edit a temp file OUTSIDE `.claude/`, then `node scripts/fcp.js <.claude/dest> <temp>`.
+- Delete: `node scripts/fcp.js --rm <.claude/path> [...]` (files or whole directories).
+
+Files OUTSIDE `.claude/` (for example `migrations/`, `scripts/`, `AGENTS.md`) are edited normally.
+
 
 ## MCP Apps Reference Clone (`scripts/clone-mcp-ext-apps.js`)
 
