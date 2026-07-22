@@ -65,8 +65,7 @@ export function initADGroupChecker(domainName?: string): IGroupCheckerInitResult
     domainConfig = appConfig.ad?.domains?.[domainName];
     resolvedDomainName = domainName;
     if (!domainConfig) {
-      const available = Object.keys(appConfig.ad?.domains || {}).join(', ') || 'none';
-      throw new Error(`AD domain "${domainName}" not found. Available: ${available}`);
+      throw new Error('Requested AD domain is not configured');
     }
   } else {
     cachedDefaultDomain = cachedDefaultDomain || getDefaultDomain();
@@ -79,7 +78,7 @@ export function initADGroupChecker(domainName?: string): IGroupCheckerInitResult
 
   const missing = validateConfig(domainConfig, resolvedDomainName);
   if (missing.length > 0) {
-    throw new Error(`Incomplete AD config for "${resolvedDomainName}". Missing: ${missing.join(', ')}`);
+    throw new Error(`Incomplete AD config. Missing field count: ${missing.length}`);
   }
 
   const controllerUrl = domainConfig.controllers[0]!;
@@ -95,7 +94,7 @@ export function initADGroupChecker(domainName?: string): IGroupCheckerInitResult
   };
 
   const groupChecker = new GroupChecker(groupCheckerConfig);
-  logger.info(`AD Group Checker initialized for "${resolvedDomainName}" (${controllerUrl}, baseDn: ${baseDn})`);
+  logger.info('AD Group Checker initialized');
 
   return {
     isUserInGroup: (userSam, groupSam) => groupChecker.isUserInGroup(userSam, groupSam),

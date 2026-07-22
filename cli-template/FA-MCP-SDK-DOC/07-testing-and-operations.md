@@ -38,6 +38,18 @@ const result = await client.callTool('my_tool', { query: 'test' });
 
 ### SSE Transport
 
+The pre-2025 `/sse` + `/messages` transport is disabled by default. Enable it explicitly only for a
+documented migration window:
+
+```yaml
+mcp:
+  legacySse:
+    enabled: true
+```
+
+The adapter still uses the canonical auth/scope/schema/limits pipeline. Prefer
+`McpStreamableHttpClient` and `/mcp` for all new code.
+
 ```typescript
 import { McpSseClient } from 'fa-mcp-sdk';
 
@@ -80,7 +92,7 @@ await client.close();
 |-----------|--------|----------|
 | STDIO | `mcp.transportType: "stdio"` | CLI, local dev |
 | HTTP (Streamable HTTP) | `mcp.transportType: "http"` | Web integrations, REST API |
-| SSE (legacy) | HTTP transport | Long-running ops, streaming; older clients |
+| SSE (legacy) | `mcp.legacySse.enabled: true` | Temporary documented migration only |
 
 The HTTP transport is **Streamable HTTP** (SDK `StreamableHTTPServerTransport`), stateful per session:
 
@@ -98,7 +110,7 @@ npx jest tests/path/file.test.ts       # Single file
 npx jest --testNamePattern="pattern"   # Filter by test name
 npm run test:mcp                       # STDIO transport tests
 npm run test:mcp-http                  # HTTP transport tests
-npm run test:mcp-sse                   # SSE transport tests
+MCP_LEGACY_SSE_ENABLED=true npm run test:mcp-sse  # legacy SSE migration tests
 ```
 
 ### Auth Headers for Tests
@@ -118,7 +130,7 @@ const result = await client.callTool('my_tool', { query: 'test' }, headers);
 - **Transport parity** — same behavior across STDIO, HTTP, SSE
 - **Edge cases** — empty strings, large payloads, special characters
 
-## Universal `debug-tool` for Integration Tests
+## Universal `debug_tool` for Integration Tests
 
 When the system-under-test is a **client** (Agent Tester, custom MCP host, CI smoke test) rather
 than the server, you usually need a server that produces every kind of `CallToolResult` on demand —
@@ -135,7 +147,7 @@ mcp:
     builtinTools: true
 ```
 
-This appends a tool named `debug-tool` to the server's `tools/list`, hidden from the LLM via
+This appends a tool named `debug_tool` to the server's `tools/list`, hidden from the LLM via
 `_meta.ui.visibility: ['app']`.
 
 ### Input Schema
@@ -159,13 +171,13 @@ import { McpHttpClient } from 'fa-mcp-sdk';
 const client = new McpHttpClient('http://localhost:9876');
 
 test('renders mixed text + image + audio', async () => {
-  const result = await client.callTool('debug-tool', { contentType: 'mixed' });
+  const result = await client.callTool('debug_tool', { contentType: 'mixed' });
   expect(result.content).toHaveLength(3);
   expect(result.content.map((b: any) => b.type)).toEqual(['text', 'image', 'audio']);
 });
 
 test('isError: true is surfaced', async () => {
-  const result = await client.callTool('debug-tool', {
+  const result = await client.callTool('debug_tool', {
     contentType: 'text',
     simulateError: true,
   });
@@ -174,13 +186,13 @@ test('isError: true is surfaced', async () => {
 
 test('respects delayMs for loading-state tests', async () => {
   const t0 = Date.now();
-  await client.callTool('debug-tool', { contentType: 'text', delayMs: 800 });
+  await client.callTool('debug_tool', { contentType: 'text', delayMs: 800 });
   expect(Date.now() - t0).toBeGreaterThanOrEqual(800);
 });
 
 test('large payload survives the round trip', async () => {
   const big = 'x'.repeat(200_000);
-  const result = await client.callTool('debug-tool', { contentType: 'text', largeInput: big });
+  const result = await client.callTool('debug_tool', { contentType: 'text', largeInput: big });
   expect((result as any).structuredContent.largeInputLength).toBe(200_000);
 });
 ```

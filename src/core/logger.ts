@@ -7,22 +7,36 @@ import { getAFLogger, Logger, FileLogger, ILogObj, ILoggerSettings } from 'af-lo
 import { appConfig } from './bootstrap/init-config.js';
 
 const { level, useFileLogger, dir: logDir, disableMasking } = appConfig.logger;
+const isProduction = (process.env.NODE_CONSUL_ENV || process.env.NODE_ENV) === 'production';
+const maskingDisabled = disableMasking === true && !isProduction;
 
 const isStdioMode = appConfig.mcp.transportType === 'stdio';
 
 const DEFAULT_MASK_VALUES_REG_EX: RegExp[] = [
-  // API tokens and keys
-  /token['":\s]+['"]\w+['"]/gi,
-  /api[_-]?key['":\s]+['"]\w+['"]/gi,
-  /secret['":\s]+['"]\w+['"]/gi,
-  /password['":\s]+['"]\w+['"]/gi,
-  // Authorization headers
-  /authorization['":\s]+['"](basic|bearer)\s+\w+['"]/gi,
-  // Email patterns (partial masking)
-  // /([a-zA-Z0-9._%+-]+)@([a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/gi,
-  // URL credentials
-  /https?:\/\/[^:]+:[^@]+@/gi,
+  // Header and standalone credentials. JWT/base64 values contain punctuation, so `\w+` is not enough.
+  /["']?authorization["']?\s*[:=]\s*["']?(?:basic|bearer)\s+[^\s,"'}]+/gi,
+  /\b(?:basic|bearer)\s+[A-Za-z0-9._~+/=-]+/gi,
+  // Common serialized secret fields (JSON, YAML, dotenv and logfmt forms).
+  /["']?(?:access[_-]?token|refresh[_-]?token|token|api[_-]?key|secret|password|passwd)["']?\s*[:=]\s*["']?[^\s,"'}]+/gi,
+  // PII and credentials embedded in URLs.
+  /[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/gi,
+  /[a-z][a-z0-9+.-]*:\/\/[^\s/:@]+:[^\s@/]+@/gi,
+  /[?&](?:access[_-]?token|token|api[_-]?key|secret|password)=[^&#\s]+/gi,
+  // Internal endpoints and absolute filesystem paths are sensitive topology too.
+  /\b[a-z][a-z0-9+.-]*:\/\/[^\s"'<>]+/gi,
+  /(?:[A-Za-z]:\\[^\s"']+|\/(?:home|usr|var|etc|root|opt|tmp|mnt|srv|Users)\/[^\s"']*)/g,
 ];
+
+export function maskLogText(value: unknown): string {
+  let text = String(value);
+  if (maskingDisabled) {
+    return text;
+  }
+  for (const pattern of DEFAULT_MASK_VALUES_REG_EX) {
+    text = text.replace(pattern, '[REDACTED]');
+  }
+  return text;
+}
 
 function buildBaseSettings(): ILoggerSettings {
   const s: ILoggerSettings = {
@@ -34,7 +48,7 @@ function buildBaseSettings(): ILoggerSettings {
     minErrorLogSize: 0,
     prettyLogTemplate: '[{{hh}}:{{MM}}:{{ss}}]: {{logLevelName}} [{{name}}] ',
     prettyErrorTemplate: `${red}{{errorMessage}}${reset}\n{{errorStack}}`,
-    maskValuesRegEx: disableMasking ? [] : DEFAULT_MASK_VALUES_REG_EX,
+    maskValuesRegEx: maskingDisabled ? [] : DEFAULT_MASK_VALUES_REG_EX,
     noFileLogger: !useFileLogger,
   };
   if (useFileLogger && logDir) {
@@ -48,11 +62,27 @@ let realMain: Logger<ILogObj> | null = null;
 let realFile: FileLogger | undefined;
 const subCache = new Map<string, Logger<ILogObj>>();
 
+function assertSafeProductionOverrides(overrides: Partial<ILoggerSettings>): void {
+  if (!isProduction) {
+    return;
+  }
+  const record = overrides as Record<string, unknown>;
+  const { overwrite } = record;
+  const overridesMaskFunction =
+    Boolean(overwrite) &&
+    typeof overwrite === 'object' &&
+    !Array.isArray(overwrite) &&
+    Object.hasOwn(overwrite as object, 'mask');
+  if (Object.hasOwn(record, 'maskValuesRegEx') || Object.hasOwn(record, 'maskValuesOfKeys') || overridesMaskFunction) {
+    throw new Error('loggerSettings cannot override secret-masking controls in production.');
+  }
+}
+
 function buildStdioLogger(): Logger<ILogObj> {
   const l: any = {};
   ['log', 'error', 'fatal', 'warn', 'info', 'debug', 'silly', 'trace'].forEach((lvl) => {
     l[lvl] = (...args: unknown[]) => {
-      process.stderr.write(`[MY LOG] ${args.map(String).join(' ')}\n`);
+      process.stderr.write(`[MY LOG] ${args.map(maskLogText).join(' ')}\n`);
       return undefined;
     };
   });
@@ -123,7 +153,11 @@ const fileLogger: FileLogger | undefined = new Proxy({} as FileLogger, {
  * No-op in STDIO mode (logging is redirected to stderr).
  */
 export function applyLoggerSettings(overrides: Partial<ILoggerSettings> | undefined | null): void {
-  if (isStdioMode || !overrides || Object.keys(overrides).length === 0) {
+  if (!overrides || Object.keys(overrides).length === 0) {
+    return;
+  }
+  assertSafeProductionOverrides(overrides);
+  if (isStdioMode) {
     return;
   }
   userOverrides = { ...userOverrides, ...overrides };

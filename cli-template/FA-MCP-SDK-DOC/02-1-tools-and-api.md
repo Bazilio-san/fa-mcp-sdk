@@ -24,10 +24,15 @@ export const tools: Tool[] = [{
 }];
 ```
 
-**Standard §9.1 (MUST) — tool name `name` MUST match `/^[a-z][a-z0-9_]{0,62}$/`** (ASCII
-snake_case, 1..63 chars). The SDK validates names eagerly at `initMcpServer()` for static
+**Standard §9.1 (MUST) — tool name `name` MUST match `/^[a-z][a-z0-9_]{1,63}$/`** (ASCII
+snake_case, 2..64 chars under the normative expression). The SDK validates names eagerly at `initMcpServer()` for static
 tool arrays and lazily on the first `getTools()` call for dynamic (function-form) tools — a
 violation throws with the offending name printed.
+
+For a non-compliant name that was already published, declare `McpServerData.toolAliases` as an
+`oldName -> canonical_name` map. An alias is accepted by `tools/call` but never appears in
+`tools/list`; it cannot shadow a canonical name or point to another alias. This is a migration
+bridge, not a way to publish new non-compliant names.
 
 **Standard §9.2 — `inputSchema` SHOULD declare `$schema: '…/draft/2020-12/schema'` and
 `additionalProperties: false`.** Both fields are recognised by the `IToolInputSchema` type.
@@ -73,6 +78,11 @@ the SDK validates the handler's response against the schema — a violation rais
 `-32603` (internal error: the tool broke its own contract). Whenever a response includes
 `structuredContent`, the SDK mirrors a serialised JSON copy into `content[0].text` so
 legacy clients that only read `content` keep working without code changes.
+
+Schema compilation is fail-closed and happens before dispatch. As a migration aid, a handler with
+`outputSchema` may return exactly one JSON text block; the SDK promotes the parsed value to
+`structuredContent` and validates it. Non-JSON text or any ambiguous content shape fails with
+`-32603` instead of silently bypassing the output contract.
 
 ```typescript
 export const tools: Tool[] = [{
@@ -287,27 +297,33 @@ Why this split matters:
 
 ### Headers Access
 
-Headers are normalized to lowercase. Available in HTTP/SSE transports:
+Non-credential headers are normalized to lowercase and available in HTTP/SSE transports:
 
 ```typescript
-const authHeader = headers?.authorization;
 const userAgent = headers?.['user-agent'];
 const clientIP = headers?.['x-real-ip'] || headers?.['x-forwarded-for'];
+const caller = headers?.['x-on-behalf-of-user'];
 ```
 
-### Transport-Based Credentials
+The SDK removes `authorization`, cookies, `x-api-key`, and any auth/token/password/secret-like header
+before building the transport context. Use the verified `payload` and opaque `principal` for
+authenticated identity. Keep service credentials in server-side configuration or environment
+variables; never forward a caller credential.
 
-`IToolHandlerParams` includes `ITransportContext` fields (`transport`, `headers`, `payload`,
+### Transport Context and Server-Side Credentials
+
+`IToolHandlerParams` includes `ITransportContext` fields (`transport`, `headers`, `payload`, `principal`,
 `clientCapabilities`). See
 [ITransportContext](./02-2-prompts-and-resources.md#itransportcontext).
 
 ### Cancellation (`signal`) — standard §8.5
 
 `IToolHandlerParams.signal?: AbortSignal` is flipped when the client sends
-`notifications/cancelled` for the current request. Pass it straight to any downstream
-`AbortSignal`-aware API (`fetch`, `pg`, `axios` ≥ 0.22, …) — they will abort their work and
-let the rejection propagate. Tool handlers MUST stop work once the signal aborts; the SDK
-then suppresses the JSON-RPC response per §8.5.
+`notifications/cancelled` for the current request or the configured synchronous tool timeout expires.
+Pass it straight to any downstream `AbortSignal`-aware API (`fetch`, `pg`, `axios` ≥ 0.22, …) — they
+will abort their work and let the rejection propagate. Tool handlers MUST stop work once the signal
+aborts. The SDK suppresses a cancelled request response per §8.5; a timeout returns JSON-RPC `-32004`
+(HTTP 504 on Streamable HTTP).
 
 ```typescript
 export const handleToolCall = async (params: IToolHandlerParams): Promise<TToolHandlerResponse> => {
@@ -340,6 +356,10 @@ case 'long_running': {
   return formatToolResult({ ok: true });
 }
 ```
+
+JavaScript cannot forcibly stop a handler that ignores its signal. After a timeout, the SDK therefore
+keeps that subject's concurrency slot occupied until the underlying promise settles. This prevents a
+later mutation from overtaking a timed-out operation that may still commit external side effects.
 
 When `signal` is `undefined` (legacy transports or older SDK consumers), behave as if it were
 never aborted — handlers should remain forward-compatible.
@@ -663,16 +683,16 @@ Define REST endpoints in `src/api/router.ts` using [tsoa](https://tsoa-community
 
 ### OpenAPI Generation
 
-- **Auto-generated** on startup if `swagger/openapi.yaml` missing
+- **Generated during build** by `npm run openapi:spec`; production serves the checked-in/generated document
 - **Swagger UI**: `/docs`
 - **Spec**: `/api/openapi.json`, `/api/openapi.yaml`
-- Regenerate: delete `swagger/openapi.yaml` and restart
+- Regenerate: run `npm run openapi:spec`
 
 ### Controller Example
 
 ```typescript
 import { Router } from 'express';
-import { Route, Get, Post, Body, Tags, Query } from 'tsoa';
+import { Route, Get, Post, Body, Tags, Query } from '@tsoa/runtime';
 import { logger } from 'fa-mcp-sdk';
 
 export const apiRouter: Router = Router();
@@ -780,7 +800,7 @@ webServer:
 ```typescript
 // src/api/router.ts
 import { Router } from 'express';
-import { Route, Get, Post, Body, Tags, Security } from 'tsoa';
+import { Route, Get, Post, Body, Tags, Security } from '@tsoa/runtime';
 
 export const apiRouter: Router = Router();
 

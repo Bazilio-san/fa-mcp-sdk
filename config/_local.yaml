@@ -246,6 +246,10 @@ logger:
 mcp:
   #> Transport for the MCP server: stdio | http
   transportType: http
+  #> Deprecated pre-2025 HTTP+SSE endpoints (`/sse`, `/messages`). Disabled by default.
+  #> Explicit compatibility mode uses the canonical auth/scope/schema/limits policy pipeline.
+  legacySse:
+    enabled: false
   #> Per-client request rate limiting for the MCP endpoint
   rateLimit:
     #> Maximum number of requests allowed within windowMs
@@ -293,7 +297,7 @@ mcp:
     #> Example: /var/log/mcp/server-debug.jsonl
     logFile: ''
     #> When true, registers SDK-provided MCP tools for widgets and integration
-    #> tests: mcp-debug-log, mcp-debug-refresh, debug-tool. All are marked
+    #> tests: mcp_debug_log, mcp_debug_refresh, debug_tool. All are marked
     #> _meta.ui.visibility: ['app'] and stay hidden from the LLM — they are
     #> only callable from MCP App widgets (app.callServerTool(...)) or test
     #> clients. Default: false.
@@ -460,6 +464,10 @@ webServer:
       expectedIssuer: ''
       #> Expected `aud` claim. Defaults to appConfig.name when empty.
       expectedAudience: ''
+      #> Optional top-level claim containing the employee login (for example `preferred_username`).
+      #> Empty means payload.user is derived from canonical `sub`; protocol and SDK policy claims
+      #> such as user/service/ip/scope/allow are reserved and rejected.
+      userClaim: ''
       #> JWKS in-memory cache TTL (seconds). Default: 600 (10 min).
       jwksCacheTtl: 600
       #> Minimum interval between repeat JWKS fetches when kid is missing (seconds). Default: 30.
@@ -468,6 +476,17 @@ webServer:
       clockSkew: 30
       #> Default TTL (seconds) for tokens issued by embedded /oauth/token endpoint. Default: 1800 (30 min).
       defaultTtl: 1800
+
+    #> OAuth protected-resource metadata. Empty URLs derive from the public request origin.
+    oauth:
+      #> Canonical MCP resource identifier. Empty => <public-origin>/mcp.
+      resourceUrl: ''
+      #> Explicit authorization-server URLs. Empty => configured URL-shaped JWT issuer.
+      authorizationServers: []
+      #> Exact advertised/issuable scopes. Empty => omit scopes_supported and issue no scopes.
+      advertisedScopes: []
+      #> Documentation URL. Empty => <public-origin>/docs.
+      resourceDocumentationUrl: ''
 
     #> ========================================================================
     #> Basic Authentication — Base64 encoded username:password
@@ -521,8 +540,8 @@ webServer:
 
   #> ========================================================================
   #> Standard §15.3 — Prometheus metrics endpoint.
-  #> Opt-in. Endpoint is PUBLIC (no auth) — protect via network policy / reverse proxy
-  #> when the server is reachable from the network.
+  #> Opt-in. Endpoint uses the normal HTTP authentication middleware by default and MUST
+  #> remain authenticated in production. Development may opt out explicitly.
   #> Metrics exposed: mcp_tool_calls_total, mcp_tool_duration_seconds,
   #> mcp_auth_failures_total, mcp_rate_limit_hits_total, mcp_http_requests_total,
   #> mcp_concurrent_calls, mcp_payload_bytes, mcp_result_bytes + Node.js process metrics.
@@ -535,3 +554,5 @@ webServer:
     #> Include Node.js process metrics (GC, heap, uptime). Default: true. Disable to shed
     #> ~30 default series when scraping many SDK instances.
     includeProcessMetrics: true
+    #> Apply normal HTTP authentication. Default: true; production preflight forbids false.
+    requireAuth: true

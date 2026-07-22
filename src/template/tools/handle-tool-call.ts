@@ -3,6 +3,7 @@ import chalk from 'chalk';
 import {
   debugMcpTool,
   formatToolResult,
+  logInternalError,
   logger as lgr,
   maskSensitive,
   ToolExecutionError,
@@ -38,6 +39,10 @@ export const handleToolCall = async (params: {
         result = await handleExampleTool(args);
         break;
 
+      case 'example_search':
+        result = await handleExampleSearch(args);
+        break;
+
       case 'example_long_task':
         result = await handleExampleLongTask(args, { signal, sendProgress });
         break;
@@ -51,13 +56,21 @@ export const handleToolCall = async (params: {
     // specific tool — define a new Debug category in `src/lib/debug.ts` and
     // call it here. The example below piggybacks on the built-in switch.
     if (debugMcpTool.enabled) {
-      debugMcpTool(`handler[${name}] returned\n${JSON.stringify(result, null, 2)}`);
+      const resultShape =
+        result && typeof result === 'object'
+          ? Object.fromEntries(
+              Object.entries(result).map(([key, value]) => [key, Array.isArray(value) ? 'array' : typeof value]),
+            )
+          : { root: typeof result };
+      debugMcpTool(`handler[${name}] returned shape=${JSON.stringify(resultShape)}`);
     }
 
     return result;
   } catch (error: Error | any) {
-    logger.error(`Tool execution failed for ${name}:`, error);
-    error.printed = true;
+    logInternalError(error, 'tool_execution');
+    if (error && typeof error === 'object') {
+      error.printed = true;
+    }
     throw error;
   }
 };
@@ -92,6 +105,21 @@ async function handleExampleTool(args: any): Promise<TToolHandlerResponse> {
   });
 
   return formatToolResult(safeResult);
+}
+
+async function handleExampleSearch(args: any): Promise<TToolHandlerResponse> {
+  const query = String(args?.query ?? '').trim();
+  if (!query) {
+    throw new ToolExecutionError('example_search', 'Query parameter is required');
+  }
+  const limit = Math.min(100, Math.max(1, Number(args?.limit) || 20));
+  const threshold = Math.min(1, Math.max(0, Number(args?.threshold) || 0));
+  const candidates = [
+    { id: 'example-1', score: 1, text: `Template match for: ${query}` },
+    { id: 'example-2', score: 0.75, text: 'Replace this deterministic fixture with a domain search.' },
+  ];
+  const results = candidates.filter((candidate) => candidate.score >= threshold).slice(0, limit);
+  return formatToolResult({ results, total: results.length });
 }
 
 /**

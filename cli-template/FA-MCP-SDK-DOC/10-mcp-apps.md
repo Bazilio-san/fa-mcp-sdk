@@ -797,7 +797,7 @@ app.sendLog({ level: "info", logger: "WeatherApp", data: "Refreshed forecast" })
 
 `basic-host` surfaces these in the console panel; production hosts MAY route them to telemetry.
 
-### 8.14 Widget-side debug helpers (`mcp-debug-log` / `mcp-debug-refresh`)
+### 8.14 Widget-side debug helpers (`mcp_debug_log` / `mcp_debug_refresh`)
 
 `app.sendLog` (above) is a host-side concern — what reaches your server logs depends on the host's
 telemetry settings. When you need the widget to push events **into the same channel as your server
@@ -816,7 +816,7 @@ This registers two app-only tools (hidden from the LLM via `_meta.ui.visibility:
 ```ts
 // from inside widget JS — replace `host.postMessage` with whatever JSON-RPC bridge you use
 await app.callServerTool({
-  name: 'mcp-debug-log',
+  name: 'mcp_debug_log',
   arguments: {
     type: 'render-error',
     payload: { stack: err.stack, viewState: snapshot },
@@ -824,12 +824,12 @@ await app.callServerTool({
 });
 // → server-side: emits {"ch":"app:view-log","kind":"log","type":"render-error","payload":{...}}
 
-const fresh = await app.callServerTool({ name: 'mcp-debug-refresh', arguments: {} });
+const fresh = await app.callServerTool({ name: 'mcp_debug_refresh', arguments: {} });
 // fresh.structuredContent === { timestamp: '2026-05-19T08:34:12.115Z', counter: 47 }
 ```
 
-Use `mcp-debug-log` to capture client-side errors, user-action breadcrumbs, or view-state snapshots
-without owning a logger, fetch client, or JWT in the widget. Use `mcp-debug-refresh` for polling /
+Use `mcp_debug_log` to capture client-side errors, user-action breadcrumbs, or view-state snapshots
+without owning a logger, fetch client, or JWT in the widget. Use `mcp_debug_refresh` for polling /
 heartbeat scenarios where the widget needs lightweight server state but you don't want the LLM to
 see the call.
 

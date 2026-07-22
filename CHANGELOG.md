@@ -5,6 +5,94 @@ All notable changes to `fa-mcp-sdk` are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.12.20] - 2026-07-13
+
+### Added
+
+- **Hidden tool migration aliases.** `McpServerData.toolAliases` maps a previously published name to
+  a canonical listed tool. Aliases are accepted by `tools/call`, never shown in `tools/list`, and are
+  validated against shadowing and unknown targets. The same resolution is used by Streamable HTTP,
+  STDIO and legacy SSE calls.
+- **Project readiness probes.** `McpServerData.readinessChecks` adds status-only, three-second-bounded
+  dependency checks to `/ready`. JWKS readiness now verifies the local keyset or the remote JWKS
+  document instead of reporting a permanent placeholder.
+- **Correlation helper exports.** `getCurrentRequestId`, the request context and trace-context accessors
+  are exported from the package root for safe recoverable-error DTOs and downstream propagation.
+- **Shared metrics registry export.** `getMetricsRegistry()` and metric types are public so projects can
+  add bounded-cardinality domain metrics to the canonical `/metrics` endpoint without a duplicate route.
+- **Project read-scope defaults.** `McpServerData.defaultReadScopes` protects built-in and otherwise
+  unscoped prompts/resources; discovery hides unavailable entries and direct reads fail independently.
+- **Corporate identity/OAuth profile.** Asymmetric JWT verification preserves canonical `payload.sub`
+  while deriving `payload.user` only from configured `jwtToken.userClaim`. Protected-resource URL,
+  authorization servers, documentation URL and advertised scopes are configurable under `auth.oauth`.
+
+### Security
+
+- Production HTTP startup now fails closed when MCP auth is disabled, an active JWT profile uses
+  HS256, the CORS allow-list is empty/wildcard, or JWT algorithm/skew/JWKS-cache settings violate the
+  corporate profile. Valid opaque service tokens remain supported and must be at least 20 characters.
+- Asymmetric JWT detection no longer depends on the legacy encryption key. Verification now requires
+  and validates `iss`, `aud`, `sub`, `exp`, `iat`, the configured RS256/ES256 algorithm, and a JWKS cache
+  ceiling of 600 seconds.
+- `prompts/get` and `resources/read` are protected by default, including every built-in prompt and
+  resource. Authorization debug output redacts the full header, and tool/config debug streams log only
+  keys and value shapes rather than raw arguments, results, dotenv data or configuration values.
+- CORS matching is exact by hostname/origin; regex prefix/suffix bypasses such as
+  `localhost.evil.example` are rejected.
+- Deprecated `/sse` and `/messages` routes are disabled by default behind
+  `mcp.legacySse.enabled`, credential-bound per session, and routed through the same canonical
+  policy pipeline as Streamable HTTP when explicitly enabled for a documented migration window.
+- With HTTP auth enabled, catalog list methods require credentials and `tools/list` hides tools for
+  which the authenticated principal lacks a required scope. Direct calls remain independently denied.
+- HTTP 401 bodies and challenges are stable and sanitized; raw JOSE errors and expected/obtained
+  claims never leave the server.
+- `mcp_concurrent_calls` is now an unlabeled aggregate gauge. Raw subjects remain only in the private
+  enforcement map and cannot leak to Prometheus or create unbounded series.
+- Concurrency-limit errors no longer interpolate the JWT subject or employee identity into the
+  outward message; callers receive only the stable limit/retry diagnostic.
+- Stateful Streamable HTTP sessions are bound to the authenticated credential/delegation digest
+  created at initialize time. A different valid principal cannot POST to, stream from, or delete
+  another principal's session, and an explicitly invalid token is rejected even on public initialize.
+- Unknown errors are logged only as bounded request-id/name/code summaries. Raw messages, stacks,
+  response error data, replayable session ids, URLs, credentials and PII are excluded from core,
+  admin, Agent Tester and generated-template error paths; outward 500 responses remain generic.
+- Production startup rejects unmasked logging, an unauthenticated admin panel, and an
+  unauthenticated Agent Tester. `/gen-jwt` additionally requires `admin:token:issue` in production.
+- Home catalog discovery authenticates, forwards verified identity to dynamic providers, and
+  filters entries by scope. Raw bearer, proxy-auth, and cookie headers are not exposed to handlers.
+- The OpenAPI compiler moved to development/build dependencies. Template builds generate the
+  specification before deployment, and production images copy the artifact instead of shipping the
+  compiler-only dependency chain.
+
+### Fixed
+
+- Tool-name validation now implements `^[a-z][a-z0-9_]{1,63}$` exactly. App-only debug tool names are
+  compliant; their previous hyphenated names remain hidden call aliases for migration.
+- JSON Schema compilation and validation fail closed. A tool publishing `outputSchema` must return
+  `structuredContent`, or exactly one JSON text block that can be promoted and validated.
+- `maxToolResultBytes` now measures the complete serialized tool result, including mirrors, metadata
+  and non-text blocks. Oversized output becomes a bounded, explicit `isError=true` result.
+- `/health` is dependency-independent liveness and returns only `{status:'ok', version, uptime}` with
+  HTTP 200. Dependency status remains in `/ready`.
+- Missing tool scopes are no longer mislabeled with the timeout code or timeout metrics. Trusted
+  STDIO and auth-disabled development HTTP remain usable without synthetic scopes; opaque permanent
+  tokens are deliberately limited to unscoped tools.
+- Boolean environment mappings now use the config library's boolean formatter, so the string `false`
+  cannot accidentally enable Agent Tester, auth, JWT checks, debug tools, or admin features.
+- A synchronous tool timeout now aborts the `AbortSignal` passed to project code. If a handler ignores
+  cancellation, its concurrency slot remains occupied until the underlying promise actually settles,
+  preventing a later write from overtaking an operation that may still commit side effects.
+- HTTP startup now treats JWT/OAuth fields as inert when authentication is disabled in development or
+  test profiles. Active auth profiles retain full validation, and production HTTP still requires auth.
+- Resource objects are serialized to JSON strings at the `resources/read` wire boundary, with list
+  sizes measured from the exact emitted text. Prompt/resource completion logs now contain only bounded
+  structured metadata and correlations, never prompt arguments, resource URIs, or returned content;
+  resolver/content exceptions also emit a completion with `status=error`.
+- Tool results marked `isError=true` now emit an error completion status and increment
+  `mcp_tool_calls_total{status="error"}` in synchronous and task-augmented execution paths.
+- The SDK now declares Node.js `>=20.0.0`, matching the generated template and the highest minimum
+  required by its production dependencies.
+
 ## [0.12.16] - 2026-06-19
 
 ### Added

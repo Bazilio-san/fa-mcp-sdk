@@ -1,13 +1,13 @@
 {
   "name": "fa-mcp-sdk",
   "productName": "FA MCP SDK",
-  "version": "0.12.19",
+  "version": "0.12.20",
   "description": "Core infrastructure and templates for building Model Context Protocol (MCP) servers with TypeScript",
   "type": "module",
   "main": "dist/core/index.js",
   "types": "dist/core/index.d.ts",
   "engines": {
-    "node": ">=18.0.0"
+    "node": ">=20.0.0"
   },
   "files": [
     "dist/core/**/*",
@@ -15,6 +15,7 @@
     "cli-template/.gitignore",
     "bin/**/*",
     "config/**/*",
+    "!config/_local.yaml",
     "src/template/**/*",
     "src/tests/**/*",
     "scripts/**/*",
@@ -60,7 +61,11 @@
     "test:error-sanitize": "npm run build && node tests/error-sanitize.test.mjs",
     "test:binary-resource": "npm run build && node tests/binary-resource.test.mjs",
     "test:error-codes": "npm run build && node tests/error-codes.test.mjs",
-    "test:completions": "npm run build && node tests/completions.test.mjs"
+    "test:completions": "npm run build && node tests/completions.test.mjs",
+    "test:operation-completion": "npm run build && node tests/operation-completion-logging.test.mjs",
+    "test:package-engines": "node tests/package-engines.test.mjs",
+    "test:tool-outcomes": "npm run build && node tests/tool-error-outcome.test.mjs && node tests/tool-result-limits.test.mjs && node tests/tool-final-outcome-trace.test.mjs",
+    "test:compliance-hardening": "npm run build && node tests/compliance-hardening.test.mjs && node tests/auth-list-protection.test.mjs && node tests/permanent-token-env.test.mjs && node tests/auth-provider-ordering.test.mjs && node tests/custom-auth-identity.test.mjs && node tests/admin-auth-modes.test.mjs && node tests/production-preflight.test.mjs && node tests/oauth-production-metadata.test.mjs && node tests/required-scopes-isolation.test.mjs && node tests/operation-completion-logging.test.mjs && node tests/tool-error-outcome.test.mjs && node tests/tool-result-limits.test.mjs && node tests/tool-final-outcome-trace.test.mjs && node tests/task-principal-isolation.test.mjs && node tests/openapi-production-dependencies.test.mjs && node tests/package-engines.test.mjs"
   },
   "keywords": [
     "mcp",
@@ -102,7 +107,7 @@
     "fa-consul": "^1.0.7",
     "helmet": "^8.1.0",
     "jose": "^5.10.0",
-    "js-yaml": "^4.1.1",
+    "js-yaml": "^4.2.0",
     "jsonwebtoken": "^9.0.3",
     "node-cache": "^5.1.2",
     "openai": "^6.33.0",
@@ -110,7 +115,6 @@
     "prom-client": "^15.1.3",
     "rate-limiter-flexible": "^11.0.0",
     "swagger-ui-express": "^5.0.1",
-    "tsoa": "^6.6.0",
     "uuid": "^13.0.0",
     "ya-express-ntlm": "^1.0.39"
   },

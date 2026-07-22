@@ -21,6 +21,7 @@ import { checkJwtToken } from './jwt.js';
 import { canLocallyIssueJwt } from './key-resolver.js';
 import { createAuthMW } from './middleware.js';
 import { checkPermanentToken } from './permanent.js';
+import { normalizeAuthPrincipal } from './principal.js';
 import { AuthResult } from './types.js';
 
 const logger = lgr.getSubLogger({ name: chalk.yellow('agent-tester-auth') });
@@ -98,8 +99,12 @@ function getValidSession(req: Request): SessionEntry | undefined {
 // ---------------------------------------------------------------------------
 
 export function createSession(authInfo: AuthResult): string {
+  const normalizedAuth = normalizeAuthPrincipal(authInfo);
+  if (!normalizedAuth.success) {
+    throw new Error('Cannot create an authenticated session without a stable principal');
+  }
   const sid = crypto.randomUUID();
-  sessions.set(sid, { createdAt: Date.now(), authInfo });
+  sessions.set(sid, { createdAt: Date.now(), authInfo: normalizedAuth });
   return sid;
 }
 
@@ -147,19 +152,22 @@ export async function validateLoginCredentials(body: {
     // Try as permanent token first
     const permResult = checkPermanentToken(token);
     if (!permResult.errorReason) {
-      return { success: true, authType: 'permanentServerTokens' };
+      return normalizeAuthPrincipal({ success: true, authType: 'permanentServerTokens' }, token);
     }
     // Try as JWT
     const jwtResult = await checkJwtToken({ token });
     if (!jwtResult.errorReason) {
-      return { success: true, authType: 'jwtToken', payload: jwtResult.payload };
+      return normalizeAuthPrincipal({ success: true, authType: 'jwtToken', payload: jwtResult.payload });
     }
     return { success: false, error: 'Invalid token' };
   }
 
   if (username && password) {
     const encoded = Buffer.from(`${username}:${password}`).toString('base64');
-    return checkBasicAuth(encoded);
+    const result = checkBasicAuth(encoded);
+    return result.success
+      ? normalizeAuthPrincipal({ ...result, authType: 'basic', payload: { user: result.username! } })
+      : result;
   }
 
   return { success: false, error: 'Provide token or username and password' };
@@ -198,7 +206,7 @@ export function createAgentTesterSessionMW(): RequestHandler[] {
     }
 
     const session = getValidSession(req);
-    if (session) {
+    if (session?.authInfo.success) {
       (req as any).authInfo = session.authInfo;
       return next();
     }

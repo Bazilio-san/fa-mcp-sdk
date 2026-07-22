@@ -27,13 +27,16 @@ await initMcpServer(serverData);
 ```typescript
 interface McpServerData {
   tools: Tool[] | (() => Promise<Tool[]>);           // Tool definitions
+  toolAliases?: Record<string, string>;              // Hidden oldName -> canonical_name call aliases
   toolHandler: <T = unknown>(params: IToolHandlerParams) => Promise<TToolHandlerResponse<T>>;
+  defaultReadScopes?: string[];                      // Prompt/resource discovery + read defaults
   agentBrief: string;                                 // Brief description
   agentPrompt: string;                                // System prompt
-  toolPrompt?: TPromptContentFunction;                // tool_prompt content (args.tool); default → ''
+  toolPrompt?: TPromptContentFunction;                // Publishes tool_prompt content (args.tool) when provided
   customPrompts?: IPromptData[];                      // Additional prompts
   usedHttpHeaders?: IUsedHttpHeader[] | null;         // HTTP headers for auth
   customResources?: IResourceData[] | null;           // Custom resources
+  readinessChecks?: Record<string, () => boolean | 'ok' | Promise<boolean | 'ok'>>;
   customAuthValidator?: CustomAuthValidator;          // Runs FIRST: bypass or fallback to standard auth
   tokenGenAuthHandler?: TokenGenAuthHandler;          // Token Generator auth
   httpComponents?: { apiRouter?: Router | null };     // Express router

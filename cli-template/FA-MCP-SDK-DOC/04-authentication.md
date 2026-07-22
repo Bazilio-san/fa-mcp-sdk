@@ -34,10 +34,12 @@ interface AuthResult {
 Pre-flight checks (`init-mcp-server.ts`) reject misconfigured non-legacy modes at start:
 
 - `remoteJwks` without `jwksUri` → throws
-- `localKey` without `publicKeyPath` → throws
+- `remoteJwks` requires a valid absolute URL and production requires HTTPS
+- `localKey` without a readable, parseable, algorithm-compatible `publicKeyPath` → throws
 - non-legacy without `expectedIssuer` → throws (standard §7.2)
 - `clockSkew > 60s` → throws (standard Прил. A.1)
-- `production` + `legacyAesCtr` + `auth.enabled=true` → warn (asymmetric required by standard)
+- production accepts corporate `remoteJwks` or a valid opaque service token; `legacyAesCtr`, `embedded`, and
+  `localKey` JWT profiles are rejected
 
 ```yaml
 # config/local.yaml — corporate IdP
@@ -50,9 +52,16 @@ webServer:
       jwksUri: 'https://idp.corp/.well-known/jwks.json'
       expectedIssuer: 'https://idp.corp'
       expectedAudience: '${SERVICE_NAME}'
+      # Explicit employee-login mapping. Canonical `sub` may remain an opaque UUID.
+      userClaim: preferred_username
       jwksCacheTtl: 600
       jwksCooldown: 30
       clockSkew: 30
+    oauth:
+      resourceUrl: 'https://calendar.corp/mcp'
+      authorizationServers: ['https://idp.corp']
+      advertisedScopes: ['calendar.read', 'calendar.write', 'calendar.delegate']
+      resourceDocumentationUrl: 'https://calendar.corp/docs'
 ```
 
 Discovery endpoints mounted automatically when `mode != 'legacyAesCtr'`:
@@ -69,8 +78,28 @@ WWW-Authenticate: Bearer realm="<appConfig.name>",
                   resource_metadata="<base>/.well-known/oauth-protected-resource"
 ```
 
-If the token was decoded but rejected (expired, bad scope), the header additionally carries
-`error="invalid_token", error_description="…"` per RFC 6750.
+If a decoded token is rejected, the header may additionally carry `error="invalid_token"`. Raw JOSE
+messages, expected/obtained claims, tokens and verifier diagnostics are never returned in the body or
+challenge; the HTTP body is the stable string `Unauthorized`.
+
+### Subject and employee identity
+
+In asymmetric modes the verifier always preserves the canonical JWT subject as `payload.sub` for
+audit, ownership and rate-limit correlation. `payload.user` is an employee login chosen only by the
+configured `jwtToken.userClaim`; when that setting is empty, it safely falls back to `sub`. A configured
+claim must be a non-empty top-level string in every token or verification fails closed. The SDK does
+not implicitly trust a token's `user`, `preferred_username`, `upn`, or any other identity claim.
+JWT protocol and SDK policy fields (`iss`, `sub`, `aud`, `exp`, `nbf`, `iat`, `jti`, `user`, `expire`,
+`service`, `ip`, `scope`, and `allow`) are reserved and cannot be configured as `userClaim`.
+
+### OAuth metadata profile
+
+`webServer.auth.oauth` controls RFC 9728 metadata. `resourceUrl` defaults to the public origin plus
+`/mcp`, never to the host root. `advertisedScopes` is exact; when empty, `scopes_supported` is omitted,
+and the embedded token endpoint rejects requested scopes. `authorizationServers` and
+`resourceDocumentationUrl` accept absolute HTTP(S) URLs. Environment variables are
+`WS_OAUTH_RESOURCE_URL`, `WS_OAUTH_AUTHORIZATION_SERVERS`, `WS_OAUTH_ADVERTISED_SCOPES`, and
+`WS_OAUTH_RESOURCE_DOCUMENTATION_URL`; the two list values are comma-separated.
 
 ## Token Operations
 
@@ -114,9 +143,10 @@ const result = await client.callTool('tool', args, await getAuthHeadersForTests(
 
 ## Scope Enforcement (since SDK 0.7.0)
 
-Standard §7.5 — protect specific tools / prompts / resources with `requiredScopes`. The auth
-middleware checks the token's `scope` claim (space-separated) against the declared list and
-returns HTTP 403 (or JSON-RPC `-32004` for tools) when scopes are missing.
+Standard §7.5 — protect specific tools, prompts, resources, and resource templates with `requiredScopes`. After
+HTTP authentication, the canonical MCP handlers check the token's space-separated `scope` claim against the one
+descriptor snapshot used for dispatch. A direct denied call returns JSON-RPC `-32000` with
+`error.data.reason="insufficient_scope"`; discovery omits entries for which the caller lacks a required scope.
 
 ```typescript
 // Resource with required scope
@@ -148,9 +178,24 @@ returns HTTP 403 (or JSON-RPC `-32004` for tools) when scopes are missing.
 }
 ```
 
-A token issued via `POST /oauth/token` with `scope=mcp:admin` (or any IdP token carrying that
-scope) passes; everything else hits 403. The full server-side scope map is published via the
-built-in `use://auth` resource — clients can introspect it programmatically.
+A token issued via `POST /oauth/token` with `scope=mcp:admin` (or any IdP token carrying that scope) passes;
+everything else is hidden from discovery and fails closed with `insufficient_scope` on direct access. The full
+server-side scope map is published via the built-in `use://auth` resource so clients can introspect it.
+
+`McpServerData.defaultReadScopes` also applies to resource templates that omit `requiredScopes`.
+`resources/templates/list` hides inaccessible templates, and `completion/complete` verifies the target prompt,
+resource, or resource template before calling the project completion provider. An explicit `requiredScopes: []`
+keeps an individual prompt/resource/template unscoped.
+
+STDIO and HTTP with `webServer.auth.enabled: false` are trusted local modes and do not enforce
+tool scopes. Production HTTP requires auth, so it never uses this bypass. Static opaque entries in
+`permanentServerTokens` do not carry a `scope` claim: they can authenticate unscoped tools, but scoped
+tools stay hidden and forbidden. Use an asymmetric JWT (or a custom validator that supplies
+`payload.scope`) when a service principal needs scoped tools.
+
+When HTTP auth is enabled, `initialize` and catalog methods (`tools/list`, `prompts/list`, `resources/list`)
+require credentials. Only `ping` and `notifications/initialized` remain public for protocol negotiation;
+stateful sessions are therefore always created with an authenticated owner.
 
 ## Forbidden vs Unauthorized
 
@@ -163,7 +208,7 @@ const validator: CustomAuthValidator = async (req) => {
   if (await tokenIsRevoked(token)) {
     return { success: false, forbidden: true, error: 'Token revoked' };     // → 403, no challenge
   }
-  return { success: true, authType: 'custom' };
+  return { success: true, authType: 'custom', username: 'api-user' };
 };
 ```
 
@@ -306,8 +351,11 @@ const serverData: McpServerData = { ..., customAuthValidator: customValidator };
 // need a valid Authorization header (permanentToken / basic / JWT).
 const serviceHeadersValidator: CustomAuthValidator = (req) => {
   const h = req.headers as Record<string, string>;
-  if (h['x-service-token'] || (h['x-username'] && h['x-password'])) {
-    return { success: true, authType: 'custom' };
+  if (h['x-service-token']) {
+    return { success: true, authType: 'custom', sessionBinding: lookupServiceId(h['x-service-token']) };
+  }
+  if (h['x-username'] && h['x-password']) {
+    return { success: true, authType: 'custom', username: h['x-username'] };
   }
   return { success: false, error: 'No service credentials and no MCP Authorization token' };
 };
@@ -316,6 +364,10 @@ const serviceHeadersValidator: CustomAuthValidator = (req) => {
 > **Note:** `customAuthValidator` receives a request with **normalized** (lowercased) header names.
 > `authInfo` is **not** set on `req` when the validator runs — it is set by the middleware only after
 > successful authentication completes.
+>
+> A successful custom result must identify a stable principal through `username`, `payload.sub`,
+> `payload.user`, or `sessionBinding`. Use a non-secret account/service identifier for `sessionBinding`,
+> never the API key itself. Results without stable identity fail closed and cannot create a stateful MCP session.
 
 ## Agent Tester Authentication
 
@@ -512,7 +564,8 @@ Or via ENV: `WS_GEN_JWT_API_ENABLE=true`
 ### Usage
 
 ```bash
-# POST /gen-jwt with any configured auth method
+# Development: POST /gen-jwt with a configured auth method.
+# Production: use a JWT whose scope claim includes admin:token:issue.
 curl -X POST http://localhost:3000/gen-jwt \
   -H "Content-Type: application/json" \
   -u "admin:password" \
@@ -523,6 +576,10 @@ curl -X POST http://localhost:3000/gen-jwt \
     "params": "role=admin;team=backend"
   }'
 ```
+
+In production, successful authentication alone is insufficient: `/gen-jwt` returns `403` unless
+the verified JWT payload contains scope `admin:token:issue`. This prevents an ordinary MCP caller or
+an opaque service token from minting arbitrary identities and claims.
 
 ### Request Body
 

@@ -2,123 +2,149 @@ import { McpError } from '@modelcontextprotocol/sdk/types.js';
 
 import { appConfig } from '../bootstrap/init-config.js';
 import { MCP_ERROR_CODES } from '../errors/specific-errors.js';
-import { TToolHandlerResponse, IToolHandlerStructuredResponse } from '../_types_/types.js';
+import { TToolHandlerResponse } from '../_types_/types.js';
 
 /**
  * Race a tool invocation against `mcp.limits.toolTimeoutMs`. On expiry the returned promise
- * rejects with an SDK `McpError` carrying code `-32004` (standard §14 / Appendix B). The
- * pending tool promise is left running — Node.js cannot synchronously abort user code —
- * but the server-side timer is cleared so we don't leak handles. The HTTP-level transport
- * layer in `server-http.ts` runs its own race so the response status becomes 504.
+ * rejects with an SDK `McpError` carrying code `-32004` (standard §14 / Appendix B) and aborts
+ * the signal supplied to project code. JavaScript cannot forcibly stop a non-cooperative
+ * handler, so the caller must keep its concurrency slot until the execution promise settles.
+ * The HTTP-level transport layer in `server-http.ts` runs its own race so the response status
+ * becomes 504.
  */
-export async function withToolTimeout<T>(toolName: string, exec: () => Promise<T>): Promise<T> {
+export async function withToolTimeout<T>(
+  _toolName: string,
+  upstreamSignal: AbortSignal | undefined,
+  exec: (signal: AbortSignal) => Promise<T>,
+): Promise<T> {
   const timeoutMs = appConfig.mcp.limits.toolTimeoutMs;
+  const timeoutController = new AbortController();
   let timer: NodeJS.Timeout | undefined;
+  const forwardAbort = () => timeoutController.abort(upstreamSignal?.reason);
+
+  if (upstreamSignal?.aborted) {
+    forwardAbort();
+  } else {
+    upstreamSignal?.addEventListener('abort', forwardAbort, { once: true });
+  }
+
+  const executionPromise = Promise.resolve().then(() => exec(timeoutController.signal));
   const timeoutPromise = new Promise<never>((_resolve, reject) => {
     timer = setTimeout(() => {
       reject(
-        new McpError(MCP_ERROR_CODES.TIMEOUT, `Tool '${toolName}' exceeded ${timeoutMs} ms timeout`, {
+        new McpError(MCP_ERROR_CODES.TIMEOUT, 'Tool call timed out', {
           reason: 'tool_timeout',
           retryAfter: 0,
         }),
       );
+      // Queue the canonical timeout rejection before a cooperative handler can reject with its
+      // own AbortError; the client must consistently receive JSON-RPC code -32004.
+      if (!timeoutController.signal.aborted) {
+        timeoutController.abort(new DOMException('Tool call timed out', 'TimeoutError'));
+      }
     }, timeoutMs);
     if (typeof timer.unref === 'function') {
       timer.unref();
     }
   });
   try {
-    return await Promise.race([exec(), timeoutPromise]);
+    return await Promise.race([executionPromise, timeoutPromise]);
   } finally {
+    upstreamSignal?.removeEventListener('abort', forwardAbort);
     if (timer) {
       clearTimeout(timer);
     }
   }
 }
 
-const TRUNCATION_TAIL = '\n…[truncated]';
-
 /**
- * Trim a tool response so its serialized payload stays under `mcp.limits.maxToolResultBytes`
- * (standard §12.2 / §14). Truncation is signalled BOTH in the textual content and in the
- * structured payload so the client cannot silently miss it.
- *
- * - For `content[].text` entries: the offending entry is cut to fit the budget and suffixed
- *   with an explicit `…[truncated]` marker.
- * - For `structuredContent`: a sibling `truncated: true` field is set when the JSON exceeds
- *   the budget, and the payload is replaced with a minimal sentinel object so the response
- *   still fits the wire frame.
+ * Measure the actual serialized result, including mirrored content, metadata and binary content
+ * blocks. Returns `undefined` when the value cannot be represented as JSON.
  */
-export function truncateToolResponse<T>(response: TToolHandlerResponse<T>): TToolHandlerResponse<T> {
-  const maxBytes = appConfig.mcp.limits.maxToolResultBytes;
-  if (!response || maxBytes <= 0) {
-    return response;
+export function serializedToolResultBytes(response: unknown): number | undefined {
+  try {
+    const serialized = JSON.stringify(response ?? null);
+    return Buffer.byteLength(serialized, 'utf8');
+  } catch {
+    return undefined;
   }
+}
 
-  // Structured response branch.
-  if ('structuredContent' in response) {
-    const structured = response as IToolHandlerStructuredResponse<any>;
-    let serialized: string;
-    try {
-      serialized = JSON.stringify(structured.structuredContent ?? null);
-    } catch {
-      return response;
-    }
-    if (Buffer.byteLength(serialized, 'utf8') <= maxBytes) {
-      return response;
-    }
-    const replacement: any = {
+export interface ToolResultLimitPolicy {
+  /** Only an explicit read-only annotation makes an automatic retry safe. */
+  readOnly: boolean;
+}
+
+export type ToolResultLimitSideEffectState = 'not_applicable' | 'completed';
+
+/** Build a bounded MCP tool-level error without publishing invalid structuredContent. */
+function truncatedResult(
+  maxBytes: number,
+  originalBytes: number | undefined,
+  policy: ToolResultLimitPolicy,
+): TToolHandlerResponse<never> {
+  const retryable = policy.readOnly;
+  const sideEffectState: ToolResultLimitSideEffectState = retryable ? 'not_applicable' : 'completed';
+  const code = retryable ? 'result_too_large' : 'result_too_large_after_side_effect';
+  const detail = {
+    error: {
+      code,
+      message: retryable
+        ? 'Tool result exceeded the size limit; the read-only call may be retried.'
+        : 'Tool completed, but result exceeded the size limit. Side effects completed; do not retry.',
       truncated: true,
       reason: 'max_tool_result_bytes_exceeded',
       maxBytes,
-      originalBytes: Buffer.byteLength(serialized, 'utf8'),
-    };
-    return {
-      ...structured,
-      structuredContent: replacement,
-    };
+      ...(originalBytes === undefined ? {} : { originalBytes }),
+      retryable,
+      sideEffectState,
+    },
+  };
+  const response = {
+    isError: true,
+    content: [{ type: 'text' as const, text: JSON.stringify(detail) }],
+    _meta: {
+      'fa-mcp-sdk/result-limit': {
+        code,
+        retryable,
+        sideEffectState,
+      },
+    },
+  };
+  if ((serializedToolResultBytes(response) ?? Infinity) <= maxBytes) {
+    return response;
   }
 
-  // Text content branch.
-  if ('content' in response && Array.isArray(response.content)) {
-    const sizes = response.content.map((p) => (p && p.type === 'text' ? Buffer.byteLength(p.text ?? '', 'utf8') : 0));
-    const total = sizes.reduce((a, b) => a + b, 0);
-    if (total <= maxBytes) {
-      return response;
-    }
+  throw new McpError(-32603, `mcp.limits.maxToolResultBytes=${maxBytes} is too small for a valid truncation response`, {
+    reason: 'result_limit_too_small',
+  });
+}
 
-    let budget = maxBytes;
-    const newContent: typeof response.content = [];
-    let truncatedFlag = false;
-    for (const part of response.content) {
-      if (!part || part.type !== 'text') {
-        newContent.push(part);
-        continue;
-      }
-      const bytes = Buffer.byteLength(part.text ?? '', 'utf8');
-      if (bytes <= budget) {
-        newContent.push(part);
-        budget -= bytes;
-        continue;
-      }
-      truncatedFlag = true;
-      const sliceBytes = Math.max(0, budget - Buffer.byteLength(TRUNCATION_TAIL, 'utf8'));
-      const buf = Buffer.from(part.text ?? '', 'utf8')
-        .subarray(0, sliceBytes)
-        .toString('utf8');
-      newContent.push({ type: 'text', text: `${buf}${TRUNCATION_TAIL}` });
-      budget = 0;
-    }
-
-    if (truncatedFlag) {
-      return {
-        ...(response as any),
-        content: newContent,
-        structuredContent: { truncated: true, reason: 'max_tool_result_bytes_exceeded', maxBytes },
-      } as TToolHandlerResponse<T>;
-    }
-    return { ...(response as any), content: newContent };
+/**
+ * Enforce the serialized result ceiling across the complete wire result. Oversized or
+ * non-serializable output is replaced with a small `isError=true` result; dropping the original
+ * `structuredContent` avoids publishing a truncation sentinel that violates the tool's outputSchema.
+ * Calls are conservatively treated as side-effecting unless the tool explicitly declares
+ * `annotations.readOnlyHint=true`, so clients never infer that retrying a completed write is safe.
+ */
+export function truncateToolResponse<T>(
+  response: TToolHandlerResponse<T>,
+  policy: ToolResultLimitPolicy = { readOnly: false },
+): TToolHandlerResponse<T> {
+  const maxBytes = appConfig.mcp.limits.maxToolResultBytes;
+  if (!response) {
+    return response;
+  }
+  if (!Number.isFinite(maxBytes) || maxBytes <= 0) {
+    throw new McpError(-32603, 'mcp.limits.maxToolResultBytes must be a positive finite number', {
+      reason: 'invalid_result_limit',
+    });
   }
 
-  return response;
+  const resultBytes = serializedToolResultBytes(response);
+  if (resultBytes !== undefined && resultBytes <= maxBytes) {
+    return response;
+  }
+
+  return truncatedResult(maxBytes, resultBytes, policy) as TToolHandlerResponse<T>;
 }

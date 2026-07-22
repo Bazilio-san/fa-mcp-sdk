@@ -16,8 +16,8 @@ export const deregisterServiceFromConsul = async () => {
   try {
     const { deregister } = await getConsulAPI();
     await deregister(svcId, options);
-  } catch (err) {
-    console.error(err);
+  } catch {
+    console.error('Consul deregistration failed');
   }
 };
 

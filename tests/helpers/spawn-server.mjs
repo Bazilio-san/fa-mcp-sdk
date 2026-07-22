@@ -28,25 +28,29 @@ export function spawnServer({ port, configOverride, label = 'server' }) {
     stdio: ['ignore', 'pipe', 'pipe'],
   });
 
-  let ready = false;
   let stderrBuf = '';
   let stdoutBuf = '';
 
   proc.stdout.on('data', (chunk) => {
-    const s = chunk.toString();
-    stdoutBuf += s;
-    if (s.includes('started with') || s.includes('HTTP transport')) {
-      ready = true;
-    }
+    stdoutBuf += chunk.toString();
   });
   proc.stderr.on('data', (chunk) => {
     stderrBuf += chunk.toString();
   });
 
-  async function waitReady(timeoutMs = 15000) {
+  async function waitReady(timeoutMs = 120000) {
     const start = Date.now();
-    // eslint-disable-next-line no-unmodified-loop-condition -- set by stdout handler
-    while (!ready) {
+    while (Date.now() - start <= timeoutMs) {
+      try {
+        const response = await fetch(`http://127.0.0.1:${port}/health`, {
+          signal: AbortSignal.timeout(1000),
+        });
+        if (response.status === 200) {
+          return;
+        }
+      } catch {
+        // Cold ESM imports on a Windows-mounted workspace can take longer than 15 seconds.
+      }
       if (Date.now() - start > timeoutMs) {
         throw new Error(
           `[${label}] server did not start within ${timeoutMs}ms.
@@ -56,9 +60,9 @@ stderr:
 ${stderrBuf}`,
         );
       }
-      await new Promise((r) => setTimeout(r, 100));
+      await new Promise((r) => setTimeout(r, 250));
     }
-    await new Promise((r) => setTimeout(r, 250));
+    throw new Error(`[${label}] server did not start within ${timeoutMs}ms.`);
   }
 
   function kill() {

@@ -17,6 +17,9 @@ const { version, description, keywords, repository, homepage } = pj;
 const name = process.env.SERVICE_NAME || pj.name;
 const productName = process.env.PRODUCT_NAME || pj.productName;
 
+export const normalizePermanentServerTokenString = (value: string): string[] =>
+  value.split(',').map(trim).filter(Boolean);
+
 // Read fa-mcp-sdk's own package.json (resolved relative to this compiled file's location).
 // Compiled path: <sdk-root>/dist/core/bootstrap/init-config.js → SDK root is three levels up.
 const sdkRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..', '..');
@@ -70,8 +73,8 @@ function buildConfig(): AppConfig {
     cfg.repo = urlRe.exec(homepage)?.[0] || '';
   }
   const pst = cfg.webServer?.auth?.permanentServerTokens as string | string[] | undefined;
-  if (typeof pst === 'string' && pst.includes(',')) {
-    cfg.webServer.auth.permanentServerTokens = pst.split(',').map(trim);
+  if (typeof pst === 'string') {
+    cfg.webServer.auth.permanentServerTokens = normalizePermanentServerTokenString(pst);
   }
 
   if (cfg.ad?.domains?.MYDOMAIN) {

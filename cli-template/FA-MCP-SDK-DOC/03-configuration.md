@@ -106,10 +106,14 @@ logger:
   level: info
   useFileLogger: {{logger.useFileLogger}}
   dir: '{{logger.dir}}'
-  disableMasking: false   # true — disable built-in secret/email/URL masking (maskValuesRegEx = [])
+  disableMasking: false   # dev only; production HTTP startup rejects true
 
 mcp:
   transportType: http  # stdio | http
+  # Deprecated HTTP+SSE (`/sse`, `/messages`). Default false. The explicit compatibility
+  # adapter uses canonical auth/scope/schema/limits. ENV: MCP_LEGACY_SSE_ENABLED.
+  legacySse:
+    enabled: false
   rateLimit:
     maxRequests: 100
     windowMs: 60000
@@ -124,7 +128,7 @@ mcp:
     # JSON-RPC code -32005, HTTP 413 Payload Too Large.
     maxPayloadBytes: 1048576       # 1 MiB
     # Max serialized tool result, bytes. Above the limit, the SDK truncates the payload
-    # and marks `structuredContent.truncated: true` + appends "…[truncated]" to text content.
+    # Complete wire-result ceiling; oversized output becomes a bounded `isError=true` sentinel.
     maxToolResultBytes: 10485760   # 10 MiB
     # Per-tool execution timeout, milliseconds. Above the limit:
     # JSON-RPC code -32004, HTTP 504 Gateway Timeout.
@@ -236,10 +240,18 @@ webServer:
       jwksUri: ''                  # remoteJwks: external JWKS endpoint
       expectedIssuer: ''           # required for embedded/localKey/remoteJwks (standard §7.2)
       expectedAudience: ''         # defaults to appConfig.name
+      # Employee-login claim. Empty => payload.user comes from sub; payload.sub is preserved.
+      userClaim: ''                # e.g. preferred_username; SDK/JWT semantic claims are reserved
       jwksCacheTtl: 600            # JWKS cache, seconds
       jwksCooldown: 30             # min interval between repeat fetches when kid missing
       clockSkew: 30                # allowed exp/nbf drift, seconds (max enforced: 60)
       defaultTtl: 1800             # default TTL for /oauth/token-issued tokens
+
+    oauth:
+      resourceUrl: ''              # empty => <public-origin>/mcp
+      authorizationServers: []     # absolute URLs; ENV accepts comma-separated values
+      advertisedScopes: []         # exact scopes; empty => omit scopes_supported
+      resourceDocumentationUrl: '' # empty => <public-origin>/docs
 
     # ========================================================================
     # Basic Authentication - Base64 encoded username:password
@@ -511,8 +523,8 @@ SDK enforces all three from `mcp.limits` — see the snippet under "config/defau
 | Key | Default | What happens above the limit |
 |-----|---------|------------------------------|
 | `mcp.limits.maxPayloadBytes` | 1 MiB | JSON-RPC `-32005` + HTTP **413 Payload Too Large**. The Express `entity.too.large` error is translated automatically — clients never see the default HTML error page. |
-| `mcp.limits.maxToolResultBytes` | 10 MiB | Response is truncated. `structuredContent.truncated: true` is set on structured payloads; `…[truncated]` marker is appended to oversized text content. Standard §12.2. |
-| `mcp.limits.toolTimeoutMs` | 30 000 ms | JSON-RPC `-32004` + HTTP **504 Gateway Timeout** on `/mcp`. The pending tool promise is left running (Node can't synchronously abort user code); your tool SHOULD also self-cancel if it watches the elapsed time. |
+| `mcp.limits.maxToolResultBytes` | 10 MiB | The complete serialized result (text, binary blocks, `structuredContent`, mirrors and `_meta`) is measured. Oversized output becomes a bounded `isError=true` result with `truncated:true`. Standard §12.2. |
+| `mcp.limits.toolTimeoutMs` | 30 000 ms | JSON-RPC `-32004` + HTTP **504 Gateway Timeout** on `/mcp`. The SDK aborts the handler signal. A handler that ignores cancellation retains its concurrency slot until its promise settles, so later writes cannot overtake it. |
 
 Override per-environment in `config/{development,production,local}.yaml` or via env vars
 (`MCP_LIMITS_MAX_PAYLOAD_BYTES`, `MCP_LIMITS_MAX_TOOL_RESULT_BYTES`, `MCP_LIMITS_TOOL_TIMEOUT_MS`).
@@ -521,10 +533,43 @@ Override per-environment in `config/{development,production,local}.yaml` or via 
 
 | Endpoint / Setting | Behaviour | Standard |
 |--------------------|-----------|----------|
-| `GET /health` | Returns `{ status, version, uptime, details }`. HTTP **503** when `status === 'unhealthy'`, **200** otherwise. | §16.1 |
-| `GET /ready` | No auth. Returns `{ status, checks: { db, cache, jwks } }`. Each check is `'ok' \| 'error' \| 'skipped'` — never leaks credentials or connection strings. HTTP **503** when any check fails, **200** when all green. | §16.2 / §16.3 |
+| `GET /health` | Dependency-independent process liveness. Always HTTP **200** while the process runs and returns exactly `{ status:'ok', version, uptime }`. | §16.1 |
+| `GET /ready` | No auth. Returns status-only DB, cache, meaningful JWKS and project `readinessChecks`. HTTP **503** when any required check fails, **200** when all green. | §16.2 / §16.3 |
 | `webServer.host` | Default `'127.0.0.1'` (loopback). Containers / k8s pods / public-facing deployments MUST set `'0.0.0.0'` explicitly. | §6 |
-| `webServer.originHosts` | Empty list in production aborts `initMcpServer()`. Unlisted `Origin` headers receive HTTP **403** + JSON-RPC error (no longer silently allowed). | §6 |
+| `webServer.originHosts` | Empty/wildcard entries abort production startup. Origins use exact host/origin matching; suffix and prefix matches are rejected with HTTP **403**. | §6 |
+
+`McpServerData.readinessChecks` accepts named functions that return `true` / `'ok'` when a critical
+project dependency is ready. Names are unique `snake_case`; failures and thrown errors are reduced to
+`'error'`, time out after three seconds and never expose an exception message in the response.
+
+`McpServerData.defaultReadScopes` sets a project-wide default for prompt/resource discovery and read.
+It applies to built-ins (`agent_brief`, `agent_prompt`, `tool_prompt`, `project://*`, `use://*`, and
+agent mirrors) and custom entries without `requiredScopes`. Explicit per-entry scopes, including `[]`,
+are preserved. Example: `defaultReadScopes: ['calendar.read']`.
+
+### Project metrics in the canonical registry
+
+Register project-specific Prometheus collectors in the same registry served by `/metrics`; do not
+mount a duplicate endpoint. Keep labels bounded and never use raw user IDs, emails or request values.
+The SDK's `mcp_concurrent_calls` gauge is an aggregate process value with no labels; the per-subject
+map used for enforcement is deliberately not exported to Prometheus.
+
+`webServer.metrics.requireAuth` defaults to `true` and applies the normal HTTP authentication middleware
+to scraper requests (`WS_METRICS_REQUIRE_AUTH`). Development may set it to `false` only on a deliberately
+isolated listener. Production preflight rejects enabled metrics unless `requireAuth: true`; the route also
+forces authentication in production as defence in depth.
+
+```typescript
+import { Counter } from 'prom-client';
+import { getMetricsRegistry } from 'fa-mcp-sdk';
+
+export const calendarOperations = new Counter({
+  name: 'calendar_operations_total',
+  help: 'Calendar operations by stable operation and outcome.',
+  labelNames: ['operation', 'outcome'],
+  registers: [getMetricsRegistry()],
+});
+```
 
 ## MCP-Specific JSON-RPC Error Codes (Appendix B)
 
@@ -549,4 +594,3 @@ import {
 All four extend `BaseMcpError`. The `createJsonRpcErrorResponse` helper emits the canonical
 `error.data` shape from Appendix B.3 — `{ requestId?, field?, reason?, retryAfter?, … }`.
 Stack traces and internal paths are NEVER included in `error.data` (standard §13.3).
-

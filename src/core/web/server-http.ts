@@ -1,34 +1,28 @@
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { dirname, join } from 'path';
 import { fileURLToPath } from 'url';
 
 import { SSEServerTransport } from '@modelcontextprotocol/sdk/server/sse.js';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 import { InMemoryEventStore } from './event-store.js';
-import {
-  CallToolRequestSchema,
-  ListToolsRequestSchema,
-  ListPromptsRequestSchema,
-  ListResourcesRequestSchema,
-  ReadResourceRequestSchema,
-  isInitializeRequest,
-} from '@modelcontextprotocol/sdk/types.js';
+import { isInitializeRequest } from '@modelcontextprotocol/sdk/types.js';
 import chalk from 'chalk';
 import express from 'express';
 import helmet from 'helmet';
 import { RateLimiterMemory } from 'rate-limiter-flexible';
 
-import { IClientCapabilities } from '../_types_/types.js';
+import { ITransportContext } from '../_types_/types.js';
 import { createAgentTesterRouter } from '../agent-tester/agent-tester-router.js';
 import { validateAdminAuthConfig } from '../auth/admin-auth.js';
 import { createAgentTesterSessionMW } from '../auth/agent-tester-auth.js';
 import { checkJwtToken, generateToken, MIN_ENCRYPT_KEY_LENGTH } from '../auth/jwt.js';
-import { canLocallyIssueJwt, getJwtRuntimeConfig } from '../auth/key-resolver.js';
+import { buildLocalJwks, canLocallyIssueJwt, getJwtRuntimeConfig } from '../auth/key-resolver.js';
 import { createAuthMW } from '../auth/middleware.js';
 import { checkPermanentToken } from '../auth/permanent.js';
+import { isUsableAuthIdentity } from '../auth/principal.js';
 import { appConfig, getProjectData } from '../bootstrap/init-config.js';
 import { getMainDBConnectionStatus } from '../db/pg-db.js';
-import { createJsonRpcErrorResponse, ServerError, toError, toStr } from '../errors/errors.js';
+import { createJsonRpcErrorResponse, logInternalError, ServerError } from '../errors/errors.js';
 import {
   PayloadTooLargeError,
   RateLimitedError,
@@ -38,11 +32,8 @@ import {
 import { logger as lgr } from '../logger.js';
 import { getMetrics, getMetricsRegistry, initMetrics } from '../metrics/metrics.js';
 import { createMcpServer } from '../mcp/create-mcp-server.js';
-import { getPromptsList } from '../mcp/prompts.js';
-import { getResource, getResourcesList } from '../mcp/resources.js';
-import { truncateToolResponse, withToolTimeout } from '../mcp/tool-limits.js';
 import { formatRateLimitError, isRateLimitError } from '../utils/rate-limit.js';
-import { getTools, normalizeHeaders } from '../utils/utils.js';
+import { normalizeTransportHeaders } from '../utils/utils.js';
 
 import { createAdminRouter } from './admin-router.js';
 import { applyCors } from './cors.js';
@@ -51,6 +42,7 @@ import { handleHomeInfo } from './home-api.js';
 import { createOAuthRouter } from './oauth-router.js';
 import { configureOpenAPI, createSwaggerUIAssetsMiddleware } from './openapi.js';
 import { requestIdMW } from './request-id.js';
+import { resolveRateLimitKey } from './rate-limit-key.js';
 import { createSvgRouter } from './svg-icons.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -63,25 +55,53 @@ const logger = lgr.getSubLogger({ name: chalk.bgYellow('server-http') });
 
 export const isAdminEnabled = appConfig.adminPanel?.enabled === true;
 
-/**
- * Standard §14 — pick the rate-limit bucket key from the request:
- *   - `scope: 'subject'` → JWT `sub`/`user` claim, falling back to req.ip when no auth payload
- *   - `scope: 'ip'`      → req.ip / unknown
- */
-function resolveRateLimitKey(req: express.Request, suffix: string = ''): string {
-  const scope = appConfig.mcp.rateLimit?.scope ?? 'subject';
-  let key = '';
-  if (scope === 'subject') {
-    const payload = (req as any).auth?.payload ?? (req as any).authInfo?.payload;
-    const sub: string | undefined = payload?.sub ?? payload?.user ?? (req as any).authInfo?.username;
-    if (sub && String(sub).trim()) {
-      key = `sub:${String(sub).trim().toLowerCase()}`;
+const READINESS_CHECK_TIMEOUT_MS = 3_000;
+const READINESS_CACHE_TTL_MS = 1_000;
+const isProduction = (process.env.NODE_CONSUL_ENV || process.env.NODE_ENV) === 'production';
+
+type ReadinessCheckStatus = 'ok' | 'error' | 'skipped';
+type ReadinessResponse = {
+  status: 'ready' | 'not_ready';
+  checks: Record<string, ReadinessCheckStatus>;
+};
+
+async function withReadinessTimeout<T>(check: () => Promise<T> | T): Promise<T> {
+  let timer: NodeJS.Timeout | undefined;
+  try {
+    return await Promise.race([
+      Promise.resolve().then(check),
+      new Promise<never>((_resolve, reject) => {
+        timer = setTimeout(() => reject(new Error('readiness timeout')), READINESS_CHECK_TIMEOUT_MS);
+        timer.unref?.();
+      }),
+    ]);
+  } finally {
+    if (timer) {
+      clearTimeout(timer);
     }
   }
-  if (!key) {
-    key = `ip:${req.ip || 'unknown'}`;
+}
+
+async function checkJwksReadiness(): Promise<'ok' | 'error' | 'skipped'> {
+  const auth = appConfig.webServer?.auth;
+  const jwt = getJwtRuntimeConfig();
+  if (!auth?.enabled || jwt.mode === 'legacyAesCtr') {
+    return 'skipped';
   }
-  return suffix ? `${suffix}-${key}` : key;
+  try {
+    if (jwt.mode === 'remoteJwks') {
+      const response = await fetch(jwt.jwksUri, { signal: AbortSignal.timeout(READINESS_CHECK_TIMEOUT_MS) });
+      if (!response.ok) {
+        return 'error';
+      }
+      const document = (await response.json()) as { keys?: unknown[] };
+      return Array.isArray(document.keys) && document.keys.length > 0 ? 'ok' : 'error';
+    }
+    const document = await withReadinessTimeout(() => buildLocalJwks());
+    return Array.isArray(document.keys) && document.keys.length > 0 ? 'ok' : 'error';
+  } catch {
+    return 'error';
+  }
 }
 
 /**
@@ -90,7 +110,7 @@ function resolveRateLimitKey(req: express.Request, suffix: string = ''): string 
 async function handleRateLimit(
   rateLimiter: RateLimiterMemory,
   clientId: string,
-  ip: string,
+  _ip: string,
   context: string = '',
   res?: express.Response,
   id?: any,
@@ -100,7 +120,7 @@ async function handleRateLimit(
   } catch (rateLimitError) {
     if (isRateLimitError(rateLimitError)) {
       const rateLimitMessage = formatRateLimitError(rateLimitError as any, appConfig.mcp.rateLimit.maxRequests);
-      logger.warn(`Rate limit exceeded${context ? ` in ${context}` : ''}: ip: ${ip}`);
+      logger.warn(`Rate limit exceeded${context ? ` in ${context}` : ''}`);
 
       const scope = (appConfig.mcp.rateLimit?.scope ?? 'subject') as 'subject' | 'ip';
       getMetrics()?.rateLimitHits.inc({ scope });
@@ -173,8 +193,8 @@ export async function startHttpServer(): Promise<void> {
   applyCors(app);
 
   // OAuth discovery + token endpoints (mounted before auth MW so they remain public).
-  // Active only when jwtToken.mode !== 'legacyAesCtr'.
-  if (getJwtRuntimeConfig().mode !== 'legacyAesCtr') {
+  // Inert JWT/OAuth placeholders must not expose discovery or token routes while auth is disabled.
+  if (appConfig.webServer.auth.enabled === true && getJwtRuntimeConfig().mode !== 'legacyAesCtr') {
     app.use(createOAuthRouter());
   }
 
@@ -187,62 +207,73 @@ export async function startHttpServer(): Promise<void> {
   app.use('/svg', createSvgRouter());
 
   // Home page API endpoint
-  app.get('/api/home-info', handleHomeInfo);
+  app.get('/api/home-info', authMW, handleHomeInfo);
 
   // Root endpoint - serve static Home page
   app.get('/', (req, res) => {
     res.sendFile(join(staticPath, 'home', 'index.html'));
   });
 
-  // Health check endpoint. Standard §16.1 mandates `status`, `version` and `uptime`. An
-  // `unhealthy` body is paired with HTTP 503 so platform health probes pick up the failure.
-  app.get('/health', async (req, res) => {
-    let health: any = {
-      status: 'healthy',
+  // Liveness is process-only: dependency failures belong to /ready and must not restart a live
+  // process. This endpoint is mounted before auth middleware and intentionally stays public.
+  app.get('/health', (_req, res) => {
+    res.status(200).json({
+      status: 'ok',
       version: appConfig.version,
       uptime: process.uptime(),
-      details: {
-        timestamp: new Date().toISOString(),
-      },
-    };
-    if (appConfig.isMainDBUsed) {
-      health.details.dbConnectionStatus = await getMainDBConnectionStatus();
-      if (health.details.dbConnectionStatus === 'error') {
-        health.status = 'unhealthy';
-      }
-    }
-    res.status(health.status === 'healthy' ? 200 : 503).json(health);
+    });
   });
 
-  // Standard §15.3 — Prometheus metrics endpoint. Opt-in (default off). Public by design —
-  // protect via network policy / reverse proxy if the server is reachable from the network.
+  // Standard §15.3 — Prometheus metrics endpoint. Opt-in (default off), authenticated by default,
+  // and unconditionally protected in production even if startHttpServer() is called without preflight.
   if (metricsEnabled) {
     const metricsPath = metricsCfg?.path || '/metrics';
-    app.get(metricsPath, async (_req, res) => {
+    const metricsAuth = isProduction || metricsCfg?.requireAuth !== false ? [authMW] : [];
+    app.get(metricsPath, ...metricsAuth, async (_req, res) => {
       try {
         const reg = getMetricsRegistry();
         res.setHeader('Content-Type', reg.contentType);
         res.end(await reg.metrics());
       } catch (err) {
-        logger.error('Failed to render Prometheus metrics', err as Error);
+        logInternalError(err, 'metrics_render');
         res.status(500).send('Failed to render metrics');
       }
     });
   }
 
-  // Readiness probe (standard §16.2) — no authentication; reports whether every dependency
-  // the server needs to serve traffic is up. Empty / sensitive details are NEVER returned —
-  // each check is reduced to `ok` / `error`.
-  app.get('/ready', async (req, res) => {
-    const checks: Record<string, 'ok' | 'error' | 'skipped'> = {};
+  // Readiness checks are cached briefly and concurrent probes share one evaluation. Custom checks
+  // also retain their in-flight promise after the public timeout, preventing an unauthenticated
+  // probe flood from launching unbounded copies of a dependency call that cannot be cancelled.
+  let readinessCache: { expiresAt: number; response: ReadinessResponse } | undefined;
+  let readinessInFlight: Promise<ReadinessResponse> | undefined;
+  const customCheckInFlight = new Map<string, Promise<boolean | 'ok'>>();
+
+  const runCustomReadinessCheck = (name: string, check: () => boolean | 'ok' | Promise<boolean | 'ok'>) => {
+    const current = customCheckInFlight.get(name);
+    if (current) {
+      return current;
+    }
+    const started = Promise.resolve().then(check);
+    customCheckInFlight.set(name, started);
+    void started.then(
+      () => customCheckInFlight.delete(name),
+      () => customCheckInFlight.delete(name),
+    );
+    return started;
+  };
+
+  const computeReadiness = async (): Promise<ReadinessResponse> => {
+    const checks: Record<string, ReadinessCheckStatus> = {};
     let ready = true;
 
     if (appConfig.isMainDBUsed) {
-      const dbStatus = await getMainDBConnectionStatus();
-      if (dbStatus === 'connected') {
-        checks.db = 'ok';
-      } else {
+      try {
+        const dbStatus = await withReadinessTimeout(() => getMainDBConnectionStatus());
+        checks.db = dbStatus === 'connected' ? 'ok' : 'error';
+      } catch {
         checks.db = 'error';
+      }
+      if (checks.db === 'error') {
         ready = false;
       }
     }
@@ -250,18 +281,72 @@ export async function startHttpServer(): Promise<void> {
     // Cache singleton: trivially available; surface it for diagnostic completeness.
     checks.cache = 'ok';
 
-    // JWKS check is a placeholder until Phase 5 introduces the OAuth profile.
-    checks.jwks = 'skipped';
+    checks.jwks = await checkJwksReadiness();
+    if (checks.jwks === 'error') {
+      ready = false;
+    }
 
-    res.status(ready ? 200 : 503).json({
+    const customChecks = getProjectData().readinessChecks ?? {};
+    await Promise.all(
+      Object.entries(customChecks).map(async ([name, check]) => {
+        try {
+          const result = await withReadinessTimeout(() => runCustomReadinessCheck(name, check));
+          checks[name] = result === true || result === 'ok' ? 'ok' : 'error';
+        } catch {
+          checks[name] = 'error';
+        }
+        if (checks[name] === 'error') {
+          ready = false;
+        }
+      }),
+    );
+
+    return {
       status: ready ? 'ready' : 'not_ready',
       checks,
-    });
+    };
+  };
+
+  const getReadiness = (): Promise<ReadinessResponse> => {
+    const now = Date.now();
+    if (readinessCache && readinessCache.expiresAt > now) {
+      return Promise.resolve(readinessCache.response);
+    }
+    if (!readinessInFlight) {
+      readinessInFlight = computeReadiness()
+        .then((response) => {
+          readinessCache = { expiresAt: Date.now() + READINESS_CACHE_TTL_MS, response };
+          return response;
+        })
+        .finally(() => {
+          readinessInFlight = undefined;
+        });
+    }
+    return readinessInFlight;
+  };
+
+  // Readiness probe (standard §16.2) — no authentication; reports whether every dependency
+  // the server needs to serve traffic is up. Empty / sensitive details are NEVER returned —
+  // each check is reduced to `ok` / `error`.
+  app.get('/ready', async (_req, res) => {
+    const response = await getReadiness();
+    res.status(response.status === 'ready' ? 200 : 503).json(response);
   });
 
   // Token check endpoint: POST /ct {"t": "<token>"}. Standard §7.1 forbids secrets in URL.
   // GET /ct?t=<token> is gated behind webServer.tokenCheck.allowQueryToken (non-prod only).
   const handleTokenCheck = async (req: express.Request, res: express.Response) => {
+    await handleRateLimit(
+      rateLimiter,
+      resolveRateLimitKey(req, 'token-check'),
+      req.ip || 'unknown',
+      'token_check',
+      res,
+      null,
+    );
+    if (res.headersSent) {
+      return;
+    }
     const raw = req.method === 'GET' ? req.query.t : req.body?.t;
     const token = typeof raw === 'string' ? raw.trim() : '';
     if (!token) {
@@ -278,13 +363,12 @@ export async function startHttpServer(): Promise<void> {
     const clientIp = req.ip ?? (xffStr.trim() || (req.socket?.remoteAddress ?? ''));
     const jwtResult = await checkJwtToken({ token, clientIp });
     if (!jwtResult.errorReason) {
-      return res.json({ success: true, type: 'JWT', payload: jwtResult.payload });
+      return res.json({ success: true, type: 'jwt' });
     }
 
-    return res.status(401).json({ success: false, error: jwtResult.errorReason });
+    return res.status(401).json({ success: false, error: 'Unauthorized' });
   };
-  const allowQueryToken =
-    appConfig.webServer.tokenCheck?.allowQueryToken === true && process.env.NODE_ENV !== 'production';
+  const allowQueryToken = appConfig.webServer.tokenCheck?.allowQueryToken === true && !isProduction;
   if (allowQueryToken) {
     app.get('/ct', handleTokenCheck);
   } else {
@@ -336,6 +420,21 @@ export async function startHttpServer(): Promise<void> {
 
   // JWT generation API endpoint
   if (appConfig.webServer.genJwtApiEnable) {
+    const requireTokenIssuerScope = (req: express.Request, res: express.Response, next: express.NextFunction) => {
+      if (!isProduction) {
+        return next();
+      }
+      const scopes = new Set(
+        String((req as any).authInfo?.payload?.scope ?? '')
+          .split(/\s+/)
+          .filter(Boolean),
+      );
+      if (!scopes.has('admin:token:issue')) {
+        getMetrics()?.authFailures.inc({ reason: 'missing_scope' });
+        return res.status(403).json({ success: false, error: 'Forbidden' });
+      }
+      return next();
+    };
     const jwtMode = getJwtRuntimeConfig().mode;
     const encryptKey = appConfig.webServer.auth?.jwtToken?.encryptKey;
     const legacyKeyMissing =
@@ -344,20 +443,17 @@ export async function startHttpServer(): Promise<void> {
     if (legacyKeyMissing) {
       logger.error('genJwtApiEnable is true but webServer.auth.jwtToken.encryptKey is not configured');
     } else if (jwtMode === 'remoteJwks') {
-      app.post('/gen-jwt', authMW, (_req: express.Request, res: express.Response) => {
-        const { jwksUri } = getJwtRuntimeConfig();
+      app.post('/gen-jwt', authMW, requireTokenIssuerScope, (_req: express.Request, res: express.Response) => {
         res.status(501).json({
           success: false,
           error: 'cannot_issue_token',
-          error_description:
-            'This server runs in mode=remoteJwks and does not issue JWTs. ' +
-            (jwksUri ? `Obtain tokens from the IdP at ${jwksUri}.` : 'Obtain tokens from the configured IdP.'),
+          error_description: 'This server does not issue JWTs. Obtain a token from the configured identity provider.',
         });
       });
     } else {
       const TTL_MULTIPLIERS: Record<string, number> = { s: 1, m: 60, d: 86400, y: 31536000 };
 
-      app.post('/gen-jwt', authMW, async (req: express.Request, res: express.Response) => {
+      app.post('/gen-jwt', authMW, requireTokenIssuerScope, async (req: express.Request, res: express.Response) => {
         try {
           const { username, ttl, service, params } = req.body as {
             username?: string;
@@ -380,7 +476,7 @@ export async function startHttpServer(): Promise<void> {
           if (!ttlMatch) {
             return res
               .status(400)
-              .json({ success: false, error: `Invalid ttl format "${ttl}". Expected: <N>s | <N>m | <N>d | <N>y` });
+              .json({ success: false, error: 'Invalid ttl format. Expected: <N>s | <N>m | <N>d | <N>y' });
           }
 
           const ttlValue = parseInt(ttlMatch[1]!, 10);
@@ -434,8 +530,8 @@ export async function startHttpServer(): Promise<void> {
             ttlSeconds: liveTimeSec,
           });
         } catch (error: any) {
-          logger.error('Error generating JWT token:', error);
-          return res.status(500).json({ success: false, error: error.message });
+          logInternalError(error, 'jwt_token_generation');
+          return res.status(500).json({ success: false, error: 'Internal error' });
         }
       });
     }
@@ -462,197 +558,164 @@ export async function startHttpServer(): Promise<void> {
     });
   }
 
-  // SSE endpoints for legacy MCP communication
-  // Store SSE transports by session ID with transport, server, preserved headers, and auth payload
-  const sseTransports = new Map<
-    string,
-    {
+  // A session id is a routing/correlation value, never proof of authorization. Bind every
+  // stateful transport to the credentials and delegated identity that initialized it. Only a
+  // SHA-256 digest is retained; bearer tokens and caller headers never enter logs or session state.
+  const getSessionAuthBinding = (req: express.Request): string => {
+    if (!appConfig.webServer.auth.enabled) {
+      return 'auth-disabled';
+    }
+    const { authInfo } = req as any;
+    if (!authInfo?.success || !isUsableAuthIdentity(authInfo.principal)) {
+      throw new Error('Authenticated request does not have a stable principal');
+    }
+    const material = JSON.stringify({
+      version: 1,
+      onBehalfOf: req.headers['x-on-behalf-of-user'] ?? '',
+      authType: authInfo?.authType ?? '',
+      principal: authInfo?.principal ?? '',
+      customBinding: authInfo?.sessionBinding ?? '',
+    });
+    return createHash('sha256').update(material).digest('hex');
+  };
+
+  const rejectSessionBinding = (res: express.Response, id: unknown): void => {
+    getMetrics()?.authFailures.inc({ reason: 'forbidden' });
+    res.status(403).json({
+      jsonrpc: '2.0',
+      error: { code: -32000, message: 'Forbidden', data: { reason: 'session_auth_mismatch' } },
+      id: id ?? null,
+    });
+  };
+
+  // Deprecated HTTP+SSE transport. It is absent unless explicitly enabled as a migration opt-in.
+  // When enabled, including during a documented production migration, all methods use createMcpServer's
+  // canonical validation, scope, concurrency, timeout, output-schema and result-size pipeline.
+  const legacySseEnabled = appConfig.mcp.legacySse?.enabled === true;
+  if (legacySseEnabled) {
+    type LegacySseSession = {
       transport: SSEServerTransport;
-      server: any;
-      headers: Record<string, string>;
-      payload?: { user: string; [key: string]: any };
-    }
-  >();
-
-  // Create SSE server instance with preserved headers and auth payload from connection establishment.
-  // Client capabilities are read lazily on every call via `sseServer.getClientCapabilities()` so the
-  // value reflects the post-handshake state for every list/read/call.
-  async function createSseServer(
-    preservedHeaders: Record<string, string>,
-    mcpAuthPayload?: { user: string; [key: string]: any },
-  ) {
-    const sseServer = createMcpServer('sse');
-
-    const sseCtx = () => {
-      const caps = sseServer.getClientCapabilities() as IClientCapabilities | undefined;
-      return {
-        transport: 'sse' as const,
-        headers: preservedHeaders,
-        payload: mcpAuthPayload,
-        ...(caps ? { clientCapabilities: caps } : {}),
-      };
+      server: ReturnType<typeof createMcpServer>;
+      authBinding: string;
     };
+    const sseTransports = new Map<string, LegacySseSession>();
 
-    // Override tools/list to pass correct transport and context
-    sseServer.setRequestHandler(ListToolsRequestSchema, async () => {
-      const tools = await getTools(sseCtx());
-      return { tools };
-    });
-
-    // Override prompts/list to pass correct transport and context
-    sseServer.setRequestHandler(ListPromptsRequestSchema, async () => {
-      return await getPromptsList(sseCtx());
-    });
-
-    // Override resources/list to pass correct transport and context
-    sseServer.setRequestHandler(ListResourcesRequestSchema, async () => {
-      return await getResourcesList(sseCtx());
-    });
-
-    // Override resources/read to pass correct transport and context
-    sseServer.setRequestHandler(ReadResourceRequestSchema, async (request: any) => {
-      return (await getResource(request.params.uri, sseCtx())) as any;
-    });
-
-    // Override the tool call handler to include rate limiting, preserved headers and auth payload
-    sseServer.setRequestHandler(CallToolRequestSchema, async (request, extra) => {
-      // Apply rate limiting for each SSE tool call
-      const toolCallClientId = 'sse-tool-unknown';
-      await handleRateLimit(rateLimiter, toolCallClientId, 'unknown', `SSE tool call | tool: ${request.params.name}`);
-
-      // Execute the tool call with preserved headers and payload from SSE connection establishment.
-      // Same `mcp.limits` enforcement as the Streamable HTTP path.
-      const { toolHandler } = getProjectData();
-      const sseToolName = (request.params as any)?.name ?? 'unknown';
-      const response = (await withToolTimeout(
-        sseToolName,
-        () =>
-          toolHandler({
-            ...request.params,
-            ...sseCtx(),
-            signal: extra?.signal,
-          }) as Promise<any>,
-      )) as any;
-      return truncateToolResponse(response) as any;
-    });
-
-    return sseServer;
-  }
-
-  // GET endpoint for SSE connection establishment
-  app.get('/sse', authMW, async (req, res) => {
-    try {
-      // Apply rate limiting for SSE connection
-      const clientId = resolveRateLimitKey(req, 'sse');
-      await handleRateLimit(rateLimiter, clientId, req.ip || 'unknown', 'SSE', res, 1);
-
-      logger.info('SSE client connected');
-
-      // Preserve normalized headers from SSE connection establishment
-      const preservedHeaders = normalizeHeaders(req.headers);
-      logger.debug('SSE connection headers preserved:', Object.keys(preservedHeaders));
-
-      // Extract auth payload from middleware (set by authMW)
-      const { authInfo } = req as any;
-      const authPayload = authInfo?.payload;
-
-      // Create SSE transport that will use the same endpoint for POST requests
-      const transport = new SSEServerTransport('/sse', res);
-
-      // Create a dedicated server instance with preserved headers and auth payload for this SSE connection
-      const sseServer = await createSseServer(preservedHeaders, authPayload);
-
-      // Store transport, server, headers, and payload for cleanup and reference
-      sseTransports.set(transport.sessionId, {
-        transport,
-        server: sseServer,
-        headers: preservedHeaders,
-        payload: authPayload,
+    const createSseServer = (preservedHeaders: Record<string, string>, authInfo?: any) =>
+      createMcpServer('sse', {
+        contextProvider: (_extra, defaultContext) => ({
+          transport: 'sse',
+          headers: preservedHeaders,
+          ...(authInfo?.payload ? { payload: authInfo.payload as ITransportContext['payload'] } : {}),
+          ...(typeof authInfo?.principal === 'string' ? { principal: authInfo.principal } : {}),
+          ...(defaultContext.clientCapabilities ? { clientCapabilities: defaultContext.clientCapabilities } : {}),
+        }),
       });
 
-      // Clean up transport and server on connection close
-      res.on('close', () => {
-        sseTransports.delete(transport.sessionId);
-        logger.info(`SSE client disconnected: ${transport.sessionId}`);
-      });
+    app.get('/sse', authMW, async (req, res) => {
+      try {
+        const clientId = resolveRateLimitKey(req, 'sse');
+        await handleRateLimit(rateLimiter, clientId, req.ip || 'unknown', 'SSE', res, 1);
+        if (res.headersSent) {
+          return;
+        }
 
-      await sseServer.connect(transport);
-
-      logger.info('SSE connection established successfully');
-      return;
-    } catch (error) {
-      logger.error('SSE connection failed:', error);
-      return res.status(500).json(createJsonRpcErrorResponse(new ServerError('Failed to establish SSE connection')));
-    }
-  });
-
-  // POST endpoint for handling SSE client messages (standard way)
-  app.post('/messages', authMW, async (req, res): Promise<void> => {
-    try {
-      const sessionId = req.query.sessionId as string;
-      if (!sessionId) {
-        res.status(400).json({
-          jsonrpc: '2.0',
-          error: {
-            code: -32602,
-            message: 'Session ID required',
-          },
-          id: null,
+        const preservedHeaders = normalizeTransportHeaders(req.headers);
+        const { authInfo } = req as any;
+        const transport = new SSEServerTransport('/sse', res);
+        const sseServer = createSseServer(preservedHeaders, authInfo);
+        sseTransports.set(transport.sessionId, {
+          transport,
+          server: sseServer,
+          authBinding: getSessionAuthBinding(req),
         });
-        return;
+
+        res.on('close', () => {
+          sseTransports.delete(transport.sessionId);
+          void sseServer.close().catch(() => {});
+          logger.info(`Legacy SSE client disconnected: ${shortSid(transport.sessionId)}`);
+        });
+
+        await sseServer.connect(transport);
+        logger.info('Legacy SSE connection established');
+      } catch (error) {
+        logInternalError(error, 'legacy_sse_connection');
+        if (!res.headersSent) {
+          res.status(500).json(createJsonRpcErrorResponse(new ServerError('Failed to establish SSE connection')));
+        }
       }
+    });
 
-      const transportData = sseTransports.get(sessionId);
-      if (!transportData) {
-        const err = new ResourceNotFoundError('SSE session not found');
-        res.status(err.statusCode).json(createJsonRpcErrorResponse(err, null));
-        return;
+    app.post('/messages', authMW, async (req, res): Promise<void> => {
+      try {
+        const sessionId = String(req.query.sessionId ?? '');
+        if (!sessionId) {
+          res.status(400).json({
+            jsonrpc: '2.0',
+            error: { code: -32602, message: 'Session ID required' },
+            id: req.body?.id ?? null,
+          });
+          return;
+        }
+
+        const session = sseTransports.get(sessionId);
+        if (!session) {
+          const err = new ResourceNotFoundError('SSE session not found');
+          res.status(err.statusCode).json(createJsonRpcErrorResponse(err, req.body?.id ?? null));
+          return;
+        }
+        if (session.authBinding !== getSessionAuthBinding(req)) {
+          rejectSessionBinding(res, req.body?.id);
+          return;
+        }
+
+        const clientId = resolveRateLimitKey(req, 'legacy-sse-message');
+        await handleRateLimit(rateLimiter, clientId, req.ip || 'unknown', 'legacy SSE message', res, req.body?.id);
+        if (res.headersSent) {
+          return;
+        }
+        await session.transport.handlePostMessage(req, res, req.body);
+      } catch (error) {
+        logInternalError(error, 'legacy_sse_message');
+        if (!res.headersSent) {
+          res.status(500).json(createJsonRpcErrorResponse(new ServerError('Failed to handle SSE message')));
+        }
       }
+    });
 
-      const { transport } = transportData;
-      await transport.handlePostMessage(req, res, req.body);
-    } catch (error) {
-      logger.error('SSE message handling failed', error);
-      if (!res.headersSent) {
-        res.status(500).json(createJsonRpcErrorResponse(new ServerError('Failed to handle SSE message')));
+    // Non-standard compatibility route used by the legacy test client. Without a sessionId it may
+    // select only a session opened with exactly the same authentication binding.
+    app.post('/sse', authMW, async (req, res): Promise<void> => {
+      try {
+        const authBinding = getSessionAuthBinding(req);
+        const sessionId = String(req.query.sessionId ?? '');
+        const session = sessionId
+          ? sseTransports.get(sessionId)
+          : Array.from(sseTransports.values()).find((candidate) => candidate.authBinding === authBinding);
+
+        if (!session) {
+          const err = new ResourceNotFoundError('No matching SSE session. Connect via GET /sse first.');
+          res.status(err.statusCode).json(createJsonRpcErrorResponse(err, req.body?.id ?? null));
+          return;
+        }
+        if (session.authBinding !== authBinding) {
+          rejectSessionBinding(res, req.body?.id);
+          return;
+        }
+
+        const clientId = resolveRateLimitKey(req, 'legacy-sse-direct');
+        await handleRateLimit(rateLimiter, clientId, req.ip || 'unknown', 'legacy SSE POST', res, req.body?.id);
+        if (res.headersSent) {
+          return;
+        }
+        await session.transport.handlePostMessage(req, res, req.body);
+      } catch (error) {
+        logInternalError(error, 'legacy_sse_post');
+        if (!res.headersSent) {
+          res.status(500).json(createJsonRpcErrorResponse(new ServerError('Failed to handle SSE POST request')));
+        }
       }
-    }
-  });
-
-  // POST endpoint for direct SSE requests (legacy compatibility - same endpoint as GET)
-  app.post('/sse', authMW, async (req, res): Promise<void> => {
-    try {
-      // Find any active SSE transport for this client (fallback approach)
-      // TODO: This is needed for test client compatibility. In production, clients should use proper session management or POST to /messages endpoint.
-      let targetTransport = null;
-
-      for (const [_sessionId, transportData] of sseTransports.entries()) {
-        // Use the first available transport (simple approach for testing)
-        targetTransport = transportData.transport;
-        break;
-      }
-
-      if (!targetTransport) {
-        const err = new ResourceNotFoundError('No SSE connection established. Connect via GET /sse first.');
-        res.status(err.statusCode).json(createJsonRpcErrorResponse(err, req.body?.id ?? null));
-        return;
-      }
-
-      // Apply rate limiting
-      const clientId = resolveRateLimitKey(req);
-      await handleRateLimit(rateLimiter, clientId, req.ip || 'unknown', 'SSE POST', res, req.body?.id);
-
-      logger.info(`Direct SSE POST request received: ${req.body.method} | id: ${req.body.id}`);
-
-      // Use the transport's built-in handlePostMessage method
-      await targetTransport.handlePostMessage(req, res, req.body);
-    } catch (error) {
-      logger.error('SSE POST request failed', error);
-      if (!res.headersSent) {
-        res.status(500).json(createJsonRpcErrorResponse(new ServerError('Failed to handle SSE POST request')));
-      }
-    }
-  });
+    });
+  }
 
   // Streamable HTTP runs **stateful**: each MCP session owns a `StreamableHTTPServerTransport`
   // bound to its own `Server` instance (so `getClientCapabilities()` works like on stdio). The
@@ -669,22 +732,28 @@ export async function startHttpServer(): Promise<void> {
   // connection/handshake trace so each can be enabled independently. Errors always log regardless.
   const RPC_DEBUG = debugNamespaces.includes('mcp-rpc');
   // Short session id for log lines (full UUID is noisy). Empty header → 'none'.
-  const shortSid = (sid?: string): string => (sid ? sid.slice(0, 8) : 'none');
+  const shortSid = (sid?: string): string =>
+    sid ? createHash('sha256').update(sid).digest('hex').slice(0, 8) : 'none';
   // Summarize the request line for handshake tracing: JSON-RPC method, id, session header,
   // and presence of the headers that matter for the MCP transport contract.
   const describeMcpRequest = (req: express.Request): string => {
     const body = req.body as any;
     const h = req.headers;
     const hasAuth = !!(h.authorization || h['x-on-behalf-of-user']);
+    const rawMethod = typeof body?.method === 'string' ? body.method : '';
+    const method = /^[A-Za-z][A-Za-z0-9_./-]{0,127}$/.test(rawMethod) ? rawMethod : rawMethod ? '(invalid)' : '(none)';
+    const rawProtocol = (h['mcp-protocol-version'] as string) || body?.params?.protocolVersion || '';
+    const protocolVersion = /^\d{4}-\d{2}-\d{2}$/.test(rawProtocol)
+      ? rawProtocol
+      : rawProtocol
+        ? '(invalid)'
+        : '(none)';
     return [
-      `method=${body?.method ?? '(none)'}`,
-      `id=${body?.id ?? '(none)'}`,
+      `method=${method}`,
+      `id=${body && Object.hasOwn(body, 'id') ? 'present' : 'none'}`,
       `session=${shortSid(h[HTTP_SESSION_HEADER] as string | undefined)}`,
-      `protocolVersion=${(h['mcp-protocol-version'] as string) || body?.params?.protocolVersion || '(none)'}`,
-      `accept=${(h.accept as string) || '(none)'}`,
-      `contentType=${(h['content-type'] as string) || '(none)'}`,
+      `protocolVersion=${protocolVersion}`,
       `auth=${hasAuth ? 'yes' : 'no'}`,
-      `ip=${req.ip || 'unknown'}`,
     ].join(' | ');
   };
   // Parse outgoing MCP payloads into JSON-RPC message objects. The SDK transport answers either
@@ -778,10 +847,8 @@ export async function startHttpServer(): Promise<void> {
         const errors = messages.filter((m) => m && m.error);
         if (errors.length > 0) {
           for (const m of errors) {
-            const data = m.error.data === undefined ? '' : ` | data=${JSON.stringify(m.error.data).slice(0, 800)}`;
             logger.warn(
-              `MCP RPC error response → HTTP ${res.statusCode} | id=${m.id ?? '(none)'} | ` +
-                `code=${m.error.code} | message=${JSON.stringify(m.error.message)}${data} ` +
+              `MCP RPC error response → HTTP ${res.statusCode} | code=${Number.isInteger(m.error.code) ? m.error.code : 'unknown'} ` +
                 `| for: ${describeMcpRequest(req)}`,
             );
           }
@@ -791,10 +858,10 @@ export async function startHttpServer(): Promise<void> {
               m.error
                 ? `error ${m.error.code}`
                 : m.result !== undefined
-                  ? `id=${m.id} result=ok`
+                  ? `result=ok`
                   : m.method
                     ? `notif ${m.method}`
-                    : `id=${m.id ?? '(none)'}`,
+                    : `response`,
             )
             .join('; ');
           logger.info(
@@ -810,7 +877,11 @@ export async function startHttpServer(): Promise<void> {
 
   // Soft cap to bound memory; oldest session is evicted (FIFO via Map insertion order).
   const MAX_HTTP_SESSIONS = 4096;
-  const mcpTransports = new Map<string, StreamableHTTPServerTransport>();
+  type HttpMcpSession = {
+    transport: StreamableHTTPServerTransport;
+    authBinding: string;
+  };
+  const mcpTransports = new Map<string, HttpMcpSession>();
   // Standard §6 (MAY) — SSE resumability. A single in-memory EventStore is shared across sessions
   // (each stream owns its own streamId). Created only when opted in; otherwise the transport is
   // built without an eventStore and behavior is unchanged.
@@ -827,9 +898,9 @@ export async function startHttpServer(): Promise<void> {
       if (!oldest || oldest === keep) {
         break;
       }
-      const t = mcpTransports.get(oldest);
+      const session = mcpTransports.get(oldest);
       mcpTransports.delete(oldest);
-      void t?.close();
+      void session?.transport.close();
     }
   };
 
@@ -859,11 +930,10 @@ export async function startHttpServer(): Promise<void> {
     try {
       const winner = await Promise.race([exec().then(() => 'done' as const), timerPromise]);
       if (winner === 'timeout' && !res.headersSent) {
-        const toolName = (req.body as any)?.params?.name ?? 'unknown';
-        const err = new TimeoutError(`Tool '${toolName}' exceeded ${timeoutMs} ms timeout`, {
+        const err = new TimeoutError(`Tool call exceeded ${timeoutMs} ms timeout`, {
           reason: 'tool_timeout',
         });
-        logger.warn(`Tool timeout (${timeoutMs} ms) for tool: ${toolName}`);
+        logger.warn(`Tool timeout (${timeoutMs} ms)`);
         res.status(err.statusCode).json(createJsonRpcErrorResponse(err, (req.body as any)?.id ?? null));
       }
     } finally {
@@ -939,18 +1009,22 @@ export async function startHttpServer(): Promise<void> {
   const routeToSession = async (req: express.Request, res: express.Response): Promise<void> => {
     installRpcResponseTrace(req, res);
     const sessionId = req.headers[HTTP_SESSION_HEADER] as string | undefined;
-    const transport = sessionId ? mcpTransports.get(sessionId) : undefined;
+    const session = sessionId ? mcpTransports.get(sessionId) : undefined;
     if (HANDSHAKE_DEBUG) {
       logger.info(
         `MCP ${req.method} /mcp routing to session ${shortSid(sessionId)}: ` +
-          `${transport ? 'found' : 'NOT FOUND'} | ${describeMcpRequest(req)}`,
+          `${session ? 'found' : 'NOT FOUND'} | ${describeMcpRequest(req)}`,
       );
     }
-    if (!transport) {
+    if (!session) {
       noSessionError(req, res);
       return;
     }
-    await transport.handleRequest(req, res, req.body);
+    if (session.authBinding !== getSessionAuthBinding(req)) {
+      rejectSessionBinding(res, (req.body as any)?.id);
+      return;
+    }
+    await session.transport.handleRequest(req, res, req.body);
   };
 
   // POST endpoint for MCP requests — handshake + all JSON-RPC calls go through the SDK transport.
@@ -974,7 +1048,7 @@ export async function startHttpServer(): Promise<void> {
           rateLimiter,
           toolCallClientId,
           req.ip || 'unknown',
-          `tool call | tool: ${(req.body as any)?.params?.name || 'unknown'}`,
+          'tool_call',
           res,
           (req.body as any)?.id,
         );
@@ -986,16 +1060,21 @@ export async function startHttpServer(): Promise<void> {
       const sessionId = req.headers[HTTP_SESSION_HEADER] as string | undefined;
       const existing = sessionId ? mcpTransports.get(sessionId) : undefined;
       if (existing) {
-        if (HANDSHAKE_DEBUG) {
-          logger.info(`POST /mcp reusing session ${shortSid(sessionId)} for method=${(req.body as any)?.method}`);
+        if (existing.authBinding !== getSessionAuthBinding(req)) {
+          rejectSessionBinding(res, (req.body as any)?.id);
+          return;
         }
-        await runHttpToolCall(req, res, () => existing.handleRequest(req, res, req.body));
+        if (HANDSHAKE_DEBUG) {
+          logger.info(`POST /mcp reusing session ${shortSid(sessionId)} | ${describeMcpRequest(req)}`);
+        }
+        await runHttpToolCall(req, res, () => existing.transport.handleRequest(req, res, req.body));
         return;
       }
 
       if (isInitializeRequest(req.body)) {
+        const authBinding = getSessionAuthBinding(req);
         logger.info(
-          `MCP client initializing: protocolVersion: ${(req.body as any)?.params?.protocolVersion} | clientInfo: ${JSON.stringify((req.body as any)?.params?.clientInfo)}` +
+          `MCP client initializing: clientInfo=${(req.body as any)?.params?.clientInfo ? 'present' : 'none'}` +
             (HANDSHAKE_DEBUG ? ` | ${describeMcpRequest(req)}` : ''),
         );
         const transport = new StreamableHTTPServerTransport({
@@ -1003,9 +1082,9 @@ export async function startHttpServer(): Promise<void> {
           // Standard §6 (MAY) — attach the EventStore only when resumability is enabled.
           ...(sseEventStore ? { eventStore: sseEventStore } : {}),
           onsessioninitialized: (sid: string) => {
-            mcpTransports.set(sid, transport);
+            mcpTransports.set(sid, { transport, authBinding });
             evictOldestSession(sid);
-            logger.info(`MCP session created: ${sid} (active sessions: ${mcpTransports.size})`);
+            logger.info(`MCP session created: ${shortSid(sid)} (active sessions: ${mcpTransports.size})`);
           },
           onsessionclosed: (sid: string) => {
             mcpTransports.delete(sid);
@@ -1038,14 +1117,15 @@ export async function startHttpServer(): Promise<void> {
       // No session and not an `initialize` request → 400 per MCP transport semantics.
       noSessionError(req, res);
     } catch (error: Error | any) {
-      if (!error.printed) {
-        logger.error('MCP request failed', toError(error));
-        error.printed = true;
+      const errorRecord = error && typeof error === 'object' ? error : undefined;
+      if (!errorRecord?.printed) {
+        logInternalError(error, 'mcp_request');
+        if (errorRecord) {
+          errorRecord.printed = true;
+        }
       }
       if (!res.headersSent) {
-        res
-          .status(500)
-          .json(createJsonRpcErrorResponse(error instanceof ServerError ? error : new ServerError(toStr(error))));
+        res.status(500).json(createJsonRpcErrorResponse(new ServerError('MCP request failed')));
       }
     }
   });
@@ -1059,36 +1139,10 @@ export async function startHttpServer(): Promise<void> {
   });
 
   // 404 handler for unknown routes
-  app.use((req, res) => {
-    const availableEndpoints: any = {
-      home: 'GET /',
-      health: 'GET /health',
-      ready: 'GET /ready',
-      checkToken: 'GET /ct?t=<token>, POST /ct',
-      sse: 'GET /sse, POST /sse',
-      messages: 'POST /messages',
-      mcp: 'POST /mcp',
-    };
-
-    if (openAPIConfig) {
-      availableEndpoints.swagger = 'GET /docs';
-      availableEndpoints.openapi = 'GET /api/openapi.json';
-      availableEndpoints.openapiYaml = 'GET /api/openapi.yaml';
-    }
-    if (appConfig.webServer.genJwtApiEnable) {
-      availableEndpoints.genJwt = 'POST /gen-jwt';
-    }
-    if (isAdminEnabled) {
-      availableEndpoints.admin = 'GET /admin';
-    }
-    if (appConfig.agentTester?.enabled) {
-      availableEndpoints.agentTester = 'GET /agent-tester';
-    }
-
+  app.use((_req, res) => {
     res.status(404).json({
       error: 'Not Found',
-      message: `Cannot ${req.method} ${req.path}`,
-      availableEndpoints,
+      message: 'Endpoint not found',
     });
   });
 
@@ -1098,7 +1152,7 @@ export async function startHttpServer(): Promise<void> {
   // JSON-RPC `-32005` / HTTP 413.
   app.use((error: any, req: express.Request, res: express.Response, _next: express.NextFunction) => {
     if (error && error.type === 'entity.too.large') {
-      logger.warn(`Payload too large from ip: ${req.ip}, limit: ${maxPayloadBytes}`);
+      logger.warn(`Payload too large: limit=${maxPayloadBytes}`);
       if (!res.headersSent) {
         const err = new PayloadTooLargeError(`Request body exceeds ${maxPayloadBytes} bytes`, {
           reason: 'payload_too_large',
@@ -1108,7 +1162,7 @@ export async function startHttpServer(): Promise<void> {
       return;
     }
 
-    logger.error('Express error handler', error);
+    logInternalError(error, 'express_error_handler');
 
     if (!res.headersSent) {
       res.status(500).json(createJsonRpcErrorResponse(error));
@@ -1120,13 +1174,12 @@ export async function startHttpServer(): Promise<void> {
   // `0.0.0.0` or a specific NIC address. Standard §6.
   const { port, host } = appConfig.webServer;
   app.listen(port, host || '127.0.0.1', () => {
-    let msg = `${chalk.magenta(appConfig.productName)} started with ${chalk.blue('HTTP')} transport on ${chalk.blue(host)}:${chalk.blue(port)}
-Home page: http://localhost:${port}/`;
+    let msg = `${chalk.magenta('MCP server')} started with ${chalk.blue('HTTP')} transport`;
     if (isAdminEnabled) {
-      msg += `\nAdmin panel: http://localhost:${port}/admin`;
+      msg += '\nAdmin panel enabled';
     }
     if (appConfig.agentTester?.enabled) {
-      msg += `\nAgent Tester: http://localhost:${port}/agent-tester`;
+      msg += '\nAgent Tester enabled';
     }
     console.log(msg);
   });

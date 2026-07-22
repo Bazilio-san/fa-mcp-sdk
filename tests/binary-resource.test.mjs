@@ -31,10 +31,17 @@ globalThis.__MCP_PROJECT_DATA__ = {
       content: { blob: Buffer.from('hello-bytes') },
     },
     { uri: 'txt://plain', name: 'plain', description: 'text', mimeType: 'text/plain', content: 'plain text content' },
+    {
+      uri: 'json://object',
+      name: 'json-object',
+      description: 'plain authoring object serialized at the wire boundary',
+      mimeType: 'application/json',
+      content: { enabled: true, count: 2 },
+    },
   ],
 };
 
-const { getResource } = await import('../dist/core/mcp/resources.js');
+const { getResource, getResourcesList } = await import('../dist/core/mcp/resources.js');
 const ctx = { transport: 'http' };
 
 let failed = 0;
@@ -72,6 +79,24 @@ await test('text resource still returns text, no blob', async () => {
   const c = r.contents[0];
   assert.equal(c.text, 'plain text content');
   assert.equal(c.blob, undefined);
+});
+
+await test('plain object resource is emitted as parseable JSON text', async () => {
+  const r = await getResource('json://object', ctx);
+  const c = r.contents[0];
+  assert.equal(typeof c.text, 'string');
+  assert.deepEqual(JSON.parse(c.text), { enabled: true, count: 2 });
+  assert.equal(c.blob, undefined);
+  const listed = (await getResourcesList(ctx)).resources.find((resource) => resource.uri === 'json://object');
+  assert.equal(listed.size, Buffer.byteLength(c.text, 'utf-8'));
+});
+
+await test('built-in JSON resources are emitted as JSON text', async () => {
+  for (const uri of ['use://http-headers', 'use://auth']) {
+    const r = await getResource(uri, ctx);
+    assert.equal(typeof r.contents[0].text, 'string');
+    assert.doesNotThrow(() => JSON.parse(r.contents[0].text));
+  }
 });
 
 await test('built-in text resource project://version returns text', async () => {

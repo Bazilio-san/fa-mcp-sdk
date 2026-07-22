@@ -1,7 +1,7 @@
+import { Route, Get, Security, Tags } from '@tsoa/runtime';
 import { Router, Request, Response } from 'express';
-import { Route, Get, Tags } from 'tsoa';
 
-import { logger, createAuthMW } from '../../core/index.js';
+import { createAuthMW, logger, logInternalError } from '../../core/index.js';
 
 export const apiRouter: Router | null = Router();
 
@@ -28,6 +28,7 @@ export class ExampleController {
    * Template endpoint - customize as needed
    */
   @Get('example')
+  @Security('bearerAuth')
   @Tags('Example')
   public async getExample(): Promise<ExampleResponse> {
     try {
@@ -39,8 +40,8 @@ export class ExampleController {
         data: { timestamp: new Date().toISOString() },
       };
     } catch (error) {
-      logger.error('Error in example endpoint:', error);
-      throw new Error(error instanceof Error ? error.message : 'Unknown error', { cause: error });
+      logInternalError(error, 'example_endpoint');
+      throw new Error('Internal error', { cause: error });
     }
   }
 
@@ -77,10 +78,10 @@ apiRouter.get('/example', authMW, async (req: Request, res: Response) => {
       data: { timestamp: new Date().toISOString() },
     });
   } catch (error) {
-    logger.error('Error in example endpoint:', error);
+    logInternalError(error, 'example_endpoint');
     res.status(500).json({
       success: false,
-      error: error instanceof Error ? error.message : 'Unknown error',
+      error: 'Internal error',
     });
   }
 });

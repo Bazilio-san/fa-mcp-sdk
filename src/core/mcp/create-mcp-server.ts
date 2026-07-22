@@ -27,9 +27,10 @@ import {
   TTransportType,
 } from '../_types_/types.js';
 import { appConfig, getProjectData } from '../bootstrap/init-config.js';
+import { transportPrincipal } from '../auth/principal.js';
 import { sanitizeOutwardMessage, toMcpError } from '../errors/errors.js';
 import { RateLimitedError, ResourceNotFoundError } from '../errors/specific-errors.js';
-import { getTools, normalizeHeaders } from '../utils/utils.js';
+import { getTools, normalizeTransportHeaders } from '../utils/utils.js';
 import { getCurrentRequestContext, IRequestContext, runWithRequestContext } from '../web/request-id.js';
 import { getMetrics } from '../metrics/metrics.js';
 
@@ -39,6 +40,7 @@ import {
   readDeprecation,
   warnDeprecatedUsage,
 } from './deprecation.js';
+import { emitTrace } from './debug-trace.js';
 import { registerLoggingCapability } from './mcp-logging.js';
 import { paginate, parsePageSize } from './pagination.js';
 import { getPrompt, getPromptsList } from './prompts.js';
@@ -50,8 +52,11 @@ import {
   unsubscribeResource,
 } from './resources.js';
 import { getTaskStore, isTerminalTaskStatus, toTaskDto, ITaskRecord } from './task-store.js';
-import { truncateToolResponse, withToolTimeout } from './tool-limits.js';
+import { assertRequiredScopes, getToolRequiredScopes, missingRequiredScopes } from './required-scopes.js';
+import { serializedToolResultBytes, truncateToolResponse, withToolTimeout } from './tool-limits.js';
+import { beginToolTrace, completeToolTrace, failToolTrace } from './tool-trace.js';
 import { validateToolInput, validateToolOutput } from './validate-tool-args.js';
+import { resolveToolAlias } from './validate-tool-names.js';
 
 /**
  * Standard §14 — per-subject in-flight counter for tools/call. Keys are the JWT `sub`
@@ -59,13 +64,26 @@ import { validateToolInput, validateToolOutput } from './validate-tool-args.js';
  * raise RateLimitedError with the standard `Retry-After` semantics.
  */
 const inFlightBySubject = new Map<string, number>();
+let totalInFlight = 0;
 
-function subjectKeyFromAuth(authInfo: any): string {
-  const sub = authInfo?.payload?.sub ?? authInfo?.payload?.user ?? authInfo?.username;
-  if (typeof sub === 'string' && sub.trim()) {
-    return sub.trim().toLowerCase();
-  }
-  return 'anonymous';
+function subjectKeyFromContext(context: ITransportContext): string {
+  return transportPrincipal(context);
+}
+
+function missingToolScopes(tool: any, context: ITransportContext): string[] {
+  return missingRequiredScopes(getToolRequiredScopes(tool), context, 'tool');
+}
+
+export interface ICreateMcpServerOptions {
+  /**
+   * Supply transport-owned request context that cannot be represented by the MCP SDK's
+   * `RequestHandlerExtra`. The legacy SSE adapter uses this to preserve the authenticated
+   * connection context while still executing every method through the canonical handlers.
+   */
+  contextProvider?: (
+    extra: { requestInfo?: { headers?: Record<string, any> }; authInfo?: any },
+    defaultContext: ITransportContext,
+  ) => ITransportContext;
 }
 
 /**
@@ -79,7 +97,8 @@ function tryAcquireSlot(subjectKey: string, maxConcurrent: number): boolean {
     return false;
   }
   inFlightBySubject.set(subjectKey, current + 1);
-  getMetrics()?.concurrentCalls.set({ subject: subjectKey }, current + 1);
+  totalInFlight += 1;
+  getMetrics()?.concurrentCalls.set(totalInFlight);
   return true;
 }
 
@@ -87,11 +106,11 @@ function releaseSlot(subjectKey: string): void {
   const after = (inFlightBySubject.get(subjectKey) ?? 1) - 1;
   if (after <= 0) {
     inFlightBySubject.delete(subjectKey);
-    getMetrics()?.concurrentCalls.set({ subject: subjectKey }, 0);
   } else {
     inFlightBySubject.set(subjectKey, after);
-    getMetrics()?.concurrentCalls.set({ subject: subjectKey }, after);
   }
+  totalInFlight = Math.max(0, totalInFlight - 1);
+  getMetrics()?.concurrentCalls.set(totalInFlight);
 }
 
 /**
@@ -107,8 +126,9 @@ function releaseSlot(subjectKey: string): void {
  *
  * @param transportType — transport that owns this server instance, surfaced to handlers as
  *   `ITransportContext.transport`.
+ * @param options — optional transport adapter hooks. Product code normally leaves this empty.
  */
-export function createMcpServer(transportType: TTransportType): Server {
+export function createMcpServer(transportType: TTransportType, options: ICreateMcpServerOptions = {}): Server {
   const resourcesCfg = appConfig.mcp.resources;
   const subscribeEnabled = resourcesCfg?.subscribeEnabled === true;
   const templatesEnabled = resourcesCfg?.templatesEnabled === true;
@@ -184,15 +204,18 @@ export function createMcpServer(transportType: TTransportType): Server {
   }
 
   const ctx = (extra: { requestInfo?: { headers?: Record<string, any> }; authInfo?: any }): ITransportContext => {
-    const headers = extra.requestInfo?.headers ? normalizeHeaders(extra.requestInfo.headers) : undefined;
+    const headers = extra.requestInfo?.headers ? normalizeTransportHeaders(extra.requestInfo.headers) : undefined;
     const payload = extra.authInfo?.payload as ITransportContext['payload'];
+    const principal = typeof extra.authInfo?.principal === 'string' ? extra.authInfo.principal : undefined;
     const caps = server.getClientCapabilities() as IClientCapabilities | undefined;
-    return {
+    const defaultContext: ITransportContext = {
       transport: transportType,
       ...(headers ? { headers } : {}),
       ...(payload ? { payload } : {}),
+      ...(principal ? { principal } : {}),
       ...(caps ? { clientCapabilities: caps } : {}),
     };
+    return options.contextProvider?.(extra, defaultContext) ?? defaultContext;
   };
 
   const pageSize = parsePageSize(appConfig.mcp.pagination?.pageSize);
@@ -227,15 +250,28 @@ export function createMcpServer(transportType: TTransportType): Server {
   server.setRequestHandler(
     ListToolsRequestSchema,
     withRequestContext(async (request, extra) => {
-      const raw = await getTools(ctx(extra));
-      const tools = raw.map((t: any) => {
-        const info = readDeprecation(t);
-        if (!info) {
-          return t;
-        }
-        assertDeprecationConsistency('tool', t.name, info);
-        return { ...t, description: applyDeprecationToDescription(t.description, info) };
-      });
+      const transportContext = ctx(extra);
+      // Standard §7.5 / G6 — discovery reflects authorization. A tool that the current
+      // principal cannot call is not advertised, while direct calls remain independently denied.
+      const raw = (await getTools(transportContext)).filter(
+        (tool) => missingToolScopes(tool, transportContext).length === 0,
+      );
+      const tools = raw
+        .map((t: any) => {
+          const info = readDeprecation(t);
+          if (!info) {
+            return t;
+          }
+          assertDeprecationConsistency('tool', t.name, info);
+          return { ...t, description: applyDeprecationToDescription(t.description, info) };
+        })
+        .map((tool: any) => {
+          if (appConfig.mcp.tools?.hideAnnotations !== true) {
+            return tool;
+          }
+          const { annotations: _annotations, ...publicTool } = tool;
+          return publicTool;
+        });
       const cursor = (request.params as any)?.cursor;
       const { page, nextCursor } = paginate(tools, cursor, pageSize, (t) => t.name);
       return nextCursor ? { tools: page, nextCursor } : { tools: page };
@@ -288,8 +324,34 @@ export function createMcpServer(transportType: TTransportType): Server {
    * and record the serialized size metric. Returns the wire-ready result.
    */
   const finalizeToolResponse = (tool: any, response: any): any => {
-    if (response && typeof response === 'object' && 'structuredContent' in response) {
-      const outputCheck = validateToolOutput(tool, response.structuredContent);
+    let normalizedResponse = response;
+    const hasOutputSchema = Boolean(tool?.outputSchema && typeof tool.outputSchema === 'object');
+
+    // A published outputSchema describes structuredContent. For compatibility with older handlers
+    // that returned one JSON text block, promote that block to structuredContent and validate it.
+    if (
+      hasOutputSchema &&
+      (!normalizedResponse ||
+        typeof normalizedResponse !== 'object' ||
+        !Object.prototype.hasOwnProperty.call(normalizedResponse, 'structuredContent'))
+    ) {
+      const content = Array.isArray(normalizedResponse?.content) ? normalizedResponse.content : [];
+      if (content.length !== 1 || content[0]?.type !== 'text' || typeof content[0]?.text !== 'string') {
+        throw new McpError(-32603, 'Tool with outputSchema did not return structuredContent', {
+          reason: 'missing_structured_content',
+        });
+      }
+      try {
+        normalizedResponse = { ...normalizedResponse, structuredContent: JSON.parse(content[0].text) };
+      } catch {
+        throw new McpError(-32603, 'Tool with outputSchema returned non-JSON text content', {
+          reason: 'missing_structured_content',
+        });
+      }
+    }
+
+    if (normalizedResponse && typeof normalizedResponse === 'object' && 'structuredContent' in normalizedResponse) {
+      const outputCheck = validateToolOutput(tool, normalizedResponse.structuredContent);
       if (!outputCheck.valid) {
         throw new McpError(-32603, `Tool produced result that violates outputSchema: ${outputCheck.summary}`, {
           field: outputCheck.field,
@@ -299,25 +361,30 @@ export function createMcpServer(transportType: TTransportType): Server {
         });
       }
       // §12.4 — mirror structuredContent in content[0] as JSON text for legacy clients.
-      const existingContent = Array.isArray(response.content) ? response.content : undefined;
-      const hasText = existingContent?.some((p: any) => p?.type === 'text' && typeof p?.text === 'string');
-      if (!hasText) {
-        let serialized: string;
-        try {
-          serialized = JSON.stringify(response.structuredContent ?? null, null, 2);
-        } catch {
-          serialized = '';
-        }
-        response.content = [{ type: 'text', text: serialized }, ...(existingContent ?? [])];
+      const existingContent = Array.isArray(normalizedResponse.content) ? normalizedResponse.content : undefined;
+      let serialized: string;
+      try {
+        serialized = JSON.stringify(normalizedResponse.structuredContent ?? null, null, 2);
+      } catch {
+        serialized = '';
+      }
+      const firstIsMirror = existingContent?.[0]?.type === 'text' && existingContent[0].text === serialized;
+      if (!firstIsMirror) {
+        normalizedResponse = {
+          ...normalizedResponse,
+          content: [{ type: 'text', text: serialized }, ...(existingContent ?? [])],
+        };
       }
     }
 
-    const truncated = truncateToolResponse(response) as any;
-    try {
-      const resultBytes = JSON.stringify(truncated ?? null).length;
+    const truncated = truncateToolResponse(normalizedResponse, {
+      // MCP defaults readOnlyHint to false. Treat an absent annotation conservatively because the
+      // handler has already completed and a retry could duplicate an external side effect.
+      readOnly: tool?.annotations?.readOnlyHint === true,
+    }) as any;
+    const resultBytes = serializedToolResultBytes(truncated);
+    if (resultBytes !== undefined) {
       getMetrics()?.resultBytes.observe(resultBytes);
-    } catch {
-      // ignore serialization-only failures
     }
     return truncated;
   };
@@ -366,34 +433,64 @@ export function createMcpServer(transportType: TTransportType): Server {
     const transportCtx = ctx(extra);
 
     const run = async () => {
+      const stopTimer = getMetrics()?.toolDuration.startTimer({ tool: toolName });
+      let outcome: 'ok' | 'error' | 'timeout' | 'internal_error' = 'ok';
+      let handlerSettled: Promise<void> | undefined;
+      let holdSlotUntilHandlerSettles = false;
       const bgCtx: IRequestContext = {
         requestId: record.requestId ?? `task-${record.taskId}`,
         jsonRpcId: null,
       };
       await runWithRequestContext(bgCtx, async () => {
+        const trace = beginToolTrace(toolName, (request.params as any)?.arguments);
         try {
-          const raw = (await toolHandler({
-            ...request.params,
-            ...transportCtx,
-            // Standard §8.5 — cancellation is driven by the task's own AbortController.
-            signal: record.abort.signal,
-            // Standard §8.6 — progress for the long-running task.
-            sendProgress,
+          const raw = (await withToolTimeout(toolName, record.abort.signal, (signal) => {
+            const handlerPromise = Promise.resolve(
+              toolHandler({
+                ...request.params,
+                name: toolName,
+                ...transportCtx,
+                // Task cancellation and the global tool timeout share the signal supplied to project code.
+                signal,
+                // Standard §8.6 — progress for the long-running task.
+                sendProgress,
+              }) as Promise<any>,
+            );
+            handlerSettled = handlerPromise.then(
+              () => undefined,
+              () => undefined,
+            );
+            return handlerPromise;
           })) as any;
           const processed = finalizeToolResponse(tool, raw);
-          // Skip if the task was cancelled while the handler was still running.
-          if (store.get(record.taskId)?.status === 'working') {
+          if (processed?.isError === true) {
+            outcome = 'error';
+          }
+          const current = store.get(record.taskId);
+          if (current?.status === 'working') {
+            completeToolTrace(trace, toolName, processed);
             const updated = store.update(record.taskId, { status: 'completed', result: processed });
             getMetrics()?.tasks.inc({ status: 'completed' });
             if (updated) {
               notifyTaskStatus(updated);
             }
+          } else {
+            // The client cancelled while project code ignored AbortSignal and later returned.
+            // Record one bounded error completion without publishing or persisting the stale result.
+            outcome = 'error';
+            failToolTrace(trace, toolName, new Error('Task execution cancelled'));
           }
         } catch (err) {
+          failToolTrace(trace, toolName, err);
+          const code = (err as { code?: number })?.code;
+          outcome = code === -32004 ? 'timeout' : code === -32603 ? 'internal_error' : 'error';
+          // A non-cooperative timed-out handler may still mutate state. Keep its subject slot
+          // occupied until it actually settles so another call cannot overtake it.
+          holdSlotUntilHandlerSettles = code === -32004;
           if (store.get(record.taskId)?.status === 'working') {
             const updated = store.update(record.taskId, {
               status: 'failed',
-              statusMessage: sanitizeOutwardMessage(err),
+              statusMessage: code === -32004 ? 'Operation timed out' : sanitizeOutwardMessage(err),
             });
             getMetrics()?.tasks.inc({ status: 'failed' });
             if (updated) {
@@ -401,7 +498,13 @@ export function createMcpServer(transportType: TTransportType): Server {
             }
           }
         } finally {
-          releaseSlot(subjectKey);
+          stopTimer?.();
+          getMetrics()?.toolCalls.inc({ tool: toolName, status: outcome });
+          if (holdSlotUntilHandlerSettles && handlerSettled) {
+            void handlerSettled.finally(() => releaseSlot(subjectKey));
+          } else {
+            releaseSlot(subjectKey);
+          }
         }
       });
     };
@@ -412,43 +515,39 @@ export function createMcpServer(transportType: TTransportType): Server {
 
   // Handler for tool execution. The call is wrapped by `withToolTimeout` (standard §14 —
   // `mcp.limits.toolTimeoutMs`) and `truncateToolResponse` (standard §12.2 — oversized
-  // results are surfaced with explicit `truncated: true` markers). Arguments are validated
+  // results are surfaced with explicit `truncated: true` and retry/side-effect markers). Arguments are validated
   // against the tool's `inputSchema` (standard §9.3); structuredContent is validated against
   // `outputSchema` (standard §9.4) and mirrored into `content[0]` as JSON text per §12.4.
   server.setRequestHandler(
     CallToolRequestSchema,
     withRequestContext(async (request, extra) => {
       const { toolHandler } = getProjectData();
-      const toolName = (request.params as any)?.name ?? 'unknown';
+      const requestedToolName = (request.params as any)?.name ?? 'unknown';
       const args = (request.params as any)?.arguments ?? {};
+      const transportContext = ctx(extra);
 
-      const tools = await getTools(ctx(extra));
+      const tools = await getTools(transportContext);
+      const toolName = resolveToolAlias(requestedToolName, tools, getProjectData().toolAliases);
       const tool = tools.find((t) => t.name === toolName);
       if (!tool) {
-        getMetrics()?.toolCalls.inc({ tool: toolName, status: 'invalid_params' });
-        throw new McpError(-32602, `Unknown tool: ${toolName}`, { field: 'name', reason: 'unknown_tool' });
+        getMetrics()?.toolCalls.inc({ tool: 'unknown', status: 'invalid_params' });
+        throw new McpError(-32602, 'Unknown tool', {
+          field: 'name',
+          reason: 'unknown_tool',
+        });
+      }
+      if (requestedToolName !== toolName) {
+        emitTrace('mcp:tool', { kind: 'legacy-alias', name: toolName });
       }
 
       // Standard §17.2 — deprecation warning is emitted at call-time (rate-limited 1/hour).
       warnDeprecatedUsage('tool', toolName, readDeprecation(tool));
 
       // Standard §7.5 — scope enforcement for tool dispatch.
-      const required: string[] = ((tool as any)._meta?.requiredScopes ??
-        (tool as any).requiredScopes ??
-        []) as string[];
-      if (Array.isArray(required) && required.length > 0) {
-        const tokenScopes = String((extra as any)?.authInfo?.payload?.scope ?? '')
-          .split(/\s+/)
-          .filter(Boolean);
-        const missing = required.filter((s) => !tokenScopes.includes(s));
-        if (missing.length > 0) {
-          getMetrics()?.toolCalls.inc({ tool: toolName, status: 'error' });
-          throw new McpError(-32004, `Missing scopes: ${missing.join(',')}`, {
-            field: 'scope',
-            reason: 'insufficient_scope',
-            missing,
-          });
-        }
+      const missing = missingToolScopes(tool, transportContext);
+      if (missing.length > 0) {
+        getMetrics()?.toolCalls.inc({ tool: toolName, status: 'forbidden' });
+        assertRequiredScopes(getToolRequiredScopes(tool), transportContext, 'tool');
       }
 
       if (validateInput) {
@@ -466,16 +565,13 @@ export function createMcpServer(transportType: TTransportType): Server {
 
       // Standard §14 — per-subject concurrent in-flight cap.
       const maxConcurrent = appConfig.mcp.rateLimit?.maxConcurrentPerSubject ?? 16;
-      const subjectKey = subjectKeyFromAuth((extra as any)?.authInfo);
+      const subjectKey = subjectKeyFromContext(transportContext);
       const progressToken = (request.params as any)?._meta?.progressToken as string | number | undefined;
 
       const raiseConcurrencyLimit = (): never => {
         getMetrics()?.toolCalls.inc({ tool: toolName, status: 'rate_limited' });
         getMetrics()?.rateLimitHits.inc({ scope: 'concurrent' });
-        throw new RateLimitedError(
-          `Too many concurrent tool calls for subject "${subjectKey}" (limit ${maxConcurrent})`,
-          1,
-        );
+        throw new RateLimitedError(`Too many concurrent tool calls (limit ${maxConcurrent})`, 1);
       };
 
       // Standard §8.7 / §9.1 — decide synchronous vs task-augmented execution. Only relevant when
@@ -511,25 +607,39 @@ export function createMcpServer(transportType: TTransportType): Server {
 
       const stopTimer = getMetrics()?.toolDuration.startTimer({ tool: toolName });
       const sendProgress = buildSendProgress(progressToken);
+      const trace = beginToolTrace(toolName, args);
 
       let outcome: 'ok' | 'error' | 'timeout' | 'internal_error' = 'ok';
+      let handlerSettled: Promise<void> | undefined;
+      let holdSlotUntilHandlerSettles = false;
 
       try {
-        const response = (await withToolTimeout(
-          toolName,
-          () =>
+        const response = (await withToolTimeout(toolName, extra.signal, (signal) => {
+          const handlerPromise = Promise.resolve(
             toolHandler({
               ...request.params,
-              ...ctx(extra),
+              name: toolName,
+              ...transportContext,
               // Standard §8.5 — propagate cancellation to user code.
-              signal: extra.signal,
+              signal,
               // Standard §8.6 — progress emitter (no-op when no progressToken).
               sendProgress,
             }) as Promise<any>,
-        )) as any;
+          );
+          handlerSettled = handlerPromise.then(
+            () => undefined,
+            () => undefined,
+          );
+          return handlerPromise;
+        })) as any;
 
         try {
-          return finalizeToolResponse(tool, response);
+          const processed = finalizeToolResponse(tool, response);
+          if (processed?.isError === true) {
+            outcome = 'error';
+          }
+          completeToolTrace(trace, toolName, processed);
+          return processed;
         } catch (finalizeErr) {
           if ((finalizeErr as { code?: number })?.code === -32603) {
             outcome = 'internal_error';
@@ -537,10 +647,14 @@ export function createMcpServer(transportType: TTransportType): Server {
           throw finalizeErr;
         }
       } catch (err) {
+        failToolTrace(trace, toolName, err);
         if (outcome === 'ok') {
           const code = (err as { code?: number })?.code;
           if (code === -32004) {
             outcome = 'timeout';
+            // A timed-out write may still be running when project code ignores AbortSignal. Keep
+            // the subject's slot occupied until it really settles so later calls cannot overtake it.
+            holdSlotUntilHandlerSettles = true;
           } else {
             outcome = 'error';
           }
@@ -549,7 +663,11 @@ export function createMcpServer(transportType: TTransportType): Server {
       } finally {
         stopTimer?.();
         getMetrics()?.toolCalls.inc({ tool: toolName, status: outcome });
-        releaseSlot(subjectKey);
+        if (holdSlotUntilHandlerSettles && handlerSettled) {
+          void handlerSettled.finally(() => releaseSlot(subjectKey));
+        } else {
+          releaseSlot(subjectKey);
+        }
       }
     }),
   );
@@ -561,7 +679,7 @@ export function createMcpServer(transportType: TTransportType): Server {
       const record = taskStore.get(taskId);
       if (!record || record.subjectKey !== subjectKey) {
         // Do not leak whether the id exists for another subject — a uniform "not found".
-        throw new ResourceNotFoundError('Task not found', { reason: 'task_not_found', taskId });
+        throw new ResourceNotFoundError('Task not found', { reason: 'task_not_found' });
       }
       return record;
     };
@@ -570,7 +688,7 @@ export function createMcpServer(transportType: TTransportType): Server {
     server.setRequestHandler(
       GetTaskRequestSchema,
       withRequestContext(async (request, extra) => {
-        const subjectKey = subjectKeyFromAuth((extra as any)?.authInfo);
+        const subjectKey = subjectKeyFromContext(ctx(extra));
         const record = requireOwnedTask((request.params as any).taskId, subjectKey);
         return toTaskDto(record, taskStore.pollIntervalMs);
       }),
@@ -580,7 +698,7 @@ export function createMcpServer(transportType: TTransportType): Server {
     server.setRequestHandler(
       GetTaskPayloadRequestSchema,
       withRequestContext(async (request, extra) => {
-        const subjectKey = subjectKeyFromAuth((extra as any)?.authInfo);
+        const subjectKey = subjectKeyFromContext(ctx(extra));
         const record = requireOwnedTask((request.params as any).taskId, subjectKey);
         if (record.status === 'completed') {
           return record.result as any;
@@ -611,7 +729,7 @@ export function createMcpServer(transportType: TTransportType): Server {
     server.setRequestHandler(
       ListTasksRequestSchema,
       withRequestContext(async (request, extra) => {
-        const subjectKey = subjectKeyFromAuth((extra as any)?.authInfo);
+        const subjectKey = subjectKeyFromContext(ctx(extra));
         const records = taskStore.list(subjectKey);
         const cursor = (request.params as any)?.cursor;
         // Descending createdAt encoded as a zero-padded sort key so pagination stays stable.
@@ -630,7 +748,7 @@ export function createMcpServer(transportType: TTransportType): Server {
     server.setRequestHandler(
       CancelTaskRequestSchema,
       withRequestContext(async (request, extra) => {
-        const subjectKey = subjectKeyFromAuth((extra as any)?.authInfo);
+        const subjectKey = subjectKeyFromContext(ctx(extra));
         const { taskId } = request.params as any;
         const existing = requireOwnedTask(taskId, subjectKey);
         const wasActive = !isTerminalTaskStatus(existing.status);
@@ -651,15 +769,20 @@ export function createMcpServer(transportType: TTransportType): Server {
     server.setRequestHandler(
       ListPromptsRequestSchema,
       withRequestContext(async (request, extra) => {
-        const result = await getPromptsList(ctx(extra));
-        const prompts = result.prompts.map((p: any) => {
-          const info = readDeprecation(p);
-          if (!info) {
-            return p;
-          }
-          assertDeprecationConsistency('prompt', p.name, info);
-          return { ...p, description: applyDeprecationToDescription(p.description, info) };
-        });
+        const transportContext = ctx(extra);
+        const result = await getPromptsList(transportContext);
+        const prompts = result.prompts
+          .filter(
+            (prompt: any) => missingRequiredScopes(prompt.requiredScopes, transportContext, 'prompt').length === 0,
+          )
+          .map((p: any) => {
+            const info = readDeprecation(p);
+            if (!info) {
+              return p;
+            }
+            assertDeprecationConsistency('prompt', p.name, info);
+            return { ...p, description: applyDeprecationToDescription(p.description, info) };
+          });
         const cursor = (request.params as any)?.cursor;
         const { page, nextCursor } = paginate(prompts, cursor, pageSize, (p: any) => p.name);
         return nextCursor ? { prompts: page, nextCursor } : { prompts: page };
@@ -671,13 +794,8 @@ export function createMcpServer(transportType: TTransportType): Server {
       GetPromptRequestSchema,
       // @ts-ignore
       withRequestContext(async (request: IGetPromptRequest, extra) => {
-        const promptName = (request.params as any)?.name;
-        if (promptName) {
-          const { prompts } = await getPromptsList(ctx(extra));
-          const prompt = prompts.find((p: any) => p.name === promptName);
-          warnDeprecatedUsage('prompt', promptName, readDeprecation(prompt));
-        }
-        return await getPrompt(request, ctx(extra));
+        const transportContext = ctx(extra);
+        return await getPrompt(request, transportContext);
       }),
     );
   }
@@ -686,15 +804,20 @@ export function createMcpServer(transportType: TTransportType): Server {
   server.setRequestHandler(
     ListResourcesRequestSchema,
     withRequestContext(async (request, extra) => {
-      const result = await getResourcesList(ctx(extra));
-      const resources = result.resources.map((r: any) => {
-        const info = readDeprecation(r);
-        if (!info) {
-          return r;
-        }
-        assertDeprecationConsistency('resource', r.uri, info);
-        return { ...r, description: applyDeprecationToDescription(r.description, info) };
-      });
+      const transportContext = ctx(extra);
+      const result = await getResourcesList(transportContext);
+      const resources = result.resources
+        .filter(
+          (resource: any) => missingRequiredScopes(resource.requiredScopes, transportContext, 'resource').length === 0,
+        )
+        .map((r: any) => {
+          const info = readDeprecation(r);
+          if (!info) {
+            return r;
+          }
+          assertDeprecationConsistency('resource', r.uri, info);
+          return { ...r, description: applyDeprecationToDescription(r.description, info) };
+        });
       const cursor = (request.params as any)?.cursor;
       const { page, nextCursor } = paginate(resources, cursor, pageSize, (r: any) => r.uri);
       return nextCursor ? { resources: page, nextCursor } : { resources: page };
@@ -705,13 +828,8 @@ export function createMcpServer(transportType: TTransportType): Server {
   server.setRequestHandler(
     ReadResourceRequestSchema,
     withRequestContext(async (request: IReadResourceRequest, extra) => {
-      const { uri } = request.params;
-      if (uri) {
-        const { resources } = await getResourcesList(ctx(extra));
-        const resource = resources.find((r: any) => r.uri === uri);
-        warnDeprecatedUsage('resource', uri, readDeprecation(resource));
-      }
-      return (await getResource(uri, ctx(extra))) as any;
+      const transportContext = ctx(extra);
+      return (await getResource(request.params.uri, transportContext)) as any;
     }),
   );
 
@@ -720,7 +838,11 @@ export function createMcpServer(transportType: TTransportType): Server {
     server.setRequestHandler(
       ListResourceTemplatesRequestSchema,
       withRequestContext(async (request, extra) => {
-        const templates = await getResourceTemplatesList(ctx(extra));
+        const transportContext = ctx(extra);
+        const templates = (await getResourceTemplatesList(transportContext)).filter(
+          (template: any) =>
+            missingRequiredScopes(template.requiredScopes, transportContext, 'resource template').length === 0,
+        );
         const cursor = (request.params as any)?.cursor;
         const { page, nextCursor } = paginate(templates, cursor, pageSize, (t: any) => t.uriTemplate ?? t.name ?? '');
         return nextCursor ? { resourceTemplates: page, nextCursor } : { resourceTemplates: page };
@@ -734,12 +856,36 @@ export function createMcpServer(transportType: TTransportType): Server {
     const completionProvider = projectData!.completionProvider!;
     server.setRequestHandler(
       CompleteRequestSchema,
-      withRequestContext(async (request) => {
+      withRequestContext(async (request, extra) => {
+        const transportContext = ctx(extra);
         const params = (request.params ?? {}) as {
           ref: { type: 'ref/prompt' | 'ref/resource'; name?: string; uri?: string };
           argument: { name: string; value: string };
           context?: Record<string, unknown>;
         };
+        if (params.ref.type === 'ref/prompt') {
+          const name = params.ref.name ?? '';
+          const { prompts } = await getPromptsList(transportContext);
+          const prompt = prompts.find((candidate: any) => candidate.name === name);
+          if (!prompt) {
+            throw new ResourceNotFoundError('Unknown completion prompt', { reason: 'unknown_prompt' });
+          }
+          assertRequiredScopes(prompt.requiredScopes, transportContext, 'prompt');
+        } else {
+          const uri = params.ref.uri ?? '';
+          const { resources } = await getResourcesList(transportContext);
+          const resource = resources.find((candidate: any) => candidate.uri === uri);
+          if (resource) {
+            assertRequiredScopes(resource.requiredScopes, transportContext, 'resource');
+          } else {
+            const templates = await getResourceTemplatesList(transportContext);
+            const template = templates.find((candidate: any) => candidate.uriTemplate === uri);
+            if (!template) {
+              throw new ResourceNotFoundError('Unknown completion resource', { reason: 'unknown_resource' });
+            }
+            assertRequiredScopes(template.requiredScopes, transportContext, 'resource template');
+          }
+        }
         const raw = await completionProvider({
           ref: params.ref,
           argument: params.argument,
@@ -755,16 +901,34 @@ export function createMcpServer(transportType: TTransportType): Server {
 
   // Optional MAY: resources/subscribe + resources/unsubscribe — opt-in via config.
   if (subscribeEnabled) {
-    server.setRequestHandler(SubscribeRequestSchema, async (request) => {
-      const uri = (request.params as any)?.uri;
-      subscribeResource(server, uri);
-      return {};
-    });
-    server.setRequestHandler(UnsubscribeRequestSchema, async (request) => {
-      const uri = (request.params as any)?.uri;
-      unsubscribeResource(server, uri);
-      return {};
-    });
+    const assertSubscriptionAccess = async (uri: string, transportContext: ITransportContext): Promise<void> => {
+      const { resources } = await getResourcesList(transportContext);
+      const resource = resources.find((candidate: any) => candidate.uri === uri);
+      if (!resource) {
+        throw new ResourceNotFoundError('Unknown resource', { reason: 'unknown_resource' });
+      }
+      assertRequiredScopes(resource.requiredScopes, transportContext, 'resource');
+    };
+    server.setRequestHandler(
+      SubscribeRequestSchema,
+      withRequestContext(async (request, extra) => {
+        const uri = (request.params as any)?.uri;
+        const transportContext = ctx(extra);
+        await assertSubscriptionAccess(uri, transportContext);
+        subscribeResource(server, uri);
+        return {};
+      }),
+    );
+    server.setRequestHandler(
+      UnsubscribeRequestSchema,
+      withRequestContext(async (request, extra) => {
+        const uri = (request.params as any)?.uri;
+        const transportContext = ctx(extra);
+        await assertSubscriptionAccess(uri, transportContext);
+        unsubscribeResource(server, uri);
+        return {};
+      }),
+    );
   }
 
   return server;

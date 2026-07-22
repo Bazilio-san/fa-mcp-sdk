@@ -247,12 +247,14 @@ The SDK initializes `af-logger-ts` with these defaults:
 - `filePrefix` — from `appConfig.name`.
 - File logger — enabled when `config.logger.useFileLogger: true`, writes to `config.logger.dir`.
 - `maskValuesRegEx` — a built-in list that masks tokens, API keys, secrets, passwords,
-  `Authorization` headers (Basic/Bearer), email addresses, and HTTP-URL credentials.
+  `Authorization` headers (Basic/Bearer), email addresses, absolute URLs, URL credentials, and
+  absolute filesystem paths. The same masker runs on the STDIO logger before it writes to stderr.
 
 ### Disabling the Built-in Secret Masking
 
-Set `logger.disableMasking: true` in any YAML config — `maskValuesRegEx` becomes `[]` and nothing is
-masked. Useful when you want raw payloads in dev logs.
+Set `logger.disableMasking: true` in a non-production YAML config to set `maskValuesRegEx` to `[]`.
+This developer-only escape hatch is ignored by the production STDIO logger; production HTTP startup
+rejects it before opening a listener.
 
 ```yaml
 # config/local.yaml
@@ -267,8 +269,8 @@ Or via env:
 LOGGER_NO_MASK_VALUES=true yarn start
 ```
 
-> ⚠️ Never enable `disableMasking` in production — emails, bearer tokens, and basic credentials will
-> leak into log files and console output.
+> Production requires `disableMasking: false`. The server fails closed when an HTTP production
+> configuration attempts to disable masking.
 
 ### Overriding Logger Settings at Startup
 
@@ -288,12 +290,15 @@ const serverData: McpServerData = {
 
   loggerSettings: {
     level: 'silly',          // bump verbosity for one run without touching YAML
-    maskValuesRegEx: [],     // ad-hoc: drop all secret masking (same effect as logger.disableMasking)
   },
 };
 
 await initMcpServer(serverData);
 ```
+
+Production rejects `loggerSettings.maskValuesRegEx`, `loggerSettings.maskValuesOfKeys`, and
+`loggerSettings.overwrite.mask`; these overrides could weaken the mandatory secret masker. They remain
+available for local development, where `logger.disableMasking` is the simpler explicit escape hatch.
 
 `initMcpServer` applies these overrides before any further logging. Existing top-level
 `const logger = lgr.getSubLogger(...)` bindings transparently pick up the new settings on next
@@ -468,7 +473,7 @@ present; remaining fields depend on the channel and `kind`.
 | `mcp:tool`      | `req` / `res` / `err`                                          | `name`, `args`, `ms`, `corr` |
 | `mcp:resource`  | `list-req` / `list-res` / `read-req` / `read-res` / `read-err` | `uri`, `count`, `ms`         |
 | `mcp:prompt`    | `list-req` / `list-res` / `get-req` / `get-res` / `get-err`    | `name`, `count`, `ms`        |
-| `app:view-log`  | `log` (emitted by built-in `mcp-debug-log` tool)               | `type`, `payload`            |
+| `app:view-log`  | `log` (emitted by built-in `mcp_debug_log` tool)               | `type`, `payload`            |
 
 `corr` is an 8-char hex correlation ID — pair `req` ↔ `res`/`err` for one tool call.
 
@@ -484,7 +489,7 @@ jq -r 'select(.ch=="mcp:tool" and .kind=="res") | "\(.name)\t\(.ms)"' /var/log/m
 # all errors of the last hour
 jq 'select((.kind|test("err$")) and (.ts > "2026-05-19T11:00:00"))' /var/log/mcp/*.jsonl
 
-# events pushed by widgets via mcp-debug-log
+# events pushed by widgets via mcp_debug_log
 jq 'select(.ch=="app:view-log")' /var/log/mcp/*.jsonl
 ```
 
@@ -520,9 +525,9 @@ mcp:
 
 | Tool name           | Caller         | Purpose                                                                     |
 |---------------------|----------------|-----------------------------------------------------------------------------|
-| `mcp-debug-log`     | Widget         | Push a structured event into the same channel as `DEBUG=mcp:*` / JSON-lines |
-| `mcp-debug-refresh` | Widget         | Read back lightweight server state (timestamp + counter) without the LLM    |
-| `debug-tool`        | Test client    | Universal CallToolResult fixture — see [07-testing-and-operations](07-testing-and-operations.md) → "Universal `debug-tool` for Integration Tests" |
+| `mcp_debug_log`     | Widget         | Push a structured event into the same channel as `DEBUG=mcp:*` / JSON-lines |
+| `mcp_debug_refresh` | Widget         | Read back lightweight server state (timestamp + counter) without the LLM    |
+| `debug_tool`        | Test client    | Universal CallToolResult fixture — see [07-testing-and-operations](07-testing-and-operations.md) → "Universal `debug_tool` for Integration Tests" |
 
 The widget-facing tools are covered in [10-mcp-apps](10-mcp-apps.md) → "Widget-side debug helpers"
 (the canonical example calls them through `app.callServerTool(...)`). Names and constants are
@@ -530,16 +535,16 @@ exported when you need to reference them in test code:
 
 ```typescript
 import {
-  MCP_DEBUG_LOG_TOOL_NAME,       // 'mcp-debug-log'
-  MCP_DEBUG_REFRESH_TOOL_NAME,   // 'mcp-debug-refresh'
-  DEBUG_TOOL_NAME,               // 'debug-tool'
+  MCP_DEBUG_LOG_TOOL_NAME,       // 'mcp_debug_log'
+  MCP_DEBUG_REFRESH_TOOL_NAME,   // 'mcp_debug_refresh'
+  DEBUG_TOOL_NAME,               // 'debug_tool'
   BUILTIN_MCP_DEBUG_TOOLS,       // Tool[] descriptors for the two widget tools
   DEBUG_TOOL,                    // Tool descriptor for the test fixture
 } from 'fa-mcp-sdk';
 ```
 
-> Leave `builtinTools: false` in production unless a widget genuinely needs `mcp-debug-log` /
-> `mcp-debug-refresh` at runtime. The tools are inert to the LLM, but they still occupy space in the
+> Leave `builtinTools: false` in production unless a widget genuinely needs `mcp_debug_log` /
+> `mcp_debug_refresh` at runtime. The tools are inert to the LLM, but they still occupy space in the
 > `tools/list` payload and add a small amount of routing overhead per call.
 
 ## Event System

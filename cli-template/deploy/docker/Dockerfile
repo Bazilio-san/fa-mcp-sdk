@@ -8,7 +8,7 @@ COPY package.json yarn.lock ./
 RUN yarn install --frozen-lockfile --production=false
 
 # Исходники и конфиг сборки
-COPY tsconfig.json ./
+COPY tsconfig.json tsoa.json ./
 COPY src/ ./src/
 COPY scripts/ ./scripts/
 COPY config/ ./config/
@@ -30,6 +30,7 @@ RUN yarn install --production=true && yarn cache clean
 
 # Собранный backend
 COPY --from=builder /app/dist/ ./dist/
+COPY --from=builder /app/swagger/ ./swagger/
 
 # Конфиги (default.yaml, production.yaml, custom-environment-variables.yaml и т.д.)
 COPY --from=builder /app/config/ ./config/

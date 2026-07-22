@@ -4,104 +4,27 @@ import { AccessPoints, IAccessPoints, IRegisterCyclic, IAccessPoint } from 'fa-c
 
 import { Tool } from '@modelcontextprotocol/sdk/types.js';
 
-import { ITransportContext, IToolHandlerParams, McpServerData, TToolHandlerResponse } from './_types_/types.js';
+import { McpServerData } from './_types_/types.js';
 import { dotEnvResult } from './bootstrap/dotenv.js';
 import { appConfig } from './bootstrap/init-config.js';
+import { assertHttpAuthPreflight, assertProductionSurfaceSecurity } from './bootstrap/production-preflight.js';
 import { startupInfo } from './bootstrap/startup-info.js';
 import { accessPointUpdater } from './consul/access-points-updater.js';
 import { registerCyclic } from './consul/register.js';
-import { debugMcpTool } from './debug.js';
 import { checkMainDB } from './db/pg-db.js';
+import { logInternalError } from './errors/errors.js';
 import { applyLoggerSettings, fileLogger, logger as lgr } from './logger.js';
 
 // Imports to modify _core functions
-import { BUILTIN_MCP_DEBUG_TOOLS, handleBuiltinDebugTool, isBuiltinDebugTool } from './mcp/builtin-debug-tools.js';
-import { emitTrace, initDebugTraceFromConfig, makeCorr } from './mcp/debug-trace.js';
+import { initDebugTraceFromConfig } from './mcp/debug-trace.js';
+import { assertStaticRequiredScopes, isValidScope } from './mcp/required-scopes.js';
 import { startStdioServer } from './mcp/server-stdio.js';
-import { assertToolNames } from './mcp/validate-tool-names.js';
+import { assertToolSchemas } from './mcp/validate-tool-args.js';
+import { assertToolAliases, assertToolNames } from './mcp/validate-tool-names.js';
+import { wrapProjectDataWithDebug } from './mcp/wrap-project-data-with-debug.js';
 import { checkPortAvailability } from './utils/port-checker.js';
-import { DEBUG_TOOL, DEBUG_TOOL_NAME, handleDebugTool } from './utils/testing/debug-tool.js';
 import { isNonEmptyObject } from './utils/utils.js';
 import { startHttpServer } from './web/server-http.js';
-
-/**
- * Render a tool response in human-readable form for the DEBUG=mcp:tool stream.
- * Text-content responses are dumped as their `text`; structuredContent and any other
- * shape is pretty-printed JSON.
- */
-function formatToolResponseForDebug(res: any): string {
-  if (res?.content?.[0]?.text != null) {
-    return String(res.content[0].text);
-  }
-  try {
-    return JSON.stringify(res, null, 2);
-  } catch {
-    return String(res);
-  }
-}
-
-/**
- * Decorate `data.toolHandler` so every tool call emits a request/response pair on the
- * DEBUG=mcp:tool stream. Both HTTP and STDIO transports resolve the handler through the
- * same `global.__MCP_PROJECT_DATA__`, so wrapping here covers all transports at once.
- *
- * When `appConfig.mcp.debug.builtinTools` is true, SDK-provided helper tools
- * (`mcp-debug-log`, `mcp-debug-refresh`, `debug-tool`) are appended to the
- * tool list and routed to their built-in handlers — never delegated to the
- * user-supplied `toolHandler`. They carry `_meta.ui.visibility: ['app']` so
- * MCP App hosts hide them from the LLM.
- */
-function wrapProjectDataWithDebug(data: McpServerData): McpServerData {
-  const builtinEnabled = appConfig.mcp?.debug?.builtinTools === true;
-  const originalToolHandler = data.toolHandler;
-  const wrappedToolHandler = async <T = unknown>(params: IToolHandlerParams): Promise<TToolHandlerResponse<T>> => {
-    const { name, arguments: args } = params;
-    const corr = makeCorr();
-    const startedAt = Date.now();
-    if (debugMcpTool.enabled) {
-      debugMcpTool(`→ tool/call ${name}\n${JSON.stringify(args ?? {}, null, 2)}`);
-    }
-    emitTrace('mcp:tool', { kind: 'req', name, args: args ?? {}, corr });
-    try {
-      let result: TToolHandlerResponse<T>;
-      if (builtinEnabled && isBuiltinDebugTool(name)) {
-        result = (await handleBuiltinDebugTool(params)) as TToolHandlerResponse<T>;
-      } else if (builtinEnabled && name === DEBUG_TOOL_NAME) {
-        result = (await handleDebugTool(params)) as TToolHandlerResponse<T>;
-      } else {
-        result = await originalToolHandler<T>(params);
-      }
-      const ms = Date.now() - startedAt;
-      if (debugMcpTool.enabled) {
-        debugMcpTool(`← tool/call ${name}\n${formatToolResponseForDebug(result)}`);
-      }
-      emitTrace('mcp:tool', { kind: 'res', name, ms, corr, ok: true });
-      return result;
-    } catch (error: any) {
-      const ms = Date.now() - startedAt;
-      const errMsg = error?.message || String(error);
-      if (debugMcpTool.enabled) {
-        debugMcpTool(`✗ tool/call ${name} threw: ${errMsg}`);
-      }
-      emitTrace('mcp:tool', { kind: 'err', name, ms, corr, error: errMsg });
-      throw error;
-    }
-  };
-
-  // Append built-in tools to the user's tool list (preserving array vs. function form).
-  let wrappedTools: McpServerData['tools'] = data.tools;
-  if (builtinEnabled) {
-    const builtins: Tool[] = [...BUILTIN_MCP_DEBUG_TOOLS, DEBUG_TOOL];
-    const original = data.tools;
-    if (typeof original === 'function') {
-      wrappedTools = async (ctx: ITransportContext) => [...(await original(ctx)), ...builtins];
-    } else {
-      wrappedTools = [...(original as Tool[]), ...builtins];
-    }
-  }
-
-  return { ...data, tools: wrappedTools, toolHandler: wrappedToolHandler };
-}
 
 let cyclicRegisterServiceInConsul: IRegisterCyclic;
 const initCyclicRegisterServiceInConsul = async () => {
@@ -153,7 +76,7 @@ export async function gracefulShutdown(signal: string, exitCode: number = 0) {
 
     process.exit(exitCode);
   } catch (error) {
-    console.error('Error when closing connections:', error);
+    logInternalError(error, 'shutdown');
     process.exit(1);
   }
 }
@@ -183,6 +106,28 @@ export async function initMcpServer(data: McpServerData): Promise<void> {
   // Dynamic (function-form) tools are validated lazily in getTools() on first call.
   if (Array.isArray(data.tools)) {
     assertToolNames(data.tools as Tool[]);
+    assertToolSchemas(data.tools as Tool[]);
+    assertToolAliases(data.tools as Tool[], data.toolAliases);
+  }
+  assertStaticRequiredScopes(data);
+  if (data.readinessChecks) {
+    const reserved = new Set(['db', 'cache', 'jwks']);
+    for (const [name, check] of Object.entries(data.readinessChecks)) {
+      if (!/^[a-z][a-z0-9_]{0,63}$/.test(name) || reserved.has(name) || typeof check !== 'function') {
+        throw new Error(
+          `Invalid readinessChecks entry "${name}": use a unique snake_case name and a function returning readiness.`,
+        );
+      }
+    }
+  }
+  if (
+    data.defaultReadScopes !== undefined &&
+    (!Array.isArray(data.defaultReadScopes) ||
+      data.defaultReadScopes.length === 0 ||
+      data.defaultReadScopes.some((scope) => !isValidScope(scope)) ||
+      new Set(data.defaultReadScopes).size !== data.defaultReadScopes.length)
+  ) {
+    throw new Error('McpServerData.defaultReadScopes must be a non-empty array of unique valid OAuth scopes.');
   }
 
   // Temporarily store data in a global context for access from _core functions
@@ -200,17 +145,20 @@ export async function initMcpServer(data: McpServerData): Promise<void> {
       break;
 
     case 'http': {
-      await startupInfo({ dotEnvResult, customStartupInfo: data.customStartupInfo });
-
       // Standard §6: production refuses an empty `originHosts` (which would degrade CORS to
       // "allow everything"). Dev / test workflows keep working — the check fires only when
       // NODE_ENV resolves to `production`.
       const isProd = (process.env.NODE_CONSUL_ENV || process.env.NODE_ENV) === 'production';
       const { originHosts } = appConfig.webServer;
-      if (isProd && (!Array.isArray(originHosts) || originHosts.length === 0)) {
+      if (
+        isProd &&
+        (!Array.isArray(originHosts) ||
+          originHosts.length === 0 ||
+          originHosts.some((origin) => !String(origin).trim() || String(origin).includes('*')))
+      ) {
         throw new Error(
-          'webServer.originHosts must list at least one allowed host in production. ' +
-            'Refusing to start with an empty CORS allow-list.',
+          'webServer.originHosts must contain only explicit allowed origins/hosts in production. ' +
+            'Empty entries and "*" are forbidden.',
         );
       }
       if (!isProd && (!Array.isArray(originHosts) || originHosts.length === 0)) {
@@ -219,31 +167,11 @@ export async function initMcpServer(data: McpServerData): Promise<void> {
 
       // Standard Прил. A.1 / §7.2 — JWT mode pre-flight checks.
       // Fail fast on misconfigured non-legacy modes so a server with broken auth never starts.
-      const jwt = appConfig.webServer?.auth?.jwtToken;
-      const jwtMode = jwt?.mode ?? 'legacyAesCtr';
-      const skewLimit = 60;
-      if (typeof jwt?.clockSkew === 'number' && jwt.clockSkew > skewLimit) {
-        throw new Error(
-          `webServer.auth.jwtToken.clockSkew=${jwt.clockSkew}s exceeds the ${skewLimit}s limit (standard Прил. A.1).`,
-        );
-      }
-      if (jwtMode === 'remoteJwks' && !(jwt?.jwksUri || '').trim()) {
-        throw new Error('webServer.auth.jwtToken.jwksUri is required for mode=remoteJwks (стандарт Прил. A.1).');
-      }
-      if (jwtMode === 'localKey' && !(jwt?.publicKeyPath || '').trim()) {
-        throw new Error('webServer.auth.jwtToken.publicKeyPath is required for mode=localKey.');
-      }
-      if ((jwtMode === 'remoteJwks' || jwtMode === 'localKey') && !(jwt?.expectedIssuer || '').trim()) {
-        throw new Error(
-          `webServer.auth.jwtToken.expectedIssuer is required for mode=${jwtMode} (стандарт §7.2 / Прил. A.2).`,
-        );
-      }
-      if (jwtMode === 'legacyAesCtr' && isProd && appConfig.webServer?.auth?.enabled) {
-        lgr.warn(
-          'Auth profile=legacyAesCtr (HS256) is enabled in production. ' +
-            'Standard Прил. A.1 requires RS256/ES256 — migrate to mode=remoteJwks or mode=localKey.',
-        );
-      }
+      const auth = appConfig.webServer?.auth;
+      assertHttpAuthPreflight(auth, isProd);
+      assertProductionSurfaceSecurity(appConfig, isProd);
+
+      await startupInfo({ dotEnvResult, customStartupInfo: data.customStartupInfo });
 
       // Check if port is available before proceeding
       await checkPortAvailability(appConfig.webServer.port, appConfig.webServer.host, true);

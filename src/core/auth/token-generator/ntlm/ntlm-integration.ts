@@ -1,22 +1,118 @@
-import { Request, Response, NextFunction } from 'express';
-import { authNTLM } from 'ya-express-ntlm';
+import type { NextFunction, Request, RequestHandler, Response } from 'express';
 
-import { tokenGenNtlmOptions } from './ntlm-auth-options.js';
-import { isADEnabled } from './ntlm-domain-config.js';
-import { checkTokenGenSession, getSessionStats } from './ntlm-session-storage.js';
-import { getLoginPageHTML } from './ntlm-templates.js';
+import { isADEnabled } from './ntlm-enabled.js';
 
-// Create NTLM middleware instance (only if NTLM is enabled)
-const ntlmMiddleware = isADEnabled ? authNTLM(tokenGenNtlmOptions) : null;
+let activeStackPromise: Promise<RequestHandler[]> | undefined;
 
-// Main NTLM authentication setup function
-export const setupNTLMAuthentication = () => {
+type TNtlmModules = Awaited<
+  ReturnType<
+    () => Promise<
+      [
+        typeof import('ya-express-ntlm'),
+        typeof import('./ntlm-auth-options.js'),
+        typeof import('./ntlm-session-storage.js'),
+        typeof import('./ntlm-templates.js'),
+      ]
+    >
+  >
+>;
+
+function buildActiveNtlmStack([
+  { authNTLM },
+  { tokenGenNtlmOptions },
+  sessionStorage,
+  templates,
+]: TNtlmModules): RequestHandler[] {
+  const activeNtlmMiddleware = authNTLM(tokenGenNtlmOptions);
+  return [
+    sessionStorage.checkTokenGenSession(),
+    (req: Request, res: Response, next: NextFunction) => {
+      if (req.path === '/login') {
+        res.send(templates.getLoginPageHTML(req.ntlm?.username || ''));
+        return;
+      }
+
+      if (req.path === '/logout') {
+        console.log('[TOKEN-GEN] Logout requested');
+        res.setHeader('WWW-Authenticate', 'NTLM');
+        res.setHeader('Clear-Site-Data', '"cookies", "storage"');
+        res.status(401).send('Authentication required - please login again');
+        return;
+      }
+
+      if (req.path === '/debug/sessions' && process.env.NODE_ENV !== 'production') {
+        res.json({
+          message: 'Token Generation Server Session Statistics',
+          timestamp: new Date().toISOString(),
+          ...sessionStorage.getSessionStats(),
+        });
+        return;
+      }
+
+      if (req.path === '/health') {
+        res.json({
+          status: 'ok',
+          service: 'token-generation-server',
+          timestamp: new Date().toISOString(),
+        });
+        return;
+      }
+
+      if (req.ntlm?.isAuthenticated) {
+        console.log('[TOKEN-GEN] Request from authenticated user');
+        next();
+        return;
+      }
+
+      const authHeader = req.headers.authorization;
+      if (authHeader && !authHeader.startsWith('NTLM ')) {
+        delete req.headers.authorization;
+      }
+      activeNtlmMiddleware(req, res, next);
+    },
+  ];
+}
+
+/**
+ * Load ya-express-ntlm only for an actual NTLM request. Importing the package initializes its
+ * proxy-cache cleanup interval, so a top-level import would keep every non-NTLM CLI/test alive.
+ */
+function getActiveNtlmStack(): Promise<RequestHandler[]> {
+  activeStackPromise ??= Promise.all([
+    import('ya-express-ntlm'),
+    import('./ntlm-auth-options.js'),
+    import('./ntlm-session-storage.js'),
+    import('./ntlm-templates.js'),
+  ]).then((modules) => buildActiveNtlmStack(modules as TNtlmModules));
+  return activeStackPromise;
+}
+
+function runStack(stack: RequestHandler[], req: Request, res: Response, done: NextFunction): void {
+  let index = 0;
+  const next: NextFunction = (error?: any) => {
+    if (error) {
+      done(error);
+      return;
+    }
+    const handler = stack[index++];
+    if (!handler) {
+      done();
+      return;
+    }
+    try {
+      handler(req, res, next);
+    } catch (caught) {
+      done(caught);
+    }
+  };
+  next();
+}
+
+/** Return one lazy middleware so non-NTLM auth modes never initialize ya-express-ntlm. */
+export const setupNTLMAuthentication = (): RequestHandler[] => {
   if (!isADEnabled) {
-    console.log('[TOKEN-GEN] NTLM authentication is DISABLED - skipping middleware setup');
-    // Return middleware that just passes through
     return [
-      (req: Request, res: Response, next: NextFunction) => {
-        // Set dummy NTLM info for compatibility
+      (req: Request, _res: Response, next: NextFunction) => {
         req.ntlm = {
           isAuthenticated: false,
           username: 'Anonymous',
@@ -28,66 +124,12 @@ export const setupNTLMAuthentication = () => {
   }
 
   return [
-    // First check for existing session
-    checkTokenGenSession(),
-
-    // Then run NTLM authentication if needed
     (req: Request, res: Response, next: NextFunction) => {
-      // Handle login page request
-      if (req.path === '/login') {
-        return res.send(getLoginPageHTML(req.ntlm?.username || ''));
-      }
-
-      // Handle logout request
-      if (req.path === '/logout') {
-        console.log(
-          `[TOKEN-GEN] Logout requested by: ${req.ntlm?.domain || 'Unknown'}\\${req.ntlm?.username || 'Unknown'}`,
-        );
-        // Clear session and send 401 to trigger browser auth prompt
-        res.setHeader('WWW-Authenticate', 'NTLM');
-        res.setHeader('Clear-Site-Data', '"cookies", "storage"');
-        console.log('[TOKEN-GEN] Sending 401 response to trigger browser authentication prompt');
-        return res.status(401).send('Authentication required - please login again');
-      }
-
-      // Add session debug endpoint (only in development)
-      if (req.path === '/debug/sessions' && process.env.NODE_ENV !== 'production') {
-        const stats = getSessionStats();
-        return res.json({
-          message: 'Token Generation Server Session Statistics',
-          timestamp: new Date().toISOString(),
-          ...stats,
-        });
-      }
-
-      // Skip authentication for health checks if needed
-      if (req.path === '/health') {
-        return res.json({
-          status: 'ok',
-          service: 'token-generation-server',
-          timestamp: new Date().toISOString(),
-        });
-      }
-
-      // If user is already authenticated (from session), continue
-      if (req.ntlm?.isAuthenticated) {
-        console.log(
-          `[TOKEN-GEN] Request from authenticated user: ${req.ntlm.domain}\\${req.ntlm.username} -> ${req.method} ${req.path}`,
-        );
-        return next();
-      }
-
-      // Clear non-NTLM Authorization header (e.g., Basic auth cached by browser for same origin)
-      // This forces NTLM middleware to send 401 with WWW-Authenticate: NTLM
-      const authHeader = req.headers.authorization;
-      if (authHeader && !authHeader.startsWith('NTLM ')) {
-        console.log('[TOKEN-GEN] Clearing non-NTLM Authorization header to trigger NTLM auth');
-        delete req.headers.authorization;
-      }
-
-      // Run NTLM authentication
-      console.log(`[TOKEN-GEN] Starting NTLM authentication for: ${req.method} ${req.path}`);
-      ntlmMiddleware!(req, res, next);
+      // eslint-disable-next-line promise/no-promise-in-callback -- lazy ESM import bridged to Express callbacks
+      void getActiveNtlmStack()
+        .then((stack) => runStack(stack, req, res, next))
+        // eslint-disable-next-line promise/no-callback-in-promise -- Express owns error propagation
+        .catch(next);
     },
   ];
 };

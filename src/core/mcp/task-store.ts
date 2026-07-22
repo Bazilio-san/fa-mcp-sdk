@@ -47,7 +47,7 @@ export interface ITaskRecord {
   statusMessage?: string;
   /** Correlation id (§15.1), copied from the creating request context. */
   requestId?: string;
-  /** Subject key (JWT `sub`, lower-cased) for per-subject scoping and concurrency accounting. */
+  /** Stable opaque principal key for task ownership and per-subject concurrency accounting. */
   subjectKey: string;
   /** Final tool result once status is `completed` (the same shape tools/call returns). */
   result?: unknown;

@@ -17,6 +17,8 @@ logger:
 
 mcp:
   transportType: stdio
+  legacySse:
+    enabled: false
   rateLimit:
     maxRequests: 1000
     windowMs: 60000
@@ -25,3 +27,5 @@ webServer:
   host: '127.0.0.1'
   port: 0  # Random port for testing
   originHosts: ['localhost']
+  metrics:
+    requireAuth: true

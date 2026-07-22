@@ -1,5 +1,5 @@
 // Import all project data from existing files
-import { appConfig, initMcpServer, McpServerData, getAsset } from '../core/index.js';
+import { appConfig, initMcpServer, logInternalError, McpServerData, getAsset } from '../core/index.js';
 
 import { apiRouter } from './api/router.js';
 import { customResources } from './custom-resources.js';
@@ -60,6 +60,6 @@ const startProject = async (): Promise<void> => {
 };
 
 startProject().catch((error) => {
-  console.error('Failed to start project:', error);
+  logInternalError(error, 'startup');
   process.exit(1);
 });

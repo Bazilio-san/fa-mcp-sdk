@@ -8,7 +8,7 @@ import chalk from 'chalk';
 import NodeCache from 'node-cache';
 
 import { appConfig } from '../bootstrap/init-config.js';
-import { addErrorMessage, toError } from '../errors/errors.js';
+import { logInternalError } from '../errors/errors.js';
 import { logger as lgr } from '../logger.js';
 
 const logger = lgr.getSubLogger({ name: chalk.green('cache') });
@@ -76,16 +76,16 @@ export class CacheManager {
    */
   private setupEventListeners(): void {
     if (this.verbose) {
-      this.cache.on('set', (key, value) => {
-        logger.debug(`Cache set: key: ${key} | hasValue: ${!!value}`);
+      this.cache.on('set', (_key, value) => {
+        logger.debug(`Cache set: hasValue=${!!value}`);
       });
 
-      this.cache.on('del', (key, value) => {
-        logger.debug(`Cache delete: key: ${key} | hasValue: ${!!value}`);
+      this.cache.on('del', (_key, value) => {
+        logger.debug(`Cache delete: hasValue=${!!value}`);
       });
 
-      this.cache.on('expired', (key, value) => {
-        logger.debug(`Cache expired: key: ${key} | hasValue: ${!!value}`);
+      this.cache.on('expired', (_key, value) => {
+        logger.debug(`Cache expired: hasValue=${!!value}`);
       });
 
       this.cache.on('flush', () => {
@@ -103,13 +103,13 @@ export class CacheManager {
     if (value !== undefined) {
       this.stats.hits++;
       if (this.verbose) {
-        logger.debug(`Cache hit: key: ${key}`);
+        logger.debug('Cache hit');
       }
       return value;
     } else {
       this.stats.misses++;
       if (this.verbose) {
-        logger.debug(`Cache miss: key: ${key}`);
+        logger.debug('Cache miss');
       }
       return undefined;
     }
@@ -125,10 +125,10 @@ export class CacheManager {
     if (success) {
       this.stats.sets++;
       if (this.verbose) {
-        logger.debug(`Cache set successful: key: ${key} | ttl: ${ttl}`);
+        logger.debug(`Cache set successful: ttl=${ttl}`);
       }
     } else {
-      logger.warn(`Cache set failed: key: ${key} | ttl: ${ttl}`);
+      logger.warn(`Cache set failed: ttl=${ttl}`);
     }
 
     return success;
@@ -141,7 +141,7 @@ export class CacheManager {
     const deleted = this.cache.del(key);
     this.stats.deletes += deleted;
     if (this.verbose) {
-      logger.debug(`Cache delete: key: ${key} | deleted: ${deleted}`);
+      logger.debug(`Cache delete: deleted=${deleted}`);
     }
     return deleted;
   }
@@ -162,7 +162,7 @@ export class CacheManager {
       this.stats.hits++;
       this.stats.deletes++;
       if (this.verbose) {
-        logger.debug(`Cache take: key: ${key}`);
+        logger.debug('Cache take');
       }
     } else {
       this.stats.misses++;
@@ -182,7 +182,7 @@ export class CacheManager {
       this.stats.misses += keys.length - foundKeys;
       return result;
     } catch (error) {
-      logger.error(`Cache mget error: keys: ${JSON.stringify(keys)}`, toError(error));
+      logInternalError(error, 'cache_mget');
       this.stats.misses += keys.length;
       return {};
     }
@@ -199,7 +199,7 @@ export class CacheManager {
       }
       return success;
     } catch (error) {
-      logger.error('Cache mset error', toError(error));
+      logInternalError(error, 'cache_mset');
       return false;
     }
   }
@@ -216,17 +216,16 @@ export class CacheManager {
       }
     } catch (error) {
       // Cache read error - log but continue to factory
-      logger.error(`Cache get error during getOrSet: key: ${key}`, toError(error));
+      logInternalError(error, 'cache_get_or_set_read');
     }
 
     // Execute factory function
-    logger.debug(`Cache miss - executing factory function: key: ${key}`);
+    logger.debug('Cache miss - executing factory function');
     let value: T;
 
     try {
       value = await factory();
     } catch (error) {
-      addErrorMessage(error, `Factory function error in getOrSet: key: ${key}`);
       throw error;
     }
 
@@ -235,7 +234,7 @@ export class CacheManager {
       this.set(key, value, ttlSeconds);
     } catch (error) {
       // Cache write error - log but return value anyway
-      logger.error(`Cache set error during getOrSet: key: ${key}`, toError(error));
+      logInternalError(error, 'cache_get_or_set_write');
     }
 
     return value;

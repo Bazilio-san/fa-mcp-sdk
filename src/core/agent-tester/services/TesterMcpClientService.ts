@@ -8,6 +8,7 @@ import chalk from 'chalk';
 import { appConfig } from '../../bootstrap/init-config.js';
 import { generateToken } from '../../auth/jwt.js';
 import { canLocallyIssueJwt } from '../../auth/key-resolver.js';
+import { logInternalError } from '../../errors/errors.js';
 import { logger as lgr } from '../../logger.js';
 import { MCP_APPS_EXTENSION_ID, MCP_APPS_RESOURCE_MIME_TYPE } from '../../mcp/mcp-apps.js';
 import {
@@ -78,9 +79,9 @@ export class TesterMcpClientService {
       if (entry) {
         try {
           entry.client.close?.();
-          logger.info(`Cleaned up stale client: ${key}`);
+          logger.info('Cleaned up stale MCP client');
         } catch (e) {
-          logger.warn(`Error closing stale client ${key}:`, e);
+          logInternalError(e, 'agent_tester_stale_client_close');
         }
         this.clientCache.delete(key);
       }
@@ -98,15 +99,15 @@ export class TesterMcpClientService {
     if (cached) {
       try {
         cached.lastUsed = new Date();
-        logger.info(`Reusing cached MCP client: ${connectionKey}`);
+        logger.info('Reusing cached MCP client');
         return cached;
       } catch {
-        logger.info(`Cached client is dead, recreating: ${connectionKey}`);
+        logger.info('Cached MCP client is unavailable; recreating');
         this.clientCache.delete(connectionKey);
       }
     }
 
-    logger.info(`Creating new MCP client for: ${connectionKey}`);
+    logger.info('Creating new MCP client');
     const client = await this.createMcpClientFromConfig(mcpConfig);
 
     const toolsList = await client.listTools();
@@ -133,11 +134,11 @@ export class TesterMcpClientService {
           const validMessages = promptData.messages.filter((m: any) => m.role === 'user' || m.role === 'assistant');
           agentPrompt = validMessages.map((m: any) => m.content.text).join('\n');
         } catch (promptDataError) {
-          logger.info('Invalid agent_prompt format:', promptDataError);
+          logInternalError(promptDataError, 'agent_tester_prompt_format');
         }
       }
     } catch (promptError) {
-      logger.info('No agent_prompt available:', promptError);
+      logInternalError(promptError, 'agent_tester_prompt_unavailable');
     }
 
     const cachedClient: ITesterCachedMcpClient = {
@@ -152,7 +153,7 @@ export class TesterMcpClientService {
     }
 
     this.clientCache.set(connectionKey, cachedClient);
-    logger.info(`Cached new MCP client: ${connectionKey}, tools: ${tools.length}`);
+    logger.info(`Cached new MCP client: tools=${tools.length}`);
 
     return cachedClient;
   }
@@ -166,7 +167,7 @@ export class TesterMcpClientService {
     const baseURL = new URL(mcpConfig.url);
 
     if (mcpConfig.transport === 'http') {
-      logger.info(`Connecting via StreamableHTTPClientTransport to ${baseURL}`);
+      logger.info('Connecting via Streamable HTTP transport');
       const safeHeaders = this.buildSafeHeaders(mcpConfig.headers);
       const transportOpts: any = {};
       if (safeHeaders) {
@@ -176,7 +177,7 @@ export class TesterMcpClientService {
       await client.connect(transport as any);
       logger.info('Connected using Streamable HTTP transport');
     } else if (mcpConfig.transport === 'sse') {
-      logger.info(`Connecting via SSEClientTransport to ${baseURL}`);
+      logger.info('Connecting via SSE transport');
       const safeHeaders = this.buildSafeHeaders(mcpConfig.headers);
       const transportOpts: any = {};
       if (safeHeaders) {
@@ -194,7 +195,13 @@ export class TesterMcpClientService {
   }
 
   public async callToolWithConfig(mcpConfig: TesterMcpConfig, toolName: string, parameters: any): Promise<any> {
-    logger.info(`Calling tool ${toolName} via cached client`, { parameters });
+    const parameterShape =
+      parameters && typeof parameters === 'object' && !Array.isArray(parameters)
+        ? Object.fromEntries(
+            Object.entries(parameters).map(([key, value]) => [key, Array.isArray(value) ? 'array' : typeof value]),
+          )
+        : { root: Array.isArray(parameters) ? 'array' : typeof parameters };
+    logger.info(`Calling tool ${toolName} via cached client; parameterShape=${JSON.stringify(parameterShape)}`);
 
     const timeout = appConfig.agentTester?.toolCallTimeoutMs ?? 60000;
 
@@ -222,17 +229,12 @@ export class TesterMcpClientService {
           logger.info(`Tool ${toolName} executed successfully after retry`);
           return result;
         } catch (retryError) {
-          logger.error(`Failed to call tool ${toolName} after retry:`, retryError);
-          throw new Error(
-            `Tool execution failed: ${retryError instanceof Error ? retryError.message : 'Unknown error'}`,
-            { cause: retryError },
-          );
+          logInternalError(retryError, 'agent_tester_tool_retry');
+          throw new Error('Tool execution failed', { cause: retryError });
         }
       }
-      logger.error(`Failed to call tool ${toolName}:`, error);
-      throw new Error(`Tool execution failed: ${error instanceof Error ? error.message : 'Unknown error'}`, {
-        cause: error,
-      });
+      logInternalError(error, 'agent_tester_tool_call');
+      throw new Error('Tool execution failed', { cause: error });
     }
   }
 
@@ -360,19 +362,19 @@ export class TesterMcpClientService {
     try {
       const baseURL = serverUrl.replace(/\/(mcp|sse)$/, '');
       const headersUrl = baseURL + '/used-http-headers';
-      logger.info(`Fetching used headers from: ${headersUrl}`);
+      logger.info('Fetching used-header requirements');
       const response = await fetch(headersUrl, { method: 'GET', headers: { Accept: 'application/json' } });
       if (response.ok) {
         const headers = await response.json();
         if (Array.isArray(headers)) {
           if (headers.length > 0) {
-            logger.info(`Found ${headers.length} used headers from ${baseURL}`);
+            logger.info(`Found ${headers.length} used-header requirements`);
           }
           return headers;
         }
       }
     } catch (e) {
-      logger.info(`Headers endpoint failed for ${serverUrl}, fallback to MCP resource`, e);
+      logInternalError(e, 'agent_tester_headers_endpoint');
     }
 
     // 2) Fallback: MCP resource use://http-headers
@@ -422,8 +424,7 @@ export class TesterMcpClientService {
         return headerRequirements;
       }
     } catch (e: Error | any) {
-      const em = e.message && e.message.includes('Unknown resource:') ? 'Unknown resource: use://http-headers' : e;
-      logger.info(`Failed to fetch used headers via MCP resource for ${serverUrl}:`, em);
+      logInternalError(e, 'agent_tester_headers_resource');
     }
 
     return [];
@@ -431,7 +432,7 @@ export class TesterMcpClientService {
 
   public async connectToServer(request: TesterMcpConnectionRequest): Promise<TesterMcpConnectionResponse> {
     try {
-      logger.info(`Attempting to connect to MCP server: ${request.name} at ${request.url} via ${request.transport}`);
+      logger.info(`Attempting MCP connection via transport=${request.transport}`);
 
       let client: Client;
       try {
@@ -461,11 +462,11 @@ export class TesterMcpClientService {
               const validMessages = promptData.messages.filter((m) => m.role === 'user' || m.role === 'assistant');
               agentPrompt = validMessages.map((m: any) => m.content.text).join('\n');
             } catch (promptDataError) {
-              logger.info(`Invalid agent_prompt format on ${request.name}:`, promptDataError);
+              logInternalError(promptDataError, 'agent_tester_prompt_format');
             }
           }
         } catch (promptError) {
-          logger.info(`No agent_prompt available on ${request.name}:`, promptError);
+          logInternalError(promptError, 'agent_tester_prompt_unavailable');
         }
 
         const serverConfig: TesterMcpServerConfig = {
@@ -489,7 +490,7 @@ export class TesterMcpClientService {
         this.clients.set(request.name, client);
         this.servers.set(request.name, serverConfig);
 
-        logger.info(`Successfully connected to MCP server: ${request.name}`, {
+        logger.info('Successfully connected to MCP server', {
           toolCount: tools.length,
           hasAgentPrompt: !!agentPrompt,
           transport: request.transport,
@@ -501,7 +502,7 @@ export class TesterMcpClientService {
           config: serverConfig,
         };
       } catch (connectionError) {
-        logger.error(`Failed to connect to MCP server ${request.name}:`, connectionError);
+        logInternalError(connectionError, 'agent_tester_mcp_connection');
 
         const serverConfig: TesterMcpServerConfig = {
           name: request.name,
@@ -509,7 +510,7 @@ export class TesterMcpClientService {
           transport: request.transport,
           isConnected: false,
           tools: [],
-          connectionError: connectionError instanceof Error ? connectionError.message : 'Connection failed',
+          connectionError: 'Connection failed',
         };
         if (request.headers) {
           serverConfig.headers = request.headers;
@@ -519,12 +520,12 @@ export class TesterMcpClientService {
 
         return {
           success: false,
-          error: connectionError instanceof Error ? connectionError.message : 'Connection failed',
+          error: 'Connection failed',
         };
       }
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-      logger.error(`Unexpected error connecting to MCP server ${request.name}:`, error);
+      const errorMessage = 'Connection failed';
+      logInternalError(error, 'agent_tester_mcp_connection');
 
       const serverConfig: TesterMcpServerConfig = {
         name: request.name,
@@ -580,15 +581,15 @@ export class TesterMcpClientService {
   }
 
   public async disconnectFromServer(serverName: string): Promise<void> {
-    logger.info(`Disconnecting from MCP server: ${serverName}`);
+    logger.info('Disconnecting from MCP server');
 
     const client = this.clients.get(serverName);
     if (client) {
       try {
         await client.close();
-        logger.info(`Closed connection to ${serverName}`);
+        logger.info('Closed MCP connection');
       } catch (error) {
-        logger.error(`Error closing connection to ${serverName}:`, error);
+        logInternalError(error, 'agent_tester_mcp_disconnect');
       }
       this.clients.delete(serverName);
     }
@@ -606,7 +607,7 @@ export class TesterMcpClientService {
   ): Promise<TesterMcpConnectionResponse> {
     const config = this.servers.get(serverName);
     if (!config) {
-      return { success: false, error: `Server ${serverName} not found` };
+      return { success: false, error: 'Server not found' };
     }
 
     config.headers = { ...headers };
@@ -626,8 +627,8 @@ export class TesterMcpClientService {
 
       return response;
     } catch (e) {
-      const msg = e instanceof Error ? e.message : 'Failed to update headers';
-      return { success: false, error: msg };
+      logInternalError(e, 'agent_tester_header_update');
+      return { success: false, error: 'Failed to update headers' };
     }
   }
 
@@ -643,22 +644,22 @@ export class TesterMcpClientService {
       this.cleanupInterval = null;
     }
 
-    for (const [key, entry] of this.clientCache.entries()) {
+    for (const entry of this.clientCache.values()) {
       try {
         await entry.client.close?.();
-        logger.info(`Closed cached client: ${key}`);
+        logger.info('Closed cached MCP client');
       } catch (error) {
-        logger.error(`Error closing cached client ${key}:`, error);
+        logInternalError(error, 'agent_tester_cached_client_close');
       }
     }
     this.clientCache.clear();
 
-    for (const [serverName, client] of this.clients.entries()) {
+    for (const client of this.clients.values()) {
       try {
         await client.close();
-        logger.info(`Closed connection to ${serverName}`);
+        logger.info('Closed MCP connection');
       } catch (error) {
-        logger.error(`Error closing connection to ${serverName}:`, error);
+        logInternalError(error, 'agent_tester_mcp_disconnect');
       }
     }
 

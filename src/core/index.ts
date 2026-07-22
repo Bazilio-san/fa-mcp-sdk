@@ -70,6 +70,7 @@ export type { IMcpErrorData } from './errors/BaseMcpError.js';
 export {
   addErrorMessage,
   createJsonRpcErrorResponse,
+  logInternalError,
   sanitizeOutwardMessage,
   toError,
   toMcpError,
@@ -159,10 +160,24 @@ export { ROOT_PROJECT_DIR } from './constants.js';
 export { eventEmitter } from './ee.js';
 export { logger, fileLogger, applyLoggerSettings } from './logger.js';
 
+// Shared Prometheus registry used by the SDK's canonical /metrics endpoint. Projects may register
+// bounded-cardinality domain metrics here instead of mounting a second metrics endpoint.
+export { getMetricsRegistry, getMetrics, isMetricsEnabled } from './metrics/metrics.js';
+export type { IMcpMetrics, ToolCallStatus, RateLimitScope } from './metrics/metrics.js';
+
 export { getCache, CacheManager } from './cache/cache.js';
 
 // Standard §6 (MAY) — in-memory EventStore for SSE resumability (opt-in via mcp.sse.resumability).
 export { InMemoryEventStore } from './web/event-store.js';
+
+// Correlation helpers for recoverable tool-error DTOs and downstream request propagation.
+export {
+  getCurrentRequestId,
+  getCurrentRequestContext,
+  getCurrentJsonRpcId,
+  getCurrentTraceContext,
+} from './web/request-id.js';
+export type { IRequestContext, ITraceContext } from './web/request-id.js';
 
 // Standard §12.2 — optional helper to mask sensitive fields/values in tool results before returning.
 export { maskSensitive } from './utils/mask-sensitive.js';

@@ -5,7 +5,49 @@ import { config } from '../bootstrap/init-config.js';
 
 const { originHosts } = config.webServer;
 
-const originTestRe = new RegExp(`https?:\\/\\/(${originHosts.join('|')})(:\\d+)?`, 'i');
+/** Exact CORS allow-list match. Bare hostnames allow any port; entries with a scheme or port match exactly. */
+export function isOriginAllowed(origin: string, allowed: string[] = originHosts): boolean {
+  let originUrl: URL;
+  try {
+    originUrl = new URL(origin);
+  } catch {
+    return false;
+  }
+  if (originUrl.protocol !== 'http:' && originUrl.protocol !== 'https:') {
+    return false;
+  }
+
+  return allowed.some((rawEntry) => {
+    const entry = String(rawEntry ?? '')
+      .trim()
+      .toLowerCase();
+    if (!entry || entry === '*') {
+      return false;
+    }
+    if (entry.includes('://')) {
+      try {
+        const allowedUrl = new URL(entry);
+        return (
+          allowedUrl.pathname === '/' &&
+          !allowedUrl.search &&
+          !allowedUrl.hash &&
+          allowedUrl.origin === originUrl.origin
+        );
+      } catch {
+        return false;
+      }
+    }
+    try {
+      const allowedUrl = new URL(`http://${entry}`);
+      if (allowedUrl.pathname !== '/' || allowedUrl.search || allowedUrl.hash) {
+        return false;
+      }
+      return entry.includes(':') ? allowedUrl.host === originUrl.host : allowedUrl.hostname === originUrl.hostname;
+    } catch {
+      return false;
+    }
+  });
+}
 
 /**
  * CORS guard (standard §6). Requests carrying an `Origin` header that is NOT covered by
@@ -18,7 +60,7 @@ const originTestRe = new RegExp(`https?:\\/\\/(${originHosts.join('|')})(:\\d+)?
 export const applyCors = (app: Express) => {
   const corsOptions = {
     origin(origin: any, callback: (err: Error | null, allow?: boolean) => void) {
-      if (!origin || originTestRe.test(origin)) {
+      if (!origin || isOriginAllowed(origin)) {
         callback(null, true);
       } else {
         callback(new Error('CORS_ORIGIN_NOT_ALLOWED'));

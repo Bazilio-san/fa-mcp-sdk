@@ -1,8 +1,8 @@
 /**
  * Standard §15.3 — Prometheus metrics endpoint.
  *
- * Boots the template server twice: once with metrics disabled (404 on /metrics) and once
- * enabled (200 + Prometheus text format).
+ * Boots the template server with metrics disabled, explicitly public in development, and
+ * protected by the normal HTTP authentication middleware.
  */
 import assert from 'node:assert/strict';
 
@@ -10,6 +10,8 @@ import { spawnServer } from './helpers/spawn-server.mjs';
 
 const PORT_DISABLED = 19_877;
 const PORT_ENABLED = 19_878;
+const PORT_PROTECTED = 19_879;
+const METRICS_TOKEN = 'metrics-service-token-0123456789';
 
 let failed = 0;
 const test = async (name, fn) => {
@@ -52,7 +54,7 @@ const test = async (name, fn) => {
     configOverride: {
       webServer: {
         auth: { enabled: false },
-        metrics: { enabled: true, path: '/metrics', includeProcessMetrics: false },
+        metrics: { enabled: true, path: '/metrics', includeProcessMetrics: false, requireAuth: false },
       },
       agentTester: { enabled: false },
       adminPanel: { enabled: false },
@@ -68,6 +70,36 @@ const test = async (name, fn) => {
     // Sanity: the SDK custom series must be exposed (counters start at 0 so just check the help line).
     assert.match(body, /mcp_tool_calls_total/);
     assert.match(body, /mcp_auth_failures_total/);
+  });
+  server.kill();
+}
+
+// --- metrics authenticated ---
+{
+  const server = spawnServer({
+    port: PORT_PROTECTED,
+    label: 'metrics-authenticated',
+    configOverride: {
+      webServer: {
+        auth: { enabled: true, permanentServerTokens: [METRICS_TOKEN] },
+        metrics: { enabled: true, path: '/metrics', includeProcessMetrics: false, requireAuth: true },
+      },
+      agentTester: { enabled: false },
+      adminPanel: { enabled: false },
+    },
+  });
+  await server.waitReady();
+  await test('GET /metrics → 401 without credentials when requireAuth=true', async () => {
+    const res = await fetch(`${server.url}/metrics`);
+    assert.equal(res.status, 401);
+    assert.ok(res.headers.get('www-authenticate'));
+  });
+  await test('GET /metrics → 200 for an authenticated scraper', async () => {
+    const res = await fetch(`${server.url}/metrics`, {
+      headers: { Authorization: `Bearer ${METRICS_TOKEN}` },
+    });
+    assert.equal(res.status, 200);
+    assert.match(await res.text(), /mcp_tool_calls_total/);
   });
   server.kill();
 }

@@ -45,6 +45,10 @@ interface IWebServerConfig {
         expectedIssuer?: string;
         // Expected `aud` claim — token must contain this audience. Defaults to appConfig.name.
         expectedAudience?: string;
+        // Optional top-level JWT claim that contains the employee login. When omitted, `sub` is
+        // used for backward compatibility. Canonical `sub` is always preserved separately. JWT
+        // protocol claims and SDK policy claims (user/service/ip/scope/allow) are forbidden here.
+        userClaim?: string;
         // JWKS in-memory cache TTL in seconds. Default: 600.
         jwksCacheTtl?: number;
         // Minimum interval (seconds) between repeat JWKS fetches when kid missing. Default: 30.
@@ -53,6 +57,17 @@ interface IWebServerConfig {
         clockSkew?: number;
         // Default TTL (seconds) for tokens issued by embedded /oauth/token endpoint. Default: 1800.
         defaultTtl?: number;
+      };
+      /** OAuth protected-resource / authorization metadata advertised by this MCP server. */
+      oauth?: {
+        /** Canonical absolute MCP resource URL. Defaults to the public request origin plus `/mcp`. */
+        resourceUrl?: string;
+        /** Authorization-server issuer URLs. Defaults to the configured JWT issuer when URL-shaped. */
+        authorizationServers?: string[];
+        /** Exact scopes advertised by metadata and accepted by the embedded token endpoint. */
+        advertisedScopes?: string[];
+        /** Optional absolute documentation URL. Defaults to the public request origin plus `/docs`. */
+        resourceDocumentationUrl?: string;
       };
       permanentServerTokens: string[];
       //> Revocation lists — never accepted by MCP, Admin or Agent Tester
@@ -71,12 +86,13 @@ interface IWebServerConfig {
     //> Express `trust proxy` setting (false | true | 'loopback' | number | etc.).
     //> Required when /.well-known/openid-configuration is built from X-Forwarded-* headers.
     trustProxy?: boolean | string | number;
-    //> Standard §15.3 — Prometheus metrics endpoint. Opt-in. Endpoint is public (no auth) —
-    //> protect via network policy / reverse proxy.
+    //> Standard §15.3 — Prometheus metrics endpoint. Opt-in and authenticated by default.
     metrics?: {
       enabled?: boolean;
       path?: string;
       includeProcessMetrics?: boolean;
+      /** Apply the normal HTTP authentication middleware. Must remain true in production. */
+      requireAuth?: boolean;
     };
   };
 }
@@ -124,6 +140,14 @@ interface IMCPConfig {
       toolTimeoutMs: number;
     };
     transportType: 'stdio' | 'http';
+    /**
+     * Deprecated pre-2025 HTTP+SSE transport (`GET /sse`, `POST /messages`). Disabled by default;
+     * enable explicitly only while migrating clients to `/mcp`. The adapter uses canonical policy.
+     */
+    legacySse?: {
+      /** Default `false`. */
+      enabled?: boolean;
+    };
     tools: {
       answerAs: 'text' | 'structuredContent';
       hideAnnotations: boolean;
@@ -231,8 +255,8 @@ interface IMCPConfig {
       logFile?: string;
       /**
        * When true, registers SDK-provided built-in MCP tools intended for
-       * widgets and integration tests (`mcp-debug-log`, `mcp-debug-refresh`,
-       * `debug-tool`). All are marked `_meta.ui.visibility: ['app']` and stay
+       * widgets and integration tests (`mcp_debug_log`, `mcp_debug_refresh`,
+       * `debug_tool`). All are marked `_meta.ui.visibility: ['app']` and stay
        * hidden from the LLM — they're only callable from MCP App widgets
        * (`app.callServerTool(...)`) or from test clients. Default: false.
        */

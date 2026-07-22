@@ -1,5 +1,5 @@
 /**
- * Universal `debug-tool` for integration testing of MCP clients (Agent Tester,
+ * Universal `debug_tool` for integration testing of MCP clients (Agent Tester,
  * custom hosts, CI smoke tests).
  *
  * One parameterised tool that can produce **any** variation of
@@ -18,7 +18,7 @@ import { Tool } from '@modelcontextprotocol/sdk/types.js';
 
 import { IToolHandlerParams, TToolHandlerResponse } from '../../_types_/types.js';
 
-export const DEBUG_TOOL_NAME = 'debug-tool';
+export const DEBUG_TOOL_NAME = 'debug_tool';
 
 // Minimal 1×1 blue PNG (base64). Private — keeps the public surface clean.
 const BLUE_PNG_1X1 = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPj/HwADBwIAMCbHYQAAAABJRU5ErkJggg==';
@@ -40,7 +40,7 @@ interface DebugToolArgs {
   delayMs?: number;
 }
 
-/** `Tool` descriptor for the universal debug-tool. */
+/** `Tool` descriptor for the universal debug_tool. */
 export const DEBUG_TOOL: Tool = {
   name: DEBUG_TOOL_NAME,
   title: 'Debug tool',
@@ -136,7 +136,7 @@ function buildContent(args: DebugToolArgs): any[] {
   return blocks;
 }
 
-/** Execute the debug-tool. Returns a `CallToolResult`-shaped response. */
+/** Execute the debug_tool. Returns a `CallToolResult`-shaped response. */
 export async function handleDebugTool(params: IToolHandlerParams): Promise<TToolHandlerResponse> {
   const args = (params.arguments ?? {}) as DebugToolArgs;
 
@@ -172,7 +172,7 @@ export async function handleDebugTool(params: IToolHandlerParams): Promise<TTool
 }
 
 /**
- * Register the debug-tool against a `McpServer` from
+ * Register the debug_tool against a `McpServer` from
  * `@modelcontextprotocol/sdk/server/mcp.js`. Use this for stand-alone test
  * servers that do not go through `initMcpServer()`.
  *

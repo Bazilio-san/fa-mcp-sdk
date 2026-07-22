@@ -17,17 +17,16 @@
  *     Basic-auth credentials as the password store — no separate user DB.
  */
 
-import chalk from 'chalk';
 import { Request, Response, Router } from 'express';
 
 import { appConfig } from '../bootstrap/init-config.js';
-import { logger as lgr } from '../logger.js';
+import { logInternalError } from '../errors/errors.js';
 
 import { checkBasicAuth } from '../auth/basic.js';
 import { generateToken } from '../auth/jwt.js';
 import { buildLocalJwks, getJwtRuntimeConfig, getKeyResolver } from '../auth/key-resolver.js';
 
-const logger = lgr.getSubLogger({ name: chalk.bgYellow('oauth-router') });
+const isProduction = (process.env.NODE_CONSUL_ENV || process.env.NODE_ENV) === 'production';
 
 /**
  * Compose the canonical issuer URL for embedded mode. Resolution order:
@@ -51,19 +50,66 @@ function getEmbeddedIssuer(req?: Request): string {
   return `http://localhost:${port}`;
 }
 
+function getPublicOrigin(req: Request): string {
+  const protocol = req.protocol || 'http';
+  const host = req.get('host');
+  return host ? `${protocol}://${host}` : `http://localhost:${appConfig.webServer?.port}`;
+}
+
+function configuredList(value: unknown): string[] {
+  const entries = Array.isArray(value) ? value : typeof value === 'string' ? value.split(',') : [];
+  return Array.from(new Set(entries.map((entry) => String(entry).trim()).filter(Boolean)));
+}
+
+function getAdvertisedScopes(): string[] {
+  return configuredList(appConfig.webServer?.auth?.oauth?.advertisedScopes);
+}
+
+function getAuthorizationServers(): string[] {
+  const configured = configuredList(appConfig.webServer?.auth?.oauth?.authorizationServers);
+  if (configured.length > 0) {
+    return configured;
+  }
+  const issuer = getJwtRuntimeConfig().expectedIssuer;
+  return /^https?:\/\//i.test(issuer) ? [issuer] : [];
+}
+
 /**
  * Public URL of THIS resource server (used as `resource` in protected-resource metadata).
  */
 function getResourceUrl(req: Request): string {
-  const protocol = req.protocol || 'http';
-  const host = req.get('host');
-  if (host) {
-    return `${protocol}://${host}`;
+  const configured = String(appConfig.webServer?.auth?.oauth?.resourceUrl ?? '').trim();
+  if (configured) {
+    return configured;
   }
-  return `http://localhost:${appConfig.webServer?.port}`;
+  if (isProduction && getJwtRuntimeConfig().mode !== 'legacyAesCtr') {
+    throw new Error('OAuth resourceUrl is required in production.');
+  }
+  return `${getPublicOrigin(req)}/mcp`;
+}
+
+function getProtectedResourceMetadataUrl(req: Request): string {
+  return `${new URL(getResourceUrl(req)).origin}/.well-known/oauth-protected-resource`;
 }
 
 const TTL_MULTIPLIERS: Record<string, number> = { s: 1, m: 60, d: 86400, y: 31536000 };
+
+/** Build RFC 9728 metadata from trusted production configuration, never from an untrusted Host header. */
+export function buildProtectedResourceMetadata(req: Request): Record<string, unknown> {
+  const resource = getResourceUrl(req);
+  const authorizationServers = getAuthorizationServers();
+  const advertisedScopes = getAdvertisedScopes();
+  const configuredDocumentation = String(appConfig.webServer?.auth?.oauth?.resourceDocumentationUrl ?? '').trim();
+  const documentation =
+    configuredDocumentation || (isProduction ? `${new URL(resource).origin}/docs` : `${getPublicOrigin(req)}/docs`);
+  return {
+    resource,
+    ...(authorizationServers.length > 0 ? { authorization_servers: authorizationServers } : {}),
+    bearer_methods_supported: ['header'],
+    ...(advertisedScopes.length > 0 ? { scopes_supported: advertisedScopes } : {}),
+    resource_documentation: documentation,
+  };
+}
 
 /**
  * Build the express router with discovery + token endpoints.
@@ -76,15 +122,7 @@ export function createOAuthRouter(): Router {
   // RFC 9728 — Protected Resource Metadata (any non-legacy mode)
   // ──────────────────────────────────────────────────────────────────────
   router.get('/.well-known/oauth-protected-resource', (req: Request, res: Response) => {
-    const resource = getResourceUrl(req);
-    const issuer = getEmbeddedIssuer(req);
-    res.json({
-      resource,
-      authorization_servers: [issuer],
-      bearer_methods_supported: ['header'],
-      scopes_supported: ['mcp:read', 'mcp:write'],
-      resource_documentation: `${resource}/docs`,
-    });
+    res.json(buildProtectedResourceMetadata(req));
   });
 
   // ──────────────────────────────────────────────────────────────────────
@@ -93,6 +131,7 @@ export function createOAuthRouter(): Router {
   if (mode === 'embedded' || mode === 'localKey') {
     router.get('/.well-known/openid-configuration', (req: Request, res: Response) => {
       const issuer = getEmbeddedIssuer(req);
+      const advertisedScopes = getAdvertisedScopes();
       res.json({
         issuer,
         jwks_uri: `${issuer}/.well-known/jwks.json`,
@@ -102,7 +141,7 @@ export function createOAuthRouter(): Router {
         token_endpoint_auth_methods_supported: ['client_secret_basic', 'none'],
         id_token_signing_alg_values_supported: [getJwtRuntimeConfig().algorithm],
         subject_types_supported: ['public'],
-        scopes_supported: ['mcp:read', 'mcp:write'],
+        ...(advertisedScopes.length > 0 ? { scopes_supported: advertisedScopes } : {}),
       });
     });
 
@@ -111,8 +150,8 @@ export function createOAuthRouter(): Router {
         const jwks = await buildLocalJwks();
         res.json(jwks);
       } catch (error: any) {
-        logger.error('Failed to build JWKS', error);
-        res.status(500).json({ error: 'jwks_unavailable', error_description: error?.message });
+        logInternalError(error, 'oauth_jwks');
+        res.status(500).json({ error: 'jwks_unavailable', error_description: 'JWKS is unavailable' });
       }
     });
   }
@@ -152,11 +191,22 @@ export function createOAuthRouter(): Router {
       if (!auth.success) {
         return res.status(401).json({
           error: 'invalid_grant',
-          error_description: auth.error || 'Invalid credentials',
+          error_description: 'Invalid credentials',
         });
       }
 
-      const scope = (req.body?.scope ?? '').toString().trim() || undefined;
+      const requestedScopes: string[] = String(req.body?.scope ?? '')
+        .trim()
+        .split(/\s+/)
+        .filter(Boolean);
+      const supportedScopes = new Set(getAdvertisedScopes());
+      if (requestedScopes.some((requested) => !supportedScopes.has(requested))) {
+        return res.status(400).json({
+          error: 'invalid_scope',
+          error_description: 'Requested scope is not supported',
+        });
+      }
+      const scope = requestedScopes.length > 0 ? Array.from(new Set(requestedScopes)).join(' ') : undefined;
       const requestedTtl = (req.body?.ttl ?? '').toString().trim();
       let liveTimeSec: number = getJwtRuntimeConfig().defaultTtl;
       if (requestedTtl) {
@@ -183,10 +233,10 @@ export function createOAuthRouter(): Router {
         ...(scope ? { scope } : {}),
       });
     } catch (error: any) {
-      logger.error('oauth/token failed', error);
+      logInternalError(error, 'oauth_token');
       return res.status(500).json({
         error: 'server_error',
-        error_description: error?.message ?? 'unknown error',
+        error_description: 'Token service unavailable',
       });
     }
   });
@@ -210,19 +260,17 @@ export function buildWwwAuthenticateHeader(
   const opts: { errorReason?: string | undefined; isTokenDecrypted?: boolean | undefined } =
     typeof ctx === 'string' ? { errorReason: ctx, isTokenDecrypted: true } : ctx;
   const { mode } = getJwtRuntimeConfig();
-  const realm = appConfig.name || 'mcp';
+  const realm = String(appConfig.name || 'mcp')
+    .replace(/[\u0000-\u001f\u007f"\\]/g, '')
+    .slice(0, 64);
   const errParts: string[] = [];
   if (opts.isTokenDecrypted && opts.errorReason) {
     errParts.push(`error="invalid_token"`);
-    errParts.push(`error_description="${String(opts.errorReason).replace(/"/g, '')}"`);
   }
   if (mode === 'legacyAesCtr') {
     return [`Bearer realm="${realm}"`, ...errParts].join(', ');
   }
-  const resource = getResourceUrl(req);
-  return [
-    `Bearer realm="${realm}"`,
-    `resource_metadata="${resource}/.well-known/oauth-protected-resource"`,
-    ...errParts,
-  ].join(', ');
+  return [`Bearer realm="${realm}"`, `resource_metadata="${getProtectedResourceMetadataUrl(req)}"`, ...errParts].join(
+    ', ',
+  );
 }

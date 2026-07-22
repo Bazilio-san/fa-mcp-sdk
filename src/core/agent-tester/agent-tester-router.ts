@@ -17,6 +17,7 @@ import {
   validateLoginCredentials,
 } from '../auth/agent-tester-auth.js';
 import { appConfig } from '../bootstrap/init-config.js';
+import { logInternalError } from '../errors/errors.js';
 import { logger as lgr } from '../logger.js';
 
 import { TesterAgentService } from './services/TesterAgentService.js';
@@ -70,7 +71,7 @@ export function createAgentTesterRouter(
   router.post('/api/auth/login', async (req, res): Promise<void> => {
     const authResult = await validateLoginCredentials(req.body || {});
     if (!authResult.success) {
-      res.status(401).json({ error: authResult.error || 'Authentication failed' });
+      res.status(401).json({ error: 'Unauthorized' });
       return;
     }
 
@@ -182,8 +183,8 @@ export function createAgentTesterRouter(
       const response = await agentService.processMessage(chatRequest);
       res.json(response);
     } catch (error: any) {
-      logger.error('Chat message error:', error);
-      res.status(500).json({ error: error.message || 'Internal server error' });
+      logInternalError(error, 'agent_tester_chat');
+      res.status(500).json({ error: 'Internal server error' });
     }
   });
 
@@ -205,8 +206,8 @@ export function createAgentTesterRouter(
       });
       res.json(response);
     } catch (error: any) {
-      logger.error('Chat test error:', error);
-      res.status(500).json({ error: error.message || 'Internal server error' });
+      logInternalError(error, 'agent_tester_chat_test');
+      res.status(500).json({ error: 'Internal server error' });
     }
   });
 
@@ -274,8 +275,8 @@ export function createAgentTesterRouter(
       const result = await mcpClientService.connectToServer(connectionRequest);
       res.json(result);
     } catch (error: any) {
-      logger.error('MCP connect error:', error);
-      res.status(500).json({ error: error.message || 'Internal server error' });
+      logInternalError(error, 'agent_tester_connect');
+      res.status(500).json({ error: 'Internal server error' });
     }
   });
 
@@ -285,7 +286,8 @@ export function createAgentTesterRouter(
       await mcpClientService.disconnectFromServer(req.params.serverName);
       res.json({ message: `Disconnected from ${req.params.serverName}` });
     } catch (error: any) {
-      res.status(500).json({ error: error.message });
+      logInternalError(error, 'agent_tester_disconnect');
+      res.status(500).json({ error: 'Internal server error' });
     }
   });
 
@@ -300,7 +302,8 @@ export function createAgentTesterRouter(
       const result = await mcpClientService.updateHeaders(serverName, headers);
       res.json(result);
     } catch (error: any) {
-      res.status(500).json({ error: error.message });
+      logInternalError(error, 'agent_tester_headers');
+      res.status(500).json({ error: 'Internal server error' });
     }
   });
 
@@ -351,7 +354,7 @@ export function createAgentTesterRouter(
               const cached = await mcpClientService.getOrCreateClient(mcpConfig);
               uiResource = await readUiResource(cached.client, uri);
             } catch (e) {
-              logger.warn(`Failed to read UI resource ${uri} for tool ${toolName}:`, e);
+              logInternalError(e, 'agent_tester_ui_resource');
             }
           }
         }
@@ -363,8 +366,8 @@ export function createAgentTesterRouter(
       }
       res.json(response);
     } catch (error: any) {
-      logger.error('MCP call-tool error:', error);
-      res.status(500).json({ success: false, error: error.message || 'Tool execution failed' });
+      logInternalError(error, 'agent_tester_tool_call');
+      res.status(500).json({ success: false, error: 'Tool execution failed' });
     }
   });
 
@@ -402,10 +405,12 @@ export function createAgentTesterRouter(
         });
         res.json({ resources: uiOnly });
       } catch (e: any) {
-        res.status(500).json({ error: e.message || 'listResources failed' });
+        logInternalError(e, 'agent_tester_list_resources');
+        res.status(500).json({ error: 'listResources failed' });
       }
     } catch (error: any) {
-      res.status(500).json({ error: error.message });
+      logInternalError(error, 'agent_tester_ui_resources');
+      res.status(500).json({ error: 'Internal server error' });
     }
   });
 
@@ -420,7 +425,8 @@ export function createAgentTesterRouter(
       const headers = await mcpClientService.getRequiredHeaders(url);
       res.json(headers);
     } catch (error: any) {
-      res.status(500).json({ error: error.message });
+      logInternalError(error, 'agent_tester_used_headers');
+      res.status(500).json({ error: 'Internal server error' });
     }
   });
 

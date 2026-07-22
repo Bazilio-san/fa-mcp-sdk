@@ -51,14 +51,14 @@ export const setTokenGenSessionData = (req: Request, userData: IUserData): void 
     isAuthenticated: true,
   };
   sessionStorage.set(sessionId, sessionData);
-  console.log(`[TOKEN-GEN] Session created for user: ${userData.username} from domain: ${userData.domain}`);
+  console.log('[TOKEN-GEN] Session created');
 };
 
 // Remove session
 export const removeTokenGenSession = (req: Request): void => {
   const sessionId = getSessionId(req);
   sessionStorage.delete(sessionId);
-  console.log(`[TOKEN-GEN] Session removed for ID: ${sessionId}`);
+  console.log('[TOKEN-GEN] Session removed');
 };
 
 // Session middleware for checking authentication

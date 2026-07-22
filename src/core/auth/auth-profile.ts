@@ -14,6 +14,8 @@ export interface IAuthProfile {
     issuer?: string;
     checkMCPName?: boolean;
     isCheckIP?: boolean;
+    subjectClaim?: 'sub';
+    userClaim?: string;
   };
   jwt?: {
     mode: 'legacyAesCtr' | 'embedded' | 'localKey' | 'remoteJwks';
@@ -28,17 +30,25 @@ export interface IAuthProfile {
     jwks?: string;
     token?: string;
   };
+  oauth?: {
+    resourceUrl?: string;
+    authorizationServers: string[];
+    advertisedScopes: string[];
+    resourceDocumentationUrl?: string;
+  };
   requiredScopes?: {
     tools: Record<string, string[]>;
     prompts: Record<string, string[]>;
     resources: Record<string, string[]>;
   };
+  defaultReadScopes?: string[];
   headers: { authorization: string };
   httpHeadersResource: string;
 }
 
 export function collectAuthProfile(): IAuthProfile {
   const auth = appConfig.webServer?.auth;
+  const jwtRt = getJwtRuntimeConfig();
   const methods: string[] = [];
   const schemes: Set<string> = new Set();
   if (auth?.enabled) {
@@ -46,7 +56,7 @@ export function collectAuthProfile(): IAuthProfile {
       methods.push('permanentServerTokens');
       schemes.add('Bearer');
     }
-    if (auth.jwtToken?.encryptKey) {
+    if (jwtRt.mode !== 'legacyAesCtr' || (auth.jwtToken?.encryptKey && auth.jwtToken.encryptKey !== '***')) {
       methods.push('jwtToken');
       schemes.add('Bearer');
     }
@@ -70,8 +80,25 @@ export function collectAuthProfile(): IAuthProfile {
   if (typeof auth?.jwtToken?.isCheckIP === 'boolean') {
     claims.isCheckIP = auth.jwtToken.isCheckIP;
   }
+  if (jwtRt.mode !== 'legacyAesCtr') {
+    claims.subjectClaim = 'sub';
+    claims.userClaim = jwtRt.userClaim || 'sub';
+  }
 
-  const jwtRt = getJwtRuntimeConfig();
+  const toList = (value: unknown): string[] => {
+    const entries = Array.isArray(value) ? value : typeof value === 'string' ? value.split(',') : [];
+    return Array.from(new Set(entries.map((entry) => String(entry).trim()).filter(Boolean)));
+  };
+  const oauthConfig = auth?.oauth;
+  const oauth: NonNullable<IAuthProfile['oauth']> = {
+    authorizationServers: toList(oauthConfig?.authorizationServers),
+    advertisedScopes: toList(oauthConfig?.advertisedScopes),
+    ...(String(oauthConfig?.resourceUrl ?? '').trim() ? { resourceUrl: String(oauthConfig?.resourceUrl).trim() } : {}),
+    ...(String(oauthConfig?.resourceDocumentationUrl ?? '').trim()
+      ? { resourceDocumentationUrl: String(oauthConfig?.resourceDocumentationUrl).trim() }
+      : {}),
+  };
+
   const jwt: NonNullable<IAuthProfile['jwt']> = {
     mode: jwtRt.mode,
     algorithm: jwtRt.mode === 'legacyAesCtr' ? 'HS256' : jwtRt.algorithm,
@@ -123,6 +150,16 @@ export function collectAuthProfile(): IAuthProfile {
       requiredScopes.resources[r.uri] = r.requiredScopes as string[];
     }
   }
+  const templates = Array.isArray(data?.customResourceTemplates) ? data.customResourceTemplates : [];
+  for (const template of templates as any[]) {
+    if (
+      Array.isArray(template?.requiredScopes) &&
+      template.requiredScopes.length > 0 &&
+      typeof template?.uriTemplate === 'string'
+    ) {
+      requiredScopes.resources[template.uriTemplate] = template.requiredScopes as string[];
+    }
+  }
 
   return {
     enabled: !!auth?.enabled,
@@ -130,11 +167,15 @@ export function collectAuthProfile(): IAuthProfile {
     methods,
     claims,
     jwt,
+    ...(jwtRt.mode !== 'legacyAesCtr' ? { oauth } : {}),
     ...(Object.keys(discovery).length ? { discovery } : {}),
     ...(Object.keys(requiredScopes.tools).length ||
     Object.keys(requiredScopes.prompts).length ||
     Object.keys(requiredScopes.resources).length
       ? { requiredScopes }
+      : {}),
+    ...(Array.isArray(data?.defaultReadScopes) && data.defaultReadScopes.length > 0
+      ? { defaultReadScopes: [...data.defaultReadScopes] }
       : {}),
     headers: { authorization: 'Authorization: Bearer <token>' },
     httpHeadersResource: 'use://http-headers',
