@@ -7,17 +7,21 @@
  */
 
 import chalk from 'chalk';
+import { createPublicKey } from 'node:crypto';
+import { readFileSync } from 'node:fs';
 import { Request, Response, NextFunction, RequestHandler } from 'express';
 
 import { AdminAuthType } from '../_types_/config.js';
 import { appConfig } from '../bootstrap/init-config.js';
 import { logger as lgr } from '../logger.js';
+import { getCurrentRequestId } from '../web/request-id.js';
 
 import { checkBasicAuth } from './basic.js';
 import { checkJwtToken } from './jwt.js';
+import { getJwtRuntimeConfig } from './key-resolver.js';
 import { getTokenFromHttpHeader } from './multi-auth.js';
 import { checkPermanentToken } from './permanent.js';
-import { isADEnabled } from './token-generator/ntlm/ntlm-domain-config.js';
+import { isADEnabled } from './token-generator/ntlm/ntlm-enabled.js';
 import { setupNTLMAuthentication } from './token-generator/ntlm/ntlm-integration.js';
 
 const logger = lgr.getSubLogger({ name: chalk.yellow('admin-auth') });
@@ -63,8 +67,21 @@ function validateSingleAuthType(authType: AdminAuthType): string | null {
 
     case 'jwtToken': {
       const jwt = auth?.jwtToken;
-      if (!jwt?.encryptKey || jwt.encryptKey.length < 8) {
-        return `adminPanel.authType "${authType}" but encryptKey is missing or too short in webServer.auth.jwtToken`;
+      const runtime = getJwtRuntimeConfig();
+      if (runtime.mode === 'legacyAesCtr') {
+        if (!jwt?.encryptKey || jwt.encryptKey.length < 8 || jwt.encryptKey === '***') {
+          return `adminPanel.authType "${authType}" but encryptKey is missing or too short in webServer.auth.jwtToken`;
+        }
+      } else if (runtime.mode === 'remoteJwks') {
+        if (!runtime.jwksUri || !runtime.expectedIssuer) {
+          return `adminPanel.authType "${authType}" requires jwksUri and expectedIssuer for remoteJwks`;
+        }
+      } else if (runtime.mode === 'localKey') {
+        try {
+          createPublicKey(readFileSync(runtime.publicKeyPath, 'utf8'));
+        } catch {
+          return `adminPanel.authType "${authType}" requires a readable publicKeyPath for localKey`;
+        }
       }
       break;
     }
@@ -150,7 +167,7 @@ async function tryAuthType(
   authType: AdminAuthType,
   scheme: string,
   credentials: string,
-): Promise<{ success: boolean; error?: string; username?: string; payload?: any } | null> {
+): Promise<{ success: boolean; failureReason?: string; username?: string; payload?: any } | null> {
   switch (authType) {
     case 'permanentServerTokens': {
       if (scheme === 'basic') {
@@ -158,7 +175,7 @@ async function tryAuthType(
       } // Not a bearer/token
       const result = checkPermanentToken(credentials);
       return result.errorReason
-        ? { success: false, error: result.errorReason }
+        ? { success: false, failureReason: classifyAdminAuthFailure(result.errorReason) }
         : { success: true, username: 'ServerToken' };
     }
 
@@ -166,7 +183,8 @@ async function tryAuthType(
       if (scheme !== 'basic') {
         return null;
       } // Not basic auth
-      return checkBasicAuth(credentials);
+      const result = checkBasicAuth(credentials);
+      return result.success ? result : { success: false, failureReason: classifyAdminAuthFailure(result.error) };
     }
 
     case 'jwtToken': {
@@ -175,10 +193,10 @@ async function tryAuthType(
       } // Not a bearer/token
       const result = await checkJwtToken({ token: credentials });
       if (result.errorReason) {
-        return { success: false, error: result.errorReason };
+        return { success: false, failureReason: classifyAdminAuthFailure(result.errorReason) };
       }
       if (result.payload?.allow !== 'gen-token') {
-        return { success: false, error: 'Admin panel requires JWT token with payload.allow === "gen-token"' };
+        return { success: false, failureReason: 'insufficient_permission' };
       }
       return { success: true, username: result.payload?.user || 'JWT User', payload: result.payload };
     }
@@ -186,6 +204,32 @@ async function tryAuthType(
     default:
       return null;
   }
+}
+
+function classifyAdminAuthFailure(error: unknown): string {
+  const value = String(error ?? '').toLowerCase();
+  if (value.includes('expired')) {
+    return 'token_expired';
+  }
+  if (value.includes('revoked')) {
+    return 'token_revoked';
+  }
+  if (value.includes('signature')) {
+    return 'invalid_signature';
+  }
+  if (value.includes('service') || value.includes('audience')) {
+    return 'audience_mismatch';
+  }
+  if (value.includes('user') || value.includes('subject')) {
+    return 'subject_mismatch';
+  }
+  if (value.includes('ip')) {
+    return 'ip_mismatch';
+  }
+  if (value.includes('not provided') || value.includes('required')) {
+    return 'credentials_missing';
+  }
+  return 'invalid_credentials';
 }
 
 /**
@@ -262,8 +306,8 @@ export function createAdminAuthMW(): RequestHandler[] {
           }
           return next();
         }
-        if (result.error) {
-          errors[authType] = result.error;
+        if (result.failureReason) {
+          errors[authType] = result.failureReason;
         }
       }
 
@@ -278,8 +322,12 @@ export function createAdminAuthMW(): RequestHandler[] {
         specificError = errors.permanentServerTokens;
       }
 
-      logger.debug(`Admin auth failed: ${specificError || 'no matching auth type'}`);
-      const message = specificError || buildAuthFailureMessage(scheme || '', !!looksLikeJwt, standardTypes);
+      logger.warn('Admin authentication rejected', {
+        reason: specificError || 'no_matching_auth_type',
+        requestId: getCurrentRequestId() ?? null,
+        status: 401,
+      });
+      const message = buildAuthFailureMessage(scheme || '', !!looksLikeJwt, standardTypes);
       return sendAuthRequired(res, standardTypes, message);
     },
   ];

@@ -28,9 +28,8 @@ export const AGENT_PROMPT = `You are a database management assistant.
 The standard `tool_prompt` prompt returns instructions scoped to a single MCP tool. It declares a
 **required** `tool` argument (the tool name) and delegates the whole content logic to the child
 project through the optional `toolPrompt` field on `McpServerData`. The function receives the tool
-name in `args.tool` and returns the prompt for that tool. When `toolPrompt` is not supplied, a
-built-in stub returns an empty string — the `tool_prompt` prompt is still advertised, it just
-yields nothing.
+name in `args.tool` and returns the prompt for that tool. When `toolPrompt` is not supplied,
+`tool_prompt` is not advertised; therefore every entry returned by `prompts/list` remains gettable.
 
 ```typescript
 import { McpServerData, TPromptContentFunction } from 'fa-mcp-sdk';
@@ -110,19 +109,25 @@ Universal type for dynamic tools/prompts/resources functions:
 ```typescript
 interface ITransportContext {
   transport: 'stdio' | 'sse' | 'http';
-  headers?: Record<string, string>;            // HTTP headers (HTTP/SSE only)
+  headers?: Record<string, string>;            // Non-credential HTTP headers (HTTP/SSE only)
   payload?: { user: string; [key: string]: any };  // Auth payload (if authenticated HTTP/SSE only)
+  principal?: string;                          // Stable opaque authenticated principal
   clientCapabilities?: IClientCapabilities;    // From MCP `initialize` handshake (see 10-mcp-apps.md)
 }
 ```
 
-Use for transport-based credential routing:
+Use for transport- and identity-based routing. Secrets must come from server-side configuration:
+
 ```typescript
-function getApiKey(ctx: ITransportContext): string {
-  if (ctx.transport === 'stdio') return process.env.API_KEY || '';
-  return ctx.headers?.['x-api-key'] || '';
+function getDownstreamConfig(ctx: ITransportContext): { apiKey: string; actor?: string } {
+  const apiKey = process.env.API_KEY || '';
+  return { apiKey, actor: ctx.principal };
 }
 ```
+
+The SDK strips `authorization`, cookies, `x-api-key`, and auth/token/password/secret-like headers from
+`headers`. Authenticated identity is represented only by the verified `payload` and opaque `principal`
+fields.
 
 Use `clientCapabilities` to branch UI-augmented vs. text-only output (see
 [10-mcp-apps.md → "Reading client capabilities from fa-mcp-sdk"](./10-mcp-apps.md)).
@@ -301,11 +306,14 @@ Exposed via `use://http-headers` resource.
 
 ## requireAuth
 
-Both prompts and resources support `requireAuth: true`:
+`prompts/get` and `resources/read` are protected by default. Built-in prompts/resources explicitly
+set `requireAuth: true`; custom entries that omit the field are also treated as protected. Shared and
+production servers must not opt out with `requireAuth: false`.
 
-- Requires valid authentication to access
-- Unauthenticated requests get error
-- Works with any configured auth method (JWT, Basic, etc.)
+- valid authentication is required to access content;
+- unauthenticated requests receive HTTP 401;
+- missing required scopes are rejected by the MCP handler as JSON-RPC `-32000` with
+  `error.data.reason="insufficient_scope"`; inaccessible entries are omitted from discovery.
 
 ## Optional MAY capabilities — templates & subscribe (standard §11.5)
 

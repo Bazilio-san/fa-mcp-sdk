@@ -68,12 +68,9 @@ GET http://localhost:{{port}}/health
 Response:
 ```json
 {
-  "status": "healthy",
-  "details": {
-    "uptime": 123.456,
-    "memoryUsage": { ... },
-    "timestamp": "..."
-  }
+  "status": "ok",
+  "version": "1.2.3",
+  "uptime": 123.456
 }
 ```
 

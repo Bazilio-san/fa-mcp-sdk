@@ -43,6 +43,7 @@ function signFixtureJwt(payload, options = {}) {
   assert.match(token, standardJwtRE, 'token should be a 3-segment standard JWT');
   const result = await checkJwtToken({ token });
   assert.ok(!result.errorReason, `expected no error, got: ${result.errorReason}`);
+  assert.strictEqual(result.payload?.sub, 'alice', 'canonical JWT subject must be preserved');
   assert.strictEqual(result.payload?.user, 'alice');
   assert.strictEqual(result.payload?.service, expectedAud);
   assert.ok(result.payload?.jti, 'standard JWT must carry a jti');
@@ -138,6 +139,28 @@ function signFixtureJwt(payload, options = {}) {
   console.log('  ✅  malformed token rejected');
 }
 
+// ===== 7b. Bounded, control-free subjects are required =====
+
+for (const [label, subject] of [
+  ['oversized subject', 'x'.repeat(4097)],
+  ['control-character subject', 'alice\u0007admin'],
+]) {
+  const token = signFixtureJwt(
+    { role: 'operator' },
+    {
+      subject,
+      audience: expectedAud,
+      expiresIn: 60,
+      jwtid: `invalid-subject-${label}`,
+    },
+  );
+  const result = await checkJwtToken({ token });
+  assert.match(result.errorReason ?? '', /subject is invalid/i, `${label} must fail before authentication succeeds`);
+}
+await assert.rejects(() => generateToken('x'.repeat(4097), 60), /empty or invalid/i);
+await assert.rejects(() => generateToken('alice\u0007admin', 60), /empty or invalid/i);
+console.log('  ✅  oversized/control-character standard JWT identities rejected');
+
 // ===== 8. Legacy token fixture → ok =====
 
 {
@@ -157,6 +180,19 @@ function signFixtureJwt(payload, options = {}) {
   assert.strictEqual(result.payload?.user, 'legacy-user');
   console.log('  ✅  legacy token fixture accepted');
 }
+
+// ===== 8b. Legacy encrypted tokens enforce the same identity bounds =====
+
+for (const [label, user] of [
+  ['oversized user', 'x'.repeat(4097)],
+  ['control-character user', 'legacy\u0007admin'],
+]) {
+  const expire = Date.now() + 60 * 1000;
+  const encrypted = legacyEncrypt(JSON.stringify({ user, expire, iat: new Date().toISOString() }));
+  const result = await checkJwtToken({ token: `${expire}.${encrypted}` });
+  assert.match(result.errorReason ?? '', /user identity is invalid/i, `${label} must fail closed`);
+}
+console.log('  ✅  oversized/control-character legacy encrypted identities rejected');
 
 // ===== 9-11. Revocation scenarios — run in subprocess so NODE_CONFIG injection takes effect =====
 

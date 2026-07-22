@@ -5,6 +5,7 @@ import { BaseMcpError, IMcpErrorData } from './BaseMcpError.js';
  * codes (`-32600`, `-32601`, `-32602`, `-32603`) and identify MCP-specific failures.
  */
 export const MCP_ERROR_CODES = {
+  SERVER_ERROR: -32000,
   RATE_LIMITED: -32003,
   RESOURCE_NOT_FOUND: -32002,
   TIMEOUT: -32004,

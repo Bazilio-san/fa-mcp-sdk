@@ -9,13 +9,15 @@ import { Request } from 'express';
 
 import { CustomAuthValidator } from '../_types_/types.js';
 import { appConfig } from '../bootstrap/init-config.js';
+import { logInternalError } from '../errors/errors.js';
 import { logger as lgr } from '../logger.js';
 import { normalizeHeaders, trim } from '../utils/utils.js';
 
 import { checkBasicAuth } from './basic.js';
 import { checkJwtToken, generateToken, jwtTokenRE, MIN_ENCRYPT_KEY_LENGTH } from './jwt.js';
-import { canLocallyIssueJwt } from './key-resolver.js';
-import { checkPermanentToken } from './permanent.js';
+import { canLocallyIssueJwt, getJwtRuntimeConfig } from './key-resolver.js';
+import { checkPermanentToken, isValidPermanentTokenConfig } from './permanent.js';
+import { normalizeAuthPrincipal } from './principal.js';
 import { AuthDetectionResult, AuthResult, AuthType } from './types.js';
 
 const logger = lgr.getSubLogger({ name: chalk.magenta('multi-auth') });
@@ -81,6 +83,14 @@ function getCustomAuthValidator(): CustomAuthValidator | undefined {
   return _cachedValidator ?? undefined;
 }
 
+function hasStableCustomIdentity(result: AuthResult): boolean {
+  const candidates = [result.sessionBinding, result.username, result.payload?.sub, result.payload?.user];
+  return candidates.some(
+    (value) =>
+      typeof value === 'string' && value.trim().length > 0 && value.length <= 1024 && !/[\u0000-\u001f]/.test(value),
+  );
+}
+
 /**
  * Detects configured authentication types in priority order (ascending CPU load)
  */
@@ -91,19 +101,26 @@ export function detectAuthConfiguration(): AuthDetectionResult {
 
   if (authEnabled) {
     // Check permanentServerTokens
-    if (Array.isArray(pt) && pt.filter(Boolean)) {
+    if (Array.isArray(pt) && pt.some(isValidPermanentTokenConfig)) {
       configured.push('permanentServerTokens');
     }
 
     // Check JWT Token
-    if (encryptKey?.length) {
-      if (encryptKey.length < MIN_ENCRYPT_KEY_LENGTH) {
+    const jwtRuntime = getJwtRuntimeConfig();
+    if (jwtRuntime.mode === 'legacyAesCtr') {
+      if (encryptKey?.length && encryptKey !== '***' && encryptKey.length < MIN_ENCRYPT_KEY_LENGTH) {
         errors.jwtToken = [
           `JWT encryption key is too short (${encryptKey.length} chars) Must be at least ${MIN_ENCRYPT_KEY_LENGTH} chars long`,
         ];
-      } else {
+      } else if (encryptKey?.length && encryptKey !== '***') {
         configured.push('jwtToken');
       }
+    } else if (jwtRuntime.mode === 'remoteJwks' && !jwtRuntime.jwksUri) {
+      errors.jwtToken = ['JWKS URI missing for remoteJwks mode'];
+    } else if (jwtRuntime.mode === 'localKey' && !jwtRuntime.publicKeyPath) {
+      errors.jwtToken = ['Public key path missing for localKey mode'];
+    } else {
+      configured.push('jwtToken');
     }
 
     // Check Basic Auth
@@ -170,11 +187,21 @@ export async function checkMultiAuth(req: Request): Promise<AuthResult> {
     try {
       const customResult = await customValidator(requestWithNormalizedHeaders);
       if (customResult.success) {
-        return customResult;
+        if (!hasStableCustomIdentity(customResult)) {
+          return {
+            success: false,
+            authType: 'custom',
+            error: `${E_PFX}custom validator success requires a stable principal identity`,
+          };
+        }
+        return normalizeAuthPrincipal({ ...customResult, authType: 'custom' });
+      }
+      if (customResult.forbidden) {
+        return { ...customResult, authType: 'custom' };
       }
       // success: false → fall through to standard auth
     } catch (error: Error | any) {
-      logger.error('Custom auth validator failed:', error);
+      logInternalError(error, 'custom_auth_validator');
       // fall through to standard auth
     }
   }
@@ -199,7 +226,7 @@ export async function checkMultiAuth(req: Request): Promise<AuthResult> {
       }
       const result = checkBasicAuth(credentials);
       if (result.success) {
-        return { ...result, authType: 'basic', payload: { user: result.username! } };
+        return normalizeAuthPrincipal({ ...result, authType: 'basic', payload: { user: result.username! } });
       }
       errorResult = { ...result, authType: 'basic' };
     } else {
@@ -211,7 +238,7 @@ export async function checkMultiAuth(req: Request): Promise<AuthResult> {
       if (configuredSet.has('permanentServerTokens')) {
         const { errorReason } = checkPermanentToken(credentials);
         if (!errorReason) {
-          return { success: true, authType: 'permanentServerTokens' };
+          return normalizeAuthPrincipal({ success: true, authType: 'permanentServerTokens' }, credentials);
         }
         permError = errorReason;
       }
@@ -222,7 +249,7 @@ export async function checkMultiAuth(req: Request): Promise<AuthResult> {
         const clientIp = req.ip ?? (xffStr.trim() || (req.socket?.remoteAddress ?? ''));
         const { errorReason, payload, isTokenDecrypted } = await checkJwtToken({ token: credentials, clientIp });
         if (!errorReason) {
-          return { success: true, authType: 'jwtToken', payload };
+          return normalizeAuthPrincipal({ success: true, authType: 'jwtToken', payload });
         }
         jwtErrorResult = { success: false, error: `${E_PFX}${errorReason}`, authType: 'jwtToken', isTokenDecrypted };
       }
@@ -241,10 +268,7 @@ export async function checkMultiAuth(req: Request): Promise<AuthResult> {
       }
     }
   } catch (error: Error | any) {
-    logger.warn(
-      `Auth scheme ${scheme} failed with exception:`,
-      error instanceof Error ? E_PFX + error.message : 'Unknown error',
-    );
+    logInternalError(error, 'auth_scheme_validation');
   }
 
   return (

@@ -1,0 +1,18 @@
+{
+  "entryFile": "src/start.ts",
+  "noImplicitAdditionalProperties": "throw-on-extras",
+  "controllerPathGlobs": ["src/api/*.ts"],
+  "spec": {
+    "outputDirectory": "swagger",
+    "specVersion": 3,
+    "specFileBaseName": "openapi",
+    "yaml": true,
+    "securityDefinitions": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT"
+      }
+    }
+  }
+}

@@ -15,11 +15,14 @@ import chalk from 'chalk';
 import { jwtVerify, SignJWT, errors as joseErrors } from 'jose';
 
 import { appConfig } from '../bootstrap/init-config.js';
+import { logInternalError } from '../errors/errors.js';
 import { logger as lgr } from '../logger.js';
 import { isObject, trim } from '../utils/utils.js';
 
 import { parseIpList, isIpAllowed } from './ip-check.js';
+import { RESERVED_USER_CLAIMS } from './jwt-claims.js';
 import { getJwtRuntimeConfig, getKeyResolver } from './key-resolver.js';
+import { isUsableAuthIdentity } from './principal.js';
 import { isJtiRevoked, isJwtTokenRevoked, isUserRevoked } from './revocation.js';
 import { ICheckTokenResult, ITokenPayload } from './types.js';
 
@@ -33,8 +36,8 @@ const STANDARD_CLAIMS = new Set(['user', 'expire', 'iat', 'service', 'iss', 'sub
  */
 export async function generateTokenV2(user: string, liveTimeSec: number, payload?: any): Promise<string> {
   const normalizedUser = trim(user).toLowerCase();
-  if (!normalizedUser) {
-    throw new Error('generateTokenV2: Username is empty');
+  if (!isUsableAuthIdentity(normalizedUser)) {
+    throw new Error('generateTokenV2: Username is empty or invalid');
   }
 
   const resolver = await getKeyResolver();
@@ -50,12 +53,21 @@ export async function generateTokenV2(user: string, liveTimeSec: number, payload
 
   const inputPayload = isObject(payload) ? { ...payload } : {};
   const service = trim(inputPayload.service) || undefined;
-  for (const reserved of ['user', 'expire', 'iat', 'service', 'sub', 'aud', 'exp', 'iss', 'jti', 'nbf']) {
+  const { expectedIssuer, expectedAudience, userClaim } = getJwtRuntimeConfig();
+  for (const reserved of ['user', 'expire', 'iat', 'service', 'sub', 'aud', 'exp', 'iss', 'jti', 'nbf', userClaim]) {
+    if (!reserved) {
+      continue;
+    }
     delete inputPayload[reserved];
+  }
+  if (userClaim) {
+    if (RESERVED_USER_CLAIMS.has(userClaim)) {
+      throw new Error(`generateTokenV2: configured userClaim "${userClaim}" is reserved`);
+    }
+    inputPayload[userClaim] = normalizedUser;
   }
 
   const { algorithm, privateKey, kid } = resolver.getSignContext();
-  const { expectedIssuer, expectedAudience } = getJwtRuntimeConfig();
 
   const issuer = expectedIssuer || `urn:fa-mcp:${appConfig.shortName || appConfig.name}`;
   const audience = service || expectedAudience || appConfig.name;
@@ -99,17 +111,16 @@ export async function verifyJwtV2(arg: {
     return { errorReason: 'JWT verifier not initialized (legacy mode)' };
   }
 
-  const { expectedIssuer, expectedAudience, clockSkew } = getJwtRuntimeConfig();
-  const checkMCPName = appConfig.webServer?.auth?.jwtToken?.checkMCPName || false;
+  const { expectedIssuer, expectedAudience, clockSkew, algorithm, userClaim } = getJwtRuntimeConfig();
   const isCheckIP = appConfig.webServer?.auth?.jwtToken?.isCheckIP || false;
-  const wantService = arg.expectedService ?? expectedAudience ?? appConfig.name;
+  const wantService = arg.expectedService || expectedAudience || appConfig.name;
 
   let payloadDecoded: Record<string, any>;
   try {
     const { payload } = await jwtVerify(token, (header) => resolver.getVerifyKey(header) as any, {
       ...(expectedIssuer ? { issuer: expectedIssuer } : {}),
-      // jose's audience check passes when the token's aud (string or array) intersects ours.
-      // We do our own check below to surface the same error wording as legacy code.
+      audience: wantService,
+      algorithms: [algorithm],
       clockTolerance: clockSkew,
     });
     payloadDecoded = payload as Record<string, any>;
@@ -126,25 +137,45 @@ export async function verifyJwtV2(arg: {
       return { errorReason: 'Invalid signature' };
     }
     if (err instanceof joseErrors.JWTClaimValidationFailed) {
-      return { errorReason: `JWT Token: ${err.message}` };
+      return { errorReason: `JWT claim validation failed (${err.code})` };
     }
     if (err instanceof joseErrors.JOSEError) {
-      logger.debug(`JOSE error: ${err.message}`);
+      logger.debug(`JWT verification rejected: ${err.code}`);
       return { errorReason: 'The token is not a JWT' };
     }
-    logger.error('verifyJwtV2 unexpected error:', err);
-    return { errorReason: `Error verifying JWT token :: ${err?.message ?? 'unknown error'}` };
+    logInternalError(err, 'jwt_v2_verification');
+    return { errorReason: 'Error verifying JWT token' };
   }
 
   const sub = typeof payloadDecoded.sub === 'string' ? payloadDecoded.sub : '';
-  if (!sub) {
-    return { errorReason: 'JWT Token: missing subject' };
+  if (!isUsableAuthIdentity(sub)) {
+    return {
+      isTokenDecrypted: true,
+      errorReason: sub ? 'JWT Token: subject is invalid' : 'JWT Token: missing subject',
+    };
   }
+  if (userClaim && RESERVED_USER_CLAIMS.has(userClaim)) {
+    return { errorReason: 'JWT verifier has an invalid user-claim configuration' };
+  }
+  const identityValue = userClaim ? payloadDecoded[userClaim] : sub;
+  if (!isUsableAuthIdentity(identityValue)) {
+    return { isTokenDecrypted: true, errorReason: 'JWT Token: configured user claim is missing or invalid' };
+  }
+  const employeeUser = trim(identityValue).toLowerCase();
   const expSec = typeof payloadDecoded.exp === 'number' ? payloadDecoded.exp : 0;
   if (!expSec) {
     return { isTokenDecrypted: true, errorReason: 'JWT Token: missing expiration' };
   }
   const iatSec = typeof payloadDecoded.iat === 'number' ? payloadDecoded.iat : 0;
+  if (!iatSec) {
+    return { isTokenDecrypted: true, errorReason: 'JWT Token: missing issued-at time' };
+  }
+  if (iatSec > Math.floor(Date.now() / 1000) + clockSkew) {
+    return { isTokenDecrypted: true, errorReason: 'JWT Token: issued-at time is in the future' };
+  }
+  if (typeof payloadDecoded.iss !== 'string' || !payloadDecoded.iss) {
+    return { isTokenDecrypted: true, errorReason: 'JWT Token: missing issuer' };
+  }
   const audValues = Array.isArray(payloadDecoded.aud)
     ? (payloadDecoded.aud as unknown[]).filter((v): v is string => typeof v === 'string' && !!trim(v))
     : typeof payloadDecoded.aud === 'string' && trim(payloadDecoded.aud)
@@ -152,7 +183,7 @@ export async function verifyJwtV2(arg: {
       : [];
   const normalizedService = wantService && audValues.includes(wantService) ? wantService : audValues[0];
 
-  const normalized: ITokenPayload = { user: sub, expire: expSec * 1000 };
+  const normalized: ITokenPayload = { sub, user: employeeUser, expire: expSec * 1000 };
   if (iatSec) {
     normalized.iat = new Date(iatSec * 1000).toISOString();
   }
@@ -166,7 +197,7 @@ export async function verifyJwtV2(arg: {
     normalized.jti = payloadDecoded.jti;
   }
   for (const [k, v] of Object.entries(payloadDecoded)) {
-    if (!STANDARD_CLAIMS.has(k)) {
+    if (!STANDARD_CLAIMS.has(k) && k !== userClaim) {
       normalized[k] = v;
     }
   }
@@ -187,14 +218,10 @@ export async function verifyJwtV2(arg: {
     };
   }
 
-  if (checkMCPName) {
-    const obtainedService = audValues.length > 1 ? audValues.join(', ') : normalized.service;
-    if (wantService && !audValues.includes(wantService)) {
-      return {
-        isTokenDecrypted: true,
-        errorReason: `JWT Token: service not match :: Expected  '${wantService}' / obtained from the token: '${obtainedService}'`,
-      };
-    }
+  // jwtVerify already enforces audience. Keep this explicit guard for a stable error if a future
+  // jose version changes the decoded payload shape.
+  if (!audValues.includes(wantService)) {
+    return { isTokenDecrypted: true, errorReason: 'JWT Token: audience does not match this MCP server' };
   }
 
   if (isCheckIP && normalized.ip && arg.clientIp) {

@@ -6,15 +6,15 @@
  * hosts hide them from the LLM. They are only invoked from widgets via
  * `app.callServerTool(...)` or from test clients that explicitly call them.
  *
- * Two tools are registered here; the universal `debug-tool` (stage 13) lives
+ * Two tools are registered here; the universal `debug_tool` (stage 13) lives
  * in {@link ../utils/testing/debug-tool.ts} and is wired through the same
  * flag from `init-mcp-server.ts`.
  *
- * - **mcp-debug-log**     — widget pushes a structured event into the same
+ * - **mcp_debug_log**     — widget pushes a structured event into the same
  *                            channel as `DEBUG=mcp:*` (via {@link emitTrace}).
  *                            Frees widget code from owning a logger / network
  *                            client / JWT.
- * - **mcp-debug-refresh** — widget reads back lightweight server state
+ * - **mcp_debug_refresh** — widget reads back lightweight server state
  *                            (timestamp + monotonically-increasing counter)
  *                            without involving the LLM. Useful for polling /
  *                            heartbeat scenarios in widgets.
@@ -23,12 +23,12 @@ import { Tool } from '@modelcontextprotocol/sdk/types.js';
 
 import { IToolHandlerParams, TToolHandlerResponse } from '../_types_/types.js';
 
-import { emitTrace } from './debug-trace.js';
+import { emitTrace, traceValueShape } from './debug-trace.js';
 
 let refreshCounter = 0;
 
-export const MCP_DEBUG_LOG_TOOL_NAME = 'mcp-debug-log';
-export const MCP_DEBUG_REFRESH_TOOL_NAME = 'mcp-debug-refresh';
+export const MCP_DEBUG_LOG_TOOL_NAME = 'mcp_debug_log';
+export const MCP_DEBUG_REFRESH_TOOL_NAME = 'mcp_debug_refresh';
 
 /** Names of the two tools registered by this module. */
 export const BUILTIN_MCP_DEBUG_TOOL_NAMES = [MCP_DEBUG_LOG_TOOL_NAME, MCP_DEBUG_REFRESH_TOOL_NAME] as const;
@@ -87,10 +87,11 @@ export async function handleBuiltinDebugTool(params: IToolHandlerParams): Promis
   const { name, arguments: args } = params;
 
   if (name === MCP_DEBUG_LOG_TOOL_NAME) {
-    const type = String((args as any)?.type ?? 'unknown');
+    const rawType = String((args as any)?.type ?? 'unknown');
+    const type = /^[a-z][a-z0-9_-]{0,63}$/.test(rawType) ? rawType : 'unknown';
     const payload = (args as any)?.payload;
-    emitTrace('app:view-log', { kind: 'log', type, payload });
-    const text = `[mcp-debug-log] ${type}`;
+    emitTrace('app:view-log', { kind: 'log', type, payloadShape: traceValueShape(payload) });
+    const text = `[mcp_debug_log] ${type}`;
     return {
       content: [{ type: 'text', text }],
       structuredContent: { logged: true, type },

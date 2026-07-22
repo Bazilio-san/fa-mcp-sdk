@@ -9,7 +9,8 @@ CLI utility that creates ready-to-use MCP (Model Context Protocol) server projec
 
 This framework provides complete infrastructure for building enterprise-grade MCP servers:
 
-- **Dual Transport**: STDIO (Claude Desktop) and HTTP/SSE (web clients)
+- **Standard Transports**: STDIO (local clients) and Streamable HTTP at `/mcp` (web clients).
+  Deprecated HTTP+SSE endpoints are opt-in for non-production migration only.
 - **Agent-Driven Tool Development**: Built-in AI agent system (Agent Tester) for iterative refinement of MCP tools through automated testing cycles — the agent calls your tools, you observe behavior, adjust descriptions/parameters/prompts, and re-test
 - **Headless Test API**: Direct HTTP endpoint (`POST /agent-tester/api/chat/test`) returns structured trace of every tool call, argument, result, and LLM decision — enabling CLI-based automated testing without a browser
 - **Authentication**: JWT (with optional IP restriction), Basic auth, permanent tokens, custom validators
@@ -20,7 +21,8 @@ This framework provides complete infrastructure for building enterprise-grade MC
   all driven by `mcp.limits` in `config/default.yaml`:
   - `mcp.limits.maxPayloadBytes` — max accepted request body (default 1 MiB; JSON-RPC `-32005` / HTTP 413 above)
   - `mcp.limits.maxToolResultBytes` — max serialized tool result (default 10 MiB; truncated with explicit marker)
-  - `mcp.limits.toolTimeoutMs` — per-tool execution timeout (default 30 000 ms; JSON-RPC `-32004` / HTTP 504 above)
+  - `mcp.limits.toolTimeoutMs` — per-tool execution timeout (default 30 000 ms; JSON-RPC `-32004` / HTTP 504 above);
+    aborts the handler signal and retains its concurrency slot until non-cooperative work settles
 - **API Documentation**: Automatic Swagger/OpenAPI generation
 - **Production Logging**: Structured logging with data masking
 - **Configuration Management**: YAML-based with environment overrides
@@ -176,7 +178,7 @@ my-mcp-server/
 │   ├── custom-resources.ts      # Custom MCP resources
 │   └── start.ts                 # Application entry point
 ├── swagger/                     
-│   └── openapi.yaml             # API description. Generated if none
+│   └── openapi.yaml             # API description. Generated during the project build
 ├── tests/                       # Test suites
 │   ├── mcp/                     # MCP protocol tests
 │   ├── jest-simple-reporter.js  # Custom Jest reporter
@@ -231,6 +233,8 @@ Note: The `dist/` directory (compiled JavaScript) is created after running `npm 
 ## Server runs at
 `http://localhost:3000` with:
 - MCP endpoints at `/mcp/*`
+- Deprecated `/sse` and `/messages` endpoints only when `mcp.legacySse.enabled: true`; the opt-in
+  adapter uses the same canonical security and limits pipeline as `/mcp`.
 - Admin panel for generating access tokens at `/admin`
   - When `adminPanel.authType` includes `jwtToken`, the JWT **must** carry `allow: 'gen-token'`
     in its payload to be accepted. Tokens without this claim (e.g. the short-lived JWT
@@ -239,7 +243,8 @@ Note: The `dist/` directory (compiled JavaScript) is created after running `npm 
     `basic` admin auth are unaffected.
     Generate an admin-capable JWT:
     `node scripts/generate-jwt.js -u admin -ttl 30d -p "allow=gen-token"`
-- JWT generation API at `/gen-jwt` (when `webServer.genJwtApiEnable: true`)
+- JWT generation API at `/gen-jwt` (when `webServer.genJwtApiEnable: true`). In production the
+  authenticated JWT must carry scope `admin:token:issue`.
 - Swagger UI at `/docs`
 - Health check at `/health`
 
@@ -258,12 +263,14 @@ Or configure in `config/default.yaml` (or `local.yaml`):
 ```yaml
 agentTester:
   enabled: true
+  useAuth: true
   openAi:
     apiKey: sk-...
 ```
 
 The tester UI is available at `http://localhost:<port>/agent-tester` and auto-connects to the local MCP server.
 Supports custom LLM endpoints, configurable system prompts, and dynamic HTTP headers. Recommended model for testing: **gpt-5.2**.
+Production startup rejects an enabled Agent Tester unless `useAuth: true`.
 
 ## Upgrade Guide Skill
 

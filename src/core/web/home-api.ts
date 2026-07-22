@@ -10,6 +10,7 @@ import { AdminAuthType } from '../_types_/config.js';
 import { detectAuthConfiguration } from '../auth/multi-auth.js';
 import { appConfig, getProjectData } from '../bootstrap/init-config.js';
 import { getMainDBConnectionStatus } from '../db/pg-db.js';
+import { logInternalError } from '../errors/errors.js';
 import { getPromptsList } from '../mcp/prompts.js';
 import { getResourcesList } from '../mcp/resources.js';
 
@@ -33,7 +34,20 @@ const getUptime = (): string => {
   }
 };
 
-export async function handleHomeInfo(_req: Request, res: Response): Promise<void> {
+function hasRequiredScopes(required: unknown, payload: unknown): boolean {
+  if (appConfig.webServer.auth.enabled !== true) {
+    return true;
+  }
+  const requiredScopes = Array.isArray(required) ? required.filter((scope) => typeof scope === 'string') : [];
+  const tokenScopes = new Set(
+    String((payload as any)?.scope ?? '')
+      .split(/\s+/)
+      .filter(Boolean),
+  );
+  return requiredScopes.every((scope) => tokenScopes.has(scope));
+}
+
+export async function handleHomeInfo(req: Request, res: Response): Promise<void> {
   try {
     const { version, repo } = appConfig;
     const serviceTitle = appConfig.productName
@@ -41,13 +55,19 @@ export async function handleHomeInfo(_req: Request, res: Response): Promise<void
       .replace(/\s{2,}/g, ' ')
       .trim();
     const logoSvg = getLogoSvg();
-    const httpArgs = { transport: 'http' as const };
-    const { resources } = await getResourcesList(httpArgs);
-    const { prompts } = await getPromptsList(httpArgs);
+    const payload = (req as any).authInfo?.payload;
+    const httpArgs = { transport: 'http' as const, ...(payload ? { payload } : {}) };
+    const { resources: allResources } = await getResourcesList(httpArgs);
+    const { prompts: allPrompts } = await getPromptsList(httpArgs);
+    const resources = allResources.filter((resource) => hasRequiredScopes(resource.requiredScopes, payload));
+    const prompts = allPrompts.filter((prompt) => hasRequiredScopes((prompt as any).requiredScopes, payload));
     const { httpComponents } = global.__MCP_PROJECT_DATA__;
     const toolsOrFn = global.__MCP_PROJECT_DATA__.tools;
     let tools: Tool[] = typeof toolsOrFn === 'function' ? await toolsOrFn(httpArgs) : toolsOrFn;
-    const { getConsulUIAddress = (_s: string) => '', toolPrompt } = getProjectData();
+    tools = tools.filter((tool: any) =>
+      hasRequiredScopes(tool?._meta?.requiredScopes ?? tool?.requiredScopes, payload),
+    );
+    const { toolPrompt } = getProjectData();
 
     // Honestly probe every tool for a non-empty tool-specific prompt. The `tool_prompt` prompt is
     // advertised over MCP unconditionally, but on the home page it should appear only when at least
@@ -94,28 +114,19 @@ export async function handleHomeInfo(_req: Request, res: Response): Promise<void
       footerParts.push(`<a href="${supportLink.href}" target="_blank" rel="noopener">${text}</a>`);
     }
 
-    // Database info
+    // Dependency details are intentionally reduced to state; hosts, ports, database names,
+    // service ids and Consul UI addresses are internal topology and never belong in this API.
     let db = null;
     if (appConfig.isMainDBUsed) {
       const dbStatus = await getMainDBConnectionStatus();
-      const { host, port, database } = appConfig.db.postgres!.dbs.main!;
       db = {
-        connection: `${host}:${port}/${database}`,
+        configured: true,
+        connection: 'configured',
         status: dbStatus,
       };
     }
 
-    // Consul info
-    let consul = null;
-    if (appConfig.consul.service.enable) {
-      const { id } = appConfig.consul.service;
-      if (id) {
-        consul = {
-          id,
-          url: getConsulUIAddress(id),
-        };
-      }
-    }
+    const consul = appConfig.consul.service.enable ? { configured: true } : null;
 
     // Authentication info (same logic as startup-info.ts)
     const authConfig = appConfig.webServer?.auth;
@@ -168,9 +179,10 @@ export async function handleHomeInfo(_req: Request, res: Response): Promise<void
 
     res.json(response);
   } catch (error: any) {
+    logInternalError(error, 'home_info');
     res.status(500).json({
       error: 'Failed to get home info',
-      message: error.message,
+      message: 'Internal error',
     });
   }
 }

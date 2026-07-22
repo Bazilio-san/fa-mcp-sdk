@@ -10,7 +10,7 @@ An MCP (Model Context Protocol) server built on the `fa-mcp-sdk` framework. It e
 
 ```bash
 # Build & run
-yarn build                 # tsc
+yarn build                 # tsc + build-time OpenAPI generation
 yarn cb                    # clean dist/ + build
 yarn start                 # node dist/src/start.js (HTTP mode)
 node dist/src/start.js stdio   # STDIO mode (Claude Desktop)

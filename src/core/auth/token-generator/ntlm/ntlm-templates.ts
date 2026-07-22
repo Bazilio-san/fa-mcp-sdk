@@ -115,13 +115,11 @@ export const getLoginPageHTML = (username: string = ''): string => `<!DOCTYPE ht
         const encodedLogin = encodeURIComponent(login);
         const encodedPassword = encodeURIComponent(password);
 
-        console.log('Attempting authentication with:', { login: encodedLogin, passwordLength: password.length });
-
         // Navigate with properly encoded credentials
         window.location.href = wl.protocol + '//' + encodedLogin + ':' + encodedPassword + '@' + wl.hostname + ':' + wl.port;
       } catch (error) {
-        console.error('Authentication error:', error);
-        alert('Authentication failed: ' + error.message);
+        console.error('Authentication failed');
+        alert('Authentication failed');
       }
     }
 

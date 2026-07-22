@@ -12,11 +12,12 @@ import { Router, Request, Response } from 'express';
 import { TokenGenAuthInput } from '../_types_/types.js';
 import { createAdminAuthMW, getAdminAuthMethods, getAdminAuthTypes } from '../auth/admin-auth.js';
 import { checkJwtToken, generateToken } from '../auth/jwt.js';
-import { isADEnabled } from '../auth/token-generator/ntlm/ntlm-domain-config.js';
+import { isADEnabled } from '../auth/token-generator/ntlm/ntlm-enabled.js';
 import { getSessionStats } from '../auth/token-generator/ntlm/ntlm-session-storage.js';
 import { getLoginPageHTML } from '../auth/token-generator/ntlm/ntlm-templates.js';
 import { AuthResult } from '../auth/types.js';
 import { appConfig, getProjectData } from '../bootstrap/init-config.js';
+import { logInternalError } from '../errors/errors.js';
 import { logger as lgr } from '../logger.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -81,15 +82,15 @@ async function checkTokenGenAuthorization(req: Request): Promise<AuthResult | nu
   try {
     const result = await handler(input);
     if (!result.success) {
-      logger.info(`Token Generator authorization denied for ${input.user}: ${result.error}`);
+      logger.info('Token Generator authorization denied');
       return result;
     }
     return null; // Authorized
   } catch (error: any) {
-    logger.error('Token Generator authorization handler error:', error);
+    logInternalError(error, 'token_generator_authorization');
     return {
       success: false,
-      error: `Authorization check failed: ${error.message}`,
+      error: 'Authorization check failed',
     };
   }
 }
@@ -148,17 +149,15 @@ export function createAdminRouter(): Router {
   // Main admin page - for NTLM-only auth (middleware already authenticated)
   if (!requiresFrontendAuth) {
     router.get('/', (req: Request, res: Response) => {
-      const username = req.ntlm?.username || 'Unknown';
-      const domain = req.ntlm?.domain || 'Unknown';
       const isAuthenticated = req.ntlm?.isAuthenticated || false;
 
-      logger.info(`Admin page accessed by: ${domain}\\${username} (Authenticated: ${isAuthenticated})`);
+      logger.info(`Admin page accessed (authenticated=${isAuthenticated})`);
       res.sendFile(join(staticPath, 'index.html'));
     });
 
     // Logout for NTLM auth
     router.get('/logout', (req: Request, res: Response) => {
-      logger.info(`Logout requested by: ${req.ntlm?.domain || 'Unknown'}\\${req.ntlm?.username || 'Unknown'}`);
+      logger.info('Admin logout requested');
 
       if (isNTLMEnabled) {
         res.setHeader('WWW-Authenticate', 'NTLM');
@@ -206,10 +205,6 @@ export function createAdminRouter(): Router {
         });
       }
 
-      const username = req.ntlm?.username || 'Unknown';
-      const domain = req.ntlm?.domain || 'Unknown';
-      const authenticatedUser = `${domain}\\${username}`;
-
       const { user, timeValue, timeUnit, payload } = req.body as {
         user?: string;
         timeValue?: number;
@@ -218,7 +213,7 @@ export function createAdminRouter(): Router {
       };
 
       if (!user || !timeValue || !timeUnit) {
-        logger.info(`Token generation failed (missing parameters) by: ${authenticatedUser}`);
+        logger.info('Token generation failed: missing parameters');
         return res.json({
           success: false,
           error: 'Need to fill in the user and token lifetime',
@@ -227,7 +222,7 @@ export function createAdminRouter(): Router {
 
       const multiplier = timeToSeconds[timeUnit];
       if (!multiplier) {
-        logger.info(`Token generation failed (invalid time unit) by: ${authenticatedUser}`);
+        logger.info('Token generation failed: invalid time unit');
         return res.json({
           success: false,
           error: 'Invalid Time Unit',
@@ -237,21 +232,17 @@ export function createAdminRouter(): Router {
       const liveTimeSec = timeValue * multiplier;
       const token = await generateToken(user, liveTimeSec, payload || {});
 
-      logger.info(
-        `Generated token for user: ${user}, duration: ${timeValue} ${timeUnit}, requested by: ${authenticatedUser}`,
-      );
+      logger.info(`Generated token with duration=${timeValue} ${timeUnit}`);
 
       return res.json({
         success: true,
         token: token,
       });
     } catch (error: any) {
-      const username = req.ntlm?.username || 'Unknown';
-      const domain = req.ntlm?.domain || 'Unknown';
-      logger.error(`Error generating token for ${domain}\\${username}:`, error);
+      logInternalError(error, 'admin_token_generation');
       return res.json({
         success: false,
-        error: error.message,
+        error: 'Internal error',
       });
     }
   });
@@ -259,14 +250,10 @@ export function createAdminRouter(): Router {
   // API: Validate token
   router.post('/api/validate-token', async (req: Request, res: Response) => {
     try {
-      const username = req.ntlm?.username || 'Unknown';
-      const domain = req.ntlm?.domain || 'Unknown';
-      const authenticatedUser = `${domain}\\${username}`;
-
       const { token } = req.body as { token?: string };
 
       if (!token) {
-        logger.info(`Token validation failed (no token provided) by: ${authenticatedUser}`);
+        logger.info('Token validation failed: token missing');
         return res.json({
           success: false,
           error: 'Token Not Transferred',
@@ -276,26 +263,24 @@ export function createAdminRouter(): Router {
       const result = await checkJwtToken({ token });
 
       if (result.errorReason) {
-        logger.info(`Token validation failed (${result.errorReason}) by: ${authenticatedUser}`);
+        logger.info('Token validation failed');
         return res.json({
           success: false,
           error: result.errorReason,
         });
       }
 
-      logger.info(`Token validated successfully for user: ${result.payload?.user}, requested by: ${authenticatedUser}`);
+      logger.info('Token validated successfully');
 
       return res.json({
         success: true,
         payload: result.payload,
       });
     } catch (error: any) {
-      const username = req.ntlm?.username || 'Unknown';
-      const domain = req.ntlm?.domain || 'Unknown';
-      logger.error(`Error validating token for ${domain}\\${username}:`, error);
+      logInternalError(error, 'admin_token_validation');
       return res.json({
         success: false,
-        error: error.message,
+        error: 'Internal error',
       });
     }
   });
@@ -307,7 +292,7 @@ export function createAdminRouter(): Router {
       const domain = req.ntlm?.domain || 'Unknown';
       const isAuthenticated = req.ntlm?.isAuthenticated || false;
 
-      logger.info(`Service info requested by: ${domain}\\${username}`);
+      logger.info('Token generator service info requested');
 
       res.json({
         success: true,
@@ -320,12 +305,10 @@ export function createAdminRouter(): Router {
         timestamp: new Date().toISOString(),
       });
     } catch (error: any) {
-      const username = req.ntlm?.username || 'Unknown';
-      const domain = req.ntlm?.domain || 'Unknown';
-      logger.error(`Error getting service info for ${domain}\\${username}:`, error);
+      logInternalError(error, 'admin_service_info');
       res.json({
         success: false,
-        error: error.message,
+        error: 'Internal error',
         serviceName: appConfig.name,
         authType: adminAuthTypes.length === 1 ? adminAuthTypes[0] : adminAuthTypes,
         ntlmEnabled: isNTLMEnabled,
@@ -362,9 +345,10 @@ export function createAdminRouter(): Router {
         timestamp: new Date().toISOString(),
       });
     } catch (error: any) {
+      logInternalError(error, 'admin_auth_status');
       res.json({
         success: false,
-        error: error.message,
+        error: 'Internal error',
         authType: adminAuthTypes.length === 1 ? adminAuthTypes[0] : adminAuthTypes.length ? adminAuthTypes : null,
       });
     }

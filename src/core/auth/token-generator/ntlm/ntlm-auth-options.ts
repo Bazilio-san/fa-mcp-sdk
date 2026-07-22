@@ -8,24 +8,16 @@ import { getNotAuthenticatedPageHTML, getNotAuthorizedPageHTML } from './ntlm-te
 
 // Authorization logic - initially allow all authenticated users
 export const authorize = (ntlm: any): boolean => {
-  const { username, domain } = ntlm;
-
-  // Debug: log what we received
-  console.log('[TOKEN-GEN] Authorization check received:', { username, domain, fullNtlm: ntlm });
+  const { username } = ntlm;
+  console.log('[TOKEN-GEN] Authorization check received');
 
   // Simple authorization - can be extended with role checks
   if (username) {
-    // For testing purposes, allow access if username exists
-    // The domain might be missing due to NTLM integration issues
-    if (domain) {
-      console.log(`[TOKEN-GEN] User authorized: ${domain}\\${username}`);
-    } else {
-      console.log(`[TOKEN-GEN] User authorized (no domain): ${username}`);
-    }
+    console.log('[TOKEN-GEN] User authorized');
     return true;
   }
 
-  console.log(`[TOKEN-GEN] User authorization failed: ${domain}\\${username}`);
+  console.log('[TOKEN-GEN] User authorization failed');
   return false;
 };
 
@@ -36,9 +28,7 @@ export const tokenGenNtlmOptions: IAuthNtlmOptions = {
   getDomainControllers: (rsn: IRsn) => {
     const domain = rsn?.req?.ntlm?.domain;
     const domainConfig = getDomainConfig(domain);
-    console.log(
-      `[TOKEN-GEN] Using domain controllers for domain "${domain || 'default'}": ${domainConfig.controllers.join(', ')}`,
-    );
+    console.log(`[TOKEN-GEN] Domain controllers configured: ${domainConfig.controllers.length}`);
     return domainConfig.controllers;
   },
 
@@ -60,37 +50,37 @@ export const tokenGenNtlmOptions: IAuthNtlmOptions = {
     if (messageType2.domain) {
       rsn.req.ntlm = rsn.req.ntlm || {};
       rsn.req.ntlm.domain = messageType2.domain;
-      console.log(`[TOKEN-GEN] Domain set from Type2 message: ${messageType2.domain}`);
+      console.log('[TOKEN-GEN] Domain set from Type2 message');
     }
   },
 
   // Error handlers using HTML templates
   handleHttpError403: (rsn: IRsn) => {
     const {
-      req: { protocol, hostname, ntlm: { username, domain } = {} },
+      req: { protocol, hostname },
       res,
     } = rsn;
-    const msg = `HTTP 403: User ${username} did not pass authorization in the "${domain}" domain`;
+    const msg = 'HTTP 403: authorization denied';
     debugNtlmAuthFlow(red + msg);
     console.log(`[TOKEN-GEN] ${msg}`);
     const title = 'NOT AUTHENTICATED';
-    res.status(403).send(getNotAuthenticatedPageHTML(title, protocol, hostname, username));
+    res.status(403).send(getNotAuthenticatedPageHTML(title, protocol, hostname));
   },
 
-  handleHttpError400: (res, message) => {
-    console.log(`[TOKEN-GEN] HTTP 400: ${message}`);
-    res.status(400).send(`400 Bad Request: ${message}`);
+  handleHttpError400: (res, _message) => {
+    console.log('[TOKEN-GEN] HTTP 400');
+    res.status(400).send('400 Bad Request');
   },
 
-  handleHttpError500: (res, message) => {
-    console.log(`[TOKEN-GEN] HTTP 500: ${message}`);
-    res.status(500).send(`500 Internal Server Error: ${message}`);
+  handleHttpError500: (res, _message) => {
+    console.log('[TOKEN-GEN] HTTP 500');
+    res.status(500).send('500 Internal Server Error');
   },
 
   // Success authentication handler
   handleSuccessAuthentication: async (rsn: IRsn) => {
     const { req, res, next } = rsn;
-    console.log(`[TOKEN-GEN] Authentication successful for: ${req.ntlm.domain}\\${req.ntlm.username}`);
+    console.log('[TOKEN-GEN] Authentication successful');
 
     const isAuthorized = await authorize(req.ntlm);
 
@@ -102,9 +92,8 @@ export const tokenGenNtlmOptions: IAuthNtlmOptions = {
     }
 
     // User authenticated but not authorized
-    const { username } = req.ntlm || {};
-    console.log(`[TOKEN-GEN] User not authorized: ${username}`);
-    res.status(200).send(getNotAuthorizedPageHTML('NOT AUTHORIZED', username));
+    console.log('[TOKEN-GEN] User not authorized');
+    res.status(200).send(getNotAuthorizedPageHTML('NOT AUTHORIZED'));
   },
 
   // Session management functions

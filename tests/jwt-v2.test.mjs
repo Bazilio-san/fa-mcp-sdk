@@ -89,6 +89,94 @@ assert.strictEqual(r.payload?.iss, 'urn:test-issuer');
 }
 
 // ────────────────────────────────────────────────────────────────────────────
+// 1b. canonical subject remains separate from explicitly configured employee identity
+// ────────────────────────────────────────────────────────────────────────────
+
+const tmpEmployeeClaim = mkdtempSync(join(tmpdir(), 'fa-mcp-employee-'));
+try {
+  runSubprocess('configured userClaim maps employee login while preserving opaque canonical sub', {
+    config: {
+      webServer: {
+        auth: {
+          enabled: true,
+          jwtToken: {
+            mode: 'embedded',
+            algorithm: 'ES256',
+            keyStoragePath: tmpEmployeeClaim,
+            expectedIssuer: 'urn:test-employee-issuer',
+            expectedAudience: 'urn:test-employee-mcp',
+            userClaim: 'preferred_username',
+          },
+        },
+      },
+    },
+    code: `
+import assert from 'node:assert';
+import { SignJWT } from 'jose';
+import { appConfig } from './dist/core/bootstrap/init-config.js';
+import { checkJwtToken, generateToken } from './dist/core/auth/jwt.js';
+import { getKeyResolver } from './dist/core/auth/key-resolver.js';
+
+const resolver = await getKeyResolver();
+const { algorithm, privateKey, kid } = resolver.getSignContext();
+const opaqueSub = '7a13b350-bc2e-48a4-a4d7-707877c09a71';
+const token = await new SignJWT({ preferred_username: 'VPotapov', user: 'mallory', unapproved_identity: 'mallory' })
+  .setProtectedHeader({ alg: algorithm, kid, typ: 'JWT' })
+  .setSubject(opaqueSub)
+  .setIssuer('urn:test-employee-issuer')
+  .setAudience('urn:test-employee-mcp')
+  .setIssuedAt()
+  .setExpirationTime(Math.floor(Date.now() / 1000) + 60)
+  .sign(privateKey);
+
+const configured = await checkJwtToken({ token });
+assert.ok(!configured.errorReason, configured.errorReason);
+assert.strictEqual(configured.payload?.sub, opaqueSub, 'canonical subject must be preserved verbatim');
+assert.strictEqual(configured.payload?.user, 'vpotapov', 'employee login comes from configured userClaim');
+
+async function signIdentityToken(sub, preferredUsername) {
+  return new SignJWT({ preferred_username: preferredUsername })
+    .setProtectedHeader({ alg: algorithm, kid, typ: 'JWT' })
+    .setSubject(sub)
+    .setIssuer('urn:test-employee-issuer')
+    .setAudience('urn:test-employee-mcp')
+    .setIssuedAt()
+    .setExpirationTime(Math.floor(Date.now() / 1000) + 60)
+    .sign(privateKey);
+}
+
+for (const invalidSub of ['x'.repeat(4097), 'opaque\\u0007subject']) {
+  const invalid = await checkJwtToken({ token: await signIdentityToken(invalidSub, 'VPotapov') });
+  assert.match(invalid.errorReason || '', /subject is invalid/i, 'invalid canonical subject must fail closed');
+}
+for (const invalidUser of ['x'.repeat(4097), 'employee\\u0007admin']) {
+  const invalid = await checkJwtToken({ token: await signIdentityToken(opaqueSub, invalidUser) });
+  assert.match(invalid.errorReason || '', /configured user claim/i, 'invalid configured identity must fail closed');
+}
+await assert.rejects(() => generateToken('x'.repeat(4097), 60), /empty or invalid/i);
+await assert.rejects(() => generateToken('employee\\u0007admin', 60), /empty or invalid/i);
+
+appConfig.webServer.auth.jwtToken.userClaim = '';
+const fallback = await checkJwtToken({ token });
+assert.ok(!fallback.errorReason, fallback.errorReason);
+assert.strictEqual(fallback.payload?.sub, opaqueSub);
+assert.strictEqual(fallback.payload?.user, opaqueSub, 'unconfigured token.user must not override canonical sub');
+
+appConfig.webServer.auth.jwtToken.userClaim = 'scope';
+const reserved = await checkJwtToken({ token });
+assert.match(reserved.errorReason || '', /invalid user-claim configuration/i);
+await assert.rejects(() => generateToken('alice', 60), /configured userClaim "scope" is reserved/);
+
+appConfig.webServer.auth.jwtToken.userClaim = 'employee_login';
+const missing = await checkJwtToken({ token });
+assert.match(missing.errorReason || '', /configured user claim/i, 'configured claim must fail closed when absent');
+`,
+  });
+} finally {
+  rmSync(tmpEmployeeClaim, { recursive: true, force: true });
+}
+
+// ────────────────────────────────────────────────────────────────────────────
 // 2. embedded mode: tampered signature rejected
 // ────────────────────────────────────────────────────────────────────────────
 

@@ -2,6 +2,7 @@ import OpenAI from 'openai';
 import { ChatCompletionCreateParamsNonStreaming } from 'openai/resources/chat/completions';
 
 import { appConfig } from '../bootstrap/init-config.js';
+import { logInternalError } from '../errors/errors.js';
 import { isMainModule } from '../utils/utils.js';
 
 export async function checkLlm(model?: string): Promise<boolean> {
@@ -24,12 +25,12 @@ export async function checkLlm(model?: string): Promise<boolean> {
   };
   try {
     await openai.chat.completions.create(data);
-    console.log(`API KEY: ${cfg.apiKey.substring(0, 15)}...${cfg.apiKey.substr(-4)}`);
+    console.log('API key configured: true');
     console.log('OK');
     return true;
   } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : String(err);
-    console.error(`FAIL: ${msg}`);
+    logInternalError(err, 'llm_check');
+    console.error('FAIL: OpenAI API request failed');
     return false;
   }
 }

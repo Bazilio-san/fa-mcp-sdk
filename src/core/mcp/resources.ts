@@ -18,9 +18,12 @@ import {
 import { collectAuthProfile } from '../auth/auth-profile.js';
 import { appConfig, getProjectData } from '../bootstrap/init-config.js';
 import { ROOT_PROJECT_DIR } from '../constants.js';
+import { logInternalError } from '../errors/errors.js';
 import { ResourceNotFoundError } from '../errors/specific-errors.js';
 import { debugMcpResource } from '../debug.js';
-import { emitTrace } from './debug-trace.js';
+import { readDeprecation, warnDeprecatedUsage } from './deprecation.js';
+import { emitTrace, safeTraceDescriptorName, traceDigest } from './debug-trace.js';
+import { assertRequiredScopes, assertResolvedRequiredScopes } from './required-scopes.js';
 import { assembleReadmeWithSatellites } from './readme-assembler.js';
 
 let readme = assembleReadmeWithSatellites(ROOT_PROJECT_DIR);
@@ -29,11 +32,17 @@ try {
   packageJson = JSON.parse(fs.readFileSync(path.join(ROOT_PROJECT_DIR, './package.json'), 'utf-8'));
   readme = readme.replace(/\[!\[Version]\([^)]+\)]\(([^)]+\))/, `Version: ${packageJson.version}`);
 } catch (err) {
-  console.error(err);
+  logInternalError(err, 'project_metadata_read');
 }
 
 const createResources = async (args: ITransportContext): Promise<IResourceData[]> => {
-  const { customResources, usedHttpHeaders: usedHttpHeadersRaw, agentBrief, agentPrompt } = getProjectData();
+  const {
+    customResources,
+    usedHttpHeaders: usedHttpHeadersRaw,
+    agentBrief,
+    agentPrompt,
+    defaultReadScopes,
+  } = getProjectData();
 
   // Resolve customResources - can be array or async function
   let resolvedCustomResources: IResourceData[] = [];
@@ -44,6 +53,7 @@ const createResources = async (args: ITransportContext): Promise<IResourceData[]
       resolvedCustomResources = customResources;
     }
   }
+  assertResolvedRequiredScopes(resolvedCustomResources, 'resource');
 
   const resources: IResourceData[] = [
     {
@@ -55,7 +65,7 @@ Used:
 - when authorizing with a JWT token`,
       mimeType: 'text/plain',
       content: appConfig.name,
-      requireAuth: false,
+      requireAuth: true,
     },
     {
       uri: 'project://name',
@@ -63,7 +73,7 @@ Used:
       description: 'Human-readable product name for use in the UI',
       mimeType: 'text/plain',
       content: appConfig.productName,
-      requireAuth: false,
+      requireAuth: true,
     },
     // Standard §4 SHOULD — version surfaced via resources/read in addition to GET /health and serverInfo.
     {
@@ -73,7 +83,7 @@ Used:
       description: 'Current server version (semver). Mirrors GET /health.version and serverInfo.version.',
       mimeType: 'text/plain',
       content: appConfig.version,
-      requireAuth: false,
+      requireAuth: true,
     },
     {
       uri: 'doc://readme',
@@ -85,7 +95,7 @@ This information is used by searching for this MCP server and its information in
 `,
       mimeType: 'text/markdown',
       content: readme,
-      requireAuth: false,
+      requireAuth: true,
     },
   ];
   const usedHttpHeaders = (usedHttpHeadersRaw || []) as IUsedHttpHeader[];
@@ -93,10 +103,14 @@ This information is used by searching for this MCP server and its information in
   resources.push({
     uri: 'use://http-headers',
     name: 'Used http headers',
-    description: 'Used http headers',
+    description:
+      'Project-declared HTTP headers that clients may need for delegation or tool-specific behavior. Read before ' +
+      'calling a tool when its header requirements are unknown. HTTP access requires authentication and configured ' +
+      'read scopes. Generated from active McpServerData.usedHttpHeaders on each request; JSON array entries contain ' +
+      'name, description, and optional isOptional.',
     mimeType: 'application/json',
-    content: usedHttpHeaders,
-    requireAuth: false,
+    content: JSON.stringify(usedHttpHeaders, null, 2),
+    requireAuth: true,
   });
 
   // Standard §11.2 SHOULD — describe enabled auth methods + claims for agent clients.
@@ -105,8 +119,8 @@ This information is used by searching for this MCP server and its information in
     name: 'auth',
     description: 'Authentication profile: enabled schemes, methods, expected claims, header names.',
     mimeType: 'application/json',
-    content: collectAuthProfile(),
-    requireAuth: false,
+    content: JSON.stringify(collectAuthProfile(), null, 2),
+    requireAuth: true,
   });
 
   // Standard §11.2 Avatar profile — service-scheme mirrors of agent_brief / agent_prompt.
@@ -122,7 +136,7 @@ This information is used by searching for this MCP server and its information in
       description: 'Mirror of prompt agent_brief. Routing-level (level 1) agent description.',
       mimeType: 'text/markdown',
       content: agentBrief,
-      requireAuth: false,
+      requireAuth: true,
     });
   }
   if (agentPrompt && !customUris.has(promptUri)) {
@@ -132,12 +146,34 @@ This information is used by searching for this MCP server and its information in
       description: 'Mirror of prompt agent_prompt. Detailed (level 2) agent instructions.',
       mimeType: 'text/markdown',
       content: agentPrompt,
-      requireAuth: false,
+      requireAuth: true,
     });
   }
 
-  return [...resources, ...resolvedCustomResources];
+  const allResources = [...resources, ...resolvedCustomResources];
+  if (!Array.isArray(defaultReadScopes) || defaultReadScopes.length === 0) {
+    return allResources;
+  }
+  return allResources.map((resource) =>
+    Array.isArray(resource.requiredScopes) ? resource : { ...resource, requiredScopes: [...defaultReadScopes] },
+  );
 };
+
+/** Serialize authoring-time text/object content to the exact string placed on the MCP wire. */
+function serializeResourceText(content: string | object): string {
+  if (typeof content === 'string') {
+    return content;
+  }
+  try {
+    const serialized = JSON.stringify(content, null, 2);
+    if (typeof serialized === 'string') {
+      return serialized;
+    }
+  } catch {
+    // Collapse JSON implementation details into one stable, secret-free error below.
+  }
+  throw new Error('Resource content is not JSON-serializable.');
+}
 
 /**
  * Standard §11.3 (MAY) — compute the byte size of a resource's content for `resources/list`.
@@ -156,31 +192,44 @@ function computeResourceSize(content: IResourceData['content']): number | undefi
     const { blob } = content as IResourceBinaryContent;
     return Buffer.isBuffer(blob) ? blob.length : Buffer.byteLength(String(blob), 'utf-8');
   }
-  // Plain object — measured as the JSON the transport will emit.
-  return Buffer.byteLength(JSON.stringify(content), 'utf-8');
+  // Plain object — measured as the exact pretty JSON text the transport will emit.
+  return Buffer.byteLength(serializeResourceText(content as object), 'utf-8');
 }
 
 export const getResourcesList = async (args: ITransportContext): Promise<{ resources: IResourceInfo[] }> => {
   const startedAt = Date.now();
+  let count: number | undefined;
+  let succeeded = false;
   if (debugMcpResource.enabled) {
     debugMcpResource('→ resources/list');
   }
   emitTrace('mcp:resource', { kind: 'list-req' });
-  const resources: IResourceData[] = await createResources(args);
-  const result = {
-    resources: resources.map(({ content, ...rest }) => {
-      // Publish `size` only when not already set by the author and computable without running
-      // lazy content (standard §11.3).
-      const size = rest.size ?? computeResourceSize(content);
-      return size === undefined ? { ...rest } : { ...rest, size };
-    }),
-  };
-  const ms = Date.now() - startedAt;
-  if (debugMcpResource.enabled) {
-    debugMcpResource(`← resources/list (${result.resources.length})\n${JSON.stringify(result, null, 2)}`);
+  try {
+    const resources: IResourceData[] = await createResources(args);
+    const result = {
+      resources: resources.map(({ content, ...rest }) => {
+        // Publish `size` only when not already set by the author and computable without running
+        // lazy content (standard §11.3).
+        const size = rest.size ?? computeResourceSize(content);
+        return size === undefined ? { ...rest } : { ...rest, size };
+      }),
+    };
+    count = result.resources.length;
+    succeeded = true;
+    return result;
+  } finally {
+    const ms = Date.now() - startedAt;
+    if (debugMcpResource.enabled) {
+      debugMcpResource(succeeded ? `← resources/list count=${count ?? 0}` : `✗ resources/list failed durationMs=${ms}`);
+    }
+    emitTrace('mcp:resource', {
+      kind: succeeded ? 'list-res' : 'list-err',
+      name: '*',
+      status: succeeded ? 'success' : 'error',
+      ...(count === undefined ? {} : { count }),
+      ms,
+    });
   }
-  emitTrace('mcp:resource', { kind: 'list-res', count: result.resources.length, ms });
-  return result;
 };
 
 /**
@@ -189,14 +238,24 @@ export const getResourcesList = async (args: ITransportContext): Promise<{ resou
  */
 export const getResourceTemplatesList = async (args: ITransportContext): Promise<any[]> => {
   const projectData = getProjectData();
-  const raw = (projectData as any)?.customResourceTemplates;
+  const raw = projectData?.customResourceTemplates;
   if (!raw) {
     return [];
   }
+  let templates: any[];
   if (typeof raw === 'function') {
-    return (await raw(args)) ?? [];
+    templates = (await raw(args)) ?? [];
+  } else {
+    templates = Array.isArray(raw) ? raw : [];
   }
-  return Array.isArray(raw) ? raw : [];
+  assertResolvedRequiredScopes(templates, 'resource template');
+  const defaultReadScopes = projectData?.defaultReadScopes;
+  if (!Array.isArray(defaultReadScopes) || defaultReadScopes.length === 0) {
+    return templates;
+  }
+  return templates.map((template) =>
+    Array.isArray(template.requiredScopes) ? template : { ...template, requiredScopes: [...defaultReadScopes] },
+  );
 };
 
 /**
@@ -257,46 +316,76 @@ function encodeBlob(bin: IResourceBinaryContent): string {
 
 export const getResource = async (uri: string, args: ITransportContext): Promise<IResource> => {
   const startedAt = Date.now();
+  const uriHash = traceDigest(uri);
+  let completionName = 'unknown';
+  let completionNameHash = 'unknown';
+  let succeeded = false;
   if (debugMcpResource.enabled) {
-    debugMcpResource(`→ resources/read ${uri}`);
+    debugMcpResource('→ resources/read');
   }
-  emitTrace('mcp:resource', { kind: 'read-req', uri });
-  const resources = await createResources(args);
-  const resource = resources.find((r) => r.uri === uri);
-  if (!resource) {
-    emitTrace('mcp:resource', { kind: 'read-err', uri, ms: Date.now() - startedAt, error: 'unknown-resource' });
-    // Standard §13 / Appendix B.2 — classify as -32002 (HTTP 404), not a generic -32603.
-    throw new ResourceNotFoundError('Unknown resource', { uri, reason: 'unknown_resource' });
-  }
-  let { content } = resource;
-  if (typeof content === 'function') {
-    content = await (content as (u: string) => any)(uri);
-  }
-  if (!content) {
-    emitTrace('mcp:resource', { kind: 'read-err', uri, ms: Date.now() - startedAt, error: 'no-content' });
-    throw new ResourceNotFoundError('Resource has no content', { uri, reason: 'empty_content' });
-  }
+  emitTrace('mcp:resource', { kind: 'read-req', uriHash });
+  try {
+    const resources = await createResources(args);
+    const resource = resources.find((candidate) => candidate.uri === uri);
+    if (!resource) {
+      // Standard §13 / Appendix B.2 — classify as -32002 (HTTP 404), not a generic -32603.
+      throw new ResourceNotFoundError('Unknown resource', { reason: 'unknown_resource' });
+    }
+    assertRequiredScopes(resource.requiredScopes, args, 'resource');
+    warnDeprecatedUsage('resource', resource.uri, readDeprecation(resource));
+    // Dynamic providers control descriptor names. Log only strict machine identifiers; keep
+    // human/PII-like names opaque while retaining a digest for correlation.
+    completionNameHash = traceDigest(resource.name);
+    completionName = safeTraceDescriptorName(resource.name) ?? 'opaque_descriptor';
+    let { content } = resource;
+    if (typeof content === 'function') {
+      content = await (content as (u: string) => any)(uri);
+    }
+    if (!content) {
+      throw new ResourceNotFoundError('Resource has no content', { reason: 'empty_content' });
+    }
 
-  // Standard §11.4 / §12.2 — a resource entry carries exactly one of `text` or `blob`. Binary
-  // content is declared as { blob: Buffer | base64-string } and emitted as base64 `blob`.
-  const isBinary = typeof content === 'object' && content !== null && 'blob' in (content as any);
-  const baseEntry = {
-    uri: resource.uri,
-    mimeType: resource.mimeType,
-    ...(resource._meta ? { _meta: resource._meta } : {}),
-  };
-  const result: IResource = {
-    contents: [
-      isBinary
-        ? { ...baseEntry, blob: encodeBlob(content as IResourceBinaryContent) }
-        : { ...baseEntry, text: content as string | object },
-    ],
-  };
-  const ms = Date.now() - startedAt;
-  if (debugMcpResource.enabled) {
-    const body = isBinary ? '[binary blob]' : typeof content === 'string' ? content : JSON.stringify(content, null, 2);
-    debugMcpResource(`← resources/read ${uri}\n${body}`);
+    // Standard §11.4 / §12.2 — a resource entry carries exactly one of `text` or `blob`. Binary
+    // content is declared as { blob: Buffer | base64-string } and emitted as base64 `blob`.
+    const isBinary = typeof content === 'object' && content !== null && 'blob' in (content as any);
+    const baseEntry = {
+      uri: resource.uri,
+      mimeType: resource.mimeType,
+      ...(resource._meta ? { _meta: resource._meta } : {}),
+    };
+    const result: IResource = {
+      contents: [
+        isBinary
+          ? { ...baseEntry, blob: encodeBlob(content as IResourceBinaryContent) }
+          : { ...baseEntry, text: serializeResourceText(content as string | object) },
+      ],
+    };
+    if (debugMcpResource.enabled) {
+      const contentBytes = isBinary
+        ? Buffer.byteLength(encodeBlob(content as IResourceBinaryContent), 'base64')
+        : Buffer.byteLength(result.contents[0].text!, 'utf-8');
+      debugMcpResource(
+        `← resources/read name=${completionName} descriptorHash=${completionNameHash} ` +
+          `binary=${isBinary} bytes=${contentBytes ?? 'unknown'}`,
+      );
+    }
+    succeeded = true;
+    return result;
+  } finally {
+    const ms = Date.now() - startedAt;
+    if (debugMcpResource.enabled && !succeeded) {
+      debugMcpResource(
+        `✗ resources/read name=${completionName} descriptorHash=${completionNameHash} ` +
+          `uriHash=${uriHash} durationMs=${ms}`,
+      );
+    }
+    emitTrace('mcp:resource', {
+      kind: succeeded ? 'read-res' : 'read-err',
+      name: completionName,
+      descriptorHash: completionNameHash,
+      uriHash,
+      status: succeeded ? 'success' : 'error',
+      ms,
+    });
   }
-  emitTrace('mcp:resource', { kind: 'read-res', uri, ms });
-  return result;
 };

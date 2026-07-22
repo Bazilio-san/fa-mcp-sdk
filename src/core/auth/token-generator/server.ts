@@ -5,12 +5,13 @@ import chalk from 'chalk';
 import express, { Request, Response } from 'express';
 
 import { appConfig } from '../../bootstrap/init-config.js';
+import { logInternalError } from '../../errors/errors.js';
 import { isMainModule } from '../../utils/utils.js';
 import { faviconSvg } from '../../web/favicon-svg.js';
 import { createSvgRouter } from '../../web/svg-icons.js';
 import { checkJwtToken, generateToken } from '../jwt.js';
 
-import { isADEnabled } from './ntlm/ntlm-domain-config.js';
+import { isADEnabled } from './ntlm/ntlm-enabled.js';
 import { setupNTLMAuthentication } from './ntlm/ntlm-integration.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -62,10 +63,8 @@ export const generateTokenApp = (port?: number) => {
 
   // Main page - Token Generator UI
   app.get('/', (req: Request, res: Response) => {
-    const username = req.ntlm?.username || 'Unknown';
-    const domain = req.ntlm?.domain || 'Unknown';
     const isAuthenticated = req.ntlm?.isAuthenticated || false;
-    logger.info(`Token generation interface accessed by: ${domain}\\${username} (Authenticated: ${isAuthenticated})`);
+    logger.info(`Token generation interface accessed (authenticated=${isAuthenticated})`);
 
     // Serve static index.html from unified static location
     res.sendFile(join(__dirname, '../../web/static/token-gen', 'index.html'));
@@ -73,7 +72,7 @@ export const generateTokenApp = (port?: number) => {
 
   // Logout endpoint
   app.get('/admin/logout', (req: Request, res: Response) => {
-    logger.info(`Logout requested by: ${req.ntlm?.domain || 'Unknown'}\\${req.ntlm?.username || 'Unknown'}`);
+    logger.info('Token generator logout requested');
 
     if (ntlmEnabled) {
       // NTLM logout - send 401 to trigger browser auth prompt
@@ -92,10 +91,6 @@ export const generateTokenApp = (port?: number) => {
 
   app.post('/admin/api/generate-token', async (req: Request, res: Response) => {
     try {
-      const username = req.ntlm?.username || 'Unknown';
-      const domain = req.ntlm?.domain || 'Unknown';
-      const authenticatedUser = `${domain}\\${username}`;
-
       const { user, timeValue, timeUnit, payload } = req.body as {
         user?: string;
         timeValue?: number;
@@ -104,7 +99,7 @@ export const generateTokenApp = (port?: number) => {
       };
 
       if (!user || !timeValue || !timeUnit) {
-        logger.info(`Token generation failed (missing parameters) by: ${authenticatedUser}`);
+        logger.info('Token generation failed: missing parameters');
         return res.json({
           success: false,
           error: 'Need to fill in the user and token lifetime',
@@ -113,7 +108,7 @@ export const generateTokenApp = (port?: number) => {
 
       const multiplier = timeToSeconds[timeUnit];
       if (!multiplier) {
-        logger.info(`Token generation failed (invalid time unit) by: ${authenticatedUser}`);
+        logger.info('Token generation failed: invalid time unit');
         return res.json({
           success: false,
           error: 'Invalid Time Unit',
@@ -123,35 +118,27 @@ export const generateTokenApp = (port?: number) => {
       const liveTimeSec = timeValue * multiplier;
       const token = await generateToken(user, liveTimeSec, payload || {});
 
-      logger.info(
-        `Generated token for user: ${user}, duration: ${timeValue} ${timeUnit}, requested by: ${authenticatedUser}`,
-      );
+      logger.info(`Generated token with duration=${timeValue} ${timeUnit}`);
 
       return res.json({
         success: true,
         token: token,
       });
     } catch (error: any) {
-      const username = req.ntlm?.username || 'Unknown';
-      const domain = req.ntlm?.domain || 'Unknown';
-      logger.error(`Error generating token for ${domain}\\${username}:`, error);
+      logInternalError(error, 'standalone_token_generation');
       return res.json({
         success: false,
-        error: error.message,
+        error: 'Internal error',
       });
     }
   });
 
   app.post('/admin/api/validate-token', async (req: Request, res: Response) => {
     try {
-      const username = req.ntlm?.username || 'Unknown';
-      const domain = req.ntlm?.domain || 'Unknown';
-      const authenticatedUser = `${domain}\\${username}`;
-
       const { token } = req.body as { token?: string };
 
       if (!token) {
-        logger.info(`Token validation failed (no token provided) by: ${authenticatedUser}`);
+        logger.info('Token validation failed: token missing');
         return res.json({
           success: false,
           error: 'Token Not Transferred',
@@ -161,26 +148,24 @@ export const generateTokenApp = (port?: number) => {
       const result = await checkJwtToken({ token });
 
       if (result.errorReason) {
-        logger.info(`Token validation failed (${result.errorReason}) by: ${authenticatedUser}`);
+        logger.info('Token validation failed');
         return res.json({
           success: false,
           error: result.errorReason,
         });
       }
 
-      logger.info(`Token validated successfully for user: ${result.payload?.user}, requested by: ${authenticatedUser}`);
+      logger.info('Token validated successfully');
 
       return res.json({
         success: true,
         payload: result.payload,
       });
     } catch (error: any) {
-      const username = req.ntlm?.username || 'Unknown';
-      const domain = req.ntlm?.domain || 'Unknown';
-      logger.error(`Error validating token for ${domain}\\${username}:`, error);
+      logInternalError(error, 'standalone_token_validation');
       return res.json({
         success: false,
-        error: error.message,
+        error: 'Internal error',
       });
     }
   });
@@ -190,7 +175,7 @@ export const generateTokenApp = (port?: number) => {
       const username = req.ntlm?.username || 'Unknown';
       const domain = req.ntlm?.domain || 'Unknown';
       const isAuthenticated = req.ntlm?.isAuthenticated || false;
-      logger.info(`Service info requested by: ${domain}\\${username}`);
+      logger.info('Token generator service info requested');
 
       res.json({
         success: true,
@@ -202,12 +187,10 @@ export const generateTokenApp = (port?: number) => {
         timestamp: new Date().toISOString(),
       });
     } catch (error: any) {
-      const username = req.ntlm?.username || 'Unknown';
-      const domain = req.ntlm?.domain || 'Unknown';
-      logger.error(`Error getting service info for ${domain}\\${username}:`, error);
+      logInternalError(error, 'standalone_service_info');
       res.json({
         success: false,
-        error: error.message,
+        error: 'Internal error',
         serviceName: 'mcp-server', // fallback
         ntlmEnabled,
       });
@@ -240,9 +223,10 @@ export const generateTokenApp = (port?: number) => {
         timestamp: new Date().toISOString(),
       });
     } catch (error: any) {
+      logInternalError(error, 'standalone_auth_status');
       res.json({
         success: false,
-        error: error.message,
+        error: 'Internal error',
         authType: ntlmEnabled ? 'ntlm' : null,
       });
     }

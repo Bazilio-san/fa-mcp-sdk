@@ -73,19 +73,31 @@ export function getJwtRuntimeConfig() {
   const mode: 'legacyAesCtr' | 'embedded' | 'localKey' | 'remoteJwks' =
     rawMode === 'embedded' || rawMode === 'localKey' || rawMode === 'remoteJwks' ? rawMode : 'legacyAesCtr';
   const algorithm: JwtAsymmetricAlgorithm = jwt?.algorithm === 'RS256' ? 'RS256' : 'ES256';
+  const configuredIssuer = String(jwt?.expectedIssuer || '').trim();
+  const expectedIssuer =
+    configuredIssuer || (mode === 'embedded' ? `urn:fa-mcp:${appConfig.shortName || appConfig.name}` : '');
+  const finiteNumber = (value: unknown, fallback: number): number =>
+    typeof value === 'number' && Number.isFinite(value) ? value : fallback;
+  const jwksCacheTtl = finiteNumber(jwt?.jwksCacheTtl, 600);
+  const jwksCooldown = finiteNumber(jwt?.jwksCooldown, 30);
+  const clockSkew = finiteNumber(jwt?.clockSkew, 30);
+  const defaultTtl = finiteNumber(jwt?.defaultTtl, 1800);
   return {
     mode,
     algorithm,
     keyStoragePath: jwt?.keyStoragePath || './keys',
     publicKeyPath: jwt?.publicKeyPath || '',
     privateKeyPath: jwt?.privateKeyPath || '',
-    jwksUri: jwt?.jwksUri || '',
-    expectedIssuer: jwt?.expectedIssuer || '',
-    expectedAudience: jwt?.expectedAudience || '',
-    jwksCacheTtl: typeof jwt?.jwksCacheTtl === 'number' ? jwt.jwksCacheTtl : 600,
-    jwksCooldown: typeof jwt?.jwksCooldown === 'number' ? jwt.jwksCooldown : 30,
-    clockSkew: typeof jwt?.clockSkew === 'number' ? jwt.clockSkew : 30,
-    defaultTtl: typeof jwt?.defaultTtl === 'number' ? jwt.defaultTtl : 1800,
+    jwksUri: String(jwt?.jwksUri || '').trim(),
+    expectedIssuer,
+    expectedAudience: String(jwt?.expectedAudience || '').trim(),
+    userClaim: String(jwt?.userClaim || '').trim(),
+    // Defence in depth: startup validation reports an invalid value, and runtime never caches
+    // remote keys beyond the corporate 10-minute ceiling even if verification is called early.
+    jwksCacheTtl: Math.min(Math.max(jwksCacheTtl, 1), 600),
+    jwksCooldown: Math.min(Math.max(jwksCooldown, 0), 600),
+    clockSkew: Math.min(Math.max(clockSkew, 0), 60),
+    defaultTtl: defaultTtl > 0 ? defaultTtl : 1800,
   };
 }
 
@@ -132,7 +144,7 @@ class EmbeddedKeyResolver implements KeyResolver {
     const pubPath = resolvePath(absDir, 'public.pem');
 
     if (!existsSync(privPath) || !existsSync(pubPath)) {
-      logger.info(`Generating embedded ${this.algorithm} keypair at ${absDir}`);
+      logger.info(`Generating embedded ${this.algorithm} keypair`);
       mkdirSync(absDir, { recursive: true });
       const { privateKey, publicKey } = await generateKeyPair(this.algorithm, { extractable: true });
       const pkcs8 = await exportPrivateKeyPem(privateKey);
@@ -230,7 +242,7 @@ class LocalKeyResolver implements KeyResolver {
     }
     const pubAbs = resolvePath(publicKeyPath);
     if (!existsSync(pubAbs)) {
-      throw new Error(`jwtToken.publicKeyPath not found: ${pubAbs}`);
+      throw new Error('jwtToken.publicKeyPath not found');
     }
     const pubPem = readFileSync(pubAbs, 'utf8');
     this.publicKey = await importSPKI(pubPem, this.algorithm, { extractable: true });
@@ -238,7 +250,7 @@ class LocalKeyResolver implements KeyResolver {
     if (privateKeyPath) {
       const privAbs = resolvePath(privateKeyPath);
       if (!existsSync(privAbs)) {
-        throw new Error(`jwtToken.privateKeyPath not found: ${privAbs}`);
+        throw new Error('jwtToken.privateKeyPath not found');
       }
       const privPem = readFileSync(privAbs, 'utf8');
       this.privateKey = await importPKCS8(privPem, this.algorithm, { extractable: true });
@@ -306,7 +318,7 @@ class RemoteJwksKeyResolver implements KeyResolver {
       cooldownDuration: jwksCooldown * 1000,
     });
     this.initialized = true;
-    logger.info(`RemoteJwks resolver ready (uri=${jwksUri}, cacheTtl=${jwksCacheTtl}s, cooldown=${jwksCooldown}s)`);
+    logger.info(`RemoteJwks resolver ready (cacheTtl=${jwksCacheTtl}s, cooldown=${jwksCooldown}s)`);
   }
 
   async getVerifyKey(header: JWSHeaderParameters): Promise<KeyLike | Uint8Array> {
@@ -315,9 +327,7 @@ class RemoteJwksKeyResolver implements KeyResolver {
   }
 
   getSignContext(): { privateKey: KeyLike; algorithm: JwtAsymmetricAlgorithm; kid: string } {
-    throw new Error(
-      `remoteJwks mode does not issue tokens. Obtain a token from the IdP at ${getJwtRuntimeConfig().jwksUri}`,
-    );
+    throw new Error('remoteJwks mode does not issue tokens. Obtain a token from the configured IdP.');
   }
 
   getPublicJwks(): { keys: JWK[] } {

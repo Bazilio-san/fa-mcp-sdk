@@ -1,20 +1,18 @@
 // noinspection UnnecessaryLocalVariableJS
 import crypto from 'crypto';
 
-import chalk from 'chalk';
 import jwt, { JwtPayload, SignOptions, VerifyOptions } from 'jsonwebtoken';
 
 import { appConfig } from '../bootstrap/init-config.js';
-import { logger as lgr } from '../logger.js';
+import { logInternalError } from '../errors/errors.js';
 import { isObject, trim } from '../utils/utils.js';
 
 import { parseIpList, isIpAllowed } from './ip-check.js';
 import { generateTokenV2, verifyJwtV2 } from './jwt-v2.js';
 import { getJwtRuntimeConfig } from './key-resolver.js';
+import { isUsableAuthIdentity } from './principal.js';
 import { isJtiRevoked, isJwtTokenRevoked, isUserRevoked } from './revocation.js';
 import { ICheckTokenResult, ITokenPayload } from './types.js';
-
-const logger = lgr.getSubLogger({ name: chalk.cyan('token-auth') });
 
 const { jwtToken } = appConfig.webServer?.auth || {};
 const checkMCPName = jwtToken?.checkMCPName || false;
@@ -83,8 +81,8 @@ export async function generateToken(user: string, liveTimeSec: number, payload?:
  */
 export const generateTokenLegacy = (user: string, liveTimeSec: number, payload?: any): string => {
   user = trim(user).toLowerCase();
-  if (!user) {
-    throw new Error('generateToken: Username is empty');
+  if (!isUsableAuthIdentity(user)) {
+    throw new Error('generateToken: Username is empty or invalid');
   }
   const inputPayload = isObject(payload) ? { ...payload } : {};
 
@@ -192,18 +190,21 @@ function checkStandardJwt(
         return { errorReason: 'Invalid signature' };
       }
       if (typeof err.message === 'string' && err.message.toLowerCase().includes('issuer')) {
-        return { errorReason: `JWT Token: ${err.message}` };
+        return { errorReason: 'JWT Token: issuer mismatch' };
       }
       return { errorReason: 'The token is not a JWT' };
     }
-    logger.error(err);
-    return { errorReason: `Error verifying JWT token :: ${err?.message ?? 'unknown error'}` };
+    logInternalError(err, 'jwt_verification');
+    return { errorReason: 'Error verifying JWT token' };
   }
 
   // Normalize to ITokenPayload shape
   const sub = typeof decoded.sub === 'string' ? decoded.sub : '';
-  if (!sub) {
-    return { errorReason: 'JWT Token: missing subject' };
+  if (!isUsableAuthIdentity(sub)) {
+    return {
+      isTokenDecrypted: true,
+      errorReason: sub ? 'JWT Token: subject is invalid' : 'JWT Token: missing subject',
+    };
   }
   const expSec = typeof decoded.exp === 'number' ? decoded.exp : 0;
   if (!expSec) {
@@ -218,7 +219,7 @@ function checkStandardJwt(
   const expectedService = arg.expectedService ?? appConfig.name;
   const normalizedService = expectedService && audValues.includes(expectedService) ? expectedService : audValues[0];
 
-  const payload: ITokenPayload = { user: sub, expire: expSec * 1000 };
+  const payload: ITokenPayload = { sub, user: sub, expire: expSec * 1000 };
   if (iatSec) {
     payload.iat = new Date(iatSec * 1000).toISOString();
   }
@@ -298,15 +299,25 @@ function checkLegacyJwt(
       return { errorReason: 'Error decrypting JWT token :: the transcribed text is not JSON' };
     }
   } catch (err: Error | any) {
-    logger.error(err);
-    return { errorReason: `Error decrypting JWT token :: ${err.message}` };
+    logInternalError(err, 'legacy_jwt_decryption');
+    return { errorReason: 'Error decrypting JWT token' };
   }
-  let payload: ITokenPayload;
+  let parsedPayload: unknown;
   try {
-    payload = JSON.parse(payloadStr);
+    parsedPayload = JSON.parse(payloadStr);
   } catch (err: Error | any) {
-    logger.error(err);
-    return { errorReason: `Error deserializing payload of JWT token :: ${err.message}` };
+    logInternalError(err, 'legacy_jwt_deserialization');
+    return { errorReason: 'Error deserializing payload of JWT token' };
+  }
+  if (!isObject(parsedPayload) || Array.isArray(parsedPayload)) {
+    return { isTokenDecrypted: true, errorReason: 'JWT Token: payload is invalid' };
+  }
+  const payload = parsedPayload as ITokenPayload;
+  if (!isUsableAuthIdentity(payload.user)) {
+    return { isTokenDecrypted: true, errorReason: 'JWT Token: user identity is invalid' };
+  }
+  if (payload.sub !== undefined && !isUsableAuthIdentity(payload.sub)) {
+    return { isTokenDecrypted: true, errorReason: 'JWT Token: subject is invalid' };
   }
 
   if (isUserRevoked(payload.user)) {

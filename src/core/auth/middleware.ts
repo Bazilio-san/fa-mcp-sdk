@@ -1,36 +1,36 @@
 // noinspection UnnecessaryLocalVariableJS
-import { cyan, lBlue, magenta, red, reset } from 'af-color';
 import { NextFunction, Request, Response } from 'express';
 
-import { appConfig } from '../bootstrap/init-config.js';
+import { appConfig, getProjectData } from '../bootstrap/init-config.js';
 import { debugTokenAuth } from '../debug.js';
 import { getMetrics } from '../metrics/metrics.js';
-import { getPromptsList } from '../mcp/prompts.js';
-import { getResourcesList } from '../mcp/resources.js';
+import { logger as lgr } from '../logger.js';
 import { buildWwwAuthenticateHeader } from '../web/oauth-router.js';
+import { getCurrentRequestId } from '../web/request-id.js';
 
 import { checkMultiAuth, logAuthConfiguration } from './multi-auth.js';
+import { normalizeAuthPrincipal } from './principal.js';
 import { AuthResult } from './types.js';
 
 const { enabled: authEnabled } = appConfig.webServer.auth;
+const isProduction = (process.env.NODE_CONSUL_ENV || process.env.NODE_ENV) === 'production';
+const logger = lgr.getSubLogger({ name: 'auth-middleware' });
 
-const SHOW_HEADERS_SET = new Set(['user', 'authorization', 'x-real-ip', 'x-mode', 'host']);
+function logAuthRejection(reason: string, status: 401 | 403 | 500): void {
+  logger.warn('Authentication rejected', {
+    reason,
+    requestId: getCurrentRequestId() ?? null,
+    status,
+  });
+}
 
 const debugAuth = (req: Request, code: number, message: string): { code: number; message: string } => {
   if (debugTokenAuth.enabled) {
-    let headersStr: string = '';
-    if (req.headers) {
-      headersStr = Object.entries(req.headers)
-        .map(([k, v]) => {
-          if (SHOW_HEADERS_SET.has(k.toLowerCase())) {
-            return `${cyan}${k}${lBlue}: ${magenta}${v}${reset}`;
-          }
-          return undefined;
-        })
-        .filter(Boolean)
-        .join(', ');
-    }
-    debugTokenAuth(`${red}Unauthorized ${lBlue}${code}${red} ${message}${reset} Headers: ${headersStr || '-'}`);
+    const headerCount = req.headers ? Object.keys(req.headers).length : 0;
+    debugTokenAuth(
+      `Authentication rejected code=${code} headerCount=${headerCount} ` +
+        `authorizationPresent=${Boolean(req.headers?.authorization)}`,
+    );
   }
   return { code, message };
 };
@@ -41,30 +41,28 @@ const debugAuth = (req: Request, code: number, message: string): { code: number;
  * Check if a resource URI is public (doesn't require authentication)
  */
 const isPublicResource = async (uri: string): Promise<boolean> => {
-  // Get all resources including built-in and custom
-  const { resources: allResources } = await getResourcesList({ transport: 'http' });
-  const resource = allResources.find((r) => r.uri === uri);
-
-  if (!resource) {
-    return false; // Unknown resources require auth by default
+  if (isProduction) {
+    return false;
   }
-
-  return resource.requireAuth !== true;
+  const projectData = getProjectData();
+  const entries = Array.isArray(projectData?.customResources) ? projectData.customResources : [];
+  const resource = entries.find((entry) => entry.uri === uri);
+  const scopes = resource?.requiredScopes ?? projectData?.defaultReadScopes;
+  return resource?.requireAuth === false && (!Array.isArray(scopes) || scopes.length === 0);
 };
 
 /**
  * Check if a prompt name is public (doesn't require authentication)
  */
 const isPublicPrompt = async (name: string): Promise<boolean> => {
-  // Get all prompts including built-in and custom
-  const { prompts: allPrompts } = await getPromptsList({ transport: 'http' });
-  const prompt = allPrompts.find((p) => p.name === name);
-
-  if (!prompt) {
-    return false; // Unknown prompts require auth by default
+  if (isProduction) {
+    return false;
   }
-
-  return (prompt as any).requireAuth !== true;
+  const projectData = getProjectData();
+  const entries = Array.isArray(projectData?.customPrompts) ? projectData.customPrompts : [];
+  const prompt = entries.find((entry) => entry.name === name);
+  const scopes = prompt?.requiredScopes ?? projectData?.defaultReadScopes;
+  return prompt?.requireAuth === false && (!Array.isArray(scopes) || scopes.length === 0);
 };
 
 /**
@@ -75,11 +73,7 @@ const isPublicMcpRequest = async (req: Request): Promise<boolean> => {
 
   switch (method) {
     case 'ping':
-    case 'initialize':
     case 'notifications/initialized':
-    case 'tools/list':
-    case 'prompts/list':
-    case 'resources/list':
       return true;
 
     case 'resources/read': {
@@ -98,48 +92,24 @@ const isPublicMcpRequest = async (req: Request): Promise<boolean> => {
   }
 };
 
-/**
- * Standard §7.5 — verify the bearer token carries every scope required by the target
- * resource / prompt. Returns the missing scopes (empty array when OK).
- */
-function checkScopes(required: string[] | undefined, payload: any): string[] {
-  if (!Array.isArray(required) || required.length === 0) {
-    return [];
+function authFailureReason(error?: string): string {
+  const value = String(error ?? '').toLowerCase();
+  if (value.includes('credentials not provided')) {
+    return 'credentials_missing';
   }
-  const tokenScopes = String(payload?.scope ?? '')
-    .split(/\s+/)
-    .filter(Boolean);
-  return required.filter((s) => !tokenScopes.includes(s));
-}
-
-/**
- * Map the MCP method on a successful auth result to a required-scopes list, then verify
- * the token carries them. Returns an `AuthResult.forbidden` shape when scopes are missing.
- */
-async function enforceScopes(
-  req: Request,
-  authResult: { success: true; payload?: any },
-): Promise<{ forbidden: true; error: string } | undefined> {
-  const { method } = req.body || {};
-  let required: string[] | undefined;
-  if (method === 'resources/read') {
-    const uri = req.body?.params?.uri;
-    if (uri) {
-      const { resources } = await getResourcesList({ transport: 'http' });
-      required = (resources.find((r) => r.uri === uri) as any)?.requiredScopes;
-    }
-  } else if (method === 'prompts/get') {
-    const name = req.body?.params?.name;
-    if (name) {
-      const { prompts } = await getPromptsList({ transport: 'http' });
-      required = (prompts.find((p) => p.name === name) as any)?.requiredScopes;
-    }
+  if (value.includes('expired')) {
+    return 'token_expired';
   }
-  const missing = checkScopes(required, authResult.payload);
-  if (missing.length > 0) {
-    return { forbidden: true, error: `Missing scopes: ${missing.join(',')}` };
+  if (value.includes('signature')) {
+    return 'invalid_signature';
   }
-  return undefined;
+  if (value.includes('revoked')) {
+    return 'token_revoked';
+  }
+  if (value.includes('not configured')) {
+    return 'method_not_configured';
+  }
+  return 'invalid_credentials';
 }
 
 // Legacy middleware functions removed - use createAuthMW() instead
@@ -155,12 +125,19 @@ export const getMultiAuthError = async (req: Request): Promise<{ code: number; m
 
   const authResult = await checkMultiAuth(req);
   if (!authResult.success) {
-    return debugAuth(req, 401, authResult.error || 'Authentication failed');
+    const status = authResult.forbidden ? 403 : 401;
+    logAuthRejection(authResult.forbidden ? 'forbidden' : authFailureReason(authResult.error), status);
+    return debugAuth(req, status, authResult.forbidden ? 'Forbidden' : 'Unauthorized');
   }
 
   // Add authentication information to request for use in application
-  (req as any).authInfo = { ...authResult };
-  (req as any).auth = { ...authResult }; // SDK transport bridge — see createAuthMW
+  const normalizedAuth = normalizeAuthPrincipal(authResult);
+  if (!normalizedAuth.success) {
+    logAuthRejection(authFailureReason(normalizedAuth.error), 401);
+    return debugAuth(req, 401, 'Unauthorized');
+  }
+  (req as any).authInfo = normalizedAuth;
+  (req as any).auth = normalizedAuth; // SDK transport bridge — see createAuthMW
 
   return undefined;
 };
@@ -183,6 +160,16 @@ export function createAuthMW(options: AuthMiddlewareOptions = {}) {
   return async (req: Request, res: Response, next: NextFunction) => {
     // If authInfo is already set by an upstream middleware (e.g. Agent Tester session), skip
     if ((req as any).authInfo?.success) {
+      const normalizedAuth = normalizeAuthPrincipal((req as any).authInfo);
+      if (!normalizedAuth.success) {
+        getMetrics()?.authFailures.inc({ reason: authFailureReason(normalizedAuth.error) });
+        logAuthRejection(authFailureReason(normalizedAuth.error), 401);
+        const errorDetails = debugAuth(req, 401, 'Unauthorized');
+        res.setHeader('WWW-Authenticate', buildWwwAuthenticateHeader(req, { errorReason: 'invalid_token' }));
+        return res.status(errorDetails.code).send(errorDetails.message);
+      }
+      (req as any).authInfo = normalizedAuth;
+      (req as any).auth = normalizedAuth;
       return next();
     }
 
@@ -192,11 +179,10 @@ export function createAuthMW(options: AuthMiddlewareOptions = {}) {
       (createAuthMW as any)._logged = true;
     }
 
-    // Check if this is a public MCP request on any of the configured paths
+    // Only explicitly public protocol methods remain callable without credentials. `initialize`
+    // is deliberately authenticated: a stateful session must never be created without an owner.
+    // When credentials are supplied for a public method we still validate and attach authInfo.
     const isMcpRequest = mcpPaths.includes(req.path);
-    if (isMcpRequest && (await isPublicMcpRequest(req))) {
-      return next();
-    }
 
     // Skip authentication if disabled
     if (!authEnabled) {
@@ -207,38 +193,49 @@ export function createAuthMW(options: AuthMiddlewareOptions = {}) {
       // Use enhanced combined authentication (standard + custom validator)
       const authResult: AuthResult = await checkMultiAuth(req);
       if (!authResult.success) {
+        // Credential-less ping/initialized remain public for protocol negotiation.
+        // Explicit but invalid/revoked credentials must fail; silently accepting them would make
+        // the subsequent session look authenticated to a client even though no identity was bound.
+        if (authFailureReason(authResult.error) === 'credentials_missing') {
+          const isPublicRequest = isMcpRequest && (await isPublicMcpRequest(req));
+          if (isPublicRequest) {
+            return next();
+          }
+        }
         // Standard §7.4 — forbidden (authenticated but lacking permission) → 403, NO WWW-Authenticate.
         if (authResult.forbidden) {
           getMetrics()?.authFailures.inc({ reason: 'forbidden' });
-          const errorDetails = debugAuth(req, 403, authResult.error || 'Forbidden');
+          logAuthRejection('forbidden', 403);
+          const errorDetails = debugAuth(req, 403, 'Forbidden');
           return res.status(errorDetails.code).send(errorDetails.message);
         }
-        const reason = (authResult.error ?? 'unauthorized').slice(0, 64);
-        getMetrics()?.authFailures.inc({ reason });
-        const errorDetails = debugAuth(req, 401, authResult.error || 'Authentication failed');
+        getMetrics()?.authFailures.inc({ reason: authFailureReason(authResult.error) });
+        logAuthRejection(authFailureReason(authResult.error), 401);
+        const errorDetails = debugAuth(req, 401, 'Unauthorized');
         const wwwAuth = buildWwwAuthenticateHeader(req, {
-          errorReason: authResult.error,
+          errorReason: authResult.error ? 'invalid_token' : undefined,
           isTokenDecrypted: authResult.isTokenDecrypted,
         });
         res.setHeader('WWW-Authenticate', wwwAuth);
         return res.status(errorDetails.code).send(errorDetails.message);
       }
 
-      // Standard §7.5 — scope enforcement against the target resource / prompt.
-      const scopeViolation = await enforceScopes(req, authResult as any);
-      if (scopeViolation) {
-        getMetrics()?.authFailures.inc({ reason: 'missing_scope' });
-        const errorDetails = debugAuth(req, 403, scopeViolation.error);
+      // Add authentication information to request for use in application
+      const normalizedAuth = normalizeAuthPrincipal(authResult);
+      if (!normalizedAuth.success) {
+        getMetrics()?.authFailures.inc({ reason: authFailureReason(normalizedAuth.error) });
+        logAuthRejection(authFailureReason(normalizedAuth.error), 401);
+        const errorDetails = debugAuth(req, 401, 'Unauthorized');
+        res.setHeader('WWW-Authenticate', buildWwwAuthenticateHeader(req, { errorReason: 'invalid_token' }));
         return res.status(errorDetails.code).send(errorDetails.message);
       }
-
-      // Add authentication information to request for use in application
-      (req as any).authInfo = authResult;
+      (req as any).authInfo = normalizedAuth;
       // Bridge for SDK transports: `StreamableHTTPServerTransport` reads `req.auth` and surfaces it
       // to handlers as `extra.authInfo`. Keep `payload` so `createMcpServer` can pass it downstream.
-      (req as any).auth = authResult;
+      (req as any).auth = normalizedAuth;
       return next();
     } catch {
+      logAuthRejection('internal_error', 500);
       res.status(500).send('Authentication error');
       return;
     }

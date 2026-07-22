@@ -1,0 +1,89 @@
+{
+  "reportType": "normalized-quality-checker-evidence",
+  "scanner": {
+    "name": "mcp-quality-checker",
+    "version": "0.2.0"
+  },
+  "target": {
+    "code": "fa-mcp-sdk-template",
+    "qualityLevel": "experimental",
+    "url": "http://127.0.0.1:39876/mcp",
+    "protocolVersion": "2025-11-25",
+    "authorizationHeaderProvided": true,
+    "healthUrl": "http://127.0.0.1:39876/health",
+    "readyUrl": "http://127.0.0.1:39876/ready",
+    "safeCallCount": 3
+  },
+  "startedAt": "2026-07-13T11:02:11.734Z",
+  "finishedAt": "2026-07-13T11:02:12.298Z",
+  "durationMs": 564,
+  "result": "warning",
+  "summary": {
+    "pass": 30,
+    "warn": 1,
+    "fail": 0,
+    "skip": 1,
+    "blockingFailures": 0
+  },
+  "blockingFailures": [],
+  "warnings": [
+    {
+      "id": "LLM_API_KEY_MISSING",
+      "gate": "G3",
+      "level": "SHOULD",
+      "reason": "The checker had no MCP_QUALITY_LLM_API_KEY, so its optional LLM description judge did not run."
+    }
+  ],
+  "skips": [
+    {
+      "id": "SEMANTIC_SIMILARITY_DISABLED",
+      "gate": "G4",
+      "level": "INFO",
+      "reason": "Embedding similarity was disabled because no approved embeddings credential was available."
+    }
+  ],
+  "evidence": {
+    "initialize": {
+      "status": "PASS",
+      "serverName": "fa-mcp-sdk",
+      "serverVersion": "0.12.20",
+      "protocolVersion": "2025-11-25"
+    },
+    "discovery": {
+      "status": "PASS",
+      "tools": 3,
+      "prompts": 4,
+      "resources": 10
+    },
+    "operations": {
+      "health": "HTTP 200",
+      "ready": "HTTP 200"
+    },
+    "security": {
+      "unauthorizedInitializeAndToolsList": "DENIED_HTTP_401"
+    },
+    "staticContract": {
+      "toolNameRegex": "PASS_ALL",
+      "toolDescriptions": "PASS_ALL",
+      "inputSchemas": "PASS_ALL",
+      "outputSchemas": "PASS_ALL"
+    },
+    "safeCalls": [
+      {
+        "tool": "example_tool",
+        "call": "PASS",
+        "outputSchemaValidation": "PASS"
+      },
+      {
+        "tool": "example_search",
+        "call": "PASS",
+        "outputSchemaValidation": "PASS"
+      },
+      {
+        "tool": "example_long_task",
+        "call": "PASS",
+        "outputSchemaValidation": "PASS"
+      }
+    ]
+  }
+}

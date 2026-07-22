@@ -238,21 +238,26 @@ The authentication check happens in the universal `createAuthMW` middleware in `
 ### HTTP MCP Endpoint (`/mcp`)
 1. Checks if the request is for the `/mcp` endpoint
 2. Determines if it's a resource or prompt request
-3. For `resources/list` and `prompts/list`: Always allows access
+3. When auth is enabled, requires credentials for `tools/list`, `resources/list`, and `prompts/list`
 4. For `resources/read`: Checks if the specific resource is public
 5. For `prompts/get`: Checks if the specific prompt is public
 6. For all other methods: Requires authentication
+7. Requires credentials for `initialize`, so every stateful session has an authenticated owner
+8. Binds every stateful `MCP-Session-Id` to the credential/delegation digest established by `initialize`; a different
+   valid principal receives HTTP 403 before POST, GET, or DELETE reaches that session's transport
 
 ### SSE Endpoints (`/sse`, `/messages`)
-The universal auth middleware also handles SSE endpoints:
+These deprecated endpoints are absent by default. For a documented migration window, set
+`mcp.legacySse.enabled: true`. When enabled, the universal auth middleware also handles SSE endpoints:
 1. Checks if request is for `/sse`, `/messages`, or `/mcp`
 2. Applies the same public resource/prompt logic as HTTP MCP
-3. Allows public access to `resources/list`, `prompts/list`, and specific public resources/prompts
+3. Requires credentials for all catalog lists when auth is enabled
 4. Requires authentication for SSE connection establishment (`GET /sse`) and all other operations
 
 ### Important Note on SSE
 - **GET `/sse`**: Always requires authentication (connection establishment)
-- **POST `/sse`**: Uses conditional auth (public operations allowed without token)
-- **POST `/messages`**: Uses conditional auth (public operations allowed without token)
+- **POST `/sse`**: Requires the same credential binding that opened the selected SSE session
+- **POST `/messages`**: Requires the same credential binding and the explicit `sessionId`
 
-This ensures that only the intended public resources and prompts are accessible without authentication while maintaining security for all other operations, including SSE connection establishment.
+Tool calls pass through the same scope, schema, concurrency, timeout, output-schema and result-size
+pipeline as Streamable HTTP; the legacy adapter does not own a second dispatcher.

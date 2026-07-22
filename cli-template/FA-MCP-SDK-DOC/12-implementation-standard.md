@@ -893,8 +893,10 @@ SHOULD expose:
 | Method            | GET                                 |
 | Authentication    | NOT required                        |
 | Body              | JSON                                |
-| HTTP 200          | service is alive                    |
-| HTTP 503          | service cannot serve requests       |
+| HTTP 200          | process is alive                    |
+
+Dependency failures do not change liveness; they are reported by `/ready` so an orchestrator does
+not restart a healthy process merely because a downstream service is unavailable.
 
 Minimal body:
 

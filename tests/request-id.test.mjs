@@ -39,9 +39,15 @@ const test = async (name, fn) => {
 
 const REQUEST_ID_RE = /^[A-Za-z0-9._-]{8,128}$/;
 
-await test('generated X-Request-Id matches the canonical format', async () => {
+await test('/health is dependency-independent liveness with the canonical body', async () => {
   const res = await fetch(`${server.url}/health`);
   const id = res.headers.get('x-request-id');
+  const body = await res.json();
+  assert.equal(res.status, 200);
+  assert.equal(body.status, 'ok');
+  assert.equal(typeof body.version, 'string');
+  assert.equal(typeof body.uptime, 'number');
+  assert.deepEqual(Object.keys(body).sort(), ['status', 'uptime', 'version']);
   assert.ok(id, 'X-Request-Id header must be present');
   assert.match(id, REQUEST_ID_RE);
 });

@@ -5,7 +5,9 @@
 import { IGetPromptRequest, ITransportContext, IPromptContent, IPromptData } from '../_types_/types.js';
 import { getProjectData } from '../bootstrap/init-config.js';
 import { debugMcpPrompt } from '../debug.js';
-import { emitTrace } from './debug-trace.js';
+import { readDeprecation, warnDeprecatedUsage } from './deprecation.js';
+import { emitTrace, safeTraceDescriptorName, traceDigest } from './debug-trace.js';
+import { assertRequiredScopes, assertResolvedRequiredScopes } from './required-scopes.js';
 
 async function getPrompts(args: ITransportContext): Promise<IPromptData[]> {
   const projectData = getProjectData();
@@ -14,7 +16,7 @@ async function getPrompts(args: ITransportContext): Promise<IPromptData[]> {
     return [];
   }
 
-  const { agentBrief, agentPrompt, toolPrompt, customPrompts } = projectData;
+  const { agentBrief, agentPrompt, toolPrompt, customPrompts, defaultReadScopes } = projectData;
 
   // Validate that required prompts are available
   if (!agentBrief || !agentPrompt) {
@@ -31,98 +33,153 @@ async function getPrompts(args: ITransportContext): Promise<IPromptData[]> {
       resolvedCustomPrompts = customPrompts;
     }
   }
+  assertResolvedRequiredScopes(resolvedCustomPrompts, 'prompt');
 
-  return [
+  const prompts: IPromptData[] = [
     {
       name: 'agent_brief',
       title: 'Agent brief',
       description: 'Brief description of the agent to be selected in the agent system',
       arguments: [],
       content: agentBrief,
-      requireAuth: false,
+      requireAuth: true,
     },
     {
       name: 'agent_prompt',
       title: 'Agent prompt',
-      description: 'Detailed prompt of the agent',
+      description:
+        'Full project-supplied operating instructions for this agent. Read before planning or using its tools, ' +
+        'especially when current workflow and response policies matter. HTTP access requires authentication and ' +
+        'configured read scopes. Resolved from active project data on each request and returned as a text/Markdown ' +
+        'prompt message.',
       arguments: [],
       content: agentPrompt,
-      requireAuth: false,
+      requireAuth: true,
     },
-    {
-      name: 'tool_prompt',
-      title: 'Tool prompt',
-      description: 'Tool-specific prompt. Requires the "tool" argument (the MCP tool name).',
-      arguments: [
-        {
-          name: 'tool',
-          description: 'Name of the MCP tool to get the prompt for.',
-          required: true,
-        },
-      ],
-      // Logic lives in the child project (projectData.toolPrompt); default stub returns empty string.
-      content: toolPrompt ?? (() => ''),
-      requireAuth: false,
-    },
+    ...(toolPrompt
+      ? [
+          {
+            name: 'tool_prompt',
+            title: 'Tool prompt',
+            description: 'Tool-specific prompt. Requires the "tool" argument (the MCP tool name).',
+            arguments: [
+              {
+                name: 'tool',
+                description: 'Name of the MCP tool to get the prompt for.',
+                required: true,
+              },
+            ],
+            content: toolPrompt,
+            requireAuth: true,
+          } satisfies IPromptData,
+        ]
+      : []),
     ...resolvedCustomPrompts,
   ];
+  if (!Array.isArray(defaultReadScopes) || defaultReadScopes.length === 0) {
+    return prompts;
+  }
+  return prompts.map((prompt) =>
+    Array.isArray(prompt.requiredScopes) ? prompt : { ...prompt, requiredScopes: [...defaultReadScopes] },
+  );
 }
 
 export async function getPromptsList(args: ITransportContext) {
   const startedAt = Date.now();
+  let count: number | undefined;
+  let succeeded = false;
   if (debugMcpPrompt.enabled) {
     debugMcpPrompt('→ prompts/list');
   }
   emitTrace('mcp:prompt', { kind: 'list-req' });
-  const prompts = await getPrompts(args);
-  const result = { prompts: prompts.map(({ content, ...rest }) => ({ ...rest })) };
-  const ms = Date.now() - startedAt;
-  if (debugMcpPrompt.enabled) {
-    debugMcpPrompt(`← prompts/list (${result.prompts.length})\n${JSON.stringify(result, null, 2)}`);
+  try {
+    const prompts = await getPrompts(args);
+    const result = { prompts: prompts.map(({ content, ...rest }) => ({ ...rest })) };
+    count = result.prompts.length;
+    succeeded = true;
+    return result;
+  } finally {
+    const ms = Date.now() - startedAt;
+    if (debugMcpPrompt.enabled) {
+      debugMcpPrompt(succeeded ? `← prompts/list count=${count ?? 0}` : `✗ prompts/list failed durationMs=${ms}`);
+    }
+    emitTrace('mcp:prompt', {
+      kind: succeeded ? 'list-res' : 'list-err',
+      name: '*',
+      status: succeeded ? 'success' : 'error',
+      ...(count === undefined ? {} : { count }),
+      ms,
+    });
   }
-  emitTrace('mcp:prompt', { kind: 'list-res', count: result.prompts.length, ms });
-  return result;
 }
 
 export const getPrompt = async (request: IGetPromptRequest, args: ITransportContext): Promise<any> => {
   const { name } = request.params;
+  const nameHash = traceDigest(name);
   const startedAt = Date.now();
+  let completionName = 'unknown';
+  let completionNameHash = 'unknown';
+  let succeeded = false;
   if (debugMcpPrompt.enabled) {
-    debugMcpPrompt(`→ prompts/get ${name}\n${JSON.stringify(request.params ?? {}, null, 2)}`);
+    debugMcpPrompt(`→ prompts/get nameHash=${nameHash}`);
   }
-  emitTrace('mcp:prompt', { kind: 'get-req', name });
-  const prompts = await getPrompts(args);
+  emitTrace('mcp:prompt', { kind: 'get-req', nameHash });
+  try {
+    const prompts = await getPrompts(args);
 
-  // Check if prompts are available
-  if (!prompts || prompts.length === 0) {
-    emitTrace('mcp:prompt', { kind: 'get-err', name, ms: Date.now() - startedAt, error: 'no-prompts' });
-    throw new Error('No prompts available. Project data may not be properly initialized.');
-  }
+    // Check if prompts are available
+    if (!prompts || prompts.length === 0) {
+      throw new Error('No prompts available. Project data may not be properly initialized.');
+    }
 
-  let content: IPromptContent | null = prompts.filter((p) => p.name === name).map((p) => p.content)[0] || null;
-  if (typeof content === 'function') {
-    content = await content(request, request.params?.arguments);
-  }
-  if (!content) {
-    emitTrace('mcp:prompt', { kind: 'get-err', name, ms: Date.now() - startedAt, error: 'unknown-prompt' });
-    throw new Error(`Unknown prompt: ${name}`);
-  }
+    const prompt = prompts.find((candidate) => candidate.name === name);
+    if (!prompt) {
+      throw new Error('Unknown prompt');
+    }
+    assertRequiredScopes(prompt.requiredScopes, args, 'prompt');
+    warnDeprecatedUsage('prompt', prompt.name, readDeprecation(prompt));
+    // Dynamic providers control descriptor names. Log only strict machine identifiers; keep
+    // human/PII-like names opaque while retaining a digest for correlation.
+    completionNameHash = traceDigest(prompt.name);
+    completionName = safeTraceDescriptorName(prompt.name) ?? 'opaque_descriptor';
+    let { content }: { content: IPromptContent | null } = prompt;
+    if (typeof content === 'function') {
+      content = await content(request, request.params?.arguments);
+    }
+    if (!content) {
+      throw new Error('Unknown prompt');
+    }
 
-  const result = {
-    messages: [
-      {
-        role: 'assistant',
-        content: {
-          type: 'text',
-          text: content,
+    const result = {
+      messages: [
+        {
+          role: 'assistant',
+          content: {
+            type: 'text',
+            text: content,
+          },
         },
-      },
-    ],
-  };
-  const ms = Date.now() - startedAt;
-  if (debugMcpPrompt.enabled) {
-    debugMcpPrompt(`← prompts/get ${name}\n${content}`);
+      ],
+    };
+    succeeded = true;
+    return result;
+  } finally {
+    const ms = Date.now() - startedAt;
+    if (debugMcpPrompt.enabled) {
+      debugMcpPrompt(
+        succeeded
+          ? `← prompts/get name=${completionName} descriptorHash=${completionNameHash} nameHash=${nameHash}`
+          : `✗ prompts/get name=${completionName} descriptorHash=${completionNameHash} ` +
+              `nameHash=${nameHash} durationMs=${ms}`,
+      );
+    }
+    emitTrace('mcp:prompt', {
+      kind: succeeded ? 'get-res' : 'get-err',
+      name: completionName,
+      descriptorHash: completionNameHash,
+      nameHash,
+      status: succeeded ? 'success' : 'error',
+      ms,
+    });
   }
-  emitTrace('mcp:prompt', { kind: 'get-res', name, ms });
-  return result;
 };

@@ -5,6 +5,9 @@
 export type TTokenType = 'permanent' | 'JWT';
 
 export interface ITokenPayload {
+  /** Canonical JWT subject, preserved verbatim for audit/rate-limit correlation. */
+  sub?: string;
+  /** Employee identity derived only from configured `userClaim`, or from `sub` when unset. */
   user: string;
   expire: number; // ms
   iat?: string; // normalized ISO string for backward compatibility
@@ -38,6 +41,13 @@ export interface AuthResult {
 
   authType?: AuthType;
   username?: string;
+  /**
+   * Stable, non-secret principal identifier supplied by a custom validator for stateful transport
+   * binding. Required when neither `username` nor `payload.sub` / `payload.user` is available.
+   */
+  sessionBinding?: string;
+  /** SDK-generated, type-tagged opaque owner key. Custom validators must provide identity inputs instead. */
+  principal?: string;
   isTokenDecrypted?: boolean | undefined; // only for JWT
   payload?: any;
   /**

@@ -6,7 +6,7 @@
  * uptime) are added conditionally — they add ≈30 series, so projects scraping multiple SDK
  * instances can shed them by setting `webServer.metrics.includeProcessMetrics = false`.
  *
- * All metrics use snake_case names; cardinality is bounded by tool name / scope so the
+ * All metrics use snake_case names; cardinality is bounded by tool name / status so the
  * SDK never explodes a Prometheus instance even when run with hundreds of tools.
  */
 import { collectDefaultMetrics, Counter, Gauge, Histogram, register, Registry } from 'prom-client';
@@ -22,7 +22,7 @@ export interface IMcpMetrics {
   authFailures: Counter<'reason'>;
   rateLimitHits: Counter<'scope'>;
   httpRequests: Counter<'method' | 'path' | 'status'>;
-  concurrentCalls: Gauge<'subject'>;
+  concurrentCalls: Gauge<never>;
   payloadBytes: Histogram<never>;
   resultBytes: Histogram<never>;
   /** Standard §8.7 — task lifecycle transitions by status (created/completed/failed/cancelled). */
@@ -34,7 +34,14 @@ let metrics: IMcpMetrics | undefined;
 const DURATION_BUCKETS = [0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10, 30];
 const BYTES_BUCKETS = [256, 1024, 4096, 16_384, 65_536, 262_144, 1_048_576, 10_485_760];
 
-export type ToolCallStatus = 'ok' | 'error' | 'timeout' | 'rate_limited' | 'invalid_params' | 'internal_error';
+export type ToolCallStatus =
+  | 'ok'
+  | 'error'
+  | 'forbidden'
+  | 'timeout'
+  | 'rate_limited'
+  | 'invalid_params'
+  | 'internal_error';
 
 export type RateLimitScope = 'subject' | 'ip' | 'concurrent';
 
@@ -94,8 +101,7 @@ export function initMetrics(): IMcpMetrics {
     }),
     concurrentCalls: new Gauge({
       name: 'mcp_concurrent_calls',
-      help: 'In-flight MCP tools/call invocations by JWT subject.',
-      labelNames: ['subject'] as const,
+      help: 'Aggregate number of in-flight MCP tools/call invocations in this process.',
       registers: [reg],
     }),
     payloadBytes: new Histogram({

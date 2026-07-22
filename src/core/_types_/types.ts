@@ -175,6 +175,11 @@ export interface IResourceTemplateInfo {
   title?: string;
   description?: string;
   mimeType?: string;
+  /**
+   * OAuth-style scopes required to discover this template or request completions for it. When
+   * omitted, `McpServerData.defaultReadScopes` is applied; explicit `[]` keeps it unscoped.
+   */
+  requiredScopes?: string[];
   _meta?: Record<string, unknown>;
 }
 
@@ -210,7 +215,7 @@ export interface IResource {
       uri: string;
       mimeType: string;
       /** Present for text resources. Exactly one of `text` / `blob` is set per standard §11.4. */
-      text?: string | object;
+      text?: string;
       /** Present for binary resources — base64-encoded bytes (standard §12.2). */
       blob?: string;
       /** Mirrors `_meta` from the resource definition; see {@link IResourceInfo._meta}. */
@@ -247,8 +252,11 @@ export interface IToolHandlerParams {
   name: string;
   arguments?: any;
   transport: TTransportType;
+  /** Lowercase non-credential headers; raw auth, cookie, token, key and secret headers are removed. */
   headers?: Record<string, string>;
   payload?: { user: string; [key: string]: any } | undefined;
+  /** Stable, opaque authenticated principal used for task ownership and rate-limit isolation. */
+  principal?: string;
   /**
    * Client capabilities reported during the MCP initialize handshake.
    * Populated for STDIO/SSE on every call; for Streamable HTTP only when the
@@ -277,8 +285,11 @@ export interface IToolHandlerParams {
 
 export interface ITransportContext {
   transport: TTransportType;
+  /** Lowercase non-credential headers; raw auth, cookie, token, key and secret headers are removed. */
   headers?: Record<string, string>;
   payload?: { user: string; [key: string]: any } | undefined;
+  /** Stable, opaque authenticated principal used for task ownership and rate-limit isolation. */
+  principal?: string;
   /** See {@link IToolHandlerParams.clientCapabilities}. */
   clientCapabilities?: IClientCapabilities;
 }
@@ -295,7 +306,20 @@ export interface IGetPromptRequest {
 export interface McpServerData {
   // MCP components
   tools: Tool[] | ((args: ITransportContext) => Promise<Tool[]>);
+  /**
+   * Hidden migration aliases accepted by `tools/call`, mapping an old public name to a canonical
+   * name present in {@link tools}. Aliases are never returned by `tools/list`, cannot shadow a
+   * canonical name, and must be removed through the normal deprecation process.
+   */
+  toolAliases?: Record<string, string>;
   toolHandler: <T = unknown>(params: IToolHandlerParams) => Promise<TToolHandlerResponse<T>>;
+
+  /**
+   * Project-wide scopes applied to built-in prompts/resources and to custom prompts, resources,
+   * and resource templates that do not declare `requiredScopes`. An entry's explicit
+   * `requiredScopes` (including `[]`) wins. Use this when all read surfaces share one scope.
+   */
+  defaultReadScopes?: string[];
 
   // Prompts
   agentBrief: string;
@@ -313,9 +337,14 @@ export interface McpServerData {
   usedHttpHeaders?: IUsedHttpHeader[] | null;
   customResources?: IResourceData[] | ((args: ITransportContext) => Promise<IResourceData[]>) | null;
   /**
+   * Named dependency probes included in unauthenticated `/ready`. A check returns only readiness;
+   * thrown errors and `false` both become the public status `error`, with no detail exposed.
+   */
+  readinessChecks?: Record<string, () => boolean | 'ok' | Promise<boolean | 'ok'>>;
+  /**
    * Standard §11.5 (MAY) — descriptors served by `resources/templates/list`.
-   * Each entry is an MCP `ResourceTemplate` (`uriTemplate`, `name`, optional `description`, `mimeType`).
-   * Only consumed when `appConfig.mcp.resources.templatesEnabled` is true.
+   * Each entry is an MCP `ResourceTemplate` (`uriTemplate`, `name`, optional `description`, `mimeType`,
+   * `requiredScopes`). Only consumed when `appConfig.mcp.resources.templatesEnabled` is true.
    */
   customResourceTemplates?:
     | IResourceTemplateInfo[]
@@ -360,7 +389,8 @@ export interface McpServerData {
 
   // Optional logger settings overrides applied on top of built-in defaults.
   // Only specified fields override defaults — merge is shallow (Object.assign semantics).
-  // Example: { level: 'silly', maskValuesRegEx: [] }
+  // Production rejects overrides of maskValuesRegEx, maskValuesOfKeys, and overwrite.mask.
+  // Example: { level: 'silly' }
   loggerSettings?: Partial<ILoggerSettings>;
 }
 

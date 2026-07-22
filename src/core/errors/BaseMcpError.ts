@@ -21,7 +21,6 @@ interface IMcpError {
   data?: IMcpErrorData;
   /** @deprecated Legacy free-form payload. Prefer the structured `data` field above. */
   details?: Record<string, unknown>;
-  stack?: string;
 }
 
 /**
@@ -91,10 +90,6 @@ export class BaseMcpError extends Error implements IMcpError {
 
     if (this.details !== undefined) {
       result.details = this.details;
-    }
-
-    if (this.stack !== undefined) {
-      result.stack = this.stack;
     }
 
     return result;

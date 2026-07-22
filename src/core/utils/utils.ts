@@ -4,9 +4,10 @@ import path from 'path';
 import { Tool } from '@modelcontextprotocol/sdk/types.js';
 
 import { ITransportContext } from '../_types_/types.js';
-import { appConfig } from '../bootstrap/init-config.js';
 import { ROOT_PROJECT_DIR } from '../constants.js';
-import { assertToolNames } from '../mcp/validate-tool-names.js';
+import { assertToolSchemas } from '../mcp/validate-tool-args.js';
+import { assertToolAliases, assertToolNames } from '../mcp/validate-tool-names.js';
+import { getToolRequiredScopes } from '../mcp/required-scopes.js';
 
 export const trim = (s: any): string => String(s || '').trim();
 
@@ -40,8 +41,8 @@ export const getAsset = (relPathFromAssetRoot: string): string | undefined => {
   }
   try {
     return fs.readFileSync(assetFilePath, 'utf8');
-  } catch (err) {
-    console.error(err);
+  } catch {
+    console.error('Failed to read asset');
   }
   return;
 };
@@ -75,16 +76,30 @@ export const normalizeHeaders = (headers: Record<string, any>): Record<string, s
   return normalized;
 };
 
+const CREDENTIAL_HEADERS = new Set(['authorization', 'proxy-authorization', 'cookie', 'set-cookie']);
+const CREDENTIAL_HEADER_NAME_RE = /(^|[-_])(auth|api[-_]?key|token|password|passwd|secret|credential)([-_]|$)/i;
+
+/**
+ * Headers exposed to project handlers. Authentication is propagated as verified `payload`; raw
+ * credentials are intentionally removed so an application cannot accidentally forward bearer
+ * tokens or browser cookies to a downstream service.
+ */
+export const normalizeTransportHeaders = (headers: Record<string, any>): Record<string, string> => {
+  const normalized = normalizeHeaders(headers);
+  for (const name of Object.keys(normalized)) {
+    if (CREDENTIAL_HEADERS.has(name) || CREDENTIAL_HEADER_NAME_RE.test(name)) {
+      delete normalized[name];
+    }
+  }
+  return normalized;
+};
+
 export async function getTools(args: ITransportContext): Promise<Tool[]> {
   const toolsOrFn = global.__MCP_PROJECT_DATA__.tools;
   const toolsArray: Tool[] = typeof toolsOrFn === 'function' ? await toolsOrFn(args) : (toolsOrFn as Tool[]);
   assertToolNames(toolsArray);
-  const { hideAnnotations } = appConfig.mcp.tools || {};
-  if (!hideAnnotations) {
-    return toolsArray;
-  }
-  return toolsArray.map((tool) => {
-    const { annotations: _annotations, ...rest } = tool;
-    return rest as Tool;
-  });
+  assertToolSchemas(toolsArray);
+  assertToolAliases(toolsArray, global.__MCP_PROJECT_DATA__.toolAliases);
+  toolsArray.forEach((tool) => getToolRequiredScopes(tool));
+  return toolsArray;
 }

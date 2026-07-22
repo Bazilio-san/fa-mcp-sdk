@@ -3,6 +3,7 @@ import OpenAI from 'openai';
 import { v4 as uuidv4 } from 'uuid';
 
 import { logger as lgr } from '../../logger.js';
+import { logInternalError } from '../../errors/errors.js';
 import {
   ITesterChatMessage,
   ITesterChatSession,
@@ -30,6 +31,15 @@ const REASONING_EFFORT_MIN: Record<string, string> = {
   'gpt-5.1': 'none',
   'gpt-5-nano': 'low',
   'gpt-5-mini': 'low',
+};
+
+const valueKind = (value: unknown): string => (value === null ? 'null' : Array.isArray(value) ? 'array' : typeof value);
+
+const summarizeObjectShape = (value: unknown): Record<string, string> => {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return { root: valueKind(value) };
+  }
+  return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, valueKind(item)]));
 };
 
 interface AgentConfig {
@@ -146,7 +156,7 @@ export class TesterAgentService {
           call.uiResource = ui;
         }
       } catch (e) {
-        logger.warn(`Failed to read UI resource ${resourceUri} for tool ${toolName}:`, e);
+        logInternalError(e, 'agent_tester_ui_resource');
       }
     }
 
@@ -243,7 +253,7 @@ Output only the new Summary Memory.`;
           agentTools = cachedClient.tools;
           logger.info(`Using cached MCP client with ${agentTools.length} tools`);
         } catch (error) {
-          logger.error('Failed to get MCP client:', error);
+          logInternalError(error, 'agent_tester_mcp_client');
         }
       }
 
@@ -276,7 +286,7 @@ Output only the new Summary Memory.`;
         });
         isCustomLlm = !!modelConfig.baseURL;
         if (isCustomLlm) {
-          logger.info(`Using custom LLM: ${modelConfig.baseURL}`);
+          logger.info('Using a custom LLM endpoint');
         }
       } else if (this.openai) {
         llmClient = this.openai;
@@ -356,33 +366,20 @@ Output only the new Summary Memory.`;
         ].join('\n');
       };
 
-      const serializeForLog = (msgs: OpenAI.Chat.ChatCompletionMessageParam[]): string => {
-        return JSON.stringify(
-          msgs.map((m) => {
-            if (m.role !== 'tool') {
-              return m;
-            }
-            return {
-              ...m,
-              content: truncateForToolMessage(m.content, toolLimitChars),
-            };
-          }),
-          null,
-          2,
-        );
-      };
+      const summarizeMessagesForLog = (msgs: OpenAI.Chat.ChatCompletionMessageParam[]): string =>
+        msgs.map((message) => message.role).join(',');
 
       // Log request
       console.log(
         chalk.blue(`${chalk.bgWhite.bold('🔵 LLM REQUEST:')}
 Model: ${selectedModel}${isCustomLlm ? ' (custom)' : ''}
-Base URL: ${modelConfig?.baseURL || 'OpenAI default'}
+Base URL: ${modelConfig?.baseURL ? 'custom' : 'OpenAI default'}
 Temperature: ${temperature}
 Max Tokens: ${maxTokens}
-Session ID: ${sessionId}
-MCP Server: ${mcpServerUrl || 'None'}
+Session ID: ${sessionId.slice(0, 8)}
+MCP Server: ${mcpServerUrl ? 'configured' : 'None'}
 Tools: ${agentTools.length}
-Messages: ${serializeForLog(openaiMessages)}
+Message roles: ${summarizeMessagesForLog(openaiMessages)}
 `),
       );
 
@@ -393,7 +390,7 @@ Messages: ${serializeForLog(openaiMessages)}
           chalk.cyan(`${chalk.bgBlue.bold(`🔄 LLM REQUEST [Turn ${turn + 1}/${maxTurns}]:`)}
 Model: ${selectedModel}${isCustomLlm ? ' (custom)' : ''}
 Messages count: ${summarizedContext.length}
-Messages: ${serializeForLog(summarizedContext)}
+Message roles: ${summarizeMessagesForLog(summarizedContext)}
 `),
         );
 
@@ -436,7 +433,7 @@ Messages: ${serializeForLog(summarizedContext)}
           chalk.magenta(`${chalk.bgMagenta.bold(`🟣 LLM RESPONSE [Turn ${turn + 1}/${maxTurns}]:`)}
 Finish reason: ${choice.finish_reason}
 Tool calls: ${toolCallNames.length > 0 ? toolCallNames.join(', ') : 'None'}
-Content: ${choice.message.content ? choice.message.content.substring(0, 500) + (choice.message.content.length > 500 ? '...' : '') : '(no text content)'}
+Content chars: ${choice.message.content?.length ?? 0}
 Usage: ${response.usage ? `prompt=${response.usage.prompt_tokens}, completion=${response.usage.completion_tokens}, total=${response.usage.total_tokens}` : 'N/A'}
 `),
         );
@@ -490,7 +487,7 @@ Usage: ${response.usage ? `prompt=${response.usage.prompt_tokens}, completion=${
 
           console.log(
             chalk.green(`${chalk.bgGreen.bold(`🔧 TOOL CALL [${functionName}]:`)}
-Arguments: ${JSON.stringify(functionArgs, null, 2).substring(0, 1000)}
+Argument shape: ${JSON.stringify(summarizeObjectShape(functionArgs))}
 `),
           );
 
@@ -499,11 +496,11 @@ Arguments: ${JSON.stringify(functionArgs, null, 2).substring(0, 1000)}
           try {
             toolResult = await this.mcpClientService.callToolWithConfig(mcpConfig, functionName, functionArgs);
           } catch (error) {
-            logger.error(`Error executing MCP tool ${functionName}:`, error);
+            logInternalError(error, 'agent_tester_tool_call');
             toolFailed = true;
             toolResult = {
               ok: false,
-              error: error instanceof Error ? error.message : String(error),
+              error: 'Tool execution failed',
             };
           }
 
@@ -520,14 +517,14 @@ Arguments: ${JSON.stringify(functionArgs, null, 2).substring(0, 1000)}
               );
               appCalls.push(appCall);
             } catch (e) {
-              logger.warn(`Failed to build appCall for ${functionName}:`, e);
+              logInternalError(e, 'agent_tester_app_call');
             }
           }
 
           const toolResultStr = truncateForToolMessage(toolResult, 2000);
           console.log(
             chalk.greenBright(`${chalk.bgGreen.bold(`🔧 TOOL RESULT [${functionName}]:`)}
-Result: ${toolResultStr}
+Result: type=${valueKind(toolResult)} chars=${toolResultStr.length}
 `),
           );
 
@@ -555,7 +552,7 @@ Result: ${toolResultStr}
         chalk.yellow(`${chalk.bgBlack.bold('🟡 LLM RESPONSE:')}
 Response Time: ${Date.now() - startTime}ms
 Tools Used: ${toolsUsed.length > 0 ? toolsUsed.join(', ') : 'None'}
-Response Text: ${finalText}
+Response chars: ${finalText.length}
 `),
       );
 
@@ -588,10 +585,8 @@ Response Text: ${finalText}
       }
       return response;
     } catch (error) {
-      logger.error('Error processing message:', error);
-      throw new Error(`Failed to process message: ${error instanceof Error ? error.message : 'Unknown error'}`, {
-        cause: error,
-      });
+      logInternalError(error, 'agent_tester_message');
+      throw new Error('Failed to process message', { cause: error });
     }
   }
 
@@ -635,7 +630,7 @@ Response Text: ${finalText}
           cachedClient = await this.mcpClientService.getOrCreateClient(mcpConfig);
           agentTools = cachedClient.tools;
         } catch (error) {
-          logger.error('Failed to get MCP client:', error);
+          logInternalError(error, 'agent_tester_mcp_client');
         }
       }
 
@@ -846,7 +841,7 @@ Response Text: ${finalText}
               JSON.stringify({
                 event: 'tool_call',
                 name: functionName,
-                arguments: functionArgs,
+                argument_shape: summarizeObjectShape(functionArgs),
                 timestamp: new Date().toISOString(),
               }),
             );
@@ -872,9 +867,9 @@ Response Text: ${finalText}
           try {
             toolResult = await this.mcpClientService.callToolWithConfig(mcpConfig, functionName, functionArgs);
           } catch (error) {
-            logger.error(`Error executing MCP tool ${functionName}:`, error);
+            logInternalError(error, 'agent_tester_tool_call');
             toolFailed = true;
-            toolResult = { ok: false, error: error instanceof Error ? error.message : String(error) };
+            toolResult = { ok: false, error: 'Tool execution failed' };
           }
           const toolDuration = Date.now() - toolStartTime;
 
@@ -892,7 +887,7 @@ Response Text: ${finalText}
               traceTurn.app_calls = traceTurn.app_calls || [];
               traceTurn.app_calls.push(appCall);
             } catch (e) {
-              logger.warn(`Failed to build appCall for ${functionName}:`, e);
+              logInternalError(e, 'agent_tester_app_call');
             }
           }
 
@@ -916,7 +911,8 @@ Response Text: ${finalText}
               JSON.stringify({
                 event: 'tool_result',
                 name: functionName,
-                result: truncateStr(toolResult, maxResultChars),
+                result_type: valueKind(toolResult),
+                result_chars: truncateStr(toolResult, maxResultChars).length,
                 duration_ms: toolDuration,
                 timestamp: new Date().toISOString(),
               }),
@@ -952,7 +948,7 @@ Response Text: ${finalText}
         console.log(
           JSON.stringify({
             event: 'response',
-            message: truncateStr(finalText, maxResultChars),
+            message_chars: truncateStr(finalText, maxResultChars).length,
             tools_used: [...new Set(toolsUsed)],
             duration_ms: totalDuration,
           }),
@@ -983,10 +979,8 @@ Response Text: ${finalText}
 
       return { message: finalText, sessionId, trace };
     } catch (error) {
-      logger.error('Error processing message with trace:', error);
-      throw new Error(`Failed to process message: ${error instanceof Error ? error.message : 'Unknown error'}`, {
-        cause: error,
-      });
+      logInternalError(error, 'agent_tester_message_trace');
+      throw new Error('Failed to process message', { cause: error });
     }
   }
 
@@ -1047,7 +1041,7 @@ Response Text: ${finalText}
       session.mcpServerUrl = mcpServerUrl;
     }
 
-    logger.info(`Created new session: ${sessionId}`);
+    logger.info(`Created new session: ${sessionId.slice(0, 8)}`);
     return session;
   }
 }

@@ -15,9 +15,13 @@ is considered an implementation detail and may change in any release.
 |--------------------|----------|--------|-------------------------------------------------------------|
 | `stdio`            | §6       | MUST   | Single JSON-RPC stream over stdin/stdout                    |
 | `streamable_http`  | §6       | MUST   | `POST/GET/DELETE /mcp` driven by the SDK transport          |
-| `legacy_http_sse`  | §6       | SHOULD | `GET /sse` + `POST /messages` — kept for backwards-compat   |
+| `legacy_http_sse`  | §6       | MAY    | Disabled by default; non-production migration only          |
 
 All HTTP routes hosted by the SDK are listed in §2.
+
+The deprecated `legacy_http_sse` routes are registered only with `mcp.legacySse.enabled: true`.
+When explicitly enabled, including for a documented production migration window, the adapter uses
+the same canonical auth/scope, schema, concurrency, timeout, output and size policy pipeline as `/mcp`.
 
 **SSE resumability (opt-in, §6 MAY).** With `mcp.sse.resumability: true` the Streamable HTTP transport
 keeps recent SSE events in a per-process in-memory ring buffer (`mcp.sse.maxStoredEvents`, default 1000),
@@ -34,13 +38,14 @@ store would be required for that.
 | `/mcp`                                            | POST   | Yes  | MUST   | JSON-RPC entry point (`initialize`, `tools/*`, …)             |
 | `/mcp`                                            | GET    | Yes  | MUST   | Server-initiated SSE stream for the active session            |
 | `/mcp`                                            | DELETE | Yes  | MUST   | Session teardown                                              |
-| `/sse`                                            | GET    | Yes  | SHOULD | Legacy SSE connect                                            |
-| `/sse`                                            | POST   | Yes  | SHOULD | Legacy direct JSON-RPC                                        |
-| `/messages`                                       | POST   | Yes  | SHOULD | Legacy SSE message channel                                    |
-| `/health`                                         | GET    | No   | MUST   | Liveness; returns `{status, version, uptime, details}`        |
+| `/sse`                                            | GET    | Yes  | MAY*   | Opt-in legacy SSE connect                                     |
+| `/sse`                                            | POST   | Yes  | MAY*   | Opt-in legacy direct JSON-RPC                                 |
+| `/messages`                                       | POST   | Yes  | MAY*   | Opt-in legacy SSE message channel                             |
+| `/health`                                         | GET    | No   | MUST   | Process liveness; returns `{status:'ok', version, uptime}`    |
 | `/ready`                                          | GET    | No   | SHOULD | Readiness; `{status, checks}`                                 |
-| `/metrics`                                        | GET    | No   | SHOULD | Prometheus exposition (opt-in via `webServer.metrics.enabled`) |
+| `/metrics`                                        | GET    | Yes* | SHOULD | Opt-in Prometheus exposition; auth required by default and always in production |
 | `/`                                               | GET    | No   | MAY    | Static home page                                              |
+| `/api/home-info`                                  | GET    | Yes* | MAY    | Scope-filtered home catalog when auth is enabled              |
 | `/ct`                                             | POST   | No   | MUST   | Token validity check via JSON body                            |
 | `/ct?t=…`                                         | GET    | No   | MAY    | Disabled by default (`webServer.tokenCheck.allowQueryToken`)  |
 | `/used-http-headers`                              | GET    | No   | MAY    | Returns the project's `usedHttpHeaders` declaration           |
@@ -48,12 +53,12 @@ store would be required for that.
 | `/.well-known/openid-configuration`               | GET    | No   | MUST*  | OIDC discovery                                                |
 | `/.well-known/jwks.json`                          | GET    | No   | MUST*  | JWK Set with the active public key                            |
 | `/oauth/token`                                    | POST   | No   | MUST*  | Embedded IdP — `grant_type=password`                          |
-| `/gen-jwt`                                        | POST   | Yes  | MAY    | JWT issuance API (`webServer.genJwtApiEnable`)                |
+| `/gen-jwt`                                        | POST   | Yes  | MAY    | JWT issuance; production requires `admin:token:issue`         |
 | `/admin`                                          | GET    | Yes  | MAY    | Token Generator UI                                            |
-| `/agent-tester`                                   | GET    | Yes? | MAY    | Built-in chat UI (`agentTester.enabled`)                      |
+| `/agent-tester`                                   | GET    | Yes* | MAY    | Production requires `agentTester.useAuth: true`               |
 | `/api/openapi.json` / `/api/openapi.yaml` / `/docs` | GET  | -    | MAY    | OpenAPI when the project supplies `httpComponents.apiRouter`  |
 
-`MUST*` rows are mandatory only when the corresponding feature is active.
+`MUST*` and `MAY*` rows apply only when the corresponding feature is active.
 
 ---
 
@@ -70,16 +75,25 @@ JWT modes are documented in [04-authentication](04-authentication.md). Public co
 
 | Claim       | Required | Notes                                                                    |
 |-------------|----------|--------------------------------------------------------------------------|
-| `sub`       | MUST     | Subject — drives rate-limit bucket and concurrency cap                   |
+| `sub`       | MUST     | Canonical subject, preserved as `payload.sub`; drives ownership/limits  |
 | `exp`       | MUST     | Expiration; SDK enforces with `clockSkew` (default 30 s, max 60 s)       |
-| `aud`       | SHOULD   | Defaults to `appConfig.name`; configurable via `expectedAudience`        |
-| `iss`       | SHOULD*  | Required in modes `embedded` / `localKey` / `remoteJwks`                 |
+| `iat`       | MUST     | Issued-at timestamp; missing and future values are rejected              |
+| `aud`       | MUST     | Validated against `expectedAudience` or `appConfig.name`                 |
+| `iss`       | MUST     | Validated in asymmetric modes; embedded mode derives a stable URN        |
 | `scope`     | MAY      | Space-separated scopes; matched against `requiredScopes` per §7.5        |
 | `ip`        | MAY      | When set + `isCheckIP=true`, client IP must match                        |
-| `service`   | MAY      | When set + `checkMCPName=true`, must contain `appConfig.name`            |
+| `service`   | MAY      | Legacy normalized audience field                                         |
 | `jti`       | MAY      | Used by the revocation list                                              |
 
-Scopes are matched against `requiredScopes` on tools, prompts, and resources (§7.5).
+Scopes are matched against `requiredScopes` on tools, prompts, and resources (§7.5). Authenticated
+catalog reads require credentials; `tools/list` also hides tools unavailable to the caller's scopes.
+STDIO and auth-disabled HTTP are trusted local modes. Opaque permanent tokens have no scope claim,
+so they cannot discover or call scoped tools.
+
+`payload.user` is distinct from canonical `sub`: it comes only from the configured
+`webServer.auth.jwtToken.userClaim`, or falls back to `sub` when no employee claim is configured.
+OAuth metadata uses `webServer.auth.oauth.resourceUrl` (default `<public-origin>/mcp`) and advertises
+only `oauth.advertisedScopes`; an empty list omits `scopes_supported`.
 
 `WWW-Authenticate: Bearer realm="<name>" resource_metadata="<url>"` is emitted on every 401
 from MCP endpoints per §7.4. 403 responses (authenticated but forbidden) carry NO
@@ -93,12 +107,12 @@ from MCP endpoints per §7.4. 403 responses (authenticated but forbidden) carry 
 |---------------------------------------|--------|-----------------------------------------------------------|
 | `initialize`                          | MUST   |                                                           |
 | `notifications/initialized`           | MUST   |                                                           |
-| `tools/list`                          | MUST   | Server-side pagination via `mcp.pagination.pageSize`      |
+| `tools/list`                          | MUST   | Authenticated, scope-filtered, server-side pagination     |
 | `tools/call`                          | MUST   | Honours `signal`, `_meta.progressToken`, `requiredScopes` |
 | `prompts/list`                        | MUST   | Capability advertised only when the server has prompts (§8.2) |
-| `prompts/get`                         | MUST   | Returns `-32601` when no prompts are configured           |
+| `prompts/get`                         | MUST   | Auth required; returns `-32601` when no prompts exist      |
 | `resources/list`                      | MUST   | Same pagination contract                                  |
-| `resources/read`                      | MUST   | Returns `text` or base64 `blob` per entry (§11.4)         |
+| `resources/read`                      | MUST   | Auth required; returns `text` or base64 `blob` (§11.4)    |
 | `resources/templates/list`            | MAY    | `mcp.resources.templatesEnabled`                          |
 | `resources/subscribe` / `unsubscribe` | MAY    | `mcp.resources.subscribeEnabled`                          |
 | `completion/complete`                 | MAY    | `mcp.completions.enabled` + `completionProvider` (§8.2)   |
@@ -128,7 +142,7 @@ default) the capability is not advertised and all four `tasks/*` methods return 
 ### Tool (`Tool` from `@modelcontextprotocol/sdk`)
 
 - `name` — MUST be `snake_case` and unique (validated at boot via
-  `validate-tool-names.ts`).
+  `validate-tool-names.ts`) and match `^[a-z][a-z0-9_]{1,63}$` exactly.
 - `description` — MUST be non-empty. Deprecation prefix `[DEPRECATED until …]` is added
   automatically when `_meta.deprecated` is set.
 - `inputSchema` — MUST declare `$schema: 'https://json-schema.org/draft/2020-12/schema'` and
@@ -140,10 +154,18 @@ default) the capability is not advertised and all four `tasks/*` methods return 
   treated as `forbidden`, i.e. synchronous only). Controls task-augmented execution (§8.7); passed
   through verbatim in `tools/list`. Effective only when `mcp.tasks.enabled` is `true`.
 - `annotations` — MAY; may be hidden via `mcp.tools.hideAnnotations`.
-- `_meta._meta.requiredScopes` (or top-level `requiredScopes`) — MAY; OAuth scopes enforced
+- `_meta.requiredScopes` (or top-level `requiredScopes`) — MAY; OAuth scopes enforced
   before dispatch.
 - `_meta.deprecated` — MAY; structured `IDeprecationInfo`.
 - `_meta.ui` — MAY; MCP Apps widget metadata.
+
+`McpServerData.toolAliases` is a hidden migration map from an old name to a listed canonical name.
+Aliases are accepted only by `tools/call`; they are omitted from discovery, cannot shadow canonical
+tools and cannot point to unknown tools.
+
+`McpServerData.defaultReadScopes` supplies scopes for built-in prompts/resources and custom read
+entries without explicit `requiredScopes`. `prompts/list` and `resources/list` hide unavailable entries;
+`prompts/get` and `resources/read` independently reject insufficient scope.
 
 ### Prompt (`IPromptData`)
 
@@ -253,11 +275,12 @@ reach the tool handler unchecked — only the JSON-RPC envelope shape is still e
 | `mcp.tasks.pollIntervalMs`   | 1000 ms (suggested to client in every task object)                     |
 | `mcp.tasks.maxTasks`         | 1000 (retained tasks; oldest finished evicted first)                   |
 | `webServer.metrics.enabled`  | `false` (opt-in)                                                        |
+| `webServer.metrics.requireAuth` | `true`; production preflight rejects `false`                         |
 | `X-Request-Id` (response)    | Always present — generated when client did not supply one (§15.1)       |
 | `tracestate` (response)      | Echoed back unchanged when client supplied a valid value                |
 | `WWW-Authenticate`           | On every 401 from MCP endpoints (§7.4)                                  |
 | `Retry-After`                | On every 429 (§14)                                                      |
-| `MCP-Session-Id`             | Set by SDK on `initialize`; subsequent requests MUST echo it            |
+| `MCP-Session-Id`             | Set on `initialize`; echo it with the same authenticated principal      |
 | `MCP-Protocol-Version`       | Negotiated by the SDK transport                                         |
 
 ---

@@ -3,13 +3,9 @@ import { NTLMAuthError } from 'ya-express-ntlm';
 
 import { IDcConfig } from '../../../_types_/active-directory-config.js';
 import { appConfig } from '../../../bootstrap/init-config.js';
+import { isADEnabled } from './ntlm-enabled.js';
 
-// Check if AD configuration is available
-export const isADEnabled: boolean = !!(
-  appConfig.ad &&
-  isObject(appConfig.ad.domains) &&
-  Object.keys(appConfig.ad.domains).length
-);
+export { isADEnabled } from './ntlm-enabled.js';
 
 // If AD config is null or undefined, NTLM/AD-based authentication is disabled
 if (!isADEnabled) {

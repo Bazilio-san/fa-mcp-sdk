@@ -86,7 +86,9 @@ Environment variables:
 - `AGENT_TESTER_SESSION_TTL_MS=28800000`
 - `AGENT_TESTER_TOKEN_TTL_SEC=1800`
 
-When `useAuth` is `false` (default), the Agent Tester is accessible without any authentication and `sessionTtlMs` has no effect.
+When `useAuth` is `false` (default), the Agent Tester is accessible without authentication only in
+development. Production startup fails closed when Agent Tester is enabled without `useAuth: true`.
+`sessionTtlMs` has no effect while authentication is disabled.
 
 ### Session Lifetime
 
@@ -684,7 +686,9 @@ or the `appMode` request flag. The existing `agentTester.*` options still apply.
 
 ## Structured JSON Logging (`agentTester.logJson`)
 
-When `agentTester.logJson` is `true`, each agent event is emitted as a single-line JSON object on stdout — useful for real-time monitoring, debugging, and log aggregation.
+When `agentTester.logJson` is `true`, each agent event is emitted as a single-line JSON object on stdout — useful for
+real-time monitoring, debugging, and log aggregation. Logs contain shapes and lengths, not raw messages, arguments, results,
+URLs, or session identifiers. The headless response trace remains the explicit, access-controlled place for test payloads.
 
 Enable via config, CLI flag, or environment variable:
 
@@ -703,10 +707,10 @@ AGENT_TESTER_LOG_JSON=true npm start
 Event types emitted:
 
 ```
-{"event":"tool_call","name":"get_currency_rate","arguments":{"quoteCurrency":"EUR"},"timestamp":"2025-08-15T14:32:00.000Z"}
-{"event":"tool_result","name":"get_currency_rate","result":{"rate":1.0847},"duration_ms":230,"timestamp":"2025-08-15T14:32:00.230Z"}
+{"event":"tool_call","name":"get_currency_rate","argument_shape":{"quoteCurrency":"string"},"timestamp":"2025-08-15T14:32:00.000Z"}
+{"event":"tool_result","name":"get_currency_rate","result_type":"object","result_chars":15,"duration_ms":230,"timestamp":"2025-08-15T14:32:00.230Z"}
 {"event":"llm_response","turn":2,"finish_reason":"stop","tool_calls":[],"has_content":true,"timestamp":"2025-08-15T14:32:01.500Z"}
-{"event":"response","message":"The EUR/USD rate is 1.0847","tools_used":["get_currency_rate"],"duration_ms":1850}
+{"event":"response","message_chars":28,"tools_used":["get_currency_rate"],"duration_ms":1850}
 ```
 
 **Default mode** (without `--log-json`) keeps the colored text logs for human debugging. The flag affects only agent tester events — other server logs (startup, auth, MCP protocol) continue in their normal format.

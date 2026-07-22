@@ -15,6 +15,7 @@ RUN yarn install --production=true && yarn cache clean
 
 # Pre-built backend (dist/ must exist on host)
 COPY dist/ ./dist/
+COPY swagger/ ./swagger/
 
 # Configs (default.yaml, production.yaml, custom-environment-variables.yaml, etc.)
 COPY config/ ./config/

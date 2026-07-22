@@ -1,4 +1,5 @@
-import { existsSync, readFileSync, mkdirSync } from 'fs';
+import { existsSync, readFileSync, mkdirSync, writeFileSync } from 'fs';
+import { createRequire } from 'node:module';
 import * as path from 'path';
 
 import { Router, Request, Response } from 'express';
@@ -6,6 +7,7 @@ import * as yaml from 'js-yaml';
 import swaggerUiExpress from 'swagger-ui-express';
 
 import { appConfig, ROOT_PROJECT_DIR } from '../index.js';
+import { logInternalError } from '../errors/errors.js';
 
 /**
  * OpenAPI specification response interface
@@ -30,6 +32,23 @@ export interface OpenAPISpecResponse {
     name: string;
     description: string;
   }>;
+  security?: Array<Record<string, string[]>>;
+}
+
+type TsoaCli = typeof import('@tsoa/cli');
+
+const projectRequire = createRequire(path.join(ROOT_PROJECT_DIR, 'package.json'));
+
+function loadGenerateSpec(): TsoaCli['generateSpec'] | null {
+  try {
+    return (projectRequire('@tsoa/cli') as TsoaCli).generateSpec;
+  } catch (error: unknown) {
+    const code = error && typeof error === 'object' && 'code' in error ? String(error.code) : '';
+    if (code === 'MODULE_NOT_FOUND' || code === 'ERR_MODULE_NOT_FOUND') {
+      return null;
+    }
+    throw error;
+  }
 }
 
 /**
@@ -54,7 +73,7 @@ export interface SwaggerUIConfig {
 /**
  * Generate OpenAPI specification on-demand using tsoa programmatic API
  */
-async function generateSpecOnDemand(specPath: string): Promise<void> {
+async function generateSpecOnDemand(specPath: string): Promise<OpenAPISpecResponse | null> {
   try {
     // Ensure directory exists
     const specDir = path.dirname(specPath);
@@ -116,19 +135,23 @@ async function generateSpecOnDemand(specPath: string): Promise<void> {
       specMerging: 'recursive' as const,
     };
 
-    // Use tsoa programmatic API
-    const { generateSpec } = await import('tsoa');
+    // The compiler is a project-local development/build dependency. Production serves the generated spec and falls
+    // back to a minimal safe document when a consumer did not generate one before deployment.
+    const generateSpec = loadGenerateSpec();
+    if (!generateSpec) {
+      throw new Error('OpenAPI generator unavailable; build with @tsoa/cli and deploy swagger/openapi.yaml.');
+    }
     await generateSpec(specConfig);
 
     if (existsSync(specPath)) {
       console.log('OpenAPI specification generated successfully via tsoa programmatic API');
-      return;
+      return null;
     }
 
     // If tsoa didn't generate the file, create fallback
     throw new Error('tsoa did not generate specification file');
   } catch (error: any) {
-    console.warn('tsoa spec generation failed, creating fallback spec:', error.message);
+    logInternalError(error, 'openapi_spec_generation');
 
     // Create fallback OpenAPI specification
     const fallbackSpec: OpenAPISpecResponse = {
@@ -169,9 +192,19 @@ async function generateSpecOnDemand(specPath: string): Promise<void> {
       tags: [{ name: 'Server', description: 'Server management endpoints' }],
     };
 
-    const { writeFileSync } = await import('fs');
-    writeFileSync(specPath, yaml.dump(fallbackSpec), 'utf8');
-    console.log('Fallback OpenAPI specification created successfully');
+    // Persist the fallback as a best-effort cache only. Production images are commonly read-only;
+    // the in-memory document below must still keep /docs and /api/openapi.* available there.
+    try {
+      const specDir = path.dirname(specPath);
+      if (!existsSync(specDir)) {
+        mkdirSync(specDir, { recursive: true });
+      }
+      writeFileSync(specPath, yaml.dump(fallbackSpec), 'utf8');
+      console.log('Fallback OpenAPI specification created successfully');
+    } catch (writeError: unknown) {
+      logInternalError(writeError, 'openapi_fallback_persist');
+    }
+    return fallbackSpec;
   }
 }
 
@@ -199,27 +232,19 @@ export async function configureOpenAPI(apiRouter?: Router | null): Promise<{
     // Try to load the generated OpenAPI spec
     const specPath = path.join(process.cwd(), 'swagger/openapi.yaml');
 
+    let openAPISpec: OpenAPISpecResponse;
     if (!existsSync(specPath)) {
       // Generate OpenAPI spec on-demand if it doesn't exist
       console.log('OpenAPI specification not found. Generating on-demand...');
-      try {
-        await generateSpecOnDemand(specPath);
-      } catch (error) {
-        console.warn('Failed to generate OpenAPI specification:', error);
-        return null;
+      const fallbackSpec = await generateSpecOnDemand(specPath);
+      if (fallbackSpec) {
+        openAPISpec = fallbackSpec;
+      } else {
+        const specContent = readFileSync(specPath, 'utf8');
+        openAPISpec = parseOpenAPISpec(specContent);
       }
-    }
-
-    // Load OpenAPI spec
-    const specContent = readFileSync(specPath, 'utf8');
-    let openAPISpec: OpenAPISpecResponse;
-
-    try {
-      // Try YAML first (tsoa default)
-      openAPISpec = yaml.load(specContent) as OpenAPISpecResponse;
-    } catch {
-      // Fallback to JSON
-      openAPISpec = JSON.parse(specContent) as OpenAPISpecResponse;
+    } else {
+      openAPISpec = parseOpenAPISpec(readFileSync(specPath, 'utf8'));
     }
 
     // Enhance spec with dynamic configuration
@@ -234,8 +259,18 @@ export async function configureOpenAPI(apiRouter?: Router | null): Promise<{
       swaggerSpecs: enhancedSpec,
     };
   } catch (error) {
-    console.error('Failed to configure OpenAPI documentation:', error);
+    logInternalError(error, 'openapi_configuration');
     return null;
+  }
+}
+
+function parseOpenAPISpec(specContent: string): OpenAPISpecResponse {
+  try {
+    // Try YAML first (tsoa default)
+    return yaml.load(specContent) as OpenAPISpecResponse;
+  } catch {
+    // Fallback to JSON
+    return JSON.parse(specContent) as OpenAPISpecResponse;
   }
 }
 
@@ -258,6 +293,7 @@ function enhanceOpenAPISpec(spec: OpenAPISpecResponse): OpenAPISpecResponse {
   // Add default security scheme if auth is configured
   if (appConfig.webServer?.auth?.enabled) {
     enhanced.components = enhanced.components || {};
+    enhanced.security ??= [{ bearerAuth: [] }];
     enhanced.components.securitySchemes = {
       bearerAuth: {
         type: 'http',
