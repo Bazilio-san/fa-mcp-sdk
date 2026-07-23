@@ -206,15 +206,25 @@ export async function initMcpServer(data: McpServerData): Promise<void> {
       // "allow everything"). Dev / test workflows keep working — the check fires only when
       // NODE_ENV resolves to `production`.
       const isProd = (process.env.NODE_CONSUL_ENV || process.env.NODE_ENV) === 'production';
+      // When the CORS guard is explicitly disabled (webServer.cors.enabled === false) the
+      // `originHosts` allow-list is irrelevant: the guard is not installed and the server allows
+      // every origin on purpose. So the empty-allow-list check applies only while the guard is on.
+      const corsEnabled = appConfig.webServer.cors?.enabled !== false;
       const { originHosts } = appConfig.webServer;
-      if (isProd && (!Array.isArray(originHosts) || originHosts.length === 0)) {
+      if (corsEnabled && isProd && (!Array.isArray(originHosts) || originHosts.length === 0)) {
         throw new Error(
           'webServer.originHosts must list at least one allowed host in production. ' +
             'Refusing to start with an empty CORS allow-list.',
         );
       }
-      if (!isProd && (!Array.isArray(originHosts) || originHosts.length === 0)) {
+      if (corsEnabled && !isProd && (!Array.isArray(originHosts) || originHosts.length === 0)) {
         lgr.warn('webServer.originHosts is empty — CORS will reject every cross-origin request.');
+      }
+      if (!corsEnabled) {
+        lgr.warn(
+          'webServer.cors.enabled is false — the CORS origin guard is OFF. Every origin is allowed ' +
+            'and all responses carry Access-Control-Allow-Origin: *. Protect the server by network policy.',
+        );
       }
 
       // Standard Прил. A.1 / §7.2 — JWT mode pre-flight checks.

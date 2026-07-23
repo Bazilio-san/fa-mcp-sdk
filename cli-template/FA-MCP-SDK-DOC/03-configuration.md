@@ -183,8 +183,17 @@ webServer:
   port: {{port}}
   # Array of hosts whose `Origin` header bypasses the CORS guard.
   # CORS now actively rejects unlisted origins with HTTP 403 + JSON-RPC error.
-  # In production an empty list aborts startup.
+  # In production an empty list aborts startup (only while the guard is enabled).
   originHosts: ['localhost']
+  # CORS origin guard. Default: enabled (true) — the `originHosts` allow-list is enforced.
+  # Set `cors.enabled: false` to turn the guard OFF: the server then adds
+  # `Access-Control-Allow-Origin: *` to every response and answers preflight requests,
+  # so public endpoints work when fetched cross-origin from sandboxed iframes (MCP Apps
+  # widgets) whose `Origin` is `null` or a dynamic host subdomain that can never match
+  # `originHosts`. This opens the server to every origin — protect it by network policy /
+  # a reverse proxy. When disabled, the empty-`originHosts` production check is skipped.
+  cors:
+    enabled: true
   # Express `trust proxy`. Set true | 'loopback' | <number> when behind an HTTPS reverse
   # proxy so /.well-known/openid-configuration derives `issuer` from X-Forwarded-* headers.
   trustProxy: false
@@ -524,7 +533,8 @@ Override per-environment in `config/{development,production,local}.yaml` or via 
 | `GET /health` | Returns `{ status, version, uptime, details }`. HTTP **503** when `status === 'unhealthy'`, **200** otherwise. | §16.1 |
 | `GET /ready` | No auth. Returns `{ status, checks: { db, cache, jwks } }`. Each check is `'ok' \| 'error' \| 'skipped'` — never leaks credentials or connection strings. HTTP **503** when any check fails, **200** when all green. | §16.2 / §16.3 |
 | `webServer.host` | Default `'127.0.0.1'` (loopback). Containers / k8s pods / public-facing deployments MUST set `'0.0.0.0'` explicitly. | §6 |
-| `webServer.originHosts` | Empty list in production aborts `initMcpServer()`. Unlisted `Origin` headers receive HTTP **403** + JSON-RPC error (no longer silently allowed). | §6 |
+| `webServer.originHosts` | Empty list in production aborts `initMcpServer()` (while the guard is on). Unlisted `Origin` headers receive HTTP **403** + JSON-RPC error (no longer silently allowed). | §6 |
+| `webServer.cors.enabled` | Default `true` — origin guard on, `originHosts` allow-list enforced. Set `false` to disable the guard: every response carries `Access-Control-Allow-Origin: *` and preflight requests are answered, so cross-origin fetches from sandboxed iframes (MCP Apps widgets) with a `null`/dynamic `Origin` succeed. Disabling skips the empty-`originHosts` production check and logs a warning at startup — the server is then open to every origin and MUST be protected by network policy / a reverse proxy. | §6 |
 
 ## MCP-Specific JSON-RPC Error Codes (Appendix B)
 
