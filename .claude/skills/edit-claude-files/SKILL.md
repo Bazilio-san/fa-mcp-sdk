@@ -1,7 +1,7 @@
 ---
 name: edit-claude-files
 description: "Protocol for creating, editing OR deleting any file under .claude/ (SKILL.md, scripts, hooks, agents, settings.json, etc.). Use it BEFORE any such change — direct Write/Edit is denied by settings.json and direct shell ops (rm/mv/cp/redirect) on .claude are blocked by the harness, so every change MUST go through the scripts/fcp.js channel."
-allowed-tools: Read, Write, Edit, MultiEdit, Bash(node scripts/fcp.js *), Bash(rm:*)
+allowed-tools: Read, Write, Edit, Bash(node scripts/fcp.js *), Bash(rm:*)
 ---
 
 # Editing files in `.claude/`
