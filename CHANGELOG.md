@@ -5,6 +5,22 @@ All notable changes to `fa-mcp-sdk` are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.12.23] - 2026-07-24
+
+### Added
+
+- **`webServer.cors.enabled` config flag** (default `true`). When left at `true` the CORS origin guard
+  stays on and the `webServer.originHosts` allow-list is enforced (unlisted `Origin` → HTTP 403). Set it
+  to `false` to disable the guard: the server then sends `Access-Control-Allow-Origin: *` on every
+  response and answers preflight requests, so public endpoints work when fetched cross-origin from
+  sandboxed iframes (MCP Apps widgets) whose `Origin` is `null` or a dynamic host subdomain.
+
+### Changed
+
+- **Empty-`originHosts` production check now applies only while the CORS guard is enabled.** With
+  `webServer.cors.enabled: false` the empty allow-list no longer aborts `initMcpServer()`; instead the
+  server logs a startup warning that all origins are allowed and must be protected by network policy.
+
 ## [0.12.16] - 2026-06-19
 
 ### Added
