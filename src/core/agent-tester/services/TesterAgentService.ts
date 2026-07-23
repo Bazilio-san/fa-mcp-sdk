@@ -356,47 +356,9 @@ Output only the new Summary Memory.`;
         ].join('\n');
       };
 
-      const serializeForLog = (msgs: OpenAI.Chat.ChatCompletionMessageParam[]): string => {
-        return JSON.stringify(
-          msgs.map((m) => {
-            if (m.role !== 'tool') {
-              return m;
-            }
-            return {
-              ...m,
-              content: truncateForToolMessage(m.content, toolLimitChars),
-            };
-          }),
-          null,
-          2,
-        );
-      };
-
-      // Log request
-      console.log(
-        chalk.blue(`${chalk.bgWhite.bold('🔵 LLM REQUEST:')}
-Model: ${selectedModel}${isCustomLlm ? ' (custom)' : ''}
-Base URL: ${modelConfig?.baseURL || 'OpenAI default'}
-Temperature: ${temperature}
-Max Tokens: ${maxTokens}
-Session ID: ${sessionId}
-MCP Server: ${mcpServerUrl || 'None'}
-Tools: ${agentTools.length}
-Messages: ${serializeForLog(openaiMessages)}
-`),
-      );
-
       const maxTurns = modelConfig?.maxTurns ?? this.defaultConfig.maxTurns ?? 10;
 
       for (let turn = 0; turn < maxTurns; turn++) {
-        console.log(
-          chalk.cyan(`${chalk.bgBlue.bold(`🔄 LLM REQUEST [Turn ${turn + 1}/${maxTurns}]:`)}
-Model: ${selectedModel}${isCustomLlm ? ' (custom)' : ''}
-Messages count: ${summarizedContext.length}
-Messages: ${serializeForLog(summarizedContext)}
-`),
-        );
-
         const completionParams: any = {
           model: selectedModel,
           messages: summarizedContext,
@@ -413,6 +375,16 @@ Messages: ${serializeForLog(summarizedContext)}
           }));
           completionParams.tool_choice = 'auto';
         }
+
+        // Single log per LLM call: the exact request payload sent to the API.
+        console.log(
+          chalk.blue(`${chalk.bgWhite.bold(`🔵 LLM REQUEST [Turn ${turn + 1}/${maxTurns}]:`)}
+Base URL: ${modelConfig?.baseURL || 'OpenAI default'}${isCustomLlm ? ' (custom)' : ''}
+Session ID: ${sessionId}
+MCP Server: ${mcpServerUrl || 'None'}
+Request JSON: ${JSON.stringify(completionParams, null, 2)}
+`),
+        );
 
         const response = await llmClient.chat.completions.create(completionParams);
 
