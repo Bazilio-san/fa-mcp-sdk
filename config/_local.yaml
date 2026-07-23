@@ -390,6 +390,14 @@ webServer:
   port: {{port}}
   #> Array of hosts that CORS skips
   originHosts: [ 'localhost', '0.0.0.0' ]
+  #> CORS origin guard. Default: enabled — the `originHosts` allow-list is enforced and
+  #> unlisted `Origin` headers are rejected with HTTP 403. Set `cors.enabled: false` to turn
+  #> the guard OFF: the server then adds `Access-Control-Allow-Origin: *` to every response and
+  #> answers preflight requests, so public endpoints work when fetched cross-origin from sandboxed
+  #> iframes (MCP Apps widgets) whose `Origin` is `null` or a dynamic host subdomain. This opens
+  #> the server to every origin — protect it by network policy / a reverse proxy.
+  cors:
+    enabled: true
   #> ========================================================================
   #> Authentication is configured here only when accessing the MCP server.
   #> Authentication in services that enable tools, resources, and prompts

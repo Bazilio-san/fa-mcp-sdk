@@ -12,6 +12,14 @@ interface IWebServerConfig {
     host: string;
     port: number;
     originHosts: string[];
+    //> CORS guard (standard §6). When `cors.enabled` is false the origin guard is NOT installed;
+    //> instead the server adds `Access-Control-Allow-Origin: *` to every response and answers
+    //> preflight requests. Needed for public endpoints fetched cross-origin from sandboxed iframes
+    //> (MCP Apps widgets), whose `Origin` is `null` or a dynamic host subdomain and therefore can
+    //> never match `originHosts`. Default: true (guard on — `originHosts` allowlist enforced).
+    cors?: {
+      enabled?: boolean;
+    };
     auth: {
       enabled: boolean;
       basic?: {
