@@ -1010,20 +1010,62 @@ body {
 
 .app-widget-title {
   flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   font-family: 'Fira Code', monospace;
 }
 
-.app-widget-collapse {
-  width: 24px;
-  height: 24px;
+/* Приставка "tool: " перед именем инструмента — приглушённая, не моноширинная, чтобы имя выделялось. */
+.app-widget-tool-prefix {
+  color: var(--text-muted);
+  font-weight: 400;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+}
+
+/* Кнопки управления окном (открепить, свернуть, развернуть) — как у диалога Windows. */
+.app-widget-controls {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  margin-left: auto;
+}
+
+.app-widget-btn {
+  width: 28px;
+  height: 22px;
   padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--text-secondary);
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  cursor: pointer;
+  border-radius: 4px;
+  transition:
+    background 0.15s,
+    color 0.15s;
 }
 
-.app-widget-collapse .material-icons-round {
+.app-widget-btn:hover {
+  background: var(--bg-input);
+  color: var(--text);
+}
+
+.app-widget-btn .material-icons-round {
+  font-size: 16px;
+}
+
+/* Кнопка-полоска «свернуть» — тонкая горизонтальная черта. */
+.app-widget-min .material-icons-round {
   font-size: 18px;
+}
+
+/* Кнопка-квадратик «развернуть». */
+.app-widget-max .material-icons-round {
+  font-size: 13px;
 }
 
 .app-widget-body {
@@ -1053,6 +1095,181 @@ body {
   color: var(--text-secondary);
   text-align: center;
   font-style: italic;
+}
+
+/* --- Detached (floating) widget window ---
+   When undocked, the whole frame becomes a floating window: fixed position, a soft drop shadow, a
+   title bar that acts as the drag handle, a body that fills the remaining height, and eight resize
+   grips on the edges and corners. */
+.app-widget-container.is-floating {
+  position: fixed;
+  z-index: 1000;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow:
+    0 10px 34px rgba(0, 0, 0, 0.28),
+    0 2px 8px rgba(0, 0, 0, 0.16);
+}
+
+.app-widget-container.is-floating > .app-widget-header {
+  cursor: move;
+  user-select: none;
+}
+
+.app-widget-container.is-floating .app-widget-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+}
+
+/* The bridge sets an explicit pixel height on the iframe from size-changed messages; in a floating,
+   resizable window we override it so the widget fills whatever height the user drags the frame to. */
+.app-widget-container.is-floating .app-widget-iframe {
+  height: 100% !important;
+  min-height: 0 !important;
+}
+
+/* Развёрнутое на весь экран плавающее окно (кнопка-квадратик). */
+.app-widget-container.is-floating.is-maximized {
+  left: 8px !important;
+  top: 8px !important;
+  width: calc(100vw - 16px) !important;
+  height: calc(100vh - 16px) !important;
+}
+
+/* Свёрнутое плавающее окно ужимается до одной строки заголовка. */
+.app-widget-container.is-floating.is-collapsed {
+  height: auto !important;
+  min-height: 0 !important;
+}
+
+/* Рукоятки изменения размера: только у плавающего окна, скрыты в свёрнутом и развёрнутом состоянии. */
+.app-widget-resize {
+  position: absolute;
+  z-index: 5;
+}
+
+.app-widget-container:not(.is-floating) .app-widget-resize,
+.app-widget-container.is-maximized .app-widget-resize,
+.app-widget-container.is-collapsed .app-widget-resize {
+  display: none;
+}
+
+.app-widget-resize-n {
+  top: 0;
+  left: 12px;
+  right: 12px;
+  height: 5px;
+  cursor: ns-resize;
+}
+
+.app-widget-resize-s {
+  bottom: 0;
+  left: 12px;
+  right: 12px;
+  height: 5px;
+  cursor: ns-resize;
+}
+
+.app-widget-resize-e {
+  top: 12px;
+  bottom: 12px;
+  right: 0;
+  width: 5px;
+  cursor: ew-resize;
+}
+
+.app-widget-resize-w {
+  top: 12px;
+  bottom: 12px;
+  left: 0;
+  width: 5px;
+  cursor: ew-resize;
+}
+
+.app-widget-resize-ne {
+  top: 0;
+  right: 0;
+  width: 12px;
+  height: 12px;
+  cursor: nesw-resize;
+}
+
+.app-widget-resize-nw {
+  top: 0;
+  left: 0;
+  width: 12px;
+  height: 12px;
+  cursor: nwse-resize;
+}
+
+.app-widget-resize-se {
+  bottom: 0;
+  right: 0;
+  width: 14px;
+  height: 14px;
+  cursor: nwse-resize;
+}
+
+.app-widget-resize-sw {
+  bottom: 0;
+  left: 0;
+  width: 12px;
+  height: 12px;
+  cursor: nesw-resize;
+}
+
+/* Заглушка на месте открепленного виджета: дублирует иконку и «tool: <name>», клик возвращает окно. */
+.app-widget-placeholder {
+  margin-top: 12px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border: 1px dashed var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-input);
+  color: var(--text-secondary);
+  font-size: 12px;
+  cursor: pointer;
+  transition:
+    border-color 0.15s,
+    color 0.15s,
+    background 0.15s;
+}
+
+.app-widget-placeholder:hover {
+  border-color: var(--primary);
+  color: var(--text);
+}
+
+.app-widget-placeholder .app-widget-icon {
+  color: var(--accent, #7c5cff);
+  font-size: 16px !important;
+}
+
+.app-widget-placeholder-label {
+  font-family: 'Fira Code', monospace;
+}
+
+.app-widget-placeholder-hint {
+  color: var(--text-muted);
+  font-style: italic;
+}
+
+/* Подложка на время перетаскивания/изменения размера — перехватывает указатель поверх iframe. */
+.app-widget-drag-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 3000;
+  display: none;
+}
+
+.app-widget-drag-overlay.is-active {
+  display: block;
 }
 
 .app-widget-confirm-overlay {
