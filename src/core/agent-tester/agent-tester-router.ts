@@ -40,6 +40,11 @@ export function createAgentTesterRouter(
   const mcpClientService = new TesterMcpClientService();
   const agentService = new TesterAgentService(mcpClientService, options.openAi, appConfig.agentTester?.logJson);
 
+  // Registry of tool calls currently running via the streaming endpoint, keyed by a client-generated
+  // callId. Each entry is the AbortController whose signal is passed down to the MCP call; the /cancel
+  // route aborts it, which makes the SDK client send `notifications/cancelled` to the server.
+  const inFlightCalls = new Map<string, AbortController>();
+
   // Serve static files (index.html, script.js, styles.css)
   const staticPath = join(__dirname, '..', 'web', 'static', 'agent-tester');
   router.use('/static', express.static(staticPath));
@@ -367,6 +372,123 @@ export function createAgentTesterRouter(
       logger.error('MCP call-tool error:', error);
       res.status(500).json({ success: false, error: error.message || 'Tool execution failed' });
     }
+  });
+
+  // POST /api/mcp/call-tool-stream — direct tool invocation that streams live progress and supports
+  // cancellation. Uses Server-Sent Events (SSE): the HTTP response stays open and the server writes
+  // `progress` events as the tool reports them, then a terminal `result` / `error` / `cancelled` event.
+  // The client sends a `callId` it generated so it can later hit /api/mcp/cancel for this exact call.
+  router.post('/api/mcp/call-tool-stream', async (req, res): Promise<void> => {
+    const { serverName, toolName, parameters, callId } = req.body || {};
+    if (!serverName || !toolName || !callId) {
+      res.status(400).json({ error: 'serverName, toolName and callId are required' });
+      return;
+    }
+    const server = mcpClientService.getAllServerConfigs().find((s) => s.name === serverName);
+    if (!server || !server.isConnected) {
+      res.status(404).json({ error: `Server ${serverName} is not connected` });
+      return;
+    }
+
+    res.writeHead(200, {
+      'Content-Type': 'text/event-stream; charset=utf-8',
+      'Cache-Control': 'no-cache, no-transform',
+      Connection: 'keep-alive',
+      // Disable proxy buffering (e.g. nginx) so events reach the browser immediately.
+      'X-Accel-Buffering': 'no',
+    });
+    res.flushHeaders?.();
+
+    const send = (event: string, data: unknown): void => {
+      res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
+    };
+
+    const ac = new AbortController();
+    inFlightCalls.set(callId, ac);
+    let done = false;
+    // If the browser drops the connection (tab closed, navigation), cancel the in-flight tool call.
+    // Listen on the RESPONSE, not the request: `req`'s close fires as soon as the body is read, whereas
+    // `res` closes only when the connection actually ends.
+    res.on('close', () => {
+      if (!done) {
+        ac.abort();
+      }
+    });
+
+    const mcpConfig: TesterMcpConfig = {
+      url: server.url,
+      transport: server.transport as 'http' | 'sse',
+      name: server.name,
+    };
+    if (server.headers) {
+      mcpConfig.headers = server.headers;
+    }
+    if (server.appMode) {
+      mcpConfig.appMode = true;
+    }
+
+    const startedAt = Date.now();
+    try {
+      const result = await mcpClientService.callToolWithConfig(mcpConfig, toolName, parameters || {}, {
+        signal: ac.signal,
+        onProgress: (progress, total, message) => send('progress', { progress, total, message }),
+      });
+
+      // Mirror the non-streaming endpoint: when MCP Apps mode is on, surface the UI resource too.
+      let uiResource;
+      if (server.appMode) {
+        uiResource = findEmbeddedAppResource(result);
+        if (!uiResource) {
+          const tool: ITesterMcpTool | undefined = (server.tools || []).find((t) => t.name === toolName);
+          const uri = getToolUiResourceUri(tool);
+          if (uri) {
+            try {
+              const cached = await mcpClientService.getOrCreateClient(mcpConfig);
+              uiResource = await readUiResource(cached.client, uri);
+            } catch (e) {
+              logger.warn(`Failed to read UI resource ${uri} for tool ${toolName}:`, e);
+            }
+          }
+        }
+      }
+
+      send('result', {
+        success: true,
+        result,
+        durationMs: Date.now() - startedAt,
+        ...(uiResource ? { uiResource } : {}),
+      });
+    } catch (error: any) {
+      const { aborted } = ac.signal;
+      if (!aborted) {
+        logger.error(`MCP call-tool-stream error for ${toolName}:`, error);
+      }
+      send(aborted ? 'cancelled' : 'error', {
+        success: false,
+        error: aborted ? 'Cancelled by user' : error?.message || 'Tool execution failed',
+        durationMs: Date.now() - startedAt,
+      });
+    } finally {
+      done = true;
+      inFlightCalls.delete(callId);
+      res.end();
+    }
+  });
+
+  // POST /api/mcp/cancel — abort an in-flight streaming tool call by its callId.
+  router.post('/api/mcp/cancel', (req, res): void => {
+    const { callId } = req.body || {};
+    if (!callId) {
+      res.status(400).json({ error: 'callId is required' });
+      return;
+    }
+    const ac = inFlightCalls.get(callId);
+    if (!ac) {
+      res.status(404).json({ error: 'No in-flight call with this id' });
+      return;
+    }
+    ac.abort();
+    res.json({ success: true });
   });
 
   // GET /api/mcp/ui-resources — list UI-flavored resources for the App Inspector

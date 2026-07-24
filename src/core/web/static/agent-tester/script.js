@@ -1681,6 +1681,11 @@ class McpAgentTester {
     this.ttValidateJson = document.getElementById('ttValidateJson');
     this.ttRequestJson = document.getElementById('ttRequestJson');
     this.ttSendBtn = document.getElementById('ttSendBtn');
+    this.ttCancelBtn = document.getElementById('ttCancelBtn');
+    this.ttProgress = document.getElementById('ttProgress');
+    this.ttProgressBar = document.getElementById('ttProgressBar');
+    this.ttProgressText = document.getElementById('ttProgressText');
+    this.ttActiveCallId = null;
     this.ttRequestStatus = document.getElementById('ttRequestStatus');
     this.ttResponseContent = document.getElementById('ttResponseContent');
     this.ttResponseClear = document.getElementById('ttResponseClear');
@@ -1792,6 +1797,9 @@ class McpAgentTester {
     }
     if (this.ttSendBtn) {
       this.ttSendBtn.addEventListener('click', () => this.sendToolRequest());
+    }
+    if (this.ttCancelBtn) {
+      this.ttCancelBtn.addEventListener('click', () => this.cancelToolRequest());
     }
     if (this.ttResponseClear) {
       this.ttResponseClear.addEventListener('click', () => this.clearToolResponse());
@@ -3922,7 +3930,15 @@ class McpAgentTester {
       }
     }
 
+    // Client-generated id so we can cancel this exact call via /api/mcp/cancel while it streams.
+    const callId =
+      (window.crypto && crypto.randomUUID && crypto.randomUUID()) ||
+      `call-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+    this.ttActiveCallId = callId;
+
     this.ttSendBtn.disabled = true;
+    this.showCancelButton(true);
+    this.resetProgress();
     this.ttRequestStatus.textContent = 'Sending request…';
     this.ttRequestStatus.className = 'tt-status tt-status-progress';
     this.ttResponseContent.innerHTML = '';
@@ -3933,36 +3949,179 @@ class McpAgentTester {
 
     const startedAt = performance.now();
     try {
-      const response = await apiFetch(`${API_BASE}/api/mcp/call-tool`, {
+      const response = await apiFetch(`${API_BASE}/api/mcp/call-tool-stream`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           serverName: this.currentServer.name,
           toolName: tool.name,
           parameters,
+          callId,
         }),
       });
-      const data = await response.json();
+
+      // The endpoint may reject before it starts streaming (400/404) — surface that as a normal error.
+      if (!response.ok || !response.body) {
+        let errMsg = `HTTP ${response.status}`;
+        try {
+          const j = await response.json();
+          errMsg = j.error || errMsg;
+        } catch {
+          /* body was not JSON */
+        }
+        throw new Error(errMsg);
+      }
+
+      // Read the SSE stream: `progress` events update the bar, the terminal event carries the outcome.
+      const final = await this.consumeToolStream(response.body, (ev) => {
+        if (ev.event === 'progress') {
+          this.updateProgress(ev.data);
+        }
+      });
       const elapsedMs = Math.round(performance.now() - startedAt);
 
-      if (!response.ok || !data.success) {
-        const errMsg = data.error || `HTTP ${response.status}`;
-        this.ttRequestStatus.textContent = `Error in ${elapsedMs} ms`;
+      if (final.event === 'cancelled') {
+        this.ttRequestStatus.textContent = `Cancelled after ${final.data?.durationMs ?? elapsedMs} ms`;
+        this.ttRequestStatus.className = 'tt-status tt-status-error';
+        this.renderToolResponse({ error: 'Cancelled by user' }, true);
+        return;
+      }
+      if (final.event === 'error' || !final.data?.success) {
+        const errMsg = final.data?.error || 'Tool execution failed';
+        this.ttRequestStatus.textContent = `Error in ${final.data?.durationMs ?? elapsedMs} ms`;
         this.ttRequestStatus.className = 'tt-status tt-status-error';
         this.renderToolResponse({ error: errMsg }, true);
         return;
       }
 
-      this.ttRequestStatus.textContent = `Success in ${data.durationMs ?? elapsedMs} ms`;
+      this.ttRequestStatus.textContent = `Success in ${final.data.durationMs ?? elapsedMs} ms`;
       this.ttRequestStatus.className = 'tt-status tt-status-success';
-      this.renderToolResponse(data.result, false, data.uiResource);
+      this.renderToolResponse(final.data.result, false, final.data.uiResource);
     } catch (error) {
       const elapsedMs = Math.round(performance.now() - startedAt);
       this.ttRequestStatus.textContent = `Error in ${elapsedMs} ms`;
       this.ttRequestStatus.className = 'tt-status tt-status-error';
       this.renderToolResponse({ error: error.message || String(error) }, true);
     } finally {
+      this.ttActiveCallId = null;
       this.ttSendBtn.disabled = false;
+      this.showCancelButton(false);
+      this.resetProgress();
+    }
+  }
+
+  /**
+   * Read a Server-Sent Events stream from a fetch response body. Calls `onEvent` for every frame and
+   * returns the last non-progress frame (`result` / `error` / `cancelled`) as the final outcome.
+   */
+  async consumeToolStream(body, onEvent) {
+    const reader = body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+    let finalEvent = { event: 'error', data: { success: false, error: 'Stream ended unexpectedly' } };
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) {
+        break;
+      }
+      buffer += decoder.decode(value, { stream: true });
+      // SSE frames are separated by a blank line.
+      let sep;
+      while ((sep = buffer.indexOf('\n\n')) !== -1) {
+        const frame = buffer.slice(0, sep);
+        buffer = buffer.slice(sep + 2);
+        const parsed = this.parseSseFrame(frame);
+        if (!parsed) {
+          continue;
+        }
+        onEvent(parsed);
+        if (parsed.event !== 'progress') {
+          finalEvent = parsed;
+        }
+      }
+    }
+    return finalEvent;
+  }
+
+  /** Parse one raw SSE frame ("event: …\ndata: …") into { event, data }. */
+  parseSseFrame(frame) {
+    let event = 'message';
+    let dataStr = '';
+    frame.split('\n').forEach((line) => {
+      if (line.startsWith('event:')) {
+        event = line.slice(6).trim();
+      } else if (line.startsWith('data:')) {
+        dataStr += line.slice(5).trim();
+      }
+    });
+    if (!dataStr) {
+      return null;
+    }
+    let data;
+    try {
+      data = JSON.parse(dataStr);
+    } catch {
+      data = dataStr;
+    }
+    return { event, data };
+  }
+
+  /** Update the progress bar + text from a `notifications/progress` payload. */
+  updateProgress(p) {
+    if (!this.ttProgress) {
+      return;
+    }
+    this.ttProgress.style.display = '';
+    const cur = Number(p?.progress) || 0;
+    const total = Number(p?.total);
+    if (Number.isFinite(total) && total > 0) {
+      const pct = Math.max(0, Math.min(100, Math.round((cur / total) * 100)));
+      this.ttProgressBar.style.width = `${pct}%`;
+      this.ttProgressBar.classList.remove('tt-progress-indeterminate');
+      this.ttProgressText.textContent = p?.message ? `${p.message} — ${pct}%` : `${cur} / ${total} (${pct}%)`;
+    } else {
+      // No total was reported → show an indeterminate bar and whatever the message/count says.
+      this.ttProgressBar.classList.add('tt-progress-indeterminate');
+      this.ttProgressText.textContent = p?.message || `Working… (${cur})`;
+    }
+  }
+
+  /** Hide and clear the progress bar. */
+  resetProgress() {
+    if (!this.ttProgress) {
+      return;
+    }
+    this.ttProgress.style.display = 'none';
+    this.ttProgressBar.style.width = '0%';
+    this.ttProgressBar.classList.remove('tt-progress-indeterminate');
+    this.ttProgressText.textContent = '';
+  }
+
+  /** Toggle the Cancel button visibility for the duration of a streaming call. */
+  showCancelButton(show) {
+    if (this.ttCancelBtn) {
+      this.ttCancelBtn.style.display = show ? '' : 'none';
+      this.ttCancelBtn.disabled = false;
+    }
+  }
+
+  /** Ask the server to abort the currently streaming tool call. */
+  async cancelToolRequest() {
+    if (!this.ttActiveCallId) {
+      return;
+    }
+    this.ttCancelBtn.disabled = true;
+    if (this.ttProgressText) {
+      this.ttProgressText.textContent = 'Cancelling…';
+    }
+    try {
+      await apiFetch(`${API_BASE}/api/mcp/cancel`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ callId: this.ttActiveCallId }),
+      });
+    } catch {
+      // The stream itself will still resolve (with a cancelled/error event); nothing else to do here.
     }
   }
 

@@ -193,7 +193,19 @@ export class TesterMcpClientService {
     return client;
   }
 
-  public async callToolWithConfig(mcpConfig: TesterMcpConfig, toolName: string, parameters: any): Promise<any> {
+  public async callToolWithConfig(
+    mcpConfig: TesterMcpConfig,
+    toolName: string,
+    parameters: any,
+    opts?: {
+      // Called on every `notifications/progress` the server emits. Passing this makes the SDK client
+      // generate a `_meta.progressToken`, which is what tells the server to start reporting progress.
+      onProgress?: (progress: number, total: number | undefined, message: string | undefined) => void;
+      // Cancellation signal. When aborted, the SDK client sends `notifications/cancelled`, which flips
+      // the server-side handler's `signal.aborted` so a long-running tool can stop cleanly.
+      signal?: AbortSignal;
+    },
+  ): Promise<any> {
     logger.info(`Calling tool ${toolName} via cached client`, { parameters });
 
     const timeout = appConfig.agentTester?.toolCallTimeoutMs ?? 60000;
@@ -206,7 +218,19 @@ export class TesterMcpClientService {
           arguments: parameters || {},
         },
         undefined,
-        { timeout },
+        {
+          timeout,
+          // With progress reporting the tool may run longer than the base timeout; reset it on each
+          // progress notification so a healthy long task is not killed mid-flight.
+          resetTimeoutOnProgress: !!opts?.onProgress,
+          ...(opts?.signal ? { signal: opts.signal } : {}),
+          ...(opts?.onProgress
+            ? {
+                onprogress: (p: { progress: number; total?: number; message?: string }) =>
+                  opts.onProgress?.(p.progress, p.total, p.message),
+              }
+            : {}),
+        },
       );
     };
 
