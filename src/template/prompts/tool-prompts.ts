@@ -22,6 +22,14 @@ const TOOL_PROMPTS: Record<string, string> = {
 - Use "limit" (1-100, default 20) to cap the number of results; request only as many as you need.
 - Use "threshold" (0-1) to drop low-similarity matches when precision matters more than recall.
 - Read results from the "results" array; "total" reports how many matches exist overall.`,
+
+  show_widget: `You are using the "show_widget" tool, which demonstrates an MCP Apps UI widget.
+
+- Call it whenever the user asks to show or demonstrate a widget ("покажи виджет", "show widget").
+- It takes no arguments.
+- When MCP Apps is enabled the host renders the widget; you only need a one-line confirmation.
+- When MCP Apps is disabled the tool returns the exact text "Для демонстрации виджета включите режим Apps".
+  In that case relay that text to the user verbatim — do not paraphrase, translate, or add anything.`,
 };
 
 export const toolPrompt: TPromptContentFunction = (_request, args) => {

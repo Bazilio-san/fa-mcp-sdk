@@ -267,9 +267,11 @@ Tick boxes as you go. The plan is not optional — it is how the user audits pro
 
 Follow the plan. For each tool/resource/prompt:
 
-1. Edit `src/tools/tools.ts`, `src/tools/handle-tool-call.ts`, `src/custom-resources.ts`,
-   `src/api/router.ts`, `src/prompts/*` as needed. Replace the stub `example_tool` — do not
-   leave demo code in the final build.
+1. Create one file per tool in `src/tools/<tool-name>.ts` (the tool's `name` with `_` → `-`), each with
+   its definition and handler together, and register it in the list in `src/tools/tools.ts` (see "Tool
+   organization" in AGENTS.md). Edit `src/custom-resources.ts`, `src/api/router.ts`, `src/prompts/*` as
+   needed. Remove the stub tool files (`example-tool.ts`, `example-search.ts`, `example-long-task.ts`,
+   `show-widget.ts`) and their entries in `tools.ts` — do not leave demo code in the final build.
 2. Add new config keys to `config/default.yaml` (and matching env mappings in
    `config/custom-environment-variables.yaml` when appropriate). Mirror structural changes
    in `config/_local.yaml`. **If the feature talks to any third-party / external service
