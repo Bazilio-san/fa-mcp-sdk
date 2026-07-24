@@ -5,6 +5,14 @@ All notable changes to `fa-mcp-sdk` are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.12.29] - 2026-07-24
+
+### Changed
+
+- **`structuredContent` is no longer copied into `content` for MCP Apps UI clients** (it is UI-only data that
+  must not enter the model context), so a tool may return it alone with an empty `content`; the mandatory-
+  duplication requirement was dropped from the implementation standard (§ 9.5, § 12.2).
+
 ## [0.12.26] - 2026-07-24
 
 ### Added

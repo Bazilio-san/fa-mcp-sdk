@@ -70,9 +70,12 @@ arguments or in a trusted internal deployment. The toggle does not affect `outpu
 
 A tool MAY declare `outputSchema` to describe its `structuredContent` payload. When set,
 the SDK validates the handler's response against the schema — a violation raises JSON-RPC
-`-32603` (internal error: the tool broke its own contract). Whenever a response includes
-`structuredContent`, the SDK mirrors a serialised JSON copy into `content[0].text` so
-legacy clients that only read `content` keep working without code changes.
+`-32603` (internal error: the tool broke its own contract).
+
+`content` and `structuredContent` are independent — a tool MAY return `structuredContent` alone with
+an empty `content`. For plain clients the SDK copies `structuredContent` into an empty `content` as a
+compatibility convenience; MCP Apps UI clients (`io.modelcontextprotocol/ui`) never get that copy,
+since `structuredContent` is UI-only data that must not enter the model context.
 
 ```typescript
 export const tools: Tool[] = [{
