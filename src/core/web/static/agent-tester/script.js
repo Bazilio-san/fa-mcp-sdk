@@ -2,25 +2,12 @@ const API_BASE = '/agent-tester';
 const trim = (s) => String(s || '').trim();
 
 const LLM_LS_KEY = 'mcpAgentLlmSettings';
-const LLM_PRESET_MODELS = [
-  'gpt-5.4',
-  'gpt-5.4-mini',
-  'gpt-5.4-nano',
-  'gpt-5.3-codex',
-  'gpt-5.2',
-  'gpt-5.1',
-  'gpt-5-nano',
-  'gpt-5-mini',
-  'gpt-4.1',
-  'gpt-4.1-mini',
-  'gpt-4.1-nano',
-  'gpt-4o',
-  'gpt-4o-mini',
-];
+// Model default and preset list now come from the server (agentTester.openAi.defaultModel / .models),
+// delivered via GET /agent-tester/api/config → llmDefaults. `model` stays empty here as a pure fallback.
 const LLM_DEFAULTS = {
   baseURL: '',
   apiKey: '',
-  model: 'gpt-5.4-nano',
+  model: '',
   temperature: 0.2,
   maxTokens: 2048,
   maxTurns: 10,
@@ -1337,6 +1324,8 @@ class McpAgentTester {
     this.llmLimitChars = document.getElementById('llmLimitChars');
 
     this.llmSettings = { ...LLM_DEFAULTS };
+    // Preset model list for the LLM Settings dropdown — populated from server config in loadDefaultConfig().
+    this.presetModels = [];
 
     this.systemPromptTextarea = document.getElementById('systemPrompt');
     this.customPromptTextarea = document.getElementById('customPrompt');
@@ -1692,6 +1681,8 @@ class McpAgentTester {
       this.authEnabled = !!config.authEnabled;
       this.configHttpHeaders = config.httpHeaders || {};
       this.llmDefaults = config.llmDefaults || {};
+      this.presetModels = Array.isArray(this.llmDefaults.models) ? this.llmDefaults.models : [];
+      this.renderLlmModelDropdown();
       this.sdkVersion = config.sdkVersion || '';
       if (config.defaultMcpUrl) {
         const serverUrlInput = document.getElementById('serverUrl');
@@ -2723,6 +2714,10 @@ class McpAgentTester {
       merged.apiKey = cfg.apiKey;
       touched = true;
     }
+    if (!merged.model && cfg.model) {
+      merged.model = cfg.model;
+      touched = true;
+    }
 
     this.llmSettings = merged;
 
@@ -2879,7 +2874,7 @@ class McpAgentTester {
 
   renderLlmModelDropdown() {
     this.llmModelDropdownList.innerHTML = '';
-    LLM_PRESET_MODELS.forEach((name) => {
+    (this.presetModels || []).forEach((name) => {
       const item = document.createElement('div');
       item.className = 'dropdown-item';
       item.setAttribute('data-testid', `at-llm-model-option-${name}`);

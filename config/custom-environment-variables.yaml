@@ -17,6 +17,10 @@ agentTester:
   openAi:
     apiKey: AGENT_TESTER_OPENAI_API_KEY
     baseURL: AGENT_TESTER_OPENAI_BASE_URL
+    defaultModel: AGENT_TESTER_OPENAI_DEFAULT_MODEL
+
+headlessTester:
+  defaultModel: HEADLESS_TESTER_DEFAULT_MODEL
 
 cache:
   ttlSeconds: CACHE_TTL_SECONDS

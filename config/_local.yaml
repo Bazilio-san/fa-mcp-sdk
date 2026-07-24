@@ -105,9 +105,25 @@ agentTester:
     #> /agent-tester can read the key. Default: false (safe).
     #> -------------------------------------------------------------------------
     exposeToClient: false
+    #> Default model pre-filled in the Agent Tester chat UI when the user has not chosen one yet.
+    #> Sent to the UI via GET /agent-tester/api/config (not a secret).
+    defaultModel: 'gpt-5.4-nano'
+    #> List of model names shown in the Agent Tester UI model dropdown (the user can still type any name).
+    models:
+      - gpt-5.4-nano
+      - gpt-5.4-mini
+      - gpt-5.4
+      - gpt-4.1-nano
+      - gpt-4.1-mini
 
   #> Key-value pairs for HTTP requests that should be auto-populated in agentTester. Example: X-User-Id: 12345
   httpHeaders:
+
+#> Headless testing of MCP tools via POST /agent-tester/api/chat/test (no browser, structured trace).
+headlessTester:
+  #> Default LLM model used for headless test requests when the request body omits modelConfig.model.
+  #> Override per request by passing modelConfig.model (e.g. --model in headless-test.js).
+  defaultModel: 'gpt-5.4'
 
 #> --------------------------------------------------
 #> CACHING Reduces API calls by caching responses
