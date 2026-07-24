@@ -41,9 +41,7 @@ export const BUILTIN_MCP_DEBUG_TOOLS: Tool[] = [
   {
     name: MCP_DEBUG_LOG_TOOL_NAME,
     title: 'MCP debug log',
-    description:
-      'App-only tool. Widgets call this to push a structured event into the server-side mcp:* debug stream. ' +
-      'Hidden from the LLM via _meta.ui.visibility=["app"].',
+    description: `App-only tool. Widgets call this to push a structured event into the server-side mcp:* debug stream. Hidden from the LLM via _meta.ui.visibility=["app"].`,
     inputSchema: {
       type: 'object',
       properties: {
@@ -62,9 +60,8 @@ export const BUILTIN_MCP_DEBUG_TOOLS: Tool[] = [
   {
     name: MCP_DEBUG_REFRESH_TOOL_NAME,
     title: 'MCP debug refresh',
-    description:
-      'App-only tool. Widgets call this to fetch lightweight server state (timestamp + call counter) ' +
-      'without involving the LLM. Hidden from the LLM via _meta.ui.visibility=["app"].',
+    description: `App-only tool. Widgets call this to fetch lightweight server state (timestamp + call counter) without involving the LLM. 
+Hidden from the LLM via _meta.ui.visibility=["app"].`,
     inputSchema: {
       type: 'object',
       properties: {},

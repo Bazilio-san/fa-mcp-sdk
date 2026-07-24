@@ -25,10 +25,10 @@ const TOOL_PROMPTS: Record<string, string> = {
 
   show_widget: `You are using the "show_widget" tool, which demonstrates an MCP Apps UI widget.
 
-- Call it whenever the user asks to show or demonstrate a widget ("покажи виджет", "show widget").
+- Call it whenever the user asks to show or demonstrate a widget ("show widget").
 - It takes no arguments.
 - When MCP Apps is enabled the host renders the widget; you only need a one-line confirmation.
-- When MCP Apps is disabled the tool returns the exact text "Для демонстрации виджета включите режим Apps".
+- When MCP Apps is disabled the tool returns the exact text "To demonstrate the widget, enable Apps mode".
   In that case relay that text to the user verbatim — do not paraphrase, translate, or add anything.`,
 };
 

@@ -275,10 +275,10 @@ Analyzes git diff between two versions/commits and produces an MD file covering 
 /upgrade-guide 0.4.30 0.4.37
 /upgrade-guide 0.4.30
 /upgrade-guide abc1234
-/upgrade-guide 0.4.30 0.4.37 на русском
+/upgrade-guide 0.4.30 0.4.37 in Russian
 ```
 
-Output language is English by default. Add a natural-language hint (e.g., "на русском", "in German") to change it.
+Output language is English by default. Add a natural-language hint (e.g., "in Russian", "in German") to change it.
 
 Skill location: `.claude/skills/upgrade-guide/SKILL.md`
 

@@ -44,11 +44,10 @@ interface DebugToolArgs {
 export const DEBUG_TOOL: Tool = {
   name: DEBUG_TOOL_NAME,
   title: 'Debug tool',
-  description:
-    'App-only test helper. Produces any variation of CallToolResult (text/image/audio/resource/' +
-    'resourceLink/mixed, single or multi-block, isError, delays, large payload) so MCP host tests ' +
-    'can exercise every code path without standing up a bespoke fake server. Hidden from the LLM ' +
-    'via _meta.ui.visibility=["app"].',
+  description: `App-only test helper. 
+Produces any variation of CallToolResult (text/image/audio/resource/resourceLink/mixed, single or multi-block, isError, delays, large payload) 
+so MCP host tests can exercise every code path without standing up a bespoke fake server. 
+Hidden from the LLM via _meta.ui.visibility=["app"].`,
   inputSchema: {
     type: 'object',
     properties: {

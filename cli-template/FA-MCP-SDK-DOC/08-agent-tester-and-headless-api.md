@@ -177,7 +177,7 @@ On Windows, curl's `-d` flag may corrupt non-ASCII characters (e.g. Cyrillic) be
 ```bash
 # 1. Write request JSON to a file (editor must save as UTF-8)
 cat > tmp-request.json << 'EOF'
-{"message":"Отправь письмо на user@example.com с темой \"Тест\"","mcpConfig":{"url":"http://localhost:9876/mcp","transport":"http"}}
+{"message":"Send an email to user@example.com with the subject \"Test\"","mcpConfig":{"url":"http://localhost:9876/mcp","transport":"http"}}
 EOF
 
 # 2. Send with --data-binary to preserve UTF-8 encoding

@@ -830,7 +830,7 @@ class McpAgentTester {
       } catch (e) {
         console.warn('Bridge destroy failed:', e);
       }
-      // Плавающий виджет и его плейсхолдер живут в разных местах DOM — убираем оба.
+      // A floating widget and its placeholder live in different parts of the DOM — remove both.
       if (entry.placeholder?.parentNode) {
         entry.placeholder.parentNode.removeChild(entry.placeholder);
       }
@@ -863,13 +863,13 @@ class McpAgentTester {
         appCall.toolName,
       )}</span>
       <div class="app-widget-controls">
-        <button type="button" class="app-widget-btn app-widget-min" title="Свернуть" aria-label="minimize">
+        <button type="button" class="app-widget-btn app-widget-min" title="Minimize" aria-label="minimize">
           <span class="material-icons-round">remove</span>
         </button>
-        <button type="button" class="app-widget-btn app-widget-max" title="Развернуть" aria-label="maximize">
+        <button type="button" class="app-widget-btn app-widget-max" title="Maximize" aria-label="maximize">
           <span class="material-icons-round">crop_square</span>
         </button>
-        <button type="button" class="app-widget-btn app-widget-dock" title="Открепить (плавающее окно)" aria-label="dock">
+        <button type="button" class="app-widget-btn app-widget-dock" title="Undock (floating window)" aria-label="dock">
           <span class="material-icons-round">open_in_new</span>
         </button>
       </div>
@@ -915,8 +915,8 @@ class McpAgentTester {
     header.querySelector('.app-widget-max').addEventListener('click', () => this._toggleWidgetMaximize(entry));
     header.querySelector('.app-widget-dock').addEventListener('click', () => this._toggleWidgetFloating(entry));
 
-    // Перетаскивание плавающего окна за заголовок. В закреплённом состоянии и в развёрнутом на весь экран
-    // перетаскивание отключено; клики по кнопкам управления окном не должны начинать перемещение.
+    // Drag the floating window by its title bar. Dragging is disabled while docked and while maximized;
+    // clicks on the window control buttons must not start a move.
     header.addEventListener('pointerdown', (e) => {
       if (!entry.floating || entry.maximized) {
         return;
@@ -930,16 +930,16 @@ class McpAgentTester {
     return container;
   }
 
-  /** Свернуть/развернуть тело виджета (кнопка-полоска, как «свернуть» у окна Windows). */
+  /** Collapse/expand the widget body (the bar button, like a Windows "minimize"). */
   _toggleWidgetCollapse(entry) {
     entry.collapsed = !entry.collapsed;
     entry.container.classList.toggle('is-collapsed', entry.collapsed);
   }
 
   /**
-   * Кнопка-квадратик «развернуть». Свёрнутый виджет сначала разворачивается; закреплённый — открепляется,
-   * затем плавающее окно переключается между заданным размером и «на весь экран». Иконка меняется на
-   * «восстановить» (filter_none), пока окно развёрнуто.
+   * The square "maximize" button. A collapsed widget is expanded first; a docked one is undocked, then the
+   * floating window toggles between its set size and full screen. The icon changes to "restore" (filter_none)
+   * while the window is maximized.
    */
   _toggleWidgetMaximize(entry) {
     if (entry.collapsed) {
@@ -969,7 +969,7 @@ class McpAgentTester {
     this._bringWidgetToFront(entry);
   }
 
-  /** Кнопка-«пин»: открепить закреплённый виджет или вернуть плавающий на место. */
+  /** The "pin" button: undock a docked widget or return a floating one to its place. */
   _toggleWidgetFloating(entry) {
     if (entry.floating) {
       this._dockWidget(entry);
@@ -979,9 +979,9 @@ class McpAgentTester {
   }
 
   /**
-   * Открепить виджет: на его месте в ленте остаётся кликабельный плейсхолдер (иконка + «tool: <name>»),
-   * а сам контейнер переносится в плавающий слой (в body), получает фиксированную позицию по текущему
-   * месту и рамку с тенью. Размеры затем меняются за края/углы, положение — за заголовок.
+   * Undock the widget: a clickable placeholder (icon + "tool: <name>") is left in its place in the feed,
+   * while the container itself is moved to the floating layer (into body), gets a fixed position at its
+   * current spot and a frame with a shadow. Size is then changed by the edges/corners, position by the title bar.
    */
   _floatWidget(entry) {
     if (entry.floating) {
@@ -992,13 +992,13 @@ class McpAgentTester {
 
     const ph = document.createElement('div');
     ph.className = 'app-widget-placeholder';
-    ph.title = 'Вернуть виджет на место';
+    ph.title = 'Return the widget to its place';
     ph.innerHTML = `
       <span class="material-icons-round app-widget-icon">grid_view</span>
       <span class="app-widget-placeholder-label"><span class="app-widget-tool-prefix">tool:&nbsp;</span>${this._escapeHtml(
         entry.appCall.toolName,
       )}</span>
-      <span class="app-widget-placeholder-hint">кликните, чтобы вернуть виджет на место</span>
+      <span class="app-widget-placeholder-hint">click to return the widget to its place</span>
     `;
     ph.addEventListener('click', () => this._dockWidget(entry));
     c.parentNode.insertBefore(ph, c);
@@ -1021,7 +1021,7 @@ class McpAgentTester {
     this._updateDockButton(entry);
   }
 
-  /** Вернуть плавающий виджет на его место в ленте (заменяем плейсхолдер контейнером). */
+  /** Return a floating widget to its place in the feed (replace the placeholder with the container). */
   _dockWidget(entry) {
     if (!entry.floating) {
       return;
@@ -1053,19 +1053,19 @@ class McpAgentTester {
     }
     const icon = btn.querySelector('.material-icons-round');
     if (entry.floating) {
-      btn.title = 'Прикрепить обратно';
+      btn.title = 'Dock back';
       if (icon) {
         icon.textContent = 'push_pin';
       }
     } else {
-      btn.title = 'Открепить (плавающее окно)';
+      btn.title = 'Undock (floating window)';
       if (icon) {
         icon.textContent = 'open_in_new';
       }
     }
   }
 
-  /** Поднять плавающее окно над остальными (несколько окон могут плавать одновременно). */
+  /** Bring the floating window above the others (several windows can float at once). */
   _bringWidgetToFront(entry) {
     if (!entry.floating) {
       return;
@@ -1074,7 +1074,7 @@ class McpAgentTester {
     entry.container.style.zIndex = String(this._floatZ);
   }
 
-  /** Восемь рукояток изменения размера по краям и углам плавающего окна. */
+  /** Eight resize handles on the edges and corners of the floating window. */
   _addWidgetResizeHandles(entry) {
     for (const dir of ['n', 's', 'e', 'w', 'ne', 'nw', 'se', 'sw']) {
       const h = document.createElement('div');
@@ -1165,9 +1165,9 @@ class McpAgentTester {
   }
 
   /**
-   * Прозрачная подложка на весь экран во время перетаскивания/изменения размера. Она перехватывает
-   * указатель поверх iframe виджета (у iframe своя область событий), поэтому перетаскивание не «залипает»,
-   * когда курсор проходит над содержимым виджета. Курсор подложки соответствует направлению операции.
+   * A transparent full-screen overlay during dragging/resizing. It captures the pointer over the widget
+   * iframe (an iframe has its own event area), so dragging does not "stick" when the cursor passes over the
+   * widget content. The overlay cursor matches the direction of the operation.
    */
   _showDragOverlay(cursorDir) {
     if (!this._dragOverlay) {
@@ -1208,8 +1208,8 @@ class McpAgentTester {
       } catch {
         /* ignore */
       }
-      // Разгружаемый виджет, если он плавал, сперва возвращаем на место в ленту — заглушку показываем
-      // в обычном потоке диалога, а не в оторванном плавающем окне.
+      // If the widget being unloaded was floating, return it to its place in the feed first — the placeholder
+      // is shown in the normal conversation flow, not in a detached floating window.
       if (oldest.floating) {
         this._dockWidget(oldest);
       }

@@ -57,7 +57,7 @@ interface IWebServerConfig {
         jwksCacheTtl?: number;
         // Minimum interval (seconds) between repeat JWKS fetches when kid missing. Default: 30.
         jwksCooldown?: number;
-        // Allowed clock skew (seconds) for exp/nbf checks. Default: 30. Max enforced: 60 (standard Прил. A.1).
+        // Allowed clock skew (seconds) for exp/nbf checks. Default: 30. Max enforced: 60 (standard Appendix A.1).
         clockSkew?: number;
         // Default TTL (seconds) for tokens issued by embedded /oauth/token endpoint. Default: 1800.
         defaultTtl?: number;

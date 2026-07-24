@@ -3,11 +3,11 @@ FROM node:22-alpine AS builder
 
 WORKDIR /app
 
-# Зависимости (кэшируется отдельным слоем)
+# Dependencies (cached as a separate layer)
 COPY package.json yarn.lock ./
 RUN yarn install --frozen-lockfile --production=false
 
-# Исходники и конфиг сборки
+# Sources and build config
 COPY tsconfig.json ./
 COPY src/ ./src/
 COPY scripts/ ./scripts/
@@ -24,17 +24,17 @@ WORKDIR /app
 ARG NODE_ENV=production
 ENV NODE_ENV=${NODE_ENV}
 
-# Только production-зависимости
+# Production dependencies only
 COPY package.json yarn.lock ./
 RUN yarn install --production=true && yarn cache clean
 
-# Собранный backend
+# Built backend
 COPY --from=builder /app/dist/ ./dist/
 
-# Конфиги (default.yaml, production.yaml, custom-environment-variables.yaml и т.д.)
+# Configs (default.yaml, production.yaml, custom-environment-variables.yaml, etc.)
 COPY --from=builder /app/config/ ./config/
 
-# Внешние конфиги (local.yaml) монтируются через volumes в docker-compose.yml.
+# External configs (local.yaml) are mounted via volumes in docker-compose.yml.
 
 EXPOSE {{port}}
 

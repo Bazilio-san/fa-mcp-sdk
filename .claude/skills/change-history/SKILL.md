@@ -1,6 +1,6 @@
 ---
 name: change-history
-description: "Record a compact, anonymized upgrade-step guide that summarizes what changed in fa-mcp-sdk between two commits. Stored under change-history/ as a checkpoint chain. Use when user asks to record/track SDK changes for downstream MCP projects, mentions 'change-history', 'зафиксировать изменения SDK', 'компактная инструкция по обновлению SDK', or wants to collapse multiple history files into one."
+description: "Record a compact, anonymized upgrade-step guide that summarizes what changed in fa-mcp-sdk between two commits. Stored under change-history/ as a checkpoint chain. Use when user asks to record/track SDK changes for downstream MCP projects, mentions 'change-history', 'record SDK changes', 'compact SDK upgrade guide', or wants to collapse multiple history files into one."
 disable-model-invocation: true
 argument-hint: "[from-commit] [to-commit] [language]  |  collapse <file1> <file2> [...] [language]"
 allowed-tools: Bash(git *) Bash(node *) Bash(ls *) Bash(rm *) Bash(mkdir *) Read Write Glob Grep
@@ -51,8 +51,8 @@ The first positional token decides the mode:
 
 ### Language detection (both modes)
 
-Look for a natural-language phrase anywhere in the arguments — `на русском`, `по-русски`,
-`in Russian`, `ru`, `in English`, `en`, or any similar phrase / ISO 639-1 code. Strip the hint
+Look for a natural-language phrase anywhere in the arguments — `in Russian`, `ru`, `in English`,
+`en`, or any similar phrase / ISO 639-1 code. Strip the hint
 from the arguments before further parsing. **Default: English.**
 
 The detected language drives every human-readable line in the generated guide. File paths,

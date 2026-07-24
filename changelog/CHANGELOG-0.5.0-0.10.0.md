@@ -220,14 +220,14 @@ or reverse proxy when the server is reachable from the outside.
 ## [0.7.0] - 2026-05-28
 
 Phase 3 — Auth profile (RS256/ES256 + JWKS + MCP Authorization). Closes the §7 /
-§7.3 / §7.4 / Прил. A gaps in the MCP server implementation standard
+§7.3 / §7.4 / Appendix A gaps in the MCP server implementation standard
 (WI-A1…A4 + WI-B1…B6). Cherry-picks the cryptography stack from the `JWKS` branch
 (commit `a5ed245`) and layers on the validation, scope-enforcement, rate-limit,
 and `/ct` hardening that the standard requires on top of it.
 
 ### Added
 
-- **Four-mode JWT runtime** (WI-A1/A2, §7.2 / Прил. A.1). New
+- **Four-mode JWT runtime** (WI-A1/A2, §7.2 / Appendix A.1). New
   `webServer.auth.jwtToken.mode`:
   - `legacyAesCtr` (default) — HS256 issue + legacy AES-CTR read. Bit-for-bit parity
     with 0.6.x for downstream servers that have not yet migrated.
@@ -255,7 +255,7 @@ and `/ct` hardening that the standard requires on top of it.
   - `POST /oauth/token` (`embedded` + `localKey` with private key, grant_type=password).
   Express `trust proxy` honours `webServer.trustProxy` so the issuer URL stays correct
   behind HTTPS reverse proxies.
-- **Pre-flight start-up validation** (WI-B1, Прил. A.1 / §7.2). `initMcpServer` now
+- **Pre-flight start-up validation** (WI-B1, Appendix A.1 / §7.2). `initMcpServer` now
   throws when `remoteJwks` has no `jwksUri`, `localKey` has no `publicKeyPath`,
   non-legacy modes have no `expectedIssuer`, or `clockSkew > 60s`. Production +
   `legacyAesCtr` now emits a warning instructing the operator to migrate to
