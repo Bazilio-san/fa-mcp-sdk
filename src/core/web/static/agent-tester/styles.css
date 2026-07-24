@@ -1390,6 +1390,137 @@ body {
   white-space: normal;
 }
 
+/* --- HTML-formatted assistant answer: readable typography for the sanitized markup ---
+   Bare block tags (h1–h6, p, ul/ol/li, blockquote, pre, table) would otherwise render with the
+   browser's default document sizing — oversized headings and loose margins that look untidy inside a
+   chat bubble. These rules keep headings chat-sized (set apart by weight and colour more than size),
+   give lists a proper hanging indent, and apply compact, consistent vertical spacing. All colours use
+   theme variables, so the result works in both light and dark modes. */
+.message-text.html-content > *:first-child {
+  margin-top: 0;
+}
+
+.message-text.html-content > *:last-child {
+  margin-bottom: 0;
+}
+
+.message-text.html-content h1,
+.message-text.html-content h2,
+.message-text.html-content h3,
+.message-text.html-content h4,
+.message-text.html-content h5,
+.message-text.html-content h6 {
+  margin: 14px 0 6px;
+  font-weight: 700;
+  line-height: 1.3;
+}
+
+.message-text.html-content h1 {
+  font-size: 1.25em;
+  color: var(--primary);
+}
+
+.message-text.html-content h2 {
+  font-size: 1.15em;
+  color: var(--primary);
+}
+
+.message-text.html-content h3 {
+  font-size: 1.05em;
+}
+
+.message-text.html-content h4,
+.message-text.html-content h5,
+.message-text.html-content h6 {
+  font-size: 0.85em;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.message-text.html-content p {
+  margin: 0 0 8px;
+}
+
+.message-text.html-content ul,
+.message-text.html-content ol {
+  margin: 6px 0;
+  padding-left: 26px;
+}
+
+.message-text.html-content li {
+  margin: 3px 0;
+}
+
+.message-text.html-content li::marker {
+  color: var(--text-secondary);
+}
+
+.message-text.html-content blockquote {
+  margin: 8px 0;
+  padding: 2px 0 2px 12px;
+  border-left: 3px solid var(--border);
+  color: var(--text-secondary);
+}
+
+/* Inline code (a code block is <pre><code> and gets the <pre> box below). */
+.message-text.html-content :not(pre) > code {
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: var(--bg-code-badge);
+  font-family: 'JetBrains Mono', ui-monospace, 'SFMono-Regular', Menlo, monospace;
+  font-size: 0.9em;
+}
+
+.message-text.html-content pre {
+  margin: 8px 0;
+  padding: 10px 12px;
+  border-radius: var(--radius);
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  overflow: auto;
+}
+
+.message-text.html-content pre code {
+  padding: 0;
+  background: none;
+  font-family: 'JetBrains Mono', ui-monospace, 'SFMono-Regular', Menlo, monospace;
+  font-size: 0.9em;
+}
+
+.message-text.html-content table {
+  border-collapse: collapse;
+  margin: 8px 0;
+  font-size: 0.95em;
+}
+
+.message-text.html-content th,
+.message-text.html-content td {
+  border: 1px solid var(--border);
+  padding: 5px 10px;
+  text-align: left;
+  vertical-align: top;
+}
+
+.message-text.html-content th {
+  background: var(--bg-input);
+  font-weight: 600;
+}
+
+.message-text.html-content a {
+  color: var(--primary);
+  text-decoration: none;
+}
+
+.message-text.html-content a:hover {
+  text-decoration: underline;
+}
+
+.message-text.html-content strong,
+.message-text.html-content b {
+  font-weight: 700;
+}
+
 .message.user .message-text {
   background: var(--bg-msg-user);
   color: var(--text);
