@@ -1519,6 +1519,194 @@ body {
   overflow: auto;
 }
 
+/* Arguments dialog shown before "Launch widget" — replaces the native browser prompt(). */
+.args-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.42);
+  z-index: 1060;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.args-modal {
+  background: var(--bg-surface);
+  width: min(760px, 92%);
+  max-height: 86vh;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg, 8px);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  box-shadow: 0 14px 40px rgba(0, 0, 0, 0.3);
+}
+
+.args-modal-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-header, var(--bg-surface));
+}
+
+.args-modal-header .material-icons-round {
+  color: var(--accent, #7c5cff);
+}
+
+.args-modal-header h3 {
+  margin: 0;
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--text);
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.args-modal-header code {
+  font-family: 'Fira Code', 'JetBrains Mono', monospace;
+  font-size: 0.82rem;
+  color: var(--primary);
+}
+
+.args-modal-header .btn-icon {
+  margin-left: auto;
+}
+
+.args-modal-desc {
+  padding: 8px 16px;
+  background: var(--primary-subtle);
+  border-bottom: 1px solid var(--border);
+  color: var(--text-secondary);
+  font-size: 0.78rem;
+  line-height: 1.4;
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 96px;
+  overflow: auto;
+}
+
+.args-modal-body {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 16px;
+  min-height: 0;
+  overflow: auto;
+}
+
+.args-modal-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.args-modal-toolbar label {
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+}
+
+.args-modal-toolbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+}
+
+.args-modal-toolbar-actions .btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 8px;
+  font-size: 0.75rem;
+  white-space: nowrap;
+}
+
+.args-modal-toolbar-actions .btn .material-icons-round {
+  font-size: 18px;
+}
+
+.args-modal-editor {
+  flex: none;
+  width: 100%;
+  min-height: 220px;
+  box-sizing: border-box;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md, 6px);
+  outline: none;
+  resize: vertical;
+  background: var(--bg-base, var(--bg-surface));
+  color: var(--text);
+  font-family: 'Fira Code', 'JetBrains Mono', monospace;
+  font-size: 0.8rem;
+  line-height: 1.5;
+  tab-size: 2;
+}
+
+.args-modal-editor:focus {
+  border-color: var(--primary);
+}
+
+.args-modal-schema {
+  margin: 0;
+  padding: 10px 12px;
+  max-height: 220px;
+  overflow: auto;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md, 6px);
+  background: var(--bg-base, var(--bg-surface));
+  color: var(--text);
+  font-family: 'Fira Code', 'JetBrains Mono', monospace;
+  font-size: 0.75rem;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.args-modal-footer {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  border-top: 1px solid var(--border);
+  background: var(--bg-header, var(--bg-surface));
+}
+
+.args-modal-status {
+  flex: 1;
+  min-width: 0;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  text-align: left;
+  overflow-wrap: anywhere;
+}
+
+.args-modal-status.args-modal-status-success {
+  color: var(--success);
+}
+
+.args-modal-status.args-modal-status-error {
+  color: var(--error);
+}
+
+.args-modal-footer .btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  white-space: nowrap;
+}
+
+.args-modal-footer .btn .material-icons-round {
+  font-size: 18px;
+}
+
 /* Inspector tab visibility tied to MCP Apps mode.
    Specificity must beat the base `.tab-btn { display: inline-flex }` rule, so the
    hide selector is scoped under `.tabs-bar`. */
