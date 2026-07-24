@@ -12,7 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Template demonstrates MCP Apps widgets.** `example_tool` now returns an interactive UI widget when the
   connected host supports MCP Apps (Agent Tester with the "Apps" toggle on); with Apps off it returns the
   plain text/JSON result, unchanged for non-UI clients. A new `show_widget` tool renders a demo widget in
-  Apps mode and otherwise returns the exact instruction `Для демонстрации виджета включите режим Apps`, which
+  Apps mode and otherwise returns the exact instruction `To demonstrate the widget, enable Apps mode`, which
   its tool prompt tells the model to relay verbatim.
 
 ### Changed

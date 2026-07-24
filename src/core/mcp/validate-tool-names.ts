@@ -19,8 +19,7 @@ export function assertToolNames(tools: Tool[]): void {
     const name = (tool as any)?.name;
     if (typeof name !== 'string' || !TOOL_NAME_RE.test(name)) {
       throw new Error(
-        `Tool name "${name}" violates standard §9.1: ` +
-          `must match /^[a-z][a-z0-9_]{0,62}$/ (snake_case, ASCII, 1..63 chars).`,
+        `Tool name "${name}" violates standard §9.1: must match /^[a-z][a-z0-9_]{0,62}$/ (snake_case, ASCII, 1..63 chars).`,
       );
     }
   }

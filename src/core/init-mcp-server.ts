@@ -213,8 +213,7 @@ export async function initMcpServer(data: McpServerData): Promise<void> {
       const { originHosts } = appConfig.webServer;
       if (corsEnabled && isProd && (!Array.isArray(originHosts) || originHosts.length === 0)) {
         throw new Error(
-          'webServer.originHosts must list at least one allowed host in production. ' +
-            'Refusing to start with an empty CORS allow-list.',
+          `webServer.originHosts must list at least one allowed host in production. Refusing to start with an empty CORS allow-list.`,
         );
       }
       if (corsEnabled && !isProd && (!Array.isArray(originHosts) || originHosts.length === 0)) {
@@ -222,36 +221,34 @@ export async function initMcpServer(data: McpServerData): Promise<void> {
       }
       if (!corsEnabled) {
         lgr.warn(
-          'webServer.cors.enabled is false — the CORS origin guard is OFF. Every origin is allowed ' +
-            'and all responses carry Access-Control-Allow-Origin: *. Protect the server by network policy.',
+          `webServer.cors.enabled is false — the CORS origin guard is OFF. Every origin is allowed and all responses carry Access-Control-Allow-Origin: *. Protect the server by network policy.`,
         );
       }
 
-      // Standard Прил. A.1 / §7.2 — JWT mode pre-flight checks.
+      // Standard Appendix A.1 / §7.2 — JWT mode pre-flight checks.
       // Fail fast on misconfigured non-legacy modes so a server with broken auth never starts.
       const jwt = appConfig.webServer?.auth?.jwtToken;
       const jwtMode = jwt?.mode ?? 'legacyAesCtr';
       const skewLimit = 60;
       if (typeof jwt?.clockSkew === 'number' && jwt.clockSkew > skewLimit) {
         throw new Error(
-          `webServer.auth.jwtToken.clockSkew=${jwt.clockSkew}s exceeds the ${skewLimit}s limit (standard Прил. A.1).`,
+          `webServer.auth.jwtToken.clockSkew=${jwt.clockSkew}s exceeds the ${skewLimit}s limit (standard Appendix A.1).`,
         );
       }
       if (jwtMode === 'remoteJwks' && !(jwt?.jwksUri || '').trim()) {
-        throw new Error('webServer.auth.jwtToken.jwksUri is required for mode=remoteJwks (стандарт Прил. A.1).');
+        throw new Error('webServer.auth.jwtToken.jwksUri is required for mode=remoteJwks (standard Appendix A.1).');
       }
       if (jwtMode === 'localKey' && !(jwt?.publicKeyPath || '').trim()) {
         throw new Error('webServer.auth.jwtToken.publicKeyPath is required for mode=localKey.');
       }
       if ((jwtMode === 'remoteJwks' || jwtMode === 'localKey') && !(jwt?.expectedIssuer || '').trim()) {
         throw new Error(
-          `webServer.auth.jwtToken.expectedIssuer is required for mode=${jwtMode} (стандарт §7.2 / Прил. A.2).`,
+          `webServer.auth.jwtToken.expectedIssuer is required for mode=${jwtMode} (standard §7.2 / Appendix A.2).`,
         );
       }
       if (jwtMode === 'legacyAesCtr' && isProd && appConfig.webServer?.auth?.enabled) {
         lgr.warn(
-          'Auth profile=legacyAesCtr (HS256) is enabled in production. ' +
-            'Standard Прил. A.1 requires RS256/ES256 — migrate to mode=remoteJwks or mode=localKey.',
+          `Auth profile=legacyAesCtr (HS256) is enabled in production. Standard Appendix A.1 requires RS256/ES256 — migrate to mode=remoteJwks or mode=localKey.`,
         );
       }
 

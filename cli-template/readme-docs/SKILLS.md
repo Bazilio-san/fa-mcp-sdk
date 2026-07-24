@@ -9,7 +9,7 @@ chat — either by a `/command` or automatically by trigger phrases.
 
 Generates JWT tokens for MCP server authentication via `scripts/generate-jwt.js`.
 
-- **Launch**: by command `/gen-jwt` or by trigger phrases ("jwt", "token for user", "токен для", "сгенерируй токен")
+- **Launch**: by command `/gen-jwt` or by trigger phrases ("jwt", "token for user", "generate a token for")
 - **Interactive**: asks for missing required params (username, TTL), then optional (request ID, IP restriction,
   service name, extra `key=value` pairs)
 - **Parameters**:
@@ -27,7 +27,7 @@ Generates JWT tokens for MCP server authentication via `scripts/generate-jwt.js`
 /gen-jwt admin 30d
 /gen-jwt vpupkin 1y request=REQ-12345 ip=10.0.0.0/24,192.168.1.100
 /gen-jwt svc-account 8d service=my-mcp
-/gen-jwt sergey на год привязать к заявке REQ-555
+/gen-jwt sergey for a year, bind to ticket REQ-555
 ```
 
 ---
@@ -46,8 +46,8 @@ Generates a migration guide for upgrading the `fa-mcp-sdk` dependency in this pr
 By default, versions and commit hashes refer to **this project** — the skill resolves them to the pinned SDK version
 via `git show <ref>:package.json`. To reference SDK versions/commits directly, mention "SDK" explicitly.
 
-- **Launch**: by command `/upgrade-guide` or by trigger phrases ("обновить sdk", "upgrade sdk", "migration guide",
-  "обновление fa-mcp-sdk")
+- **Launch**: by command `/upgrade-guide` or by trigger phrases ("upgrade sdk", "migration guide", "update
+  fa-mcp-sdk")
 - **Output**: `upgrade-guide-<old>-to-<new>.md` in project root
 
 **Examples:**
@@ -61,7 +61,6 @@ via `git show <ref>:package.json`. To reference SDK versions/commits directly, m
 /upgrade-guide from SDK version 0.1.30 to SDK version 0.5.0  # SDK versions directly
 /upgrade-guide from SDK commit abc1234 to SDK commit def5678 # SDK commits directly
 /upgrade-guide 1.2.3 1.2.7 in Russian                        # output guide in Russian
-/upgrade-guide 1.2.3 1.2.7 на русском                        # same, via Russian phrasing
 ```
 
 ---
@@ -125,7 +124,7 @@ What it does:
 Characteristics:
 
 - **Launch**: by command `/readme-generator` or by trigger phrases ("generate readme", "update
-  readme", "обнови README", "сгенерируй README для MCP")
+  readme", "generate README for MCP")
 - **Input**: none required — reads the current project
 - **Output**: `README.md` in project root, `readme-docs/*.md` (one per satellite topic), backup
   of the previous README as `README.backup.md` when rewriting
@@ -135,7 +134,7 @@ Characteristics:
 ```
 /readme-generator
 /readme-generator refresh the README after adding 3 new tools
-/readme-generator обнови README с учётом того, что теперь подключён PostgreSQL
+/readme-generator update the README now that PostgreSQL is wired in
 ```
 
 ---
@@ -219,7 +218,7 @@ Characteristics:
 ```
 /mcp-app-add-to-server
 /mcp-app-add-to-server add UI to the search and analytics tools, leave the lookup tools as text-only
-/mcp-app-add-to-server обогати UI инструмент get_dashboard, остальные оставь без изменений
+/mcp-app-add-to-server enrich the get_dashboard tool with UI, leave the rest unchanged
 /mcp-app-add-to-server add an interactive map view to the geo-search tool
 ```
 
@@ -273,6 +272,6 @@ Characteristics:
 
 ```
 /create-mcp-wizard
-/create-mcp-wizard реализуй инструменты из task.md, OpenAI key sk-..., GitLab group mcp-servers
-/create-mcp-wizard implement tools from the message; repo уже существует, push to git@gitlab.example:ai/mcp-foo.git
+/create-mcp-wizard implement the tools from task.md, OpenAI key sk-..., GitLab group mcp-servers
+/create-mcp-wizard implement tools from the message; repo already exists, push to git@gitlab.example:ai/mcp-foo.git
 ```

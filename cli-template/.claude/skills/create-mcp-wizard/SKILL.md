@@ -1,6 +1,6 @@
 ---
 name: create-mcp-wizard
-description: "Implement an fa-mcp MCP server end-to-end in this already-scaffolded project: verify Agent Tester OpenAI creds, seed dev-time secrets and lenient config, push the scaffold to GitLab (creating a new repo OR reusing an existing one when instructed), draft an implementation plan, implement tools/prompts/resources, iterate via the Agent Tester headless API, then push the finished work. Use when the user asks to develop/implement/deploy the MCP server in this project, mentions 'create-mcp-wizard', 'развернуть MCP', 'реализовать MCP', or supplies a feature brief."
+description: "Implement an fa-mcp MCP server end-to-end in this already-scaffolded project: verify Agent Tester OpenAI creds, seed dev-time secrets and lenient config, push the scaffold to GitLab (creating a new repo OR reusing an existing one when instructed), draft an implementation plan, implement tools/prompts/resources, iterate via the Agent Tester headless API, then push the finished work. Use when the user asks to develop/implement/deploy the MCP server in this project, mentions 'create-mcp-wizard', 'deploy MCP', 'implement MCP', or supplies a feature brief."
 disable-model-invocation: true
 allowed-tools: Bash(node *), Bash(yarn *), Bash(npm *), Bash(git *), Bash(pwd), Bash(cd *), Bash(curl *), Read, Write, Edit, Glob, Grep
 ---
@@ -122,8 +122,8 @@ This step has two branches at the "remote" stage:
 
 - **Create new repo** (default) — no pre-existing remote, user didn't veto creation.
 - **Skip creation, push to existing remote** — triggered when the accompanying text explicitly
-  says so ("don't create repo", "не создавай репозиторий", "remote already exists", "push to
-  `<url>`", "репозиторий уже есть", "origin уже настроен" etc.), OR `git remote -v` already shows
+  says so ("don't create repo", "remote already exists", "push to `<url>`", "origin already
+  configured" etc.), OR `git remote -v` already shows
   an `origin` pointing at GitLab. When in doubt, ASK the user before creating — it's cheap to
   confirm, expensive to recover from an accidental duplicate project.
 
@@ -159,7 +159,7 @@ to commit.
 - If the text says "don't create" / "repo already exists" / names an explicit remote URL, OR
   `git remote -v` already shows an `origin` → go to **4a (skip creation)**.
 - If neither signal is present, confirm creation with the user in one short question
-  (e.g. *"Создать новый репозиторий в GitLab или использовать существующий? Если существующий — дай
+  (e.g. *"Create a new GitLab repository or use an existing one? If existing — provide the
   URL."*), then branch accordingly.
 
 ### 4a. Skip creation — push to existing remote

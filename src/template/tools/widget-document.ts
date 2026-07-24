@@ -28,8 +28,7 @@ export function renderWidgetDocument(
   const rowsHtml = rows
     .map(
       (r) =>
-        `    <div class="row"><span class="k">${escapeHtml(r.k)}</span>` +
-        `<span class="v${r.mono ? ' q' : ''}">${escapeHtml(r.v)}</span></div>`,
+        `    <div class="row"><span class="k">${escapeHtml(r.k)}</span><span class="v${r.mono ? ' q' : ''}">${escapeHtml(r.v)}</span></div>`,
     )
     .join('\n');
   return `<!doctype html>

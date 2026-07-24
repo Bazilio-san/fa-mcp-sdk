@@ -160,9 +160,7 @@ export function createAgentTesterRouter(
     if (!canLocallyIssueJwt()) {
       res.status(501).json({
         error: 'cannot_issue_token',
-        error_description:
-          'This server cannot issue JWTs in the current configuration. ' +
-          'For mode=remoteJwks refresh the token at the external IdP.',
+        error_description: `This server cannot issue JWTs in the current configuration. For mode=remoteJwks refresh the token at the external IdP.`,
       });
       return;
     }

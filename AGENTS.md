@@ -55,7 +55,7 @@ node src/tests/mcp/test-stdio.js   # STDIO transport
 ## JWT Token Generation (Skill /gen-jwt)
 
 Generate JWT tokens for MCP server authentication using the `/gen-jwt` skill.
-Triggers: user asks to generate/create a JWT token, mentions "jwt", "token for user", "токен для", "сгенерируй токен для".
+Triggers: user asks to generate/create a JWT token, mentions "jwt", "token for user", "generate a token for".
 
 **To start/stop the dev server**: build first (`npm run build`), then `npm start`. Stop with Ctrl+C.
 The server port is configured in `config/default.yaml` under `webServer.port`. Default port is 9876.
@@ -182,3 +182,13 @@ touches the digest + two index files — it does NOT modify `src/core/**` or sca
 
 MD lines ≤120 chars. Break at 120. Target 100-120. No short lines (60-80). Fill to ~120.
 Exceptions: URLs, code blocks, tables — no wrap.
+
+
+## Strings (JS)
+
+Never build a string with `+` concatenation. Whenever a string would overflow the 120-column limit and needs to span
+several source lines, write it as a single multi-line template literal (backticks) instead of joining `'…' + '…' +`
+fragments. Use `${expr}` interpolation rather than `'…' + value` to splice values in. Short single-line strings that
+fit within 120 columns stay as plain quotes. For user-facing text where the exact spacing matters (no stray line
+breaks), keep the wording on one logical line inside the backticks even if that line is long — the formatter leaves
+template-literal contents untouched, which is exactly why they replace `+` wrapping.

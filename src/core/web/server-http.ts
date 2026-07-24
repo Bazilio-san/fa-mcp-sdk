@@ -349,9 +349,9 @@ export async function startHttpServer(): Promise<void> {
         res.status(501).json({
           success: false,
           error: 'cannot_issue_token',
-          error_description:
-            'This server runs in mode=remoteJwks and does not issue JWTs. ' +
-            (jwksUri ? `Obtain tokens from the IdP at ${jwksUri}.` : 'Obtain tokens from the configured IdP.'),
+          error_description: `This server runs in mode=remoteJwks and does not issue JWTs. ${
+            jwksUri ? `Obtain tokens from the IdP at ${jwksUri}.` : 'Obtain tokens from the configured IdP.'
+          }`,
         });
       });
     } else {
@@ -780,9 +780,7 @@ export async function startHttpServer(): Promise<void> {
           for (const m of errors) {
             const data = m.error.data === undefined ? '' : ` | data=${JSON.stringify(m.error.data).slice(0, 800)}`;
             logger.warn(
-              `MCP RPC error response → HTTP ${res.statusCode} | id=${m.id ?? '(none)'} | ` +
-                `code=${m.error.code} | message=${JSON.stringify(m.error.message)}${data} ` +
-                `| for: ${describeMcpRequest(req)}`,
+              `MCP RPC error response → HTTP ${res.statusCode} | id=${m.id ?? '(none)'} | code=${m.error.code} | message=${JSON.stringify(m.error.message)}${data} | for: ${describeMcpRequest(req)}`,
             );
           }
         } else if (RPC_DEBUG) {
@@ -798,8 +796,7 @@ export async function startHttpServer(): Promise<void> {
             )
             .join('; ');
           logger.info(
-            `MCP RPC response → HTTP ${res.statusCode} | ${summary || `${raw.length} bytes`}` +
-              (truncated ? ' | [capture truncated]' : ''),
+            `MCP RPC response → HTTP ${res.statusCode} | ${summary || `${raw.length} bytes`}${truncated ? ' | [capture truncated]' : ''}`,
           );
         }
       } catch {
@@ -922,11 +919,11 @@ export async function startHttpServer(): Promise<void> {
     // client with nothing on the server. We surface why the session was rejected.
     const sessionHeader = req.headers[HTTP_SESSION_HEADER] as string | undefined;
     logger.warn(
-      `MCP rejected with -32600 (no valid session). The client must send an \`initialize\` request first, ` +
-        `or include a valid \`mcp-session-id\` header. Request: ${describeMcpRequest(req)}` +
-        (sessionHeader && !mcpTransports.get(sessionHeader)
+      `MCP rejected with -32600 (no valid session). The client must send an \`initialize\` request first, or include a valid \`mcp-session-id\` header. Request: ${describeMcpRequest(req)}${
+        sessionHeader && !mcpTransports.get(sessionHeader)
           ? ` — session id ${shortSid(sessionHeader)} is unknown/expired (known sessions: ${mcpTransports.size})`
-          : ''),
+          : ''
+      }`,
     );
     res.status(400).json({
       jsonrpc: '2.0',
@@ -942,8 +939,7 @@ export async function startHttpServer(): Promise<void> {
     const transport = sessionId ? mcpTransports.get(sessionId) : undefined;
     if (HANDSHAKE_DEBUG) {
       logger.info(
-        `MCP ${req.method} /mcp routing to session ${shortSid(sessionId)}: ` +
-          `${transport ? 'found' : 'NOT FOUND'} | ${describeMcpRequest(req)}`,
+        `MCP ${req.method} /mcp routing to session ${shortSid(sessionId)}: ${transport ? 'found' : 'NOT FOUND'} | ${describeMcpRequest(req)}`,
       );
     }
     if (!transport) {
@@ -995,8 +991,7 @@ export async function startHttpServer(): Promise<void> {
 
       if (isInitializeRequest(req.body)) {
         logger.info(
-          `MCP client initializing: protocolVersion: ${(req.body as any)?.params?.protocolVersion} | clientInfo: ${JSON.stringify((req.body as any)?.params?.clientInfo)}` +
-            (HANDSHAKE_DEBUG ? ` | ${describeMcpRequest(req)}` : ''),
+          `MCP client initializing: protocolVersion: ${(req.body as any)?.params?.protocolVersion} | clientInfo: ${JSON.stringify((req.body as any)?.params?.clientInfo)}${HANDSHAKE_DEBUG ? ` | ${describeMcpRequest(req)}` : ''}`,
         );
         const transport = new StreamableHTTPServerTransport({
           sessionIdGenerator: () => randomUUID(),

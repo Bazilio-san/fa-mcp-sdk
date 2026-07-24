@@ -1,6 +1,6 @@
 ---
 name: upgrade-sdk
-description: "Upgrade a downstream MCP project (built on fa-mcp-sdk) end-to-end FROM the SDK repo side: you provide a path to the target project, the skill analyzes the SDK diff between two refs LOCALLY via git, presents an actionable execution plan, gets confirmation, and applies the upgrade in the target project (deps, configs, code) — asking for any inputs inline. Falls back to a manual checklist only for items that genuinely cannot be automated. Use when user asks to upgrade/update a downstream fa-mcp-sdk project, mentions 'обнови проект', 'upgrade downstream', 'apply sdk changes to <path>', 'apply upgrade to project at <path>', or supplies a project path together with SDK versions/commits."
+description: "Upgrade a downstream MCP project (built on fa-mcp-sdk) end-to-end FROM the SDK repo side: you provide a path to the target project, the skill analyzes the SDK diff between two refs LOCALLY via git, presents an actionable execution plan, gets confirmation, and applies the upgrade in the target project (deps, configs, code) — asking for any inputs inline. Falls back to a manual checklist only for items that genuinely cannot be automated. Use when user asks to upgrade/update a downstream fa-mcp-sdk project, mentions 'update the project', 'upgrade downstream', 'apply sdk changes to <path>', 'apply upgrade to project at <path>', or supplies a project path together with SDK versions/commits."
 disable-model-invocation: true
 allowed-tools: Bash(yarn *) Bash(npm *) Bash(node *) Bash(git *) Bash(cat *) Bash(diff *) Bash(ls *) Bash(find *) Bash(mkdir *) Bash(cp *) Bash(mv *) Bash(rm *) Read Write Edit MultiEdit Glob Grep Agent
 argument-hint: "<target-project-path> [from-ref] [to-ref] [language hint]"
@@ -70,7 +70,7 @@ Do not proceed without a valid path.
 ### Language detection
 
 After stripping the target path, scan remaining arguments for a language hint:
-- "на русском", "по-русски", "in Russian", "ru" → Russian
+- "in Russian", "ru" → Russian
 - "in English", "en" → English
 - Any similar phrase or ISO 639-1 code.
 

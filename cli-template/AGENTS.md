@@ -47,7 +47,7 @@ yarn consul:unreg          # deregister from Consul
 ## JWT Token Generation (Skill /gen-jwt)
 
 Generate JWT tokens for MCP server authentication using the `/gen-jwt` skill. 
-Triggers: user asks to generate/create a JWT token, mentions "jwt", "token for user", "токен для", "сгенерируй токен для". 
+Triggers: user asks to generate/create a JWT token, mentions "jwt", "token for user", "generate a token for". 
 
 **Start/stop the server**: `yarn build && yarn start`. Stop with Ctrl+C. Port is in `config/default.yaml` → `webServer.port`. Force stop: `node scripts/kill-port.js <port>`.
 
@@ -412,3 +412,13 @@ the cloned tree, so make sure it has run successfully before troubleshooting the
 
 MD lines ≤120 chars. Break at 120. Target 100-120. No short lines (60-80). Fill to ~120.
 Exceptions: URLs, code blocks, tables — no wrap.
+
+
+## Strings (JS)
+
+Never build a string with `+` concatenation. Whenever a string would overflow the 120-column limit and needs to span
+several source lines, write it as a single multi-line template literal (backticks) instead of joining `'…' + '…' +`
+fragments. Use `${expr}` interpolation rather than `'…' + value` to splice values in. Short single-line strings that
+fit within 120 columns stay as plain quotes. For user-facing text where the exact spacing matters (no stray line
+breaks), keep the wording on one logical line inside the backticks even if that line is long — the formatter leaves
+template-literal contents untouched, which is exactly why they replace `+` wrapping.

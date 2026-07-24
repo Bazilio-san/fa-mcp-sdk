@@ -24,10 +24,10 @@ const JSON_SCHEMA_2020_12 = 'https://json-schema.org/draft/2020-12/schema';
 const definition: Tool = {
   name: 'example_tool',
   title: 'Example: process text',
-  description:
-    'Example tool that processes text input. When the host supports MCP Apps (Agent Tester with ' +
-    'the "Apps" toggle on), it also returns an interactive widget visualizing the result. Replace ' +
-    'with your actual tools.',
+  description: `Example tool that processes text input. 
+When the host supports MCP Apps (Agent Tester with the "Apps" toggle on), 
+it also returns an interactive widget visualizing the result. 
+Replace with your actual tools.`,
   inputSchema: {
     $schema: JSON_SCHEMA_2020_12,
     type: 'object',
@@ -92,13 +92,13 @@ async function handler(params: IToolHandlerParams): Promise<TToolHandlerResponse
 /** HTML for the `example_tool` widget — a card with the processed query, result and timestamp. */
 function buildWidgetHtml(query: string, data: { message: string; timestamp: string }): string {
   return renderWidgetDocument(
-    'Обработка текста',
+    'Text processing',
     [
-      { k: 'Запрос', v: query, mono: true },
-      { k: 'Результат', v: data.message },
-      { k: 'Время', v: new Date(data.timestamp).toLocaleString() },
+      { k: 'Query', v: query, mono: true },
+      { k: 'Result', v: data.message },
+      { k: 'Time', v: new Date(data.timestamp).toLocaleString() },
     ],
-    'Пример MCP App: виджет тестового инструмента example_tool.',
+    'MCP App example: the widget of the example_tool test tool.',
   );
 }
 

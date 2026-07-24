@@ -1017,14 +1017,14 @@ body {
   font-family: 'Fira Code', monospace;
 }
 
-/* Приставка "tool: " перед именем инструмента — приглушённая, не моноширинная, чтобы имя выделялось. */
+/* The "tool: " prefix before the tool name — muted, not monospaced, so the name stands out. */
 .app-widget-tool-prefix {
   color: var(--text-muted);
   font-weight: 400;
   font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
 }
 
-/* Кнопки управления окном (открепить, свернуть, развернуть) — как у диалога Windows. */
+/* Window control buttons (undock, minimize, maximize) — like a Windows dialog. */
 .app-widget-controls {
   display: inline-flex;
   align-items: center;
@@ -1058,12 +1058,12 @@ body {
   font-size: 16px;
 }
 
-/* Кнопка-полоска «свернуть» — тонкая горизонтальная черта. */
+/* The "minimize" bar button — a thin horizontal line. */
 .app-widget-min .material-icons-round {
   font-size: 18px;
 }
 
-/* Кнопка-квадратик «развернуть». */
+/* The "maximize" square button. */
 .app-widget-max .material-icons-round {
   font-size: 13px;
 }
@@ -1132,7 +1132,7 @@ body {
   min-height: 0 !important;
 }
 
-/* Развёрнутое на весь экран плавающее окно (кнопка-квадратик). */
+/* A floating window maximized to full screen (the square button). */
 .app-widget-container.is-floating.is-maximized {
   left: 8px !important;
   top: 8px !important;
@@ -1140,13 +1140,13 @@ body {
   height: calc(100vh - 16px) !important;
 }
 
-/* Свёрнутое плавающее окно ужимается до одной строки заголовка. */
+/* A collapsed floating window shrinks to a single title-bar row. */
 .app-widget-container.is-floating.is-collapsed {
   height: auto !important;
   min-height: 0 !important;
 }
 
-/* Рукоятки изменения размера: только у плавающего окна, скрыты в свёрнутом и развёрнутом состоянии. */
+/* Resize handles: only on a floating window, hidden while collapsed or maximized. */
 .app-widget-resize {
   position: absolute;
   z-index: 5;
@@ -1222,7 +1222,7 @@ body {
   cursor: nesw-resize;
 }
 
-/* Заглушка на месте открепленного виджета: дублирует иконку и «tool: <name>», клик возвращает окно. */
+/* Placeholder in the place of an undocked widget: duplicates the icon and "tool: <name>", a click returns the window. */
 .app-widget-placeholder {
   margin-top: 12px;
   display: inline-flex;
@@ -1260,7 +1260,7 @@ body {
   font-style: italic;
 }
 
-/* Подложка на время перетаскивания/изменения размера — перехватывает указатель поверх iframe. */
+/* Overlay during dragging/resizing — captures the pointer over the iframe. */
 .app-widget-drag-overlay {
   position: fixed;
   inset: 0;
