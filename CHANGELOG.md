@@ -5,6 +5,24 @@ All notable changes to `fa-mcp-sdk` are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.12.26] - 2026-07-24
+
+### Added
+
+- **`agentTester.openAi.defaultModel` and `agentTester.openAi.models` config keys.** The first seeds the
+  Agent Tester chat UI's default model (stored in browser `localStorage` on first open); the second fills
+  the model dropdown. Both are delivered to the UI via `GET /agent-tester/api/config` and are not secrets,
+  so they are sent regardless of `agentTester.openAi.exposeToClient`.
+- **`headlessTester.defaultModel` config key.** Sets the default LLM model for headless test runs
+  (`POST /agent-tester/api/chat/test`) when the request omits `modelConfig.model`; overridable per request.
+
+### Changed
+
+- **Agent Tester default model and preset model list now come from server config instead of hardcoded
+  client values.** The `LLM_PRESET_MODELS` array and the hardcoded default model in the Agent Tester UI
+  script were removed; the UI seeds both from `GET /agent-tester/api/config`, and the headless service
+  reads `headlessTester.defaultModel` from `appConfig`.
+
 ## [0.12.23] - 2026-07-24
 
 ### Added
