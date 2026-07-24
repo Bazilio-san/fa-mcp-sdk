@@ -298,8 +298,18 @@
                                 <span class="material-icons-round">send</span>
                                 Send Request
                             </button>
+                            <button type="button" class="btn btn-secondary tt-cancel-btn" id="ttCancelBtn" style="display: none;" data-testid="at-tt-cancel-btn">
+                                <span class="material-icons-round">stop_circle</span>
+                                Cancel
+                            </button>
                             <span id="ttRequestStatus" class="tt-status" data-testid="at-tt-request-status"></span>
                         </footer>
+                        <div class="tt-progress" id="ttProgress" style="display: none;" data-testid="at-tt-progress">
+                            <div class="tt-progress-track">
+                                <div class="tt-progress-bar" id="ttProgressBar"></div>
+                            </div>
+                            <div class="tt-progress-text" id="ttProgressText" data-testid="at-tt-progress-text"></div>
+                        </div>
                     </section>
 
                     <!-- Response Panel -->

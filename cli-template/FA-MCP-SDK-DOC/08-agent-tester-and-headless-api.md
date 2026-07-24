@@ -613,6 +613,54 @@ right. The widget runs the full handshake (`ui/initialize` → `tool-input` → 
 same way it would inside a chat message, so you can iterate on widget HTML without a chat agent
 in the loop.
 
+### Live progress & cancellation (`/api/mcp/call-tool-stream`)
+
+The Tool Tester's **Send Request** streams a long-running tool's progress live (a fill bar plus a
+`step N of M — P%` line) and shows a **Cancel** button while the tool runs. This is the interactive
+counterpart to the tool-side `sendProgress` / `signal` contract in `02-1-tools-and-api.md`
+(§ Progress, § Cancellation): it lets you *see* the `notifications/progress` a tool emits and
+*exercise* cancellation without hand-writing an MCP client.
+
+```
+POST /agent-tester/api/mcp/call-tool-stream
+```
+
+Request — `callId` is a client-generated id used to cancel this exact call:
+```json
+{ "serverName": "my-mcp", "toolName": "import_rows", "parameters": { "rows": 20 }, "callId": "c-8f3a" }
+```
+
+The response is a Server-Sent Events stream (`Content-Type: text/event-stream`). It emits one
+`progress` event per `notifications/progress` the tool reports, then exactly one terminal event:
+
+| event | data | meaning |
+|---|---|---|
+| `progress` | `{ progress, total?, message? }` | one step reported by the tool through `sendProgress` |
+| `result` | `{ success: true, result, durationMs, uiResource? }` | tool finished — same payload shape as `/api/mcp/call-tool` |
+| `error` | `{ success: false, error, durationMs }` | the tool threw |
+| `cancelled` | `{ success: false, error, durationMs }` | the call was aborted by the client |
+
+Progress is opt-in on the wire: the SDK client attaches a `_meta.progressToken` automatically because
+this endpoint registers a progress callback — you never set the token by hand. A tool produces
+`progress` events only if its handler actually calls `sendProgress` (a tool that never reports
+progress simply streams the terminal event with no bar).
+
+**Cancel** an in-flight streaming call:
+```
+POST /agent-tester/api/mcp/cancel      { "callId": "c-8f3a" }
+```
+
+This aborts the call's `AbortController`; the SDK client then sends `notifications/cancelled`, which
+flips the tool handler's `signal.aborted`. Cancellation therefore only takes effect if the tool honors
+`signal` — checking `signal.aborted` at safe seams, or forwarding `signal` to `fetch` / `pg`. Closing
+the browser tab cancels the call too (the server aborts when the SSE connection drops). The flow works
+the same for a plain synchronous long tool and for a task-augmented one (`execution.taskSupport`).
+
+The non-streaming `POST /api/mcp/call-tool` above stays as-is for headless / programmatic callers and
+the MCP Apps split-view; the streaming variant is what the Tool Tester's Send button uses. New UI
+test-ids for this flow: `at-tt-cancel-btn` (Cancel button), `at-tt-progress` (progress container),
+`at-tt-progress-text` (the `step N of M — P%` line).
+
 ### `GET /api/mcp/ui-resources`
 
 Lists all UI resources advertised by a connected server. Used by the App Inspector tab; available

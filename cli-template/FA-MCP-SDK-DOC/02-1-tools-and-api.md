@@ -508,6 +508,12 @@ poll interval and the retained-task cap are configured under `mcp.tasks.*` (see
 [03-configuration.md](./03-configuration.md)); the full method contract is in
 [11-public-contract.md](./11-public-contract.md) §4.
 
+> **Test progress and cancellation live.** The Agent Tester's **Tool Tester** tab exercises both this
+> `sendProgress` stream and `signal`-based cancellation without a hand-written client: Send Request
+> shows a live progress bar and a Cancel button for any tool that reports progress and honors the abort
+> signal. See [08-agent-tester-and-headless-api.md](./08-agent-tester-and-headless-api.md) →
+> "Live progress & cancellation (`/api/mcp/call-tool-stream`)".
+
 ### MCP Apps — Reading Client Capabilities
 
 `params.clientCapabilities` carries the client's `initialize`-time capabilities (including the
