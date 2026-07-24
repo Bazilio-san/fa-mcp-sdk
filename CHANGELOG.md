@@ -5,6 +5,42 @@ All notable changes to `fa-mcp-sdk` are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.12.34] - 2026-07-24
+
+### Added
+
+- **Template demonstrates MCP Apps widgets.** `example_tool` now returns an interactive UI widget when the
+  connected host supports MCP Apps (Agent Tester with the "Apps" toggle on); with Apps off it returns the
+  plain text/JSON result, unchanged for non-UI clients. A new `show_widget` tool renders a demo widget in
+  Apps mode and otherwise returns the exact instruction `Для демонстрации виджета включите режим Apps`, which
+  its tool prompt tells the model to relay verbatim.
+
+### Changed
+
+- **Template tools reorganized: one tool = one file.** Each tool lives in `src/tools/<tool-name>.ts` (the
+  tool's `name` with `_` replaced by `-`), holding its definition and handler together and exporting a
+  self-contained `ITemplateTool` (`{ definition, handler }`, interface in `src/tools/tool.ts`). The thin
+  `tools.ts` (registry) derives the `Tool[]` array and `handle-tool-call.ts` (dispatcher) routes each call by
+  name; a helper shared by several tools (e.g. `widget-document.ts`) lives under a non-tool name. The
+  convention is documented in `cli-template/AGENTS.md`, `FA-MCP-SDK-DOC/00-FA-MCP-SDK-index.md`,
+  `FA-MCP-SDK-DOC/02-1-tools-and-api.md`, and the `create-mcp-wizard` skill.
+
+## [0.12.33] - 2026-07-24
+
+### Added
+
+- **Agent Tester widgets can be detached into floating windows.** A widget frame now has a Windows-style
+  title bar — `tool: <name>` label plus minimize (a bar), maximize (a square) and dock/undock (pin) controls.
+  Undocking turns the frame into a floating window with a drop shadow that can be moved by its title bar and
+  resized from any edge or corner; a placeholder is left in the conversation to re-dock it, and several
+  widgets can float at once.
+
+### Changed
+
+- **Agent Tester renders HTML-formatted assistant answers with readable typography.** Headings, lists,
+  paragraphs, blockquotes, inline/block code and tables in a bot bubble get compact, consistent spacing and
+  theme-aware colours (light and dark) instead of the browser's default document styling.
+
 ## [0.12.29] - 2026-07-24
 
 ### Changed
