@@ -17,8 +17,15 @@ const JSON_SCHEMA_2020_12 = 'https://json-schema.org/draft/2020-12/schema';
 const definition: Tool = {
   name: 'example_long_task',
   title: 'Example: long-running task',
-  description: `Example long-running tool that emits progress and supports cancellation.
-Demonstrates task-augmented execution — call it with a 'task' param to run it as a task.`,
+  description: `Example long-running tool that runs a multi-step job, emits progress and supports cancellation.
+
+Call this whenever the user asks to run a long, multi-step or background job, or to see progress reporting e.g.:
+- "run a long task"
+- "start a background job with 10 steps"
+- "simulate a long-running operation"
+- "run the example long task"
+
+Demonstrates task-augmented execution — call it with a 'task' param to run it as a cancellable, pollable task.`,
   inputSchema: {
     $schema: JSON_SCHEMA_2020_12,
     type: 'object',

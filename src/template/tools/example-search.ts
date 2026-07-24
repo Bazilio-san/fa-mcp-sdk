@@ -14,7 +14,15 @@ const JSON_SCHEMA_2020_12 = 'https://json-schema.org/draft/2020-12/schema';
 const definition: Tool = {
   name: 'example_search',
   title: 'Example: search with filters',
-  description: 'Example search tool with pagination and filtering. Template for search-based tools.',
+  description: `Example search tool with pagination and filtering over a collection of documents.
+
+Call this whenever the user wants to search, find, look up or query something e.g.:
+- "search for ..."
+- "find documents about ..."
+- "look up the top 5 matches for ..."
+- "search 'invoices' with limit 10"
+
+Accepts a text query, an optional result limit and a minimum similarity threshold. Template for search-based tools.`,
   inputSchema: {
     $schema: JSON_SCHEMA_2020_12,
     type: 'object',

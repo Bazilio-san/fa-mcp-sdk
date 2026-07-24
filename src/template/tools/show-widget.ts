@@ -22,9 +22,14 @@ const JSON_SCHEMA_2020_12 = 'https://json-schema.org/draft/2020-12/schema';
 const definition: Tool = {
   name: 'show_widget',
   title: 'Show demo widget',
-  description: `Show a demonstration UI widget. 
-Call this whenever the user asks to show or demonstrate a widget (e.g. "show widget", "widget demo").
-When the host supports MCP Apps (Agent Tester with the "Apps" toggle on) it renders an interactive widget; 
+  description: `Show a demonstration UI widget.
+
+Call this whenever the user asks to show or demonstrate a widget e.g.:
+- "show widget"
+- "widget demo"
+- "show the demo UI"
+
+When the host supports MCP Apps (Agent Tester with the "Apps" toggle on) it renders an interactive widget;
 otherwise it returns a short instruction to enable Apps mode, which you MUST relay to the user verbatim.`,
   inputSchema: {
     $schema: JSON_SCHEMA_2020_12,
