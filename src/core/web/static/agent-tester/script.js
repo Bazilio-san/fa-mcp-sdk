@@ -830,6 +830,10 @@ class McpAgentTester {
       } catch (e) {
         console.warn('Bridge destroy failed:', e);
       }
+      // Плавающий виджет и его плейсхолдер живут в разных местах DOM — убираем оба.
+      if (entry.placeholder?.parentNode) {
+        entry.placeholder.parentNode.removeChild(entry.placeholder);
+      }
       if (entry.container?.parentNode) {
         entry.container.parentNode.removeChild(entry.container);
       }
@@ -849,14 +853,26 @@ class McpAgentTester {
     container.dataset.callId = appCall.callId;
     container.dataset.messageId = messageId;
 
+    // Windows-style title bar: icon + "tool: <name>", then window controls — undock/dock (pin),
+    // minimize (a bar) and maximize (a square). The bar doubles as the drag handle when floating.
     const header = document.createElement('div');
     header.className = 'app-widget-header';
     header.innerHTML = `
       <span class="material-icons-round app-widget-icon">grid_view</span>
-      <span class="app-widget-title">${this._escapeHtml(appCall.toolName)}</span>
-      <button type="button" class="app-widget-collapse btn-icon" title="Collapse">
-        <span class="material-icons-round">expand_less</span>
-      </button>
+      <span class="app-widget-title"><span class="app-widget-tool-prefix">tool:&nbsp;</span>${this._escapeHtml(
+        appCall.toolName,
+      )}</span>
+      <div class="app-widget-controls">
+        <button type="button" class="app-widget-btn app-widget-min" title="Свернуть" aria-label="minimize">
+          <span class="material-icons-round">remove</span>
+        </button>
+        <button type="button" class="app-widget-btn app-widget-max" title="Развернуть" aria-label="maximize">
+          <span class="material-icons-round">crop_square</span>
+        </button>
+        <button type="button" class="app-widget-btn app-widget-dock" title="Открепить (плавающее окно)" aria-label="dock">
+          <span class="material-icons-round">open_in_new</span>
+        </button>
+      </div>
     `;
     container.appendChild(header);
 
@@ -879,19 +895,306 @@ class McpAgentTester {
     );
     bridge.mount(body);
 
-    const entry = { callId: appCall.callId, messageId, bridge, container };
+    const entry = {
+      callId: appCall.callId,
+      messageId,
+      bridge,
+      container,
+      header,
+      appCall,
+      floating: false,
+      maximized: false,
+      collapsed: false,
+      placeholder: null,
+      restoreRect: null,
+    };
     this.activeAppWidgets.push(entry);
     this._enforceWidgetCap();
 
-    header.querySelector('.app-widget-collapse').addEventListener('click', () => {
-      const collapsed = container.classList.toggle('is-collapsed');
-      const icon = header.querySelector('.app-widget-collapse .material-icons-round');
-      if (icon) {
-        icon.textContent = collapsed ? 'expand_more' : 'expand_less';
+    header.querySelector('.app-widget-min').addEventListener('click', () => this._toggleWidgetCollapse(entry));
+    header.querySelector('.app-widget-max').addEventListener('click', () => this._toggleWidgetMaximize(entry));
+    header.querySelector('.app-widget-dock').addEventListener('click', () => this._toggleWidgetFloating(entry));
+
+    // Перетаскивание плавающего окна за заголовок. В закреплённом состоянии и в развёрнутом на весь экран
+    // перетаскивание отключено; клики по кнопкам управления окном не должны начинать перемещение.
+    header.addEventListener('pointerdown', (e) => {
+      if (!entry.floating || entry.maximized) {
+        return;
       }
+      if (e.target.closest('.app-widget-controls')) {
+        return;
+      }
+      this._startWidgetMove(e, entry);
     });
 
     return container;
+  }
+
+  /** Свернуть/развернуть тело виджета (кнопка-полоска, как «свернуть» у окна Windows). */
+  _toggleWidgetCollapse(entry) {
+    entry.collapsed = !entry.collapsed;
+    entry.container.classList.toggle('is-collapsed', entry.collapsed);
+  }
+
+  /**
+   * Кнопка-квадратик «развернуть». Свёрнутый виджет сначала разворачивается; закреплённый — открепляется,
+   * затем плавающее окно переключается между заданным размером и «на весь экран». Иконка меняется на
+   * «восстановить» (filter_none), пока окно развёрнуто.
+   */
+  _toggleWidgetMaximize(entry) {
+    if (entry.collapsed) {
+      this._toggleWidgetCollapse(entry);
+    }
+    if (!entry.floating) {
+      this._floatWidget(entry);
+    }
+    entry.maximized = !entry.maximized;
+    entry.container.classList.toggle('is-maximized', entry.maximized);
+    const icon = entry.header.querySelector('.app-widget-max .material-icons-round');
+    if (icon) {
+      icon.textContent = entry.maximized ? 'filter_none' : 'crop_square';
+    }
+    if (entry.maximized) {
+      entry.restoreRect = {
+        left: entry.container.style.left,
+        top: entry.container.style.top,
+        width: entry.container.style.width,
+        height: entry.container.style.height,
+      };
+      Object.assign(entry.container.style, { left: '', top: '', width: '', height: '' });
+    } else if (entry.restoreRect) {
+      Object.assign(entry.container.style, entry.restoreRect);
+      entry.restoreRect = null;
+    }
+    this._bringWidgetToFront(entry);
+  }
+
+  /** Кнопка-«пин»: открепить закреплённый виджет или вернуть плавающий на место. */
+  _toggleWidgetFloating(entry) {
+    if (entry.floating) {
+      this._dockWidget(entry);
+    } else {
+      this._floatWidget(entry);
+    }
+  }
+
+  /**
+   * Открепить виджет: на его месте в ленте остаётся кликабельный плейсхолдер (иконка + «tool: <name>»),
+   * а сам контейнер переносится в плавающий слой (в body), получает фиксированную позицию по текущему
+   * месту и рамку с тенью. Размеры затем меняются за края/углы, положение — за заголовок.
+   */
+  _floatWidget(entry) {
+    if (entry.floating) {
+      return;
+    }
+    const c = entry.container;
+    const rect = c.getBoundingClientRect();
+
+    const ph = document.createElement('div');
+    ph.className = 'app-widget-placeholder';
+    ph.title = 'Вернуть виджет на место';
+    ph.innerHTML = `
+      <span class="material-icons-round app-widget-icon">grid_view</span>
+      <span class="app-widget-placeholder-label"><span class="app-widget-tool-prefix">tool:&nbsp;</span>${this._escapeHtml(
+        entry.appCall.toolName,
+      )}</span>
+      <span class="app-widget-placeholder-hint">кликните, чтобы вернуть виджет на место</span>
+    `;
+    ph.addEventListener('click', () => this._dockWidget(entry));
+    c.parentNode.insertBefore(ph, c);
+    entry.placeholder = ph;
+
+    document.body.appendChild(c);
+    c.classList.add('is-floating');
+    c.style.left = `${Math.min(Math.max(8, rect.left), window.innerWidth - 120)}px`;
+    c.style.top = `${Math.min(Math.max(8, rect.top), window.innerHeight - 60)}px`;
+    c.style.width = `${Math.max(rect.width, 320)}px`;
+    c.style.height = `${Math.max(rect.height, 220)}px`;
+
+    if (!entry.handlesAdded) {
+      this._addWidgetResizeHandles(entry);
+      c.addEventListener('pointerdown', () => this._bringWidgetToFront(entry));
+      entry.handlesAdded = true;
+    }
+    entry.floating = true;
+    this._bringWidgetToFront(entry);
+    this._updateDockButton(entry);
+  }
+
+  /** Вернуть плавающий виджет на его место в ленте (заменяем плейсхолдер контейнером). */
+  _dockWidget(entry) {
+    if (!entry.floating) {
+      return;
+    }
+    const c = entry.container;
+    entry.maximized = false;
+    c.classList.remove('is-floating', 'is-maximized');
+    c.style.left = '';
+    c.style.top = '';
+    c.style.width = '';
+    c.style.height = '';
+    c.style.zIndex = '';
+    const maxIcon = entry.header.querySelector('.app-widget-max .material-icons-round');
+    if (maxIcon) {
+      maxIcon.textContent = 'crop_square';
+    }
+    if (entry.placeholder?.parentNode) {
+      entry.placeholder.parentNode.replaceChild(c, entry.placeholder);
+    }
+    entry.placeholder = null;
+    entry.floating = false;
+    this._updateDockButton(entry);
+  }
+
+  _updateDockButton(entry) {
+    const btn = entry.header.querySelector('.app-widget-dock');
+    if (!btn) {
+      return;
+    }
+    const icon = btn.querySelector('.material-icons-round');
+    if (entry.floating) {
+      btn.title = 'Прикрепить обратно';
+      if (icon) {
+        icon.textContent = 'push_pin';
+      }
+    } else {
+      btn.title = 'Открепить (плавающее окно)';
+      if (icon) {
+        icon.textContent = 'open_in_new';
+      }
+    }
+  }
+
+  /** Поднять плавающее окно над остальными (несколько окон могут плавать одновременно). */
+  _bringWidgetToFront(entry) {
+    if (!entry.floating) {
+      return;
+    }
+    this._floatZ = (this._floatZ || 1000) + 1;
+    entry.container.style.zIndex = String(this._floatZ);
+  }
+
+  /** Восемь рукояток изменения размера по краям и углам плавающего окна. */
+  _addWidgetResizeHandles(entry) {
+    for (const dir of ['n', 's', 'e', 'w', 'ne', 'nw', 'se', 'sw']) {
+      const h = document.createElement('div');
+      h.className = `app-widget-resize app-widget-resize-${dir}`;
+      h.addEventListener('pointerdown', (e) => this._startWidgetResize(e, entry, dir));
+      entry.container.appendChild(h);
+    }
+  }
+
+  _startWidgetMove(e, entry) {
+    e.preventDefault();
+    this._bringWidgetToFront(entry);
+    const c = entry.container;
+    const startX = e.clientX;
+    const startY = e.clientY;
+    const rect = c.getBoundingClientRect();
+    this._showDragOverlay();
+    const onMove = (ev) => {
+      let left = rect.left + (ev.clientX - startX);
+      let top = rect.top + (ev.clientY - startY);
+      left = Math.min(Math.max(0, left), window.innerWidth - 60);
+      top = Math.min(Math.max(0, top), window.innerHeight - 30);
+      c.style.left = `${left}px`;
+      c.style.top = `${top}px`;
+    };
+    const onUp = () => {
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerup', onUp);
+      this._hideDragOverlay();
+    };
+    window.addEventListener('pointermove', onMove);
+    window.addEventListener('pointerup', onUp);
+  }
+
+  _startWidgetResize(e, entry, dir) {
+    e.preventDefault();
+    e.stopPropagation();
+    this._bringWidgetToFront(entry);
+    const c = entry.container;
+    const startX = e.clientX;
+    const startY = e.clientY;
+    const rect = c.getBoundingClientRect();
+    const MIN_W = 260;
+    const MIN_H = 160;
+    this._showDragOverlay(dir);
+    const onMove = (ev) => {
+      const dx = ev.clientX - startX;
+      const dy = ev.clientY - startY;
+      let { left, top, width, height } = rect;
+      if (dir.includes('e')) {
+        width = rect.width + dx;
+      }
+      if (dir.includes('s')) {
+        height = rect.height + dy;
+      }
+      if (dir.includes('w')) {
+        width = rect.width - dx;
+        left = rect.left + dx;
+      }
+      if (dir.includes('n')) {
+        height = rect.height - dy;
+        top = rect.top + dy;
+      }
+      if (width < MIN_W) {
+        if (dir.includes('w')) {
+          left = rect.right - MIN_W;
+        }
+        width = MIN_W;
+      }
+      if (height < MIN_H) {
+        if (dir.includes('n')) {
+          top = rect.bottom - MIN_H;
+        }
+        height = MIN_H;
+      }
+      c.style.left = `${left}px`;
+      c.style.top = `${top}px`;
+      c.style.width = `${width}px`;
+      c.style.height = `${height}px`;
+    };
+    const onUp = () => {
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerup', onUp);
+      this._hideDragOverlay();
+    };
+    window.addEventListener('pointermove', onMove);
+    window.addEventListener('pointerup', onUp);
+  }
+
+  /**
+   * Прозрачная подложка на весь экран во время перетаскивания/изменения размера. Она перехватывает
+   * указатель поверх iframe виджета (у iframe своя область событий), поэтому перетаскивание не «залипает»,
+   * когда курсор проходит над содержимым виджета. Курсор подложки соответствует направлению операции.
+   */
+  _showDragOverlay(cursorDir) {
+    if (!this._dragOverlay) {
+      const o = document.createElement('div');
+      o.className = 'app-widget-drag-overlay';
+      document.body.appendChild(o);
+      this._dragOverlay = o;
+    }
+    const cursorMap = {
+      n: 'ns-resize',
+      s: 'ns-resize',
+      e: 'ew-resize',
+      w: 'ew-resize',
+      ne: 'nesw-resize',
+      sw: 'nesw-resize',
+      nw: 'nwse-resize',
+      se: 'nwse-resize',
+    };
+    this._dragOverlay.style.cursor = cursorDir ? cursorMap[cursorDir] || 'move' : 'move';
+    this._dragOverlay.classList.add('is-active');
+    return this._dragOverlay;
+  }
+
+  _hideDragOverlay() {
+    if (this._dragOverlay) {
+      this._dragOverlay.classList.remove('is-active');
+    }
   }
 
   _enforceWidgetCap() {
@@ -904,6 +1207,11 @@ class McpAgentTester {
         oldest.bridge.destroy();
       } catch {
         /* ignore */
+      }
+      // Разгружаемый виджет, если он плавал, сперва возвращаем на место в ленту — заглушку показываем
+      // в обычном потоке диалога, а не в оторванном плавающем окне.
+      if (oldest.floating) {
+        this._dockWidget(oldest);
       }
       if (oldest.container) {
         oldest.container.classList.add('is-poster');
