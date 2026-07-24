@@ -17,7 +17,7 @@ const JSON_SCHEMA_2020_12 = 'https://json-schema.org/draft/2020-12/schema';
 const definition: Tool = {
   name: 'example_long_task',
   title: 'Example: long-running task',
-  description: `Example long-running tool that runs a multi-step job, emits progress and supports cancellation.
+  description: `Example long-running tool that runs a multi-step job (1 sec per step), emits progress and supports cancellation.
 
 Call this whenever the user asks to run a long, multi-step or background job, or to see progress reporting e.g.:
 - "run a long task"
@@ -34,7 +34,7 @@ Demonstrates task-augmented execution — call it with a 'task' param to run it 
         type: 'number',
         description: 'Number of processing steps to simulate (1-20, default 5)',
         minimum: 1,
-        maximum: 20,
+        maximum: 100,
       },
     },
     required: [],
@@ -57,7 +57,7 @@ async function handler(params: IToolHandlerParams): Promise<TToolHandlerResponse
     if (signal?.aborted) {
       throw new ToolExecutionError('example_long_task', 'Cancelled by client');
     }
-    await new Promise((resolve) => setTimeout(resolve, 200));
+    await new Promise((resolve) => setTimeout(resolve, 1000));
     sendProgress?.(i, steps, `Completed step ${i} of ${steps}`);
   }
 
