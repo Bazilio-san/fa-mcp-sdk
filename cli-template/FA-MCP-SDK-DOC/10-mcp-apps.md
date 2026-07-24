@@ -495,13 +495,18 @@ export const handleToolCall = async (params: IToolHandlerParams) => {
 
   if (supportsUi) {
     return {
-      content: [{ type: 'text', text: renderTextSummary() }],   // text fallback is MANDATORY
+      content: [{ type: 'text', text: renderTextSummary() }],   // optional — see note below
       _meta: { ui: { resourceUri: 'ui://my/view.html' } },
     };
   }
   return formatToolResult({ message: renderTextSummary() });    // pure text path
 };
 ```
+
+**`structuredContent` is not mirrored into `content` for UI clients.** Per the MCP Apps spec it is
+UI-only data that must not enter the model context, and a UI client reads it natively. So a UI tool
+MAY return `structuredContent` alone with `content: []`, and the model gets no text for that call.
+Only plain clients get the compatibility copy of `structuredContent` in an empty `content`.
 
 The `ITransportContext` passed to dynamic `customPrompts(ctx)` / `customResources(ctx)` carries the
 same `clientCapabilities` field — use it to filter which prompts/resources to advertise per host.

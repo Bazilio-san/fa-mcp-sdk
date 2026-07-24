@@ -39,6 +39,7 @@ import {
   readDeprecation,
   warnDeprecatedUsage,
 } from './deprecation.js';
+import { hostSupportsMcpApps } from './mcp-apps.js';
 import { registerLoggingCapability } from './mcp-logging.js';
 import { paginate, parsePageSize } from './pagination.js';
 import { getPrompt, getPromptsList } from './prompts.js';
@@ -282,10 +283,10 @@ export function createMcpServer(transportType: TTransportType): Server {
   };
 
   /**
-   * Post-process a raw tool response (shared by the synchronous and task paths): validate
-   * `structuredContent` against `outputSchema` (§9.4 — throws -32603 on violation), mirror it into
-   * `content[0]` as JSON text for legacy clients (§12.4), then truncate oversized payloads (§12.2)
-   * and record the serialized size metric. Returns the wire-ready result.
+   * Post-process a raw tool response: validate `structuredContent` against `outputSchema` (§9.4 —
+   * throws -32603), copy it into `content[0]` as JSON text for plain clients (§12.4), then truncate
+   * oversized payloads (§12.2) and record the serialized size metric. The §12.4 copy is skipped for
+   * MCP Apps UI clients — `structuredContent` is UI-only data that must not enter the model context.
    */
   const finalizeToolResponse = (tool: any, response: any): any => {
     if (response && typeof response === 'object' && 'structuredContent' in response) {
@@ -298,17 +299,25 @@ export function createMcpServer(transportType: TTransportType): Server {
           errorCount: outputCheck.errorCount,
         });
       }
-      // §12.4 — mirror structuredContent in content[0] as JSON text for legacy clients.
+      const uiClient = hostSupportsMcpApps(server.getClientCapabilities() as IClientCapabilities | undefined);
       const existingContent = Array.isArray(response.content) ? response.content : undefined;
-      const hasText = existingContent?.some((p: any) => p?.type === 'text' && typeof p?.text === 'string');
-      if (!hasText) {
-        let serialized: string;
-        try {
-          serialized = JSON.stringify(response.structuredContent ?? null, null, 2);
-        } catch {
-          serialized = '';
+      if (uiClient) {
+        // UI client: no copy; keep content as-is, ensure a valid (possibly empty) array on the wire.
+        if (!existingContent) {
+          response.content = [];
         }
-        response.content = [{ type: 'text', text: serialized }, ...(existingContent ?? [])];
+      } else {
+        // §12.4 — copy structuredContent into content[0] as JSON text for plain clients.
+        const hasText = existingContent?.some((p: any) => p?.type === 'text' && typeof p?.text === 'string');
+        if (!hasText) {
+          let serialized: string;
+          try {
+            serialized = JSON.stringify(response.structuredContent ?? null, null, 2);
+          } catch {
+            serialized = '';
+          }
+          response.content = [{ type: 'text', text: serialized }, ...(existingContent ?? [])];
+        }
       }
     }
 
