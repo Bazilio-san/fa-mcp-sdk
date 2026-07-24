@@ -129,7 +129,17 @@ below is what makes the digest self-sufficient.
 
 2. **What & Why** — one paragraph. MCP App = Tool + UI Resource pair linked via `_meta.ui.resourceUri`.
    The tool MUST still return a text `content` array (so non-UI hosts work); the UI is an
-   enhancement, not a replacement.
+   enhancement, not a replacement. This section MUST also state, explicitly, that the **referenced**
+   delivery form (the tool declares `_meta.ui.resourceUri`; the `ui://` HTML is a **separately registered**
+   resource the host fetches via `resources/read`) is **preferred** over the **embedded** form (the `ui://`
+   resource returned inline in the tool result's `content[]`), with a one-line rationale: the host can
+   fetch/cache the static shell once, review its `_meta.ui` (CSP, permissions, domain) before rendering, and
+   know the widget exists before the call — which is what enables app-only tools (`visibility: ["app"]`) and
+   the Agent Tester Inspector's "UI" badge / "Launch widget" button. Note that `fa-mcp-sdk` resolves both
+   (it reads an embedded resource from the result first, then falls back to `_meta.ui.resourceUri`), so a
+   tool uses exactly one form; the embedded form is reserved for quick, one-off, fully data-dependent widgets.
+   In the template, `show_widget` demonstrates the referenced form and `example_tool` the embedded one. This
+   preference is fa-mcp-sdk guidance (not derived from upstream) and MUST be re-emitted on every regeneration.
 
 3. **Architecture** — host iframe + server + `PostMessageTransport`; iframe sandbox / security
    model (including the desktop/native vs. web sandbox-proxy split documented in spec §
@@ -283,6 +293,11 @@ Before saving the digest, verify:
    root of `examples/`) is represented in exactly one row of section 12. Diff `examples[].name`
    against the section's row count — drift indicates a new upstream example that the digest
    hasn't classified yet.
+9. The **What & Why** section carries the fa-mcp-sdk preference note: the **referenced**
+   (`_meta.ui.resourceUri` + separately registered `ui://` resource) delivery form is stated as
+   **preferred** over the **embedded** (resource inline in the tool result `content[]`) form, with the
+   one-line rationale. This guidance is not derived from upstream, so it will not reappear on its own —
+   confirm it is present before saving.
 
 If the file already exists, diff the new digest against the old one and surface the deltas to the
 user before overwriting — that's how the user sees what changed upstream.
