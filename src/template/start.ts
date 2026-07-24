@@ -8,7 +8,7 @@ import { AGENT_PROMPT } from './prompts/agent-prompt.js';
 import { customPrompts } from './prompts/custom-prompts.js';
 import { toolPrompt } from './prompts/tool-prompts.js';
 import { handleToolCall } from './tools/handle-tool-call.js';
-import { tools } from './tools/tools.js';
+import { templateUiResources, tools } from './tools/tools.js';
 
 const isConsulProd = (process.env.NODE_CONSUL_ENV || process.env.NODE_ENV) === 'production';
 
@@ -34,8 +34,9 @@ const startProject = async (): Promise<void> => {
       { name: 'Authorization', description: 'JWT Token issued on request' },
       { name: 'x-test-header', description: 'Any custom header', isOptional: true },
     ],
-    // Resources
-    customResources,
+    // Resources — user-defined resources plus the `ui://` widgets owned by MCP Apps tools
+    // (referenced-widget pattern; see `show_widget` and `templateUiResources`).
+    customResources: [...customResources, ...templateUiResources],
 
     // HTTP components
     httpComponents: { apiRouter },

@@ -1,6 +1,6 @@
 import { Tool } from '@modelcontextprotocol/sdk/types.js';
 
-import { IToolHandlerParams, TToolHandlerResponse } from '../../core/index.js';
+import { IResourceData, IToolHandlerParams, TToolHandlerResponse } from '../../core/index.js';
 
 /**
  * One self-contained MCP tool.
@@ -16,4 +16,13 @@ export interface ITemplateTool {
   definition: Tool;
   /** Invoked on `tools/call`; receives the full transport context (args, capabilities, signal, …). */
   handler: (params: IToolHandlerParams) => Promise<TToolHandlerResponse> | TToolHandlerResponse;
+  /**
+   * Optional `ui://` resources this tool owns, for the MCP Apps **referenced-widget** pattern: the
+   * tool declares `_meta.ui.resourceUri` in its {@link definition}, and the actual widget HTML lives
+   * in one of these resources (fetched by the host via `resources/read`). `tools.ts` aggregates them
+   * into `templateUiResources`, which `start.ts` merges into the server's `customResources`. Leave
+   * unset for plain tools and for the **embedded-widget** pattern (see `example_tool`), where the
+   * HTML is returned inline in the tool result instead.
+   */
+  uiResources?: IResourceData[];
 }
