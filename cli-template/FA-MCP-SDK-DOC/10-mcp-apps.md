@@ -24,6 +24,17 @@ resource, renders it inside a sandboxed iframe (the **View**), and proxies bidir
 between View and MCP server. The View can call server tools, read resources, request display-mode
 changes, send chat messages, or push model-context updates.
 
+**Prefer referencing the widget over embedding it.** A tool can ship its `ui://` resource two ways, and the
+*referenced* form is the recommended one: declare `_meta.ui.resourceUri` on the tool and register the `ui://`
+HTML as a **separate** resource the host fetches with `resources/read` (preferred), rather than returning the
+resource inline in the tool result's `content[]` (*embedded*). Referencing lets the host fetch and cache the
+static shell once, review its `_meta.ui` (CSP, permissions, domain) before rendering, and know the widget
+exists before the call — which is what enables app-only tools (`visibility: ["app"]`) and the Agent Tester
+Inspector's "UI" badge / "Launch widget" button. `fa-mcp-sdk` resolves both — it reads an embedded resource
+from the result first, then falls back to `_meta.ui.resourceUri` — so a tool uses exactly one form; reserve
+embedding for quick, one-off, fully data-dependent widgets. In the template, `show_widget` demonstrates the
+referenced form and `example_tool` the embedded one.
+
 This solves three problems with text-only MCP responses: (a) lack of standardized UI delivery across
 hosts (MCP-UI vs. OpenAI Apps SDK fragmentation), (b) inconsistent security models for embedded
 content, and (c) inability to ship rich interactive surfaces (dashboards, players, forms, maps)
@@ -502,26 +513,6 @@ export const handleToolCall = async (params: IToolHandlerParams) => {
   return formatToolResult({ message: renderTextSummary() });    // pure text path
 };
 ```
-
-**Preferred delivery pattern — reference the widget, don't embed it.** MCP Apps allow two ways to ship a
-widget from a tool, and for new tools the *referenced* form shown above (`_meta.ui.resourceUri`) is the
-preferred one over the *embedded* form:
-
-- **Referenced (preferred).** The tool declares `_meta.ui.resourceUri: 'ui://…'` and the `ui://` HTML is
-  registered as a **separate** resource (through `customResources`, or ext-apps' `registerAppResource`). The
-  host fetches the static shell once with `resources/read`, so it can cache it, review its `_meta.ui` (CSP,
-  permissions, domain) up front, and know the widget exists *before* the call — which is what lets app-only
-  tools (`visibility: ['app']`) work and what makes the Agent Tester Inspector flag the tool with a "UI" badge
-  and a "Launch widget" button. The tool result stays small (just `structuredContent` plus a text fallback),
-  and one shared shell can back several tools. The `show_widget` tool in the generated template uses this form.
-- **Embedded.** The tool returns the `ui://` resource inline in its result `content[]` (an item of
-  `type: 'resource'` carrying the full HTML — the `example_tool` template tool does this). It is simpler and
-  fully dynamic, but the whole HTML rides on every call, the host learns of the widget only after calling, and
-  none of the caching / review / declared-widget benefits apply. Reserve it for quick, one-off, fully
-  data-dependent widgets.
-
-The `fa-mcp-sdk` host resolves both — it reads an embedded resource from the result first, then falls back to
-fetching `_meta.ui.resourceUri` — so a tool uses exactly one of the two forms.
 
 **`structuredContent` is not mirrored into `content` for UI clients.** Per the MCP Apps spec it is
 UI-only data that must not enter the model context, and a UI client reads it natively. So a UI tool
