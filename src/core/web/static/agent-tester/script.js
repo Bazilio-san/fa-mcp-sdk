@@ -1352,25 +1352,207 @@ class McpAgentTester {
   /**
    * Direct widget-only smoke test — invoke a tool without involving the LLM
    * and mount the returned UI resource in a dedicated modal. Useful for
-   * iterating on widget HTML in isolation.
+   * iterating on widget HTML in isolation. The arguments are collected in the
+   * in-page dialog below (`#widgetArgsModal`), not in a native browser prompt.
    */
-  async _launchInspectorWidget(tool) {
+  _launchInspectorWidget(tool) {
     if (!this.currentServer?.isConnected) {
       this.showToast('Connect to an MCP server first', 'error');
       return;
     }
-    const args = prompt(`Arguments JSON for ${tool.name}:`, '{}');
-    if (args === null) {
+    this.openWidgetArgsModal(tool);
+  }
+
+  /** Fill the arguments dialog for `tool` and show it. */
+  openWidgetArgsModal(tool) {
+    if (!this.widgetArgsModal || !tool) {
       return;
     }
-    let parsed;
-    try {
-      parsed = args.trim() ? JSON.parse(args) : {};
-    } catch (e) {
-      this.showToast('Invalid JSON: ' + e.message, 'error');
-      return;
+    this._widgetArgsTool = tool;
+    this._widgetArgsSchemaAcknowledged = false;
+
+    this.widgetArgsToolName.textContent = tool.name;
+    if (tool.description) {
+      this.widgetArgsDesc.textContent = tool.description;
+      this.widgetArgsDesc.style.display = '';
+    } else {
+      this.widgetArgsDesc.textContent = '';
+      this.widgetArgsDesc.style.display = 'none';
     }
 
+    // Arguments are shared with the Tool Tester tab — same per-tool storage key.
+    let saved = null;
+    try {
+      saved = localStorage.getItem(this.getToolJsonStorageKey(tool.name));
+    } catch {
+      /* ignore */
+    }
+    if (saved === null) {
+      try {
+        saved = JSON.stringify(this.buildSkeletonFromSchema(tool.inputSchema), null, 2);
+      } catch {
+        saved = '{}';
+      }
+    }
+    this.widgetArgsJson.value = saved || '{}';
+
+    this.setWidgetArgsStatus('');
+    this.widgetArgsSchema.style.display = 'none';
+    this.widgetArgsModal.style.display = 'flex';
+    this.widgetArgsJson.focus();
+    this.widgetArgsJson.setSelectionRange(this.widgetArgsJson.value.length, this.widgetArgsJson.value.length);
+  }
+
+  closeWidgetArgsModal() {
+    if (!this.widgetArgsModal || this.widgetArgsModal.style.display === 'none') {
+      return;
+    }
+    this.saveWidgetArgsJson();
+    this.widgetArgsModal.style.display = 'none';
+    this._widgetArgsTool = null;
+  }
+
+  isWidgetArgsModalOpen() {
+    return !!this.widgetArgsModal && this.widgetArgsModal.style.display === 'flex';
+  }
+
+  saveWidgetArgsJson() {
+    if (!this._widgetArgsTool) {
+      return;
+    }
+    try {
+      localStorage.setItem(this.getToolJsonStorageKey(this._widgetArgsTool.name), this.widgetArgsJson.value);
+    } catch {
+      /* ignore */
+    }
+  }
+
+  setWidgetArgsStatus(text, kind) {
+    if (!this.widgetArgsStatus) {
+      return;
+    }
+    this.widgetArgsStatus.textContent = text;
+    this.widgetArgsStatus.className = kind ? `args-modal-status args-modal-status-${kind}` : 'args-modal-status';
+  }
+
+  generateWidgetArgsSkeleton() {
+    if (!this._widgetArgsTool) {
+      return;
+    }
+    try {
+      this.widgetArgsJson.value = JSON.stringify(
+        this.buildSkeletonFromSchema(this._widgetArgsTool.inputSchema),
+        null,
+        2,
+      );
+    } catch {
+      this.widgetArgsJson.value = '{}';
+    }
+    this._widgetArgsSchemaAcknowledged = false;
+    this.setWidgetArgsStatus('Skeleton generated from the tool input schema');
+  }
+
+  /** Parse the editor content; returns `{ ok, value, error }` without touching the UI. */
+  parseWidgetArgsJson() {
+    const raw = this.widgetArgsJson.value.trim();
+    if (!raw) {
+      return { ok: true, value: {} };
+    }
+    try {
+      return { ok: true, value: JSON.parse(raw) };
+    } catch (e) {
+      return { ok: false, error: e.message };
+    }
+  }
+
+  validateWidgetArgs() {
+    if (!this._widgetArgsTool) {
+      return null;
+    }
+    const parsed = this.parseWidgetArgsJson();
+    if (!parsed.ok) {
+      this.setWidgetArgsStatus(`Invalid JSON: ${parsed.error}`, 'error');
+      return null;
+    }
+    const errors = this.validateAgainstSchema(parsed.value, this._widgetArgsTool.inputSchema || {}, '$');
+    if (errors.length === 0) {
+      this.setWidgetArgsStatus('✓ JSON matches schema', 'success');
+    } else {
+      const preview = errors.slice(0, 5).join('; ');
+      const more = errors.length > 5 ? ` (+${errors.length - 5} more)` : '';
+      this.setWidgetArgsStatus(
+        `${errors.length} validation error${errors.length === 1 ? '' : 's'}: ${preview}${more}`,
+        'error',
+      );
+    }
+    return { parsed: parsed.value, errors };
+  }
+
+  toggleWidgetArgsSchema() {
+    if (!this.widgetArgsSchema) {
+      return;
+    }
+    const isOpen = this.widgetArgsSchema.style.display !== 'none';
+    if (isOpen) {
+      this.widgetArgsSchema.style.display = 'none';
+      return;
+    }
+    const schema = this._widgetArgsTool?.inputSchema || {};
+    let rendered = false;
+    if (window.prettyPrintJson && typeof window.prettyPrintJson.toHtml === 'function') {
+      try {
+        this.widgetArgsSchema.innerHTML = window.prettyPrintJson.toHtml(schema, { indent: 2 });
+        rendered = true;
+      } catch {
+        /* fall back to plain text */
+      }
+    }
+    if (!rendered) {
+      try {
+        this.widgetArgsSchema.textContent = JSON.stringify(schema, null, 2);
+      } catch {
+        this.widgetArgsSchema.textContent = String(schema);
+      }
+    }
+    this.widgetArgsSchema.style.display = '';
+  }
+
+  /**
+   * "Launch" click: invalid JSON always blocks; schema mismatches block once and
+   * let the user push through with a second click (the server validates too).
+   */
+  async submitWidgetArgs() {
+    const tool = this._widgetArgsTool;
+    if (!tool) {
+      return;
+    }
+    const parsed = this.parseWidgetArgsJson();
+    if (!parsed.ok) {
+      this.setWidgetArgsStatus(`Invalid JSON: ${parsed.error}`, 'error');
+      return;
+    }
+    const errors = this.validateAgainstSchema(parsed.value, tool.inputSchema || {}, '$');
+    if (errors.length > 0 && !this._widgetArgsSchemaAcknowledged) {
+      const preview = errors.slice(0, 5).join('; ');
+      const more = errors.length > 5 ? ` (+${errors.length - 5} more)` : '';
+      this.setWidgetArgsStatus(
+        `${errors.length} schema error${errors.length === 1 ? '' : 's'}: ${preview}${more} — press Launch again to send anyway`,
+        'error',
+      );
+      this._widgetArgsSchemaAcknowledged = true;
+      return;
+    }
+    this.saveWidgetArgsJson();
+    this.closeWidgetArgsModal();
+    await this._runInspectorWidget(tool, parsed.value);
+  }
+
+  /** Call the tool without the LLM and mount the returned UI resource. */
+  async _runInspectorWidget(tool, parsed) {
+    if (!this.currentServer?.isConnected) {
+      this.showToast('Connect to an MCP server first', 'error');
+      return;
+    }
     await this.flushPendingHeaders();
 
     try {
@@ -1666,6 +1848,22 @@ class McpAgentTester {
     this.inspectorLogClear = document.getElementById('inspectorLogClear');
     this.inspectorRefreshBtn = document.getElementById('inspectorRefreshBtn');
 
+    // "Launch widget" arguments dialog (App Inspector)
+    this.widgetArgsModal = document.getElementById('widgetArgsModal');
+    this.widgetArgsToolName = document.getElementById('widgetArgsToolName');
+    this.widgetArgsDesc = document.getElementById('widgetArgsDesc');
+    this.widgetArgsJson = document.getElementById('widgetArgsJson');
+    this.widgetArgsSchema = document.getElementById('widgetArgsSchema');
+    this.widgetArgsSchemaToggle = document.getElementById('widgetArgsSchemaToggle');
+    this.widgetArgsGenerate = document.getElementById('widgetArgsGenerate');
+    this.widgetArgsValidate = document.getElementById('widgetArgsValidate');
+    this.widgetArgsStatus = document.getElementById('widgetArgsStatus');
+    this.widgetArgsClose = document.getElementById('widgetArgsClose');
+    this.widgetArgsCancel = document.getElementById('widgetArgsCancel');
+    this.widgetArgsLaunch = document.getElementById('widgetArgsLaunch');
+    this._widgetArgsTool = null;
+    this._widgetArgsSchemaAcknowledged = false;
+
     // Tool Tester tab elements
     this.tabsBar = document.querySelector('.tabs-bar');
     this.tabPaneChat = document.getElementById('tabPaneChat');
@@ -1749,6 +1947,36 @@ class McpAgentTester {
         this.closeLlmModal();
       }
     });
+
+    // "Launch widget" arguments dialog
+    if (this.widgetArgsModal) {
+      this.widgetArgsClose.addEventListener('click', () => this.closeWidgetArgsModal());
+      this.widgetArgsCancel.addEventListener('click', () => this.closeWidgetArgsModal());
+      this.widgetArgsLaunch.addEventListener('click', () => this.submitWidgetArgs());
+      this.widgetArgsGenerate.addEventListener('click', () => this.generateWidgetArgsSkeleton());
+      this.widgetArgsValidate.addEventListener('click', () => this.validateWidgetArgs());
+      this.widgetArgsSchemaToggle.addEventListener('click', () => this.toggleWidgetArgsSchema());
+      this.widgetArgsModal.addEventListener('click', (e) => {
+        if (e.target === this.widgetArgsModal) {
+          this.closeWidgetArgsModal();
+        }
+      });
+      this.widgetArgsJson.addEventListener('input', () => {
+        this._widgetArgsSchemaAcknowledged = false;
+        this.setWidgetArgsStatus('');
+      });
+      this.widgetArgsJson.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+          e.preventDefault();
+          this.submitWidgetArgs();
+        }
+      });
+      document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && this.isWidgetArgsModalOpen()) {
+          this.closeWidgetArgsModal();
+        }
+      });
+    }
 
     document.querySelectorAll('.btn-enlarge').forEach((btn) => {
       btn.addEventListener('click', () => this.openPromptModal(btn.dataset.target));

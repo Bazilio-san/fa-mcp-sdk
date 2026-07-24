@@ -692,9 +692,13 @@ starts with `ui://`. Returns `404` when the named server is not connected.
 A third tab (test-id `at-tab-inspector`) appears next to Chat / Tool Tester. It surfaces:
 
 - **App Tools** — every tool from the connected server with a `🖼 UI` flag for those that carry
-  `_meta.ui.resourceUri`. Each app-tool gets a "Launch widget" button that runs the tool with an
-  arguments JSON (prompted) and mounts the returned widget in a modal — useful for iterating on a
-  widget without going through chat or Tool Tester.
+  `_meta.ui.resourceUri`. Each app-tool gets a "Launch widget" button that opens an in-page arguments
+  dialog (test-id `at-widget-args-modal`) with a JSON editor, a schema-driven **Skeleton** generator, a
+  **Validate** button and a collapsible **Schema** view; **Launch** then runs the tool and mounts the
+  returned widget in a modal — useful for iterating on a widget without going through chat or Tool Tester.
+  The editor content is stored per tool under the same `localStorage` key as the Tool Tester tab, so the
+  arguments are shared between the two. Invalid JSON blocks the launch; a schema mismatch blocks the first
+  click and can be pushed through with a second one (the server still validates the arguments).
 - **UI Resources** — output of `GET /api/mcp/ui-resources` for the connected server.
 - **UI Message Log** — live capture of every JSON-RPC frame passing through the iframe bridges
   (host→view, view→host, View-initiated tool calls, log notifications). Filterable by direction.

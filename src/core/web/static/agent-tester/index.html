@@ -453,6 +453,49 @@
         </div>
     </div>
 
+    <!-- Launch Widget Arguments Modal (App Inspector) -->
+    <div class="args-modal-overlay" id="widgetArgsModal" style="display: none;" data-testid="at-widget-args-modal">
+        <div class="args-modal">
+            <div class="args-modal-header">
+                <span class="material-icons-round">grid_view</span>
+                <h3>Launch widget<code id="widgetArgsToolName" data-testid="at-widget-args-tool-name"></code></h3>
+                <button type="button" class="btn-icon" id="widgetArgsClose" title="Close" data-testid="at-widget-args-close">
+                    <span class="material-icons-round">close</span>
+                </button>
+            </div>
+            <div class="args-modal-desc" id="widgetArgsDesc" style="display: none;" data-testid="at-widget-args-desc"></div>
+            <div class="args-modal-body">
+                <div class="args-modal-toolbar">
+                    <label for="widgetArgsJson">Arguments (JSON)</label>
+                    <div class="args-modal-toolbar-actions">
+                        <button type="button" class="btn btn-secondary" id="widgetArgsGenerate" title="Fill with a skeleton built from the tool input schema" data-testid="at-widget-args-generate">
+                            <span class="material-icons-round">auto_fix_high</span>
+                            Skeleton
+                        </button>
+                        <button type="button" class="btn btn-secondary" id="widgetArgsValidate" title="Validate the JSON against the tool input schema" data-testid="at-widget-args-validate">
+                            <span class="material-icons-round">fact_check</span>
+                            Validate
+                        </button>
+                        <button type="button" class="btn btn-secondary" id="widgetArgsSchemaToggle" title="Show/hide the tool input schema" data-testid="at-widget-args-schema-toggle">
+                            <span class="material-icons-round">schema</span>
+                            Schema
+                        </button>
+                    </div>
+                </div>
+                <textarea id="widgetArgsJson" class="args-modal-editor" rows="12" spellcheck="false" placeholder='{ "param": "value" }' data-testid="at-widget-args-json"></textarea>
+                <pre class="args-modal-schema" id="widgetArgsSchema" style="display: none;" data-testid="at-widget-args-schema"></pre>
+            </div>
+            <div class="args-modal-footer">
+                <span class="args-modal-status" id="widgetArgsStatus" data-testid="at-widget-args-status"></span>
+                <button type="button" class="btn" id="widgetArgsCancel" data-testid="at-widget-args-cancel">Cancel</button>
+                <button type="button" class="btn btn-primary" id="widgetArgsLaunch" data-testid="at-widget-args-launch">
+                    <span class="material-icons-round">play_arrow</span>
+                    Launch
+                </button>
+            </div>
+        </div>
+    </div>
+
     <!-- Loading Overlay -->
     <div class="loading-overlay" id="loadingOverlay" style="display: none;" data-testid="at-loading-overlay">
         <div class="spinner"></div>
