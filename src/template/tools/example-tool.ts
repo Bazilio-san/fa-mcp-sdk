@@ -24,9 +24,15 @@ const JSON_SCHEMA_2020_12 = 'https://json-schema.org/draft/2020-12/schema';
 const definition: Tool = {
   name: 'example_tool',
   title: 'Example: process text',
-  description: `Example tool that processes text input. 
+  description: `Example tool that processes an arbitrary text input and returns the processed result.
+
+Call this whenever the user asks to process, handle or transform a piece of text e.g.:
+- "process this text: ..."
+- "handle the input 'foo bar'"
+- "run 'hello world' through the example tool"
+
 When the host supports MCP Apps (Agent Tester with the "Apps" toggle on), 
-it also returns an interactive widget visualizing the result. 
+it also returns an interactive widget visualizing the result.
 Replace with your actual tools.`,
   inputSchema: {
     $schema: JSON_SCHEMA_2020_12,
