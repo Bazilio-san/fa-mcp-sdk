@@ -268,11 +268,20 @@ interface IAgentTesterConfig {
     toolCallTimeoutMs?: number; // Per-tool-call timeout (ms) the Agent Tester MCP client waits for a tool result. Default: 60000. Set above the target server's mcp.limits.toolTimeoutMs so the client does not abort long-running tools before the server.
     logJson?: boolean; // true — emit structured JSON events (tool_call, tool_result, llm_response, response) to stdout during agent execution
     openAi?: {
+      apiKeyName?: string; // human-readable key name (for logging/debugging only)
       apiKey: string;
       baseURL?: string;
       exposeToClient?: boolean; // default false; when true — apiKey/baseURL sent to Agent Tester UI as defaults
+      defaultModel?: string; // default model pre-filled in the Agent Tester UI when nothing is chosen yet (stored in browser localStorage)
+      models?: string[]; // preset model names shown in the Agent Tester UI model dropdown
     };
     httpHeaders?: Record<string, string>;
+  };
+}
+
+interface IHeadlessTesterConfig {
+  headlessTester?: {
+    defaultModel?: string; // default LLM model for headless testing (POST /agent-tester/api/chat/test) when the request omits modelConfig.model
   };
 }
 
@@ -307,6 +316,7 @@ export interface AppConfig
     IMCPConfig,
     ISwaggerConfig,
     IAgentTesterConfig,
+    IHeadlessTesterConfig,
     IHomePageConfig {
   isMainDBUsed: boolean; // = !!appConfig.db.postgres?.dbs.main?.host
   // Package metadata (enriched from package.json)

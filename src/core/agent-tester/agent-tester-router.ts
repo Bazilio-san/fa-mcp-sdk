@@ -107,6 +107,9 @@ export function createAgentTesterRouter(
       llmDefaults: {
         baseURL: expose ? openAi?.baseURL || '' : '',
         apiKey: expose ? openAi?.apiKey || '' : '',
+        // Not secrets — always sent so the UI can seed its default model and dropdown from config.
+        model: openAi?.defaultModel || '',
+        models: Array.isArray(openAi?.models) ? openAi.models : [],
       },
     });
   });

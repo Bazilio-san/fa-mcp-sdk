@@ -2,6 +2,7 @@ import chalk from 'chalk';
 import OpenAI from 'openai';
 import { v4 as uuidv4 } from 'uuid';
 
+import { appConfig } from '../../bootstrap/init-config.js';
 import { logger as lgr } from '../../logger.js';
 import {
   ITesterChatMessage,
@@ -65,7 +66,8 @@ export class TesterAgentService {
   ) {
     this.logJson = logJson || false;
     this.defaultConfig = {
-      model: 'gpt-4o-mini',
+      // Headless default model — driven by config (headlessTester.defaultModel); used when the request omits modelConfig.model.
+      model: appConfig.headlessTester?.defaultModel || 'gpt-5.4-mini',
       agentPrompt: 'You are a helpful AI assistant that can use MCP tools to help users.',
       temperature: 0.3,
       maxTokens: 4096,
