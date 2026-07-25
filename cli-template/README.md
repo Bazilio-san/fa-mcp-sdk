@@ -185,7 +185,7 @@ npm run agents:link:status   # inspect current link state
 npm run agents:link:remove   # remove the link
 ```
 
-Only skills are linked. Other Claude Code entities (`.claude/agents/`, `.claude/commands/`, hooks, MCP config)
+Only skills are linked. Other Claude Code entities (`.claude/commands/`, hooks, MCP config)
 use formats incompatible with Codex (TOML agents in `.codex/agents/`, MCP servers in `.codex/config.toml`) and
 must be configured separately. For project guidance, this template already keeps a single `AGENTS.md` and
 imports it from `CLAUDE.md` via `@AGENTS.md`, so the same instructions feed both tools.

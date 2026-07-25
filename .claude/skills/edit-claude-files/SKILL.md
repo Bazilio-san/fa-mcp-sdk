@@ -8,7 +8,7 @@ allowed-tools: Read, Write, Edit, Bash(node scripts/fcp.js *), Bash(rm:*)
 
 **Scope — read carefully.** This applies to **every file under `.claude/`** and to **every kind of change**:
 creating, editing, **deleting**, renaming, moving. It covers `SKILL.md`, scripts in
-`.claude/skills/<skill>/scripts/`, hooks in `.claude/hooks/`, agents in `.claude/agents/`, supporting reference
+`.claude/skills/<skill>/scripts/`, hooks in `.claude/hooks/`, supporting reference
 files, `settings.json` — anything inside the tree.
 
 **Never attempt a direct change, not even once.** Two layers block direct access on purpose:
