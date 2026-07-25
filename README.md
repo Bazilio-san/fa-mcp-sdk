@@ -145,6 +145,8 @@ my-mcp-server/
 │   └── test.yaml                # Test environment
 ├── deploy/                      # Deployment configurations
 │   ├── .gitkeep                 # Git directory keeper
+│   ├── CADDY/                   # Caddy reverse proxy template
+│   │   └── Caddyfile            # Caddy site configuration
 │   ├── NGINX/                   # Nginx configuration templates
 │   │   ├── sites-enabled/       # Nginx site configurations
 │   │   └── snippets/            # Nginx configuration snippets
@@ -337,8 +339,16 @@ chmod +x deploy/srv.cjs
 ### Consul Registration
 Set `consul.service.enable: true` and provide required tokens for automatic service registration.
 
-### Nginx Configuration
-Generated nginx configuration files in `deploy/NGINX/` for domain-based routing.
+### Reverse Proxy (Nginx / Caddy)
+
+Ready-to-adapt reverse proxy templates are generated in `deploy/`: `NGINX/sites-enabled/<domain>.conf`
+together with `NGINX/snippets/mcp-proxy.conf`, and the equivalent `CADDY/Caddyfile`. Both give the MCP
+protocol endpoints (`/mcp`, `/sse`, `/messages`) unbuffered proxying and long read timeouts — the server
+answers JSON-RPC calls with Server-Sent Events streams that a buffering proxy would hold back, and the
+server-initiated streams stay idle far longer than the 60-second default of Nginx. The Agent Tester, the
+Prometheus metrics endpoint and the token-issuing endpoints (`/admin`, `/gen-jwt`) get their own blocks
+with, respectively, a longer timeout for LLM turns and optional network allow-lists. Set
+`webServer.trustProxy: true` in the config so the app honours the `X-Forwarded-*` headers.
 
 ## License
 
