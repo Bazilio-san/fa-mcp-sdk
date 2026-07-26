@@ -1,4 +1,4 @@
-# Copy this file to local.yaml and update with your database credentials
+# Copy this file to local.yaml and update with your settings
 # local.yaml is gitignored and won't be committed
 # ^ *#>[^\n]+\n
 ---
