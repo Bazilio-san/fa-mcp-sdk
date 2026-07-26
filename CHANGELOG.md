@@ -5,6 +5,53 @@ All notable changes to `fa-mcp-sdk` are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.12.52] - 2026-07-26
+
+### Added
+
+- **Live progress and cancellation in the Agent Tester Tool Tester.** New SSE endpoint
+  `POST /agent-tester/api/mcp/call-tool-stream` streams progress events and a terminal result, `POST
+  /agent-tester/api/mcp/cancel` aborts an in-flight call by client-supplied `callId`, and
+  `TesterMcpClientService.callToolWithConfig` accepts optional `onProgress` and `signal` (forwarded to the MCP SDK
+  with `resetTimeoutOnProgress`).
+- **Arguments dialog for "Launch widget" in the Inspector tab.** The dialog (`at-widget-args-modal`) offers a JSON
+  editor, a schema-driven skeleton generator, a `Validate` button and a collapsible schema view; arguments are shared
+  with the Tool Tester through the same `localStorage` key.
+- **`deploy-mcp-to-remote-server` skill for generated projects.** Deploys, stops, restarts, updates and diagnoses the
+  MCP server on a remote host as a self-contained systemd Docker container behind Caddy or nginx, with a once-a-minute
+  in-container git auto-update; everything runs through `scripts/remote.cjs <subcommand>`.
+- **Tool-owned UI resources in the template.** `ITemplateTool` accepts an optional `uiResources` array; `tools.ts`
+  aggregates them into `templateUiResources`, which `start.ts` merges into `customResources`.
+- Ready-made reverse-proxy configurations for generated projects: `deploy/CADDY/Caddyfile` and
+  `deploy/NGINX/snippets/mcp-proxy.conf`, plus an expanded `sites-enabled/mcp-template.com.conf`.
+- `update.cjs` now reports deploy outcomes over Telegram and SMTP (via `nodemailer`) and writes a one-line
+  machine-readable verdict to `deploy__<project>__status.log` for external monitors.
+
+### Changed
+
+- **TypeScript 7 is now required.** The SDK and generated projects move to `typescript@^7.0.2`, and `baseUrl` plus
+  `ignoreDeprecations` are dropped from both `tsconfig.json` files — TypeScript 7 removed `baseUrl` and rejects it
+  with error `TS5102`. Projects that still list `baseUrl` must remove it (or add `paths` if they relied on it).
+- `update.cjs` parses `deploy/config.yml` with the real `yaml` package instead of the previous line-by-line reader;
+  notification settings live in nested `telegram: { botToken, chatId }` and `smtp: { from, host, port, user, pass }`
+  blocks, while `branch` and `email` keep their flat form.
+- Generated projects gain `nodemailer` and `yaml` as dependencies; toolchain bumped to `oxfmt@^0.60.0`,
+  `oxlint@^1.75.0` and `@types/node@^26.1.1`.
+- Documentation and the MCP Apps skills now recommend the referenced `_meta.ui.resourceUri` widget pattern over
+  embedding the UI resource in the tool result; the note sits in `10-mcp-apps.md` §2 so it survives regeneration of
+  the digest.
+- Template `show_widget` switched to the referenced-widget pattern and returns `structuredContent`, while
+  `example_tool` stays on the embedded pattern so the template demonstrates both.
+- Template `example_long_task` accepts up to 100 steps with a refined timing simulation, and tool descriptions carry
+  detailed usage examples.
+
+### Removed
+
+- `cli-template/deploy/docker/` (Dockerfile, Dockerfile.local, docker-compose.yml, `.env.example`,
+  `config/local.docker.yaml`, README) — superseded by the `deploy-mcp-to-remote-server` skill.
+- Bundled subagent definitions under `cli-template/.claude/agents/` (architect, auditor, planner, scanner, worker,
+  refactor, prd-writer, javascript-pro, typescript-pro, fa-mcp-sdk) — generated projects no longer ship them.
+
 ## [0.12.34] - 2026-07-24
 
 ### Added
