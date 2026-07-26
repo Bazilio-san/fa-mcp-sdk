@@ -1,0 +1,15 @@
+# Copy this file to local.yaml (kept out of version control — it holds secrets).
+#
+# local.yaml is the MCP app's own config/local.yaml: it is copied VERBATIM into the container
+# at <project>/config/local.yaml. Put here only the per-server overrides your app needs — its
+# exact shape is project-specific (whatever your config/*.yaml supports).
+#
+# The skill reads only ONE thing from this file: webServer.port (the port the app listens on,
+# used for the reverse proxy + health checks). The deploy skill's own Telegram/e-mail settings
+# live in config.yml, NOT here.
+#
+# Do NOT set webServer.publicBaseUrl — the skill injects it as https://<mcp.dns>.
+
+webServer:
+  port: 9049
+

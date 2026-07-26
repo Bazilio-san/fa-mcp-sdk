@@ -4,6 +4,8 @@
 
 const fs = require('fs');
 const path = require('path');
+const https = require('https');
+const YAML = require('yaml');
 const { execSync, spawn } = require('child_process');
 const os = require('os');
 
@@ -21,6 +23,8 @@ const VON = path.resolve(path.join(CWD, '..'));
 const DEFAULT_CONFIG = {
   branch: 'master',
   email: '',
+  telegramBotToken: '',
+  telegramChatId: '',
 };
 
 // Colors for terminal  output
@@ -74,6 +78,9 @@ const ytdl = timestamp.slice(2, 14); // YYMMDDHHMMSS format
 const runTimeLogFile = path.join(VON, `deploy__${scriptDirName}__processing__${ytdl}.log`);
 const lastDeployLogFile = path.join(VON, `deploy__${scriptDirName}__last_deploy.log`);
 const cumulativeLogFile = path.join(VON, `deploy__${scriptDirName}__cumulative.log`);
+// Machine-readable one-line verdict of the last actual update, for external monitors
+// (e.g. the deploy skill's `status` / `updatelog`): "SUCCESS|FAIL | <ts> | <detail>".
+const statusFile = path.join(VON, `deploy__${scriptDirName}__status.log`);
 
 const clearColors = (text) => text.replace(/\x1B\[[0-9;]*[mGKH]/g, '');
 const clearHtmlColors = (text) => text.replace(/<\/?(red|y|g|r|status)>/g, '');
@@ -96,9 +103,24 @@ const logError = (msg) => {
   const msg2 = `[ERROR] ${msg}`;
   logBuffer += `<red>${msg2}</red>\n`;
   fs.appendFileSync(cumulativeLogFile, `${msg2}\n`);
+  // Also mirror into the current run log so the last_deploy copy carries the error.
+  try {
+    fs.appendFileSync(runTimeLogFile, `${msg2}\n`);
+  } catch {
+    /* runtime log may not exist yet */
+  }
 };
 
-const nowPretty = () => new Date().toISOString().replace('T', ' ').substring(0, 19) + 'Z';
+const nowPretty = () => `${new Date().toISOString().replace('T', ' ').substring(0, 19)}Z`;
+
+/** Write the one-line machine-readable verdict of the current update run. */
+const writeStatus = (status, detail = '') => {
+  try {
+    fs.writeFileSync(statusFile, `${status} | ${nowPretty()} | ${String(detail).split('\n')[0]}\n`);
+  } catch {
+    /* best effort */
+  }
+};
 
 /**
  * Truncate cumulative log file if it exceeds 2MB, keeping last 10KB
@@ -243,55 +265,30 @@ function showHelp() {
 }
 
 /**
- * Parse simple YAML content (key: value format)
- */
-function parseSimpleYAML(content) {
-  const config = {};
-  const lines = content.split('\n');
-
-  for (const line of lines) {
-    const trimmed = line.trim();
-    // Skip empty lines and comments
-    if (trimmed && !trimmed.startsWith('#')) {
-      // Parse key: value pairs
-      const colonIndex = trimmed.indexOf(':');
-      if (colonIndex > 0) {
-        const [, key, valueRaw] = trimmed.match(/^\s*([^:]+?)\s*:\s*(.*)\s*$/) || [];
-        let value = valueRaw ? valueRaw.replace(/^(['"])(.*)\1$/, '$2') : '';
-        // Handle empty values
-        if (value === 'null' || value === '~') {
-          value = '';
-        }
-        config[key] = value;
-      }
-    }
-  }
-
-  return config;
-}
-
-/**
- * Load configuration from YAML file
+ * Load configuration from deploy/config.yml (proper YAML via the `yaml` package).
+ * Telegram, SMTP and the rest are read as nested blocks: `telegram: { botToken, chatId }`,
+ * `smtp: { from, host, port, user, pass }`.
  */
 function loadConfig() {
   // Load NVM environment from .envrc
   loadNVMEnvironment();
 
   const configFile = path.join(process.cwd(), 'deploy', 'config.yml');
-
-  // Get Node.js version from NVM environment if available
   if (!fs.existsSync(configFile)) {
     return { ...DEFAULT_CONFIG };
   }
 
   try {
-    const configContent = fs.readFileSync(configFile, 'utf8');
-    const config = parseSimpleYAML(configContent);
-
+    const config = YAML.parse(fs.readFileSync(configFile, 'utf8')) || {};
+    const telegram = config.telegram || {};
+    const smtp = config.smtp && config.smtp.host ? config.smtp : null;
     return {
       branch: config.branch || DEFAULT_CONFIG.branch,
       nodeVersion: config.nodeVersion,
       email: config.email || DEFAULT_CONFIG.email,
+      smtp,
+      telegramBotToken: telegram.botToken || DEFAULT_CONFIG.telegramBotToken,
+      telegramChatId: telegram.chatId || DEFAULT_CONFIG.telegramChatId,
     };
   } catch (error) {
     console.warn(`Warning: Could not parse config file ${configFile}:`, error.message);
@@ -388,6 +385,17 @@ function getRepoInfo() {
   }
 }
 
+// True when a usable `mail` command is on PATH. Inside the Docker container there is
+// no mail transfer agent, so the e-mail channel is silently skipped there.
+function hasMailCommand() {
+  try {
+    execSync('command -v mail', { stdio: 'ignore', shell: '/bin/bash' });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 const colorizeHTML = (text) =>
   text
     .replace(/<red>/g, '<span style="color:#ff0000;">')
@@ -400,8 +408,17 @@ const colorizeHTML = (text) =>
     .replace(/<\/r>/g, '</span>')
     .replace(/\[ERROR]/g, '<span style="color:#ffffff; background-color: #ff0000">[ERROR]</span>');
 
-async function sendBuildNotification(emails, status, body, serviceName) {
+/**
+ * Send a build/restart verdict by e-mail via the system `mail` command.
+ * Used on the classic host/systemd deployment. Skipped when no `mail` command
+ * exists (e.g. inside the container) or when no address is configured.
+ */
+async function sendEmailNotification(emails, status, body, serviceName) {
   if (!emails) {
+    return;
+  }
+  if (!hasMailCommand()) {
+    logIt('`mail` command not available — e-mail notification skipped');
     return;
   }
   let s = '';
@@ -412,7 +429,6 @@ async function sendBuildNotification(emails, status, body, serviceName) {
   }
   body = body.replace('<status>', s);
 
-  // Create HTML email content
   const hostname = os.hostname();
   const htmlContent = `<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "https://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
 <html xmlns="http://www.w3.org/1999/xhtml" lang="en">
@@ -426,7 +442,6 @@ async function sendBuildNotification(emails, status, body, serviceName) {
 ${colorizeHTML(clearColors(body))}
 </pre></body></html>`;
 
-  // Send to each email address
   const emailArray = emails
     .split(',')
     .map((email) => email.trim())
@@ -451,6 +466,134 @@ ${colorizeHTML(clearColors(body))}
       console.error(`Failed to send email to ${emailAddress}:`, error.message);
     }
   }
+}
+
+/**
+ * Send a build/restart verdict by e-mail over SMTP via nodemailer. Used when a `smtp:`
+ * block is set in deploy/config.yml — works inside the container (no local MTA needed).
+ * Recipient is `email`; sender is `smtp.from` (falling back to `smtp.user`).
+ */
+async function sendSmtpNotification(config, status, body, serviceName) {
+  const { smtp, email } = config;
+  if (!smtp) {
+    return;
+  }
+  if (!email) {
+    logIt('SMTP configured but no recipient (email) set — notification skipped');
+    return;
+  }
+  let nodemailer;
+  try {
+    nodemailer = require('nodemailer');
+  } catch {
+    logIt('SMTP configured but nodemailer is not installed — notification skipped');
+    return;
+  }
+  const s = status === 'FAIL' ? '<r>FAIL</r> ' : status === 'SUCCESS' ? '<g>SUCCESS</g> ' : '';
+  const hostname = os.hostname();
+  const port = Number(smtp.port) || 25;
+  const html = `<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"></head><body><pre>
+${colorizeHTML(clearColors(body.replace('<status>', s)))}
+</pre></body></html>`;
+  const transporter = nodemailer.createTransport({
+    host: smtp.host,
+    port,
+    secure: port === 465, // 465 = implicit TLS; 587/25 = STARTTLS/plain
+    auth: smtp.user && smtp.pass ? { user: smtp.user, pass: smtp.pass } : undefined,
+    // Internal corporate relays often present self-signed certs; this is only a deploy notice.
+    tls: { rejectUnauthorized: false },
+    connectionTimeout: 15000,
+    greetingTimeout: 15000,
+    socketTimeout: 20000,
+  });
+  try {
+    logIt(`Sending SMTP notification to ${email} via ${smtp.host}:${port}`);
+    await transporter.sendMail({
+      from: smtp.from || smtp.user,
+      to: email,
+      subject: `${status} Update: ${serviceName} (on ${hostname})`,
+      html,
+    });
+  } catch (error) {
+    console.error(`SMTP send failed: ${error.message}`);
+  }
+}
+
+/**
+ * Send a build/restart verdict to Telegram. Used on the Docker deployment (and
+ * anywhere a bot is configured). Credentials come from deploy/config.yml →
+ * telegramBotToken / telegramChatId.
+ */
+function sendTelegramNotification(config, status, body, serviceName) {
+  const { telegramBotToken, telegramChatId } = config;
+  if (!telegramBotToken || !telegramChatId) {
+    logIt('Telegram bot token or chat id not set — notification skipped');
+    return Promise.resolve();
+  }
+
+  const hostname = os.hostname();
+  const icon = status === 'SUCCESS' ? '✅' : '❌';
+  let raw = `${icon} ${status} — ${serviceName} @ ${hostname}\n\n${clearColors(clearHtmlColors(body))}`;
+  // Telegram hard-limits a single message to 4096 chars; leave room for the code fence + escaping.
+  if (raw.length > 3800) {
+    raw = `${raw.slice(0, 3800)}\n…(truncated)`;
+  }
+  // Render as a MarkdownV2 fenced code block (monospace). Inside a code block only backslash and
+  // backtick are special, so those are the only characters that need escaping.
+  const fenced = '```\n' + raw.replace(/\\/g, '\\\\').replace(/`/g, '\\`') + '\n```';
+
+  const payload = JSON.stringify({
+    chat_id: telegramChatId,
+    text: fenced,
+    parse_mode: 'MarkdownV2',
+    disable_web_page_preview: true,
+  });
+
+  return new Promise((resolve) => {
+    const req = https.request(
+      {
+        hostname: 'api.telegram.org',
+        path: `/bot${telegramBotToken}/sendMessage`,
+        method: 'POST',
+        timeout: 15000,
+        headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(payload) },
+      },
+      (res) => {
+        let data = '';
+        res.on('data', (chunk) => (data += chunk));
+        res.on('end', () => {
+          if (res.statusCode !== 200) {
+            console.error(`Telegram notify HTTP ${res.statusCode}: ${data}`);
+          }
+          resolve();
+        });
+      },
+    );
+    // Don't let an unreachable Telegram (e.g. blocked network) hang the update.
+    req.on('timeout', () => req.destroy(new Error('request timed out after 15s')));
+    req.on('error', (error) => {
+      console.error(`Telegram notify failed: ${error.message}`);
+      resolve();
+    });
+    req.write(payload);
+    req.end();
+  });
+}
+
+/**
+ * Universal dispatcher: fire every configured notification channel.
+ *   * E-mail — via SMTP (nodemailer) when a `smtp:` block is set (works in the container),
+ *     otherwise via the system `mail` command (classic host deploy).
+ *   * Telegram — when bot credentials exist.
+ * Each channel is a no-op when its prerequisites are absent.
+ */
+async function sendNotifications(config, status, body, serviceName) {
+  if (config.smtp) {
+    await sendSmtpNotification(config, status, body, serviceName);
+  } else {
+    await sendEmailNotification(config.email, status, body, serviceName);
+  }
+  await sendTelegramNotification(config, status, body, serviceName);
 }
 
 const printCurrenBranch = () => {
@@ -600,21 +743,17 @@ async function main() {
 
       // Add completion info to build log
       logIt(`Update completed successfully at ${new Date().toISOString().replace('T', ' ').substring(0, 19)}`);
-      // Send build notification if email is configured
-      if (config.email) {
-        await sendBuildNotification(config.email, 'SUCCESS', logBuffer, serviceName);
-      } else {
-        logIt('EMAIL not found');
-      }
+      writeStatus('SUCCESS', updateReason || 'update completed');
+      // Notify via every configured channel (e-mail and/or Telegram)
+      await sendNotifications(config, 'SUCCESS', logBuffer, serviceName);
     } else {
       logIt('No changes detected. Update skipped.');
     }
   } catch (err) {
     const message = String(err.message).includes(err.stderr) ? err.message : [err.stderr, err.message].join('\n');
     logError(message);
-    if (config.email) {
-      await sendBuildNotification(config.email, 'FAIL', logBuffer, serviceName);
-    }
+    writeStatus('FAIL', message);
+    await sendNotifications(config, 'FAIL', logBuffer, serviceName);
   } finally {
     logIt('#FINISH#');
     if (updateDeployedLogFile) {
