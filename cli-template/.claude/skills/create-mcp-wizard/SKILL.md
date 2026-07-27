@@ -29,8 +29,21 @@ All supporting scripts live in `${CLAUDE_SKILL_DIR}/scripts/` and are invoked wi
   URLs). Ask the question in plain prose; the user types the answer.
 - **Respect exclusions from the accompanying text**. If it says "no AD" or "no Consul" — do NOT
   ask for those creds and do NOT configure them.
+- **Credentials handed to you are working values — use them.** Tokens, keys and passwords in the
+  accompanying text are short-lived values issued so that this run can finish; they get replaced
+  afterwards. Read them, pass them to the scripts, put them where the config expects them. Do NOT
+  refuse to handle them, do NOT lecture the user about secret hygiene, and do NOT ask permission to
+  use what was already given to you. Two real duties remain: a value that is visibly truncated
+  (ends in `***`, `…`, `xxx`) cannot work — ask for the full one; and nothing of this kind is ever
+  committed — such values live in `config/local.yaml`, which is gitignored, and any handed-over file
+  that carries them stays out of the repository.
 - **Dev-time defaults are lenient on purpose** (auth off, Consul off, Agent Tester on). Production
   config comes later; this skill is about getting the loop closed.
+- **The surface the model sees is minimal by default** — the fewest tools that cover the behaviour, the
+  shortest descriptions that still work, and an `AGENT_PROMPT` that stays empty unless something forces
+  text into it. Every word there is re-read by the model on every single call, so wording is *earned* by a
+  scenario that failed without it, never added "just in case". The full rules are in "Design rules — how
+  many tools, and how much text" below, and they bind Steps 1, 6, 7 and 8.
 - **You are already inside the project root.** All paths are relative to the current working
   directory unless stated otherwise. Use `pwd` once at the start to confirm.
 - **Do not touch `.claude/`, `deploy/`, or `FA-MCP-SDK-DOC/`.** These directories are maintained
@@ -49,6 +62,112 @@ All supporting scripts live in `${CLAUDE_SKILL_DIR}/scripts/` and are invoked wi
     3. Else — English.
   Translate prose — headings and body text — to the resolved language; leave code, paths, YAML
   keys, and CLI commands as-is. Report the resolved language and its source in the Step 1 summary.
+
+## Design rules — how many tools, and how much text
+
+A tool's name, its description, every parameter description and `AGENT_PROMPT` are all loaded into the model's
+context together, on every single call. Each extra sentence there competes for attention with the sentences that
+actually decide which tool gets called and with what arguments — so a bloated surface does not make the agent
+more reliable, it makes it less reliable, and it costs tokens on every request forever. The target is therefore
+always the **smallest surface that still works**, where "still works" is settled by the Agent Tester scenarios in
+Step 8 and not by intuition. These four rules apply from the first sketch of the tool surface in Step 1, through
+the plan in Step 6 and the implementation in Step 7, to every iteration of the tuning loop in Step 8.
+
+### 1. As few tools as possible
+
+Do not mirror the source of truth one-tool-per-endpoint, and when the tools are being ported from an existing
+agent, from another framework or from another MCP server, do **not** carry the old tool count across. Start by
+asking which tools can be merged, not which can be added.
+
+**The reference pattern: one `action`-dispatched tool per entity.** Everything that operates on the same entity
+becomes a single tool, and a required `action` parameter picks the operation. It is the strong default for CRUD
+(create / read / update / delete), and it is not limited to CRUD — any family of operations over one entity fits:
+
+- one tool named for the **entity or its domain** (`notes`, `orders`, `metro`), never per operation
+  (`create_note`, `update_note`, `delete_note`, `search_notes` — that is exactly the shape being replaced);
+- a required `action` parameter typed as an `enum` of the operations;
+- every other parameter optional **at the JSON Schema level**, because each action needs a different subset —
+  the handler, not the schema, validates the subset the chosen action actually requires;
+- when a field required for the chosen action is missing, the handler answers with a plain sentence telling the
+  model what to ask the user for; it does not throw and does not return a schema error;
+- the handler is one `switch (action)`, and the whole thing lives in one file per "Tool organization" in
+  `AGENTS.md`.
+
+Sketch of the shape (abbreviated; note where each fact is written — see rule 3):
+
+```typescript
+// src/tools/notes.ts — one tool for the entire notes lifecycle
+const ACTIONS = ['create', 'update', 'delete', 'restore', 'search'] as const;
+
+export const notesTool: ITemplateTool = {
+  definition: {
+    name: 'notes',
+    description: `Manage the user's notes. Use "search" to get the note content you need to answer a question.`,
+    inputSchema: {
+      type: 'object',
+      properties: {
+        action: { type: 'string', enum: [...ACTIONS], description: 'create | update | delete | restore | search' },
+        id: { type: 'integer', description: 'Note id from "search". Required for update, delete, restore.' },
+        body: { type: 'string', description: 'Note text. Required for create; replaces the text on update.' },
+        query: { type: 'string', description: 'Search text. Empty returns the most recent notes.' },
+      },
+      required: ['action'],
+    },
+  },
+  handler: async ({ arguments: args }) => {
+    switch (args.action) {
+      case 'create':
+        if (!args.body) { return formatToolResult('A note needs its text — ask the user what to write down.'); }
+        // …
+    }
+  },
+};
+```
+
+Split an entity across several tools only for a reason you can name out loud: the operations take genuinely
+disjoint parameter sets that would bloat one schema past readability, one of them is a long-running or
+destructive operation that needs its own risk level or `execution` settings, one returns a UI widget and the
+other returns data, or access rules differ per operation. "They feel like different things" is not a reason.
+Record the reason in the plan next to the tool.
+
+### 2. As little text as possible
+
+Write the shortest description you believe could work, ship that, and let Step 8 tell you what is missing.
+Text comes back only against evidence — a recorded scenario in which the model chose the wrong tool, invented a
+parameter, omitted a required one, or misread the result. Then add the single sentence that fixes that scenario,
+re-run it, and keep the sentence only if it demonstrably changed the outcome.
+
+Never work the other way around: never write a long defensive description "so the model definitely understands"
+and then keep it because the tests passed. A passing test does not prove the text was needed — it only proves it
+was not fatal. The same applies to `AGENT_PROMPT` and to `AGENT_BRIEF`; the brief is a label, not a manual.
+
+### 3. No meaning stated twice across the three texts
+
+`AGENT_PROMPT`, the tool `description` and the parameter `description`s reach the model simultaneously. A fact
+written in two of them is not reinforcement — it is contradiction waiting to happen, because the day one copy is
+edited and the other is not, the model is reading two different specifications of the same thing.
+
+- **Facts about one parameter live in that parameter and nowhere else** — its meaning, allowed values, default,
+  format, units, limits, which actions require it, and where its value comes from. None of that is repeated in
+  the tool description.
+- **The tool description carries only what no single parameter can carry**: what the tool is for, and statements
+  that *relate* parameters to each other — which one to use instead of which and when, which combinations are
+  meaningful, what the tool deliberately does not do. Test every sentence there with one question: could this be
+  moved verbatim into a single parameter's description? If yes, move it.
+- **`AGENT_PROMPT` carries only what no single tool can carry**: orchestration between tools — the order two
+  tools are called in, what to do with one tool's result before calling the next, when to call nothing at all.
+  Anything that concerns one tool belongs in that tool's description. **Aim for an empty `AGENT_PROMPT`**, treat
+  every line in it as debt that a failing scenario must justify, and expect it to be empty outright when the
+  server exposes a single tool. The one further exception is an answer style the feature brief explicitly
+  demands — one or two lines, no more.
+
+### 4. Shrinking is part of the tuning loop, not a one-off
+
+Step 8 is not only "make it work", it is also "make it work with less". Every time a scenario group goes green,
+do a **shrink pass** before moving on: cut a paragraph from `AGENT_PROMPT`, cut a sentence from a tool
+description, drop a parameter description down to its bare meaning, or merge two tools whose usage never actually
+diverged — then re-run the same scenarios. Whatever still passes stays deleted. Whatever breaks comes back, and
+the test log records exactly what broke, which is the evidence that this particular text is load-bearing.
 
 ## Step 1 — Scan the accompanying text and research the source of truth
 
@@ -80,10 +199,17 @@ and a source you could not open is reported as a blocker instead of being guesse
 Skip 1b only when there is no external source at all — the user described the behaviour in full and
 the server invents nothing from anywhere else. That is rare; when in doubt, do the research.
 
+The step where the source's operations become an MCP surface is where "Design rules" above starts to bind: the
+inventory may list twenty operations, and that is not twenty tools. Group the operations by the entity they act
+on and propose one `action`-dispatched tool per entity. If the brief hands you a ready-made list of tools —
+because they are being ported from an existing agent or another server — treat that list as a list of
+*operations*, not as the tool count, and merge it the same way.
+
 Summarize to the user: the findings from 1a in 3-6 bullets (including the resolved reporting language
 and its source), plus the source-research output described at the end of `source-research.md` — the
 inventory, the proposed tool surface, the reusable artifacts, the assumptions, and any open questions.
-Get answers to the open questions and a one-line confirmation before proceeding.
+State the proposed tool count explicitly, and for every tool that is not an `action`-dispatched one give the
+one-line reason it stands apart. Get answers to the open questions and a one-line confirmation before proceeding.
 
 ## Step 2 — Verify Agent Tester OpenAI credentials
 
@@ -195,8 +321,8 @@ git remote add origin <ssh-or-https-url>         # first time
 # or
 git remote set-url origin <ssh-or-https-url>     # replacing
 
-git checkout -B main
-git push -u origin main
+git checkout -B master
+git push -u origin master
 ```
 
 Record the remote URL for Step 10. You do NOT need `baseUrl`, `token`, or `group` in this branch —
@@ -221,12 +347,18 @@ node ${CLAUDE_SKILL_DIR}/scripts/gitlab-push.js \
   --token "<token>" \
   --group "<group>" \
   --name "<project.name>" \
+  --visibility public \
+  --branch master \
   --cwd "$(pwd)"
 ```
 
-The script: resolves `groupId` → `POST /projects` with `{ name, path, namespace_id, visibility: private }`
-→ `git init` (if needed) → `git checkout -B main` → `git add -A` → commit (if anything to commit)
-→ `git remote add origin <ssh_url>` → `git push -u origin main`.
+`--visibility public` and `--branch master` are **not optional** — the script's own defaults are
+`private` and `main`, and both are wrong here. Pass them on every run unless the accompanying text
+demands something else in so many words.
+
+The script: resolves `groupId` → `POST /projects` with `{ name, path, namespace_id, visibility }`
+→ `git init` (if needed) → `git checkout -B master` → `git add -A` → commit (if anything to commit)
+→ `git remote add origin <ssh_url>` → `git push -u origin master`.
 
 If creation or push fails, surface the HTTP body / git stderr to the user — do NOT retry silently.
 A common failure is "path has already been taken" — ask the user for a different `--path` (URL slug),
@@ -257,14 +389,17 @@ sections exactly as the format file prescribes:
 ## Scope
 
 ### Tools
-- `<tool_name>` — <description>; params: …; expected result: …; file: `src/tools/<tool-name>.ts`
+- `<tool_name>` — <what it is for>; actions: `<a|b|c>`; params: …; expected result: …;
+  file: `src/tools/<tool-name>.ts`
+- <if a tool is NOT `action`-dispatched: one line saying why it stands apart>
 
 ### Resources
 - `<resource_uri>` — …
 
 ### Prompts
 - `AGENT_BRIEF` — …
-- `AGENT_PROMPT` — …
+- `AGENT_PROMPT` — empty, or the inter-tool orchestration rules it must carry and why each of them
+  cannot live in a tool description instead
 
 ### REST endpoints (if any)
 - `GET /api/<…>` — …
@@ -298,6 +433,8 @@ sections exactly as the format file prescribes:
 ### Stage 5 — Agent Tester scenarios
 - [ ] <user-question-1> — expects tool `<tool>` and <behaviour>
 - [ ] <user-question-2> — …
+- [ ] shrink pass — tool descriptions, parameter descriptions and `AGENT_PROMPT` cut back to what the
+      scenarios prove is load-bearing; everything removed is listed in `claudedocs/test-log.md`
 
 ### Stage 6 — Documentation update
 - [ ] `README.md` and `readme-docs/*` describe the tools, config keys, and endpoints as they are
@@ -325,7 +462,8 @@ the purpose of writing one.
 Print into the chat — not merely a link to the file, which nobody opens:
 
 - the plain-language opening block, in full (it is short and it is the part the user actually judges);
-- one line per tool: name, what it does, what it takes, what it returns;
+- one line per tool: name, its actions, what it takes, what it returns — and, when there is more than one
+  tool, the sentence that says why they were not merged into one;
 - the stage headings of the checklist, so the user sees the order of work;
 - anything still recorded as an assumption or an open question.
 
@@ -352,9 +490,14 @@ Follow the approved plan. For each tool/resource/prompt:
 
 1. Create one file per tool in `src/tools/<tool-name>.ts` (the tool's `name` with `_` → `-`), each with
    its definition and handler together, and register it in the list in `src/tools/tools.ts` (see "Tool
-   organization" in AGENTS.md). Edit `src/custom-resources.ts`, `src/api/router.ts`, `src/prompts/*` as
-   needed. Remove the stub tool files (`example-tool.ts`, `example-search.ts`, `example-long-task.ts`,
-   `show-widget.ts`) and their entries in `tools.ts` — do not leave demo code in the final build.
+   organization" in AGENTS.md). Write each tool in the `action`-dispatched shape from "Design rules"
+   above — required `action` enum, the remaining parameters optional in the schema and validated per
+   action in the handler, a plain sentence back to the model when something required is missing. Write
+   the descriptions at their shortest now; they grow only in Step 8 and only where a scenario forces it,
+   and no fact appears in both a tool description and a parameter description. Edit
+   `src/custom-resources.ts`, `src/api/router.ts`, `src/prompts/*` as needed. Remove the stub tool files
+   (`example-tool.ts`, `example-search.ts`, `example-long-task.ts`, `show-widget.ts`) and their entries in
+   `tools.ts` — do not leave demo code in the final build.
 2. Add new config keys to `config/default.yaml` (and matching env mappings in
    `config/custom-environment-variables.yaml` when appropriate). Mirror structural changes
    in `config/_local.yaml`. **If the feature talks to any third-party / external service
@@ -370,6 +513,16 @@ Reference docs live in `FA-MCP-SDK-DOC/` — read them if you are unsure about a
 `03-configuration.md`, `08-agent-tester-and-headless-api.md`).
 
 ## Step 8 — Headless Agent Tester loop
+
+**Where the scenarios come from.** If the accompanying text supplied acceptance scenarios — real user
+questions and the answers they must produce — those are the scenarios, and they are covered first. If
+it supplied none, **you invent them yourself; do not ask the user to write them.** The source you
+researched in Step 1 carries everything needed: each tool's parameters say what a user must provide,
+the tool's description and the agent's instructions say what people ask it for, and reference data
+files show the real values that appear in questions. Derive at least a happy path per tool, one case
+with a missing or ambiguous parameter, one case with a value that does not exist, and one multi-turn
+scenario where the user supplies the parameters piecemeal. Write the scenarios into the plan and the
+test log, so the user can see what you decided to check.
 
 The key was already verified against the endpoint in Step 2. Here the remaining concern is that
 `config/local.yaml` was written correctly and the project can actually load the key at runtime.
@@ -450,6 +603,18 @@ agent prompt, handler logic, error message — per `FA-MCP-SDK-DOC/08-agent-test
 fix, rebuild (`yarn cb`), restart, and re-run the scenario. After restart, in-memory sessions on
 the server are wiped — delete the stale `claudedocs/.agent-session` file before re-running.
 
+The fix is always the **smallest** one that makes the scenario pass: one sentence added to the one text that
+owns that fact — the parameter if it is about a parameter, the tool description if it relates parameters to each
+other, `AGENT_PROMPT` only if it is about the interplay of two tools. Do not paste the same clarification into
+two places hoping one of them lands, and do not rewrite a whole description when a clause was missing.
+
+**The shrink pass.** Once a scenario group is green, spend one iteration going the other way, as rule 4 of
+"Design rules" requires: delete text you are not sure is needed — a paragraph of `AGENT_PROMPT`, a sentence of a
+tool description, an over-explained parameter — or merge two tools whose calls never actually diverged, then
+re-run exactly the same scenarios. What still passes stays deleted; what breaks is restored and is now known to
+be load-bearing. Keep shrinking until a pass produces nothing removable. If `AGENT_PROMPT` survives the whole
+loop non-empty, the test log must say which scenario failed without it.
+
 Log every iteration in `claudedocs/test-log.md` in the reporting language (session header +
 per-scenario: sent / expected / received / tools used / result / diagnosis / fix). This is the
 audit trail.
@@ -474,6 +639,11 @@ Zero errors, zero warnings that matter, all transport tests green.
 Write `claudedocs/dev-report.md` in the reporting language, following the structure in
 `CLAUDE.md` → "Development Report" (what was built, architecture decisions, agent prompt rationale,
 test coverage, Agent Tester findings, configuration, known limitations).
+
+Two of those sections answer directly to "Design rules". Architecture decisions states how many tools there are,
+how the source's operations were grouped into them, and the reason behind any tool that was kept separate rather
+than merged. Agent prompt rationale states what `AGENT_PROMPT` ended up holding and which failing scenario each
+surviving line is there for — or, preferably, that it is empty.
 
 Alongside the full report, produce two companion files in the reporting language:
 
@@ -518,11 +688,11 @@ initial commit and you haven't changed anything since.
 **3. Push to the remote set up in Step 5:**
 
 ```
-git push origin main
+git push origin master
 ```
 
 If the push is rejected because of a non-fast-forward (remote ahead) — something diverged unexpectedly.
-Show the user `git log origin/main..HEAD` and `git log HEAD..origin/main` and ask how to proceed.
+Show the user `git log origin/master..HEAD` and `git log HEAD..origin/master` and ask how to proceed.
 Do NOT `git push --force` without explicit user approval.
 
 ## Final report
@@ -531,7 +701,7 @@ Tell the user:
 
 1. Project absolute path on disk.
 2. GitLab web URL of the repo (created in Step 5) and confirmation that both the scaffold push
-   (Step 5) and the feature push (Step 10) landed on `main`.
+   (Step 5) and the feature push (Step 10) landed on `master`.
 3. Summary of tools/resources/prompts/endpoints that were implemented.
 4. Any flagged limitations from the dev report.
 5. Links to `claudedocs/impl-plan.md`, `claudedocs/test-log.md`, `claudedocs/dev-report.md`,
