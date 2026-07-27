@@ -2,7 +2,7 @@
 name: create-mcp-wizard
 description: "Implement an fa-mcp MCP server end-to-end in this already-scaffolded project: verify Agent Tester OpenAI creds, seed dev-time secrets and lenient config, push the scaffold to GitLab (creating a new repo OR reusing an existing one when instructed), draft an implementation plan, implement tools/prompts/resources, iterate via the Agent Tester headless API, then push the finished work. Use when the user asks to develop/implement/deploy the MCP server in this project, mentions 'create-mcp-wizard', 'deploy MCP', 'implement MCP', or supplies a feature brief."
 disable-model-invocation: true
-allowed-tools: Bash(node *), Bash(yarn *), Bash(npm *), Bash(git *), Bash(pwd), Bash(cd *), Bash(curl *), Read, Write, Edit, Glob, Grep
+allowed-tools: Bash(node *), Bash(yarn *), Bash(npm *), Bash(git *), Bash(pwd), Bash(cd *), Bash(curl *), Read, Write, Edit, Glob, Grep, WebFetch, WebSearch, mcp__context7__resolve-library-id, mcp__context7__query-docs
 ---
 
 # Deploy MCP — feature implementation
@@ -33,7 +33,12 @@ All supporting scripts live in `${CLAUDE_SKILL_DIR}/scripts/` and are invoked wi
 - **Do not touch `.claude/`, `deploy/`, or `FA-MCP-SDK-DOC/`.** These directories are maintained
   by the CLI / skill infrastructure and by the SDK maintainer. Do NOT modify, add, or delete files
   inside them unless the accompanying text explicitly instructs you to. This applies to every step
-  below — implementation, tests, dev report, everything.
+  below — implementation, tests, dev report, everything. Reading them is expected and encouraged; the
+  ban is on writing.
+- **Shared references.** Two documents next to this skill are part of it and are read, not summarized:
+  `${CLAUDE_SKILL_DIR}/../_shared/source-research.md` — how a source of truth is studied (Step 1), and
+  `${CLAUDE_SKILL_DIR}/../_shared/prompt-plan-format.md` — how the plan document is written (Step 6).
+  They are shared with other skills; do not copy their contents into project files.
 - **Reporting language**. Language for all generated artifacts (`claudedocs/*.md`, commit
   messages, user-facing summaries) is resolved in this order:
     1. Explicit directive in the feature brief.
@@ -42,15 +47,17 @@ All supporting scripts live in `${CLAUDE_SKILL_DIR}/scripts/` and are invoked wi
   Translate prose — headings and body text — to the resolved language; leave code, paths, YAML
   keys, and CLI commands as-is. Report the resolved language and its source in the Step 1 summary.
 
-## Step 1 — Scan the accompanying text for requirements
+## Step 1 — Scan the accompanying text and research the source of truth
 
-Before touching code, read every message/file the user attached and extract:
+This step decides what gets built. It has two halves: reading what the user handed over, and going out
+to the source that the future MCP server will speak for.
+
+**1a. Extract from the accompanying text.** Read every message and file the user attached and pull out:
 
 - **Tool requirements** — what the MCP server must expose (tools, resources, prompts, REST endpoints).
-- **Source-of-truth references** — existing code paths (e.g. "wrap the tools in `D:/foo/bar/`"),
-  public APIs to proxy, or other MCP projects to crib from. If a path is given, use Read/Glob/Grep
-  on it to understand the surface area before writing code. If an API is named, fetch its docs
-  (Context7 / WebFetch) before guessing at parameters.
+- **Source-of-truth references** — where the knowledge actually lives: a code path
+  (e.g. "wrap the tools in `D:/foo/bar/`"), a public API to proxy, a database, a specification, or
+  another MCP project to crib from. This is the input to half 1b below.
 - **Exclusions** — "no AD", "no Consul", "no DB", etc. Record them; do not ask for those creds later.
 - **Additional creds required by the feature** (DB user/password, upstream service tokens, AD
   service account, etc.). Ask for ONLY what the feature actually needs and nothing the text excluded.
@@ -59,8 +66,21 @@ Before touching code, read every message/file the user attached and extract:
   has a working `agentTester.openAi.apiKey`, re-use it instead of asking again.
 - **Reporting language** — resolve per the Ground rule above; record it for later steps.
 
-Summarize what you found to the user in 3-6 bullets (including the resolved reporting language
-and its source) and get a one-line confirmation before proceeding.
+**1b. Research the source.** Read `${CLAUDE_SKILL_DIR}/../_shared/source-research.md` and follow it.
+That document is the method: classify the source, read the project baseline, inventory the source's
+operations with their inputs, outputs, access rules and limits, map those operations onto an MCP
+surface that an agent can actually use, list what is already reusable in this project, and record
+assumptions and open questions. Its rules are binding here — in particular, nothing is invented: a
+path is read before it is cited, an API's documentation is fetched before its parameters are named,
+and a source you could not open is reported as a blocker instead of being guessed at.
+
+Skip 1b only when there is no external source at all — the user described the behaviour in full and
+the server invents nothing from anywhere else. That is rare; when in doubt, do the research.
+
+Summarize to the user: the findings from 1a in 3-6 bullets (including the resolved reporting language
+and its source), plus the source-research output described at the end of `source-research.md` — the
+inventory, the proposed tool surface, the reusable artifacts, the assumptions, and any open questions.
+Get answers to the open questions and a one-line confirmation before proceeding.
 
 ## Step 2 — Verify Agent Tester OpenAI credentials
 
@@ -212,56 +232,86 @@ OR switch to branch 4a if the "collision" is in fact the already-existing target
 **5. Remember the remote URL for Step 10.** Step 10 does NOT re-create the project — only
 `git push` against the same remote, regardless of which branch (4a or 4b) you took here.
 
-## Step 6 — Draft and commit to a plan
+## Step 6 — Draft the prompt-plan and commit to it
 
-Create `claudedocs/impl-plan.md` (create the directory if needed) in the reporting language.
-Structure:
+Create `claudedocs/impl-plan.md` (create the directory if needed) in the reporting language. This
+document is a **prompt-plan** — an implementation plan written as a prompt for whoever carries it out.
+
+**Read `${CLAUDE_SKILL_DIR}/../_shared/prompt-plan-format.md` and follow it.** That file is the single
+source of truth for the format: the plain-language opening block, the note to the executor, the stage
+checklist with boxes ticked as work genuinely lands, documentation as the last stage, and the
+target-state wording. Do not reproduce those rules here and do not improvise around them.
+
+The material for the opening block comes from Step 1 — the goal, the problem the source of truth is
+being wrapped for, and what the user will be able to ask the agent once the server runs. The material
+for the technical sections comes from the source research: the inventory, the proposed tool surface,
+the reusable artifacts, and the configuration keys.
+
+For this project the plan's technical sections and stages are the ones below; keep the two opening
+sections exactly as the format file prescribes:
 
 ```markdown
-# Implementation Plan — <project name>
+## Scope
 
-## Goal
-<One paragraph restating the feature from the accompanying text.>
+### Tools
+- `<tool_name>` — <description>; params: …; expected result: …; file: `src/tools/<tool-name>.ts`
 
-## Tools
-- [ ] `<tool_name>` — <description>; params: …; expected result: …
-- [ ] …
+### Resources
+- `<resource_uri>` — …
 
-## Resources
-- [ ] `<resource_uri>` — …
+### Prompts
+- `AGENT_BRIEF` — …
+- `AGENT_PROMPT` — …
 
-## Prompts
-- [ ] `AGENT_BRIEF` — …
-- [ ] `AGENT_PROMPT` — …
+### REST endpoints (if any)
+- `GET /api/<…>` — …
 
-## REST endpoints (if any)
-- [ ] `GET /api/<…>` — …
+### Configuration in `config/default.yaml`
+- `accessPoints.<name>` / `db.postgres.dbs.<name>` / etc.
 
-## Configuration additions to default.yaml
-- [ ] `accessPoints.<name>` / `db.postgres.dbs.<name>` / etc.
+## Implementation checklist
 
-## Test cases (tests/mcp/test-cases.js)
-- [ ] happy path per tool
-- [ ] invalid params / missing required
+### Stage 1 — Tools
+- [ ] `src/tools/<tool-name>.ts` — definition and handler in one file
+- [ ] registered in the list in `src/tools/tools.ts`
+- [ ] stub tools (`example-tool.ts`, `example-search.ts`, `example-long-task.ts`, `show-widget.ts`)
+      deleted together with their entries in `tools.ts`
+
+### Stage 2 — Resources, prompts, REST endpoints
+- [ ] `src/custom-resources.ts`
+- [ ] `src/prompts/agent-brief.ts`, `src/prompts/agent-prompt.ts`
+- [ ] `src/api/router.ts`
+
+### Stage 3 — Configuration
+- [ ] keys added to `config/default.yaml`, external services under `accessPoints`
+- [ ] env mappings in `config/custom-environment-variables.yaml`
+- [ ] structure mirrored in `config/_local.yaml`
+
+### Stage 4 — Tests
+- [ ] happy path per tool in `tests/mcp/test-cases.js`
+- [ ] invalid params / missing required fields
 - [ ] upstream errors
 
-## Agent Tester scenarios
-- [ ] <user-question-1> → expects <tool>/<behaviour>
-- [ ] …
+### Stage 5 — Agent Tester scenarios
+- [ ] <user-question-1> — expects tool `<tool>` and <behaviour>
+- [ ] <user-question-2> — …
+
+### Stage 6 — Documentation update
+- [ ] `README.md` and `readme-docs/*` describe the tools, config keys, and endpoints as they are
+- [ ] `claudedocs/dev-report.md` — full report
+- [ ] `claudedocs/breef-report.md` — brief of the work and the problems
+- [ ] `claudedocs/dev-problems.md` — blockers, failed checks, open questions
+- [ ] `claudedocs/test-log.md` — every Agent Tester iteration logged
 
 ## Sign-off
 - [ ] `yarn cb` clean
 - [ ] `yarn lint:fix` clean
 - [ ] `yarn typecheck` clean
 - [ ] `yarn test:mcp`, `:mcp-http`, `:mcp-sse` all green
-- [ ] Agent Tester iterations done, `claudedocs/test-log.md` has entries
-- [ ] `claudedocs/dev-report.md` written (full report)
-- [ ] `claudedocs/breef-report.md` written (brief of work + problems — same content echoed to console)
-- [ ] `claudedocs/dev-problems.md` written (blockers, failed checks, open questions)
 - [ ] Final GitLab push (Step 10) complete
 ```
 
-Tick boxes as you go. The plan is not optional — it is how the user audits progress.
+The plan is not optional — it is how the user audits progress. Tick the boxes as you go.
 
 ## Step 7 — Implement
 
