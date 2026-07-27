@@ -21,6 +21,11 @@ service, a database, a specification, or another MCP server that the new work mu
    `ASSUMPTION:`, and phrased so it can be reversed in one edit.
 7. **Ask, don't guess.** When a fork in the road is not covered by the task, stop, name the ambiguity in plain
    words, and ask. One question now is cheaper than a rewrite later.
+8. **No vague wording.** "Handle correctly", "process properly" record nothing. Say what, where, and how.
+9. **Configuration over constants.** Hosts, ports, tokens and credentials are read through `appConfig`, never
+   baked into `.ts` files. This is about where the code *reads* them from, not about hiding them — writing the
+   literal values into configuration files, the plan, the reports or the console is expected (see
+   "Credentials" below).
 
 ## Step 1 — Classify the source
 
@@ -160,20 +165,7 @@ Everything in this summary is raw material for the plan, and the plan must settl
 source. So record it in a form that can be pasted: exact paths with line numbers, full URLs, real parameter
 names, sample requests and sample responses, literal values. A summary that says "the API has a search
 endpoint" has recorded nothing; one that gives the method, the path, the parameters, a `curl` line and a
-response body has. Working code is the exception — it is located and judged, not transcribed: name the module,
-where it lives, and whether it is taken as is, adapted (say how), or merely used as inspiration.
-
-## Hard prohibitions
-
-- Inventing files, functions, exports, endpoints, tables, or SDK methods. Only what was verified by reading.
-- Vague wording — "handle correctly", "process properly". Say what, where, and how.
-- Features nobody asked for. YAGNI applies to the design stage too, not only to the code.
-- Rewriting adjacent modules that the task did not mention.
-- Values baked into source code that belong in configuration — hosts, ports, tokens, credentials are read
-  through `appConfig`, not written into `.ts` files. This is about where the code *reads* them from; it is not
-  a rule about hiding them. Writing the literal values into configuration files, the plan, the reports or the
-  console is expected — see "Credentials" below.
-- Presenting an unread source as read. If you could not open it, say so.
+response body has.
 
 ## Credentials
 

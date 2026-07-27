@@ -11,12 +11,6 @@ Implement this MCP server against a feature brief, iteratively refine via the Ag
 API, and push the result to GitLab. The project has **already been scaffolded** by the `fa-mcp` CLI —
 this skill picks up from the first `yarn install` and ends with the finished feature pushed to GitLab.
 
-The skill makes **two GitLab pushes**: the first (Step 5) lands the scaffolded, configured project
-on the remote so the rest of the work is tracked; the second (Step 10) pushes the implemented and
-tested feature on top. In Step 5 the remote is either created via `gitlab-push.js` (default) or
-reused as-is when the accompanying instructions say a repo already exists or `origin` is already
-wired up — no duplicate projects get created.
-
 All supporting scripts live in `${CLAUDE_SKILL_DIR}/scripts/` and are invoked with `node`.
 
 ## Ground rules
@@ -24,7 +18,15 @@ All supporting scripts live in `${CLAUDE_SKILL_DIR}/scripts/` and are invoked wi
 - **Every step is explicit and verified**. Do NOT silently skip a step. If a step fails, stop and report.
 - **Two hard stops require the user's word before you continue**: the end of Step 1 (the requirements and
   the source research are confirmed) and the end of Step 6 (the plan is approved). Nothing gets built
-  before both are passed, and neither can be satisfied by writing a file and moving on.
+  before both are passed, and neither can be satisfied by writing a file and moving on. The accompanying
+  text can waive them — only in so many words, and in two distinct modes. A targeted waiver ("do not stop
+  after the research", "stop only at the plan") skips the FIRST stop: print the Step 1 summary and
+  continue, but an unanswered question or a missing credential still forces the stop — this waiver skips
+  the confirmation, never the answers. A blanket directive ("run without stops", "run without questions",
+  or the same meaning in any language) skips BOTH stops: print the Step 1 summary and the plan digest as
+  usual and keep going; the plan counts as approved, and every open question is decided by you and
+  recorded as an assumption in the plan. Even then, stop when no decision can substitute for a missing
+  fact — a credential or access that was never provided and without which a step cannot run.
 - **Never ask the user with predefined options for free-form input** (usernames, paths, tokens, keys,
   URLs). Ask the question in plain prose; the user types the answer.
 - **Respect exclusions from the accompanying text**. If it says "no AD" or "no Consul" — do NOT
@@ -42,22 +44,14 @@ All supporting scripts live in `${CLAUDE_SKILL_DIR}/scripts/` and are invoked wi
   `…`, `xxx`) cannot work — ask for the full one.
 - **Dev-time defaults are lenient on purpose** (auth off, Consul off, Agent Tester on). Production
   config comes later; this skill is about getting the loop closed.
-- **The surface the model sees is minimal by default** — the fewest tools that cover the behaviour, the
-  shortest descriptions that still work, and an `AGENT_PROMPT` that stays empty unless something forces
-  text into it. Every word there is re-read by the model on every single call, so wording is *earned* by a
-  scenario that failed without it, never added "just in case". The full rules are in "Design rules — how
-  many tools, and how much text" below, and they bind Steps 1, 6, 7 and 8.
-- **Minimal applies to the model, exhaustive applies to the plan.** The rule above governs only text the
-  model re-reads at call time — tool and parameter descriptions, `AGENT_PROMPT`. The plan of Step 6 and
-  the documents of Step 9 are the exact opposite: they are written for a human or an agent starting from
-  an empty context, and there brevity is a defect. Never trim the plan in the name of minimality.
-- **The plan is self-contained in its decisions.** An executor with a clean context — no feature brief, no
-  memory of this conversation, nobody to ask — implements the whole feature from `claudedocs/impl-plan.md`.
-  Everything it cannot recover on its own is carried INTO the plan: algorithms, endpoints with request and
-  response samples, credentials in the clear, package versions, full config fragments, contracts, skeletons of
-  new code. What already exists as working code or data is **pointed at** instead — exact location plus the
-  verdict "as is" / "with these changes" / "inspiration only". Reusing a ready module is the good outcome; the
-  plan just has to say which module, where, and in what state. Step 6 defines the sections and the check.
+- **"Design rules — how many tools, and how much text" below binds Steps 1, 6, 7 and 8.** It governs the
+  runtime surface the model re-reads on every call — tool count, tool and parameter descriptions,
+  `AGENT_PROMPT` — and it states both the target (the smallest surface that still works) and what it
+  deliberately leaves exhaustive.
+- **Shared references.** Two documents next to this skill are part of it and are read in full, not
+  summarized: `${CLAUDE_SKILL_DIR}/../_shared/source-research.md` — the method of Step 1, and
+  `${CLAUDE_SKILL_DIR}/../_shared/prompt-plan-format.md` — the format and self-containment rules of the
+  Step 6 plan. They are shared with other skills; do not copy their contents into project files.
 - **You are already inside the project root.** All paths are relative to the current working
   directory unless stated otherwise. Use `pwd` once at the start to confirm.
 - **Do not touch `.claude/`, `deploy/`, or `FA-MCP-SDK-DOC/`.** These directories are maintained
@@ -65,10 +59,6 @@ All supporting scripts live in `${CLAUDE_SKILL_DIR}/scripts/` and are invoked wi
   inside them unless the accompanying text explicitly instructs you to. This applies to every step
   below — implementation, tests, dev report, everything. Reading them is expected and encouraged; the
   ban is on writing.
-- **Shared references.** Two documents next to this skill are part of it and are read, not summarized:
-  `${CLAUDE_SKILL_DIR}/../_shared/source-research.md` — how a source of truth is studied (Step 1), and
-  `${CLAUDE_SKILL_DIR}/../_shared/prompt-plan-format.md` — how the plan document is written (Step 6).
-  They are shared with other skills; do not copy their contents into project files.
 - **Reporting language**. Language for all generated artifacts (`claudedocs/*.md`, commit
   messages, user-facing summaries) is resolved in this order:
     1. Explicit directive in the feature brief.
@@ -207,28 +197,23 @@ to the source that the future MCP server will speak for.
   has a working `agentTester.openAi.apiKey`, re-use it instead of asking again.
 - **Reporting language** — resolve per the Ground rule above; record it for later steps.
 
-**1b. Research the source.** Read `${CLAUDE_SKILL_DIR}/../_shared/source-research.md` and follow it.
-That document is the method: classify the source, read the project baseline, inventory the source's
-operations with their inputs, outputs, access rules and limits, map those operations onto an MCP
-surface that an agent can actually use, list what is already reusable in this project, and record
-assumptions and open questions. Its rules are binding here — in particular, nothing is invented: a
-path is read before it is cited, an API's documentation is fetched before its parameters are named,
-and a source you could not open is reported as a blocker instead of being guessed at.
+**1b. Research the source.** Read `${CLAUDE_SKILL_DIR}/../_shared/source-research.md` and follow it —
+it is the method for this half of the step, and every rule in it is binding here.
 
 Skip 1b only when there is no external source at all — the user described the behaviour in full and
 the server invents nothing from anywhere else. That is rare; when in doubt, do the research.
 
-The step where the source's operations become an MCP surface is where "Design rules" above starts to bind: the
-inventory may list twenty operations, and that is not twenty tools. Group the operations by the entity they act
-on and propose one `action`-dispatched tool per entity. If the brief hands you a ready-made list of tools —
-because they are being ported from an existing agent or another server — treat that list as a list of
-*operations*, not as the tool count, and merge it the same way.
+The step where the source's operations become an MCP surface is where "Design rules" above starts to bind:
+twenty inventoried operations are not twenty tools. Group them by entity per rule 1, and treat a ready-made
+tool list in the brief the same way — as a list of *operations*, not as the tool count.
 
 Summarize to the user: the findings from 1a in 3-6 bullets (including the resolved reporting language
 and its source), plus the source-research output described at the end of `source-research.md` — the
 inventory, the proposed tool surface, the reusable artifacts, the assumptions, and any open questions.
 State the proposed tool count explicitly, and for every tool that is not an `action`-dispatched one give the
-one-line reason it stands apart. Get answers to the open questions and a one-line confirmation before proceeding.
+one-line reason it stands apart. Get answers to the open questions and a one-line confirmation before
+proceeding — unless the accompanying text waived this stop; the two waiver modes and their limits are
+defined in Ground rules.
 
 ## Step 2 — Verify Agent Tester OpenAI credentials
 
@@ -394,63 +379,18 @@ Create `claudedocs/impl-plan.md` (create the directory if needed) in the reporti
 document is a **prompt-plan** — an implementation plan written as a prompt for whoever carries it out.
 
 **Read `${CLAUDE_SKILL_DIR}/../_shared/prompt-plan-format.md` and follow it.** That file is the single
-source of truth for the format: the plain-language opening block, the note to the executor, the stage
-checklist with boxes ticked as work genuinely lands, documentation as the last stage, and the
-target-state wording. Do not reproduce those rules here and do not improvise around them.
+source of truth for the format and for self-containment — what is written out, what is pointed at with a
+verdict, credentials as literal values, the release check. Do not reproduce those rules here and do not
+improvise around them.
 
 The material for the opening block comes from Step 1 — the goal, the problem the source of truth is
 being wrapped for, and what the user will be able to ask the agent once the server runs. The material
 for the technical sections comes from the source research: the inventory, the proposed tool surface,
 the reusable artifacts, and the configuration keys.
 
-### The plan is exhaustive — that is its whole point
-
-The executor is assumed to start with an empty context: no feature brief, no memory of this conversation, and
-nobody to ask. Everything it needs to make a decision is in this document. What it must never have to do is
-*reconstruct* something — go into the source to work out what an endpoint expects, what a credential is, or how
-an algorithm should behave. A plan that says "look it up in the source" instead of stating a fact has a hole.
-
-**Self-containment is about decisions, not about volume.** It does not mean transcribing the source into the
-plan. A ready module, a working function, a reference dataset — those are *pointed at*, precisely, and the
-pointer is an asset, not a shortcut: reusing code that already works beats re-deriving it from a description.
-The line between the two is this:
-
-- **Written out in the plan** — everything the executor cannot recover on its own: the decisions, the tool
-  boundaries, the algorithms and their rules, the values (credentials, addresses, parameters, versions), the
-  contracts, the configuration, and the shape of what gets written.
-- **Referenced by pointer** — everything that already exists as working code or data: modules, functions,
-  classes, schemas, fixtures, whole subsystems. The pointer is exact — `path/to/file.ts:120-180`, the exported
-  name, the repository and branch, the documentation URL and section — and it always carries the verdict:
-  **take as is**, **take with these changes** (named, one line each), or **use as inspiration only** (what to
-  keep from the approach, what to discard).
-
-The worked example: a tool has to find named entities by an inexact, fuzzy match. The plan spells out the
-matching itself — how the query is normalized, which similarity measure is used and with what threshold, how
-ties are broken, what happens when nothing clears the threshold. It does **not** re-derive the subsystem that
-fetches the reference data from the upstream API and builds the searchable cache of variants; that subsystem
-exists, so the plan points at it: this module is taken as is, this one is taken with the cache key changed to
-include the language, this one is only an inspiration for the scoring and is rewritten against our types.
-
-Concretely, the plan spells out **all** of the following, and it does so with real values, not with descriptions
-of values:
-
-- **the algorithms and the approach** — per tool and per action, step by step, including input normalization,
-  caching, retries, timeouts, pagination, sorting, edge cases and the exact parsing or matching rules;
-- **the npm packages** — names, exact versions, what each is for, and the install command;
-- **the credentials, in the clear** — logins, passwords, tokens, API keys, connection strings, internal
-  hostnames. Write the literal values. Never mask, never substitute `<token>` for a token you were given,
-  never move them out of the plan "because the plan is committed". The plan IS committed and that is fine;
-- **the upstream endpoints** — method, full URL, every parameter, headers, the auth scheme, rate limits, plus a
-  runnable `curl` example and a real (abbreviated) response body for each one;
-- **the configuration** — complete YAML fragments ready to paste, filled with the real values, for
-  `config/default.yaml`, `config/custom-environment-variables.yaml` and `config/_local.yaml` / `local.yaml`;
-- **the code** — for what is written from scratch: skeletons of the files, the tool definition with its full
-  `inputSchema`, the handler shape, the types, the non-obvious helpers. For what is reused: the exact pointer
-  plus the verdict — taken as is, taken with these named changes, or used as inspiration only. Pointing at an
-  existing module is the preferred outcome; pasting a thousand lines into the plan is not.
-
 The two opening sections stay exactly as the format file prescribes; the technical sections for this project
-are the ones below. Add sections when the feature needs them — never drop one because "it is obvious".
+are the ones below, each filled with real values, not with descriptions of values. Add sections when the
+feature needs them — never drop one because "it is obvious".
 
 ````markdown
 ## Sources — what is reused, from where, and in what state
@@ -614,31 +554,20 @@ accessPoints:
 
 The plan is not optional — it is how the user audits progress. Tick the boxes as you go.
 
-### The self-containment check — run it before showing the plan
+### The release check — run it before showing the plan
 
-Re-read the finished document once, pretending you have never seen the brief or the source, and answer these
-questions. Every "no" is a hole to fill before the plan is shown to anyone:
-
-- Is every decision already made in the plan — so that opening the source means *fetching known code*, never
-  working out what the code should do?
-- Does every reuse pointer name an exact location (`path:line`, export name, URL) and a verdict — as is / with
-  these changes / inspiration only?
-- Is every upstream call in the plan with its full URL, its parameters, a runnable example and a real response?
-- Are all credentials present as literal values, so nothing has to be asked for again?
-- Are the algorithms written as steps I could follow mechanically, rather than as goals I would have to design?
-- Can the config files be produced by pasting from the plan?
-- Would a reader who knows nothing about this project understand, from the opening block alone, what is being
-  built and why?
-
-A plan that fails these is rewritten, not shipped. Two failure modes, and both are real: a plan too thin to act
-on, and a plan bloated with source code that should have been a two-line pointer. Length in itself proves
-nothing — what counts is that nothing is left for the executor to invent.
+Run the "Before releasing a plan" checklist from the format file against the finished document; every unmet
+item is a hole to fill first. A plan that fails it is rewritten, not shipped. Two failure modes, and both are
+real: a plan too thin to act on, and a plan bloated with source code that should have been a two-line pointer.
+Length in itself proves nothing — what counts is that nothing is left for the executor to invent.
 
 ### Stop here and get the plan approved
 
 **This is a hard stop. Do NOT start Step 7 until the user has approved the plan.** Writing the file is
 not approval, and silence is not approval. A plan that is implemented before anyone read it defeats
-the purpose of writing one.
+the purpose of writing one. The one exception is a blanket no-stop directive in the accompanying text
+(see Ground rules): it is "Decide yourself" given in advance — print everything below anyway, record
+your decisions as assumptions in the plan, and continue without waiting.
 
 Print into the chat — not merely a link to the file, which nobody opens:
 
@@ -676,14 +605,11 @@ For each tool/resource/prompt:
 
 1. Create one file per tool in `src/tools/<tool-name>.ts` (the tool's `name` with `_` → `-`), each with
    its definition and handler together, and register it in the list in `src/tools/tools.ts` (see "Tool
-   organization" in AGENTS.md). Write each tool in the `action`-dispatched shape from "Design rules"
-   above — required `action` enum, the remaining parameters optional in the schema and validated per
-   action in the handler, a plain sentence back to the model when something required is missing. Write
-   the descriptions at their shortest now; they grow only in Step 8 and only where a scenario forces it,
-   and no fact appears in both a tool description and a parameter description. Edit
-   `src/custom-resources.ts`, `src/api/router.ts`, `src/prompts/*` as needed. Remove the stub tool files
-   (`example-tool.ts`, `example-search.ts`, `example-long-task.ts`, `show-widget.ts`) and their entries in
-   `tools.ts` — do not leave demo code in the final build.
+   organization" in AGENTS.md). Write each tool in the `action`-dispatched shape of rule 1 of "Design
+   rules", with descriptions at their shortest per rules 2 and 3 — they grow only in Step 8, and only
+   where a scenario forces it. Edit `src/custom-resources.ts`, `src/api/router.ts`, `src/prompts/*` as
+   needed. Remove the stub tool files (`example-tool.ts`, `example-search.ts`, `example-long-task.ts`,
+   `show-widget.ts`) and their entries in `tools.ts` — do not leave demo code in the final build.
 2. Add new config keys to `config/default.yaml` (and matching env mappings in
    `config/custom-environment-variables.yaml` when appropriate). Mirror structural changes
    in `config/_local.yaml`. **If the feature talks to any third-party / external service
@@ -790,16 +716,12 @@ fix, rebuild (`yarn cb`), restart, and re-run the scenario. After restart, in-me
 the server are wiped — delete the stale `claudedocs/.agent-session` file before re-running.
 
 The fix is always the **smallest** one that makes the scenario pass: one sentence added to the one text that
-owns that fact — the parameter if it is about a parameter, the tool description if it relates parameters to each
-other, `AGENT_PROMPT` only if it is about the interplay of two tools. Do not paste the same clarification into
-two places hoping one of them lands, and do not rewrite a whole description when a clause was missing.
+owns that fact under rule 3 of "Design rules". Do not paste the same clarification into two places hoping one
+of them lands, and do not rewrite a whole description when a clause was missing.
 
-**The shrink pass.** Once a scenario group is green, spend one iteration going the other way, as rule 4 of
-"Design rules" requires: delete text you are not sure is needed — a paragraph of `AGENT_PROMPT`, a sentence of a
-tool description, an over-explained parameter — or merge two tools whose calls never actually diverged, then
-re-run exactly the same scenarios. What still passes stays deleted; what breaks is restored and is now known to
-be load-bearing. Keep shrinking until a pass produces nothing removable. If `AGENT_PROMPT` survives the whole
-loop non-empty, the test log must say which scenario failed without it.
+**The shrink pass.** Once a scenario group is green, run rule 4 of "Design rules" against it, and keep
+shrinking until a pass produces nothing removable. If `AGENT_PROMPT` survives the whole loop non-empty, the
+test log must say which scenario failed without it.
 
 Log every iteration in `claudedocs/test-log.md` in the reporting language (session header +
 per-scenario: sent / expected / received / tools used / result / diagnosis / fix). This is the
