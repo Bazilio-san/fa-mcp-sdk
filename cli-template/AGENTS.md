@@ -2,9 +2,11 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+
 ## What This Is
 
 An MCP (Model Context Protocol) server built on the `fa-mcp-sdk` framework. It exposes tools, prompts, and resources to AI agents via STDIO or HTTP/SSE transports.
+
 
 ## Commands
 
@@ -44,6 +46,7 @@ node scripts/generate-jwt.js -u <username> -ttl <duration> [-s <service>] [-p <p
 yarn consul:unreg          # deregister from Consul
 ```
 
+
 ## JWT Token Generation (Skill /gen-jwt)
 
 Generate JWT tokens for MCP server authentication using the `/gen-jwt` skill. 
@@ -52,6 +55,7 @@ Triggers: user asks to generate/create a JWT token, mentions "jwt", "token for u
 **Start/stop the server**: `yarn build && yarn start`. Stop with Ctrl+C. Port is in `config/default.yaml` → `webServer.port`. Force stop: `node scripts/kill-port.js <port>`.
 
 **Server endpoints** (HTTP mode): `/mcp/*` (MCP protocol), `/docs` (Swagger UI), `/admin` (token generator), `/health`, `/agent-tester` (chat UI for testing tools).
+
 
 ## Architecture
 
@@ -142,6 +146,7 @@ When multiple auth methods configured, detection from `Authorization` header:
 3. `jwtToken` — standard signed JWT, HS256 (optional IP restriction via `isCheckIP` + `ip` field in payload; legacy `<expire>.<hex>` tokens still accepted for backward compatibility)
 4. `custom` — user-defined validator (fallback)
 
+
 ## Framework Documentation
 
 Detailed fa-mcp-sdk docs are in `FA-MCP-SDK-DOC/`:
@@ -162,6 +167,7 @@ Detailed fa-mcp-sdk docs are in `FA-MCP-SDK-DOC/`:
 | `10-mcp-apps.md` | Building / extending MCP Apps (UI-augmented tools) — protocol contract, SDK surface, patterns, pitfalls |
 | `11-public-contract.md` | Formal SDK public contract — transports, endpoints, JWT claims, tool/prompt/resource format, error mapping, headers, semver & deprecation policy |
 | `12-implementation-standard.md` | Corporate MCP server implementation standard (Avatar profile over MCP 2025-11-25) — tool side-effects & risk level, error codes, limits, observability, deprecation, compliance checklist |
+
 
 ## Development and Testing Through Agent Tester
 
@@ -384,11 +390,13 @@ This log serves as:
 - **Progress tracker** — which tools/scenarios are covered, which remain
 - **Handoff document** — if the session is interrupted, the next session can read the log and continue
 
+
 ## Editing files in `.claude/` (Skill /edit-claude-files)
 
 Any edit or new file under `.claude/**` (SKILL.md, scripts, hooks, agents, `settings.json`) is blocked
 by `settings.json` — direct `Write`/`Edit` will fail. Invoke the `/edit-claude-files` skill, which
 describes the required `scripts/fcp.js` temp-copy protocol.
+
 
 ## MCP Apps Reference Clone (`scripts/clone-mcp-ext-apps.js`)
 
@@ -427,6 +435,7 @@ fragments. Use `${expr}` interpolation rather than `'…' + value` to splice val
 fit within 120 columns stay as plain quotes. For user-facing text where the exact spacing matters (no stray line
 breaks), keep the wording on one logical line inside the backticks even if that line is long — the formatter leaves
 template-literal contents untouched, which is exactly why they replace `+` wrapping.
+
 
 ## Writing prompt-plan documents
 
