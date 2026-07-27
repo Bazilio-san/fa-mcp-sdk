@@ -52,6 +52,27 @@ This file is **not a skill** — nothing auto-invokes it. Read it before writing
   do NOT write "the `search` flag is now removed" or any "moved from X to Y" phrasing. No was/became wording
   inside the plan; the plan describes only the final state.
 
+- **The plan is self-contained in its decisions.** Assume the executor starts with an empty context: it has not
+  read the task that produced this plan and cannot ask the author anything. Everything it cannot recover on its
+  own is written INTO the document — the approach and the algorithms step by step, the packages with their
+  versions, the endpoints with their parameters and real request/response samples, the credentials as literal
+  values, complete configuration fragments ready to paste, the contracts, and skeletons of the code that is
+  written from scratch. "Work it out from the source" is a hole; nothing may be left for the executor to invent.
+
+- **Existing code and data are pointed at, not transcribed.** Self-containment is about decisions, not about
+  volume — a whole subsystem does not go into a plan, and re-deriving working code from a description is worse
+  than reusing it. Point at it precisely (`path/to/file.ts:120-180`, the exported name, the repository and
+  branch, the documentation URL and section) and state the verdict every time: **as is**, **with these changes**
+  (named, one line each), or **inspiration only** (what to keep from the approach, what to discard). A pointer
+  without a verdict is a hole; a pointer with one is an asset. So: the fuzzy-matching rules are written out in
+  the plan — normalization, similarity measure, threshold, tie-breaking — while the existing subsystem that
+  fetches the reference data and builds the searchable cache is taken as is, module by module, by pointer.
+
+- **Credentials are written out in full.** Logins, passwords, tokens, keys, connection strings and internal
+  URLs go into the plan as literal values, unmasked, regardless of whether the plan is committed. No
+  placeholders, no `<token>` stand-ins for values that are known, no notes about secret hygiene. A plan whose
+  executor has to go and ask for a password is not self-contained.
+
 ## Headings and language
 
 Headings are written in the language of the document, alongside the rest of the prose. The two opening
@@ -89,9 +110,12 @@ no "today" to describe.>
 
 ## <Technical sections>
 
-<Everything technical starts here and is shaped by the task: the scope, the contract, the interfaces, the
-file-by-file change plan, code examples, test cases, execution commands. Order them so that a reader moves
-from what is built to how it is verified.>
+<Everything technical starts here and is shaped by the task, but it always covers: what is reused and from
+where (path:line / export name / URL) with the verdict for each — as is, with named changes, or inspiration
+only; the credentials and access details as literal values; the external calls with their parameters and real
+request/response samples; the packages and versions; the approach and algorithms step by step; complete
+configuration fragments; skeletons of the code written from scratch; the file-by-file change plan; the test
+cases and the commands to run. Order them so that a reader moves from what is built to how it is verified.>
 
 ## Implementation checklist
 
@@ -117,3 +141,9 @@ from what is built to how it is verified.>
 - Every stage item is a `- [ ]` checkbox and the stages are grouped.
 - The last stage is the documentation update.
 - Nowhere does the text describe a transition from an old state to a new one.
+- Nothing in the document sends the executor elsewhere to *decide* something: algorithms, packages, endpoints
+  with real samples, credentials in the clear and config fragments are all present.
+- Every reuse of existing code or data is a precise pointer carrying a verdict — as is / with these changes /
+  inspiration only — and no working module has been transcribed into the plan instead of being pointed at.
+- Re-read it once as someone who knows nothing about the task: whatever you could not act on is missing, and
+  gets written in before the plan is shown to anyone.
