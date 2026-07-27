@@ -22,6 +22,9 @@ All supporting scripts live in `${CLAUDE_SKILL_DIR}/scripts/` and are invoked wi
 ## Ground rules
 
 - **Every step is explicit and verified**. Do NOT silently skip a step. If a step fails, stop and report.
+- **Two hard stops require the user's word before you continue**: the end of Step 1 (the requirements and
+  the source research are confirmed) and the end of Step 6 (the plan is approved). Nothing gets built
+  before both are passed, and neither can be satisfied by writing a file and moving on.
 - **Never ask the user with predefined options for free-form input** (usernames, paths, tokens, keys,
   URLs). Ask the question in plain prose; the user types the answer.
 - **Respect exclusions from the accompanying text**. If it says "no AD" or "no Consul" — do NOT
@@ -313,9 +316,39 @@ sections exactly as the format file prescribes:
 
 The plan is not optional — it is how the user audits progress. Tick the boxes as you go.
 
+### Stop here and get the plan approved
+
+**This is a hard stop. Do NOT start Step 7 until the user has approved the plan.** Writing the file is
+not approval, and silence is not approval. A plan that is implemented before anyone read it defeats
+the purpose of writing one.
+
+Print into the chat — not merely a link to the file, which nobody opens:
+
+- the plain-language opening block, in full (it is short and it is the part the user actually judges);
+- one line per tool: name, what it does, what it takes, what it returns;
+- the stage headings of the checklist, so the user sees the order of work;
+- anything still recorded as an assumption or an open question.
+
+Then say where the full document lives (`claudedocs/impl-plan.md`) and ask one direct question: approve
+as written, or what should change — the set of tools, the boundaries between them, the order of the
+stages, the scope.
+
+Handle the answer:
+
+- **Approved** — go to Step 7.
+- **Changes requested** — edit `claudedocs/impl-plan.md`, state in one or two sentences what changed,
+  and ask again. Repeat until the user approves. Do not argue the plan into acceptance; if you think a
+  requested change is wrong, say why in one sentence and then do what the user decided.
+- **"Decide yourself"** — that is approval. Record the decisions you made under the assumptions in the
+  plan, and go to Step 7.
+
+Once approved, the plan is the contract for the rest of the run. If implementation reveals that
+something in it cannot work as written, stop, say what and why, propose the correction, and get it
+agreed before deviating — do not quietly build something other than what was approved.
+
 ## Step 7 — Implement
 
-Follow the plan. For each tool/resource/prompt:
+Follow the approved plan. For each tool/resource/prompt:
 
 1. Create one file per tool in `src/tools/<tool-name>.ts` (the tool's `name` with `_` → `-`), each with
    its definition and handler together, and register it in the list in `src/tools/tools.ts` (see "Tool
