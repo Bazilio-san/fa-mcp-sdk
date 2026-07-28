@@ -1,7 +1,7 @@
 {
   "name": "fa-mcp-sdk",
   "productName": "FA MCP SDK",
-  "version": "0.12.66",
+  "version": "0.12.67",
   "description": "Core infrastructure and templates for building Model Context Protocol (MCP) servers with TypeScript",
   "type": "module",
   "main": "dist/core/index.js",
@@ -123,6 +123,7 @@
     "@types/jsonwebtoken": "^9.0.10",
     "@types/mssql": "^9.1.11",
     "@types/node": "^26.1.1",
+    "@typescript/typescript6": "^6.0.2",
     "@types/swagger-ui-express": "^4.1.8",
     "oxfmt": "^0.60.0",
     "oxlint": "^1.75.0",

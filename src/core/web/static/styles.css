@@ -192,6 +192,11 @@ body {
   text-decoration: underline;
 }
 
+.simple-footer .powered-by {
+  margin-top: 6px;
+  font-size: 11px;
+}
+
 .MCPServer {
   color: #dddddd;
 }
