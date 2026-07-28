@@ -58,7 +58,7 @@
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.29.0",
     "dotenv": "^17.4.2",
-    "fa-mcp-sdk": "^0.12.66",
+    "fa-mcp-sdk": "^0.12.67",
     "nodemailer": "^9.0.3",
     "yaml": "^2.9.0"
   },
@@ -66,6 +66,7 @@
     "@types/express": "^5.0.6",
     "@types/jest": "^30.0.0",
     "@types/node": "^25.5.2",
+    "@typescript/typescript6": "^6.0.2",
     "cross-env": "^10.1.0",
     "jest": "^30.3.0",
     "oxfmt": "^0.60.0",
@@ -78,5 +79,8 @@
   "repository": {
     "type": "git",
     "url": "git+https://{{git-base-url}}/{{project.name}}.git"
+  },
+  "resolutions": {
+    "ts-jest/typescript": "npm:@typescript/typescript6@^6.0.2"
   }
 }
