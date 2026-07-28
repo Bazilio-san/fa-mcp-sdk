@@ -2,6 +2,9 @@ const API_BASE = '/agent-tester';
 const trim = (s) => String(s || '').trim();
 
 const LLM_LS_KEY = 'mcpAgentLlmSettings';
+// Prefilled into the Custom Prompt field on a first visit only. An empty value the user saved on purpose
+// is kept as an empty string in localStorage and must not be replaced by this default on the next load.
+const CUSTOM_PROMPT_DEFAULT = 'Format answer as HTML';
 // Model default and preset list now come from the server (agentTester.openAi.defaultModel / .models),
 // delivered via GET /agent-tester/api/config → llmDefaults. `model` stays empty here as a pure fallback.
 const LLM_DEFAULTS = {
@@ -3593,26 +3596,28 @@ class McpAgentTester {
   }
 
   loadFormValuesFromStorage() {
+    let formData = {};
     try {
       const stored = localStorage.getItem('mcpAgentFormValues');
       if (stored) {
-        const formData = JSON.parse(stored);
-        if (formData.serverUrl) {
-          this.serverUrlInput.value = formData.serverUrl;
-        }
-        if (formData.transport) {
-          this.transportSelect.value = formData.transport;
-        }
-        if (formData.agentPrompt) {
-          this.systemPromptTextarea.value = trim(formData.agentPrompt);
-        }
-        if (formData.customPrompt) {
-          this.customPromptTextarea.value = trim(formData.customPrompt);
-        }
+        formData = JSON.parse(stored) || {};
       }
     } catch (error) {
       console.error('Error loading form values from storage:', error);
     }
+    if (formData.serverUrl) {
+      this.serverUrlInput.value = formData.serverUrl;
+    }
+    if (formData.transport) {
+      this.transportSelect.value = formData.transport;
+    }
+    if (formData.agentPrompt) {
+      this.systemPromptTextarea.value = trim(formData.agentPrompt);
+    }
+    // A stored empty string means the user deliberately cleared the field, so only a missing key
+    // (never saved yet) falls back to the default text.
+    this.customPromptTextarea.value =
+      typeof formData.customPrompt === 'string' ? trim(formData.customPrompt) : CUSTOM_PROMPT_DEFAULT;
   }
 
   getSavedUrls() {
