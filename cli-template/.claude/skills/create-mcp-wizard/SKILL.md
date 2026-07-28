@@ -66,6 +66,10 @@ All supporting scripts live in `${CLAUDE_SKILL_DIR}/scripts/` and are invoked wi
     3. Else — English.
   Translate prose — headings and body text — to the resolved language; leave code, paths, YAML
   keys, and CLI commands as-is. Report the resolved language and its source in the Step 1 summary.
+- **Runtime surface language is always English.** `AGENT_PROMPT`, `AGENT_BRIEF`, MCP prompts, tool names, tool
+  `description`s and every parameter `description` are written in English, regardless of the resolved reporting
+  language — this is the text the LLM reads on every call, and English is what models parse most reliably. The
+  reporting language governs only the human-facing artifacts listed above, never the runtime surface.
 
 ## Design rules — how many tools, and how much text
 
