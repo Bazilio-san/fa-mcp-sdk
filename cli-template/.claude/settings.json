@@ -17,6 +17,9 @@
       "Read(./**/*.private.*)",
       "Read(./**/*.local.*)",
       "Read(./**/*local-*)",
+      "Read(.claude/skills/deploy-mcp-to-remote-server/config/config.yml)",
+      "Read(.claude/skills/deploy-mcp-to-remote-server/config/local.yaml)",
+      "Read(.claude/skills/deploy-mcp-to-remote-server/config/remote-server-config.yaml)",
       "Edit(.claude/**)"
     ]
   },
