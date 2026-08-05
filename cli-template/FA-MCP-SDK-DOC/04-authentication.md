@@ -116,7 +116,8 @@ const result = await client.callTool('tool', args, await getAuthHeadersForTests(
 
 Standard §7.5 — protect specific tools / prompts / resources with `requiredScopes`. The auth
 middleware checks the token's `scope` claim (space-separated) against the declared list and
-returns HTTP 403 (or JSON-RPC `-32004` for tools) when scopes are missing.
+returns HTTP 403 (or JSON-RPC `-32000` with `data.reason: "insufficient_scope"` for tools) when scopes are
+missing.
 
 ```typescript
 // Resource with required scope
