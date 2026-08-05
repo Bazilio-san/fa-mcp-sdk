@@ -5,20 +5,12 @@ import { fileURLToPath } from 'url';
 import { SSEServerTransport } from '@modelcontextprotocol/sdk/server/sse.js';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 import { InMemoryEventStore } from './event-store.js';
-import {
-  CallToolRequestSchema,
-  ListToolsRequestSchema,
-  ListPromptsRequestSchema,
-  ListResourcesRequestSchema,
-  ReadResourceRequestSchema,
-  isInitializeRequest,
-} from '@modelcontextprotocol/sdk/types.js';
+import { isInitializeRequest } from '@modelcontextprotocol/sdk/types.js';
 import chalk from 'chalk';
 import express from 'express';
 import helmet from 'helmet';
 import { RateLimiterMemory } from 'rate-limiter-flexible';
 
-import { IClientCapabilities } from '../_types_/types.js';
 import { createAgentTesterRouter } from '../agent-tester/agent-tester-router.js';
 import { validateAdminAuthConfig } from '../auth/admin-auth.js';
 import { createAgentTesterSessionMW } from '../auth/agent-tester-auth.js';
@@ -38,12 +30,9 @@ import {
 } from '../errors/specific-errors.js';
 import { logger as lgr } from '../logger.js';
 import { getMetrics, getMetricsRegistry, initMetrics } from '../metrics/metrics.js';
-import { createMcpServer } from '../mcp/create-mcp-server.js';
-import { getPromptsList } from '../mcp/prompts.js';
-import { getResource, getResourcesList } from '../mcp/resources.js';
-import { truncateToolResponse, withToolTimeout } from '../mcp/tool-limits.js';
+import { createMcpServer, releaseSlot, subjectKeyFromAuth, tryAcquireSlot } from '../mcp/create-mcp-server.js';
 import { formatRateLimitError, isRateLimitError } from '../utils/rate-limit.js';
-import { getTools, normalizeHeaders } from '../utils/utils.js';
+import { normalizeHeaders } from '../utils/utils.js';
 
 import { createAdminRouter } from './admin-router.js';
 import { applyCors } from './cors.js';
@@ -475,69 +464,19 @@ export async function startHttpServer(): Promise<void> {
     }
   >();
 
-  // Create SSE server instance with preserved headers and auth payload from connection establishment.
-  // Client capabilities are read lazily on every call via `sseServer.getClientCapabilities()` so the
-  // value reflects the post-handshake state for every list/read/call.
+  // Create SSE server instance with preserved headers and auth payload from connection
+  // establishment. The full handler set from `createMcpServer` is used as-is — `presetCtx`
+  // carries the connection-scoped headers/payload into every list/read/call, so the SSE path gets
+  // the same pagination, validation, deprecation decoration, metrics, scopes and limits as the
+  // Streamable HTTP path (the former duplicated handler overrides are gone).
   async function createSseServer(
     preservedHeaders: Record<string, string>,
     mcpAuthPayload?: { user: string; [key: string]: any },
   ) {
-    const sseServer = createMcpServer('sse');
-
-    const sseCtx = () => {
-      const caps = sseServer.getClientCapabilities() as IClientCapabilities | undefined;
-      return {
-        transport: 'sse' as const,
-        headers: preservedHeaders,
-        payload: mcpAuthPayload,
-        ...(caps ? { clientCapabilities: caps } : {}),
-      };
-    };
-
-    // Override tools/list to pass correct transport and context
-    sseServer.setRequestHandler(ListToolsRequestSchema, async () => {
-      const tools = await getTools(sseCtx());
-      return { tools };
+    return createMcpServer('sse', {
+      headers: preservedHeaders,
+      ...(mcpAuthPayload ? { payload: mcpAuthPayload } : {}),
     });
-
-    // Override prompts/list to pass correct transport and context
-    sseServer.setRequestHandler(ListPromptsRequestSchema, async () => {
-      return await getPromptsList(sseCtx());
-    });
-
-    // Override resources/list to pass correct transport and context
-    sseServer.setRequestHandler(ListResourcesRequestSchema, async () => {
-      return await getResourcesList(sseCtx());
-    });
-
-    // Override resources/read to pass correct transport and context
-    sseServer.setRequestHandler(ReadResourceRequestSchema, async (request: any) => {
-      return (await getResource(request.params.uri, sseCtx())) as any;
-    });
-
-    // Override the tool call handler to include rate limiting, preserved headers and auth payload
-    sseServer.setRequestHandler(CallToolRequestSchema, async (request, extra) => {
-      // Apply rate limiting for each SSE tool call
-      const toolCallClientId = 'sse-tool-unknown';
-      await handleRateLimit(rateLimiter, toolCallClientId, 'unknown', `SSE tool call | tool: ${request.params.name}`);
-
-      // Execute the tool call with preserved headers and payload from SSE connection establishment.
-      // Same `mcp.limits` enforcement as the Streamable HTTP path.
-      const { toolHandler } = getProjectData();
-      const sseToolName = (request.params as any)?.name ?? 'unknown';
-      const response = (await withToolTimeout(
-        sseToolName,
-        () =>
-          toolHandler({
-            ...request.params,
-            ...sseCtx(),
-            signal: extra?.signal,
-          }) as Promise<any>,
-      )) as any;
-      return truncateToolResponse(response) as any;
-    });
-
-    return sseServer;
   }
 
   // GET endpoint for SSE connection establishment
@@ -608,6 +547,22 @@ export async function startHttpServer(): Promise<void> {
         const err = new ResourceNotFoundError('SSE session not found');
         res.status(err.statusCode).json(createJsonRpcErrorResponse(err, null));
         return;
+      }
+
+      // Dedicated rate-limit bucket for SSE tool calls (same policy as the Streamable HTTP path).
+      if ((req.body as any)?.method === 'tools/call') {
+        const toolCallClientId = resolveRateLimitKey(req, 'tool');
+        await handleRateLimit(
+          rateLimiter,
+          toolCallClientId,
+          req.ip || 'unknown',
+          `SSE tool call | tool: ${(req.body as any)?.params?.name || 'unknown'}`,
+          res,
+          (req.body as any)?.id,
+        );
+        if (res.headersSent) {
+          return;
+        }
       }
 
       const { transport } = transportData;
@@ -992,6 +947,29 @@ export async function startHttpServer(): Promise<void> {
       // `_meta` itself (`-32020` / `-32022` / `-32602`), answers `server/discover`, and stamps
       // `resultType` / `serverInfo` / cache hints on modern results. `req.auth` (set by `authMW`)
       // is forwarded as `authInfo` by the node adapter.
+      //
+      // Standard §14 — the per-subject concurrent-calls cap is enforced HERE, before the v2
+      // handler: the v2 package flattens every tool-callback throw into an `isError: true` text,
+      // while `-32003 Rate limited` must stay a thrown protocol error with `Retry-After`.
+      if ((req.body as any)?.method === 'tools/call') {
+        const maxConcurrent = appConfig.mcp.rateLimit?.maxConcurrentPerSubject ?? 16;
+        const subjectKey = subjectKeyFromAuth((req as any).auth);
+        if (!tryAcquireSlot(subjectKey, maxConcurrent)) {
+          const toolName = (req.body as any)?.params?.name || 'unknown';
+          getMetrics()?.toolCalls.inc({ tool: toolName, status: 'rate_limited' });
+          getMetrics()?.rateLimitHits.inc({ scope: 'concurrent' });
+          const err = new RateLimitedError(
+            `Too many concurrent tool calls for subject "${subjectKey}" (limit ${maxConcurrent})`,
+            1,
+          );
+          res.setHeader('Retry-After', '1');
+          res.status(err.statusCode).json(createJsonRpcErrorResponse(err, (req.body as any)?.id ?? null));
+          return;
+        }
+        // `close` fires after the response is fully sent OR the connection drops — both paths
+        // must release the slot exactly once.
+        res.once('close', () => releaseSlot(subjectKey));
+      }
       if (HANDSHAKE_DEBUG) {
         logger.info(`POST /mcp → v2 stateless handler: ${describeMcpRequest(req)}`);
       }
