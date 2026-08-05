@@ -10,6 +10,8 @@ import type { Tool } from '@modelcontextprotocol/sdk/types.js';
 
 import { toMcpError } from '../../errors/errors.js';
 import { getRequestStateCodec, isInputRequiredResponse, missingCapabilitiesForInputRequests } from './mrtr.js';
+import { TASKS_EXTENSION_ID, maybeStartModernTask } from './tasks-methods.js';
+import { subjectKeyFromAuth } from '../create-mcp-server.js';
 
 import { IClientCapabilities, ITransportContext } from '../../_types_/types.js';
 import { appConfig, getProjectData } from '../../bootstrap/init-config.js';
@@ -134,6 +136,9 @@ export const v2ServerFactory = async (ctx: McpRequestContext): Promise<McpServer
         resources: { subscribe: true, listChanged: true },
         ...(feats.hasPrompts ? { prompts: { listChanged: true } } : {}),
         ...(feats.completionsEnabled ? { completions: {} } : {}),
+        // Official Tasks extension (2026-07-28): advertised in `server/discover`; a task is
+        // returned only to clients that declare the same extension per-request.
+        ...(feats.tasksEnabled ? { extensions: { [TASKS_EXTENSION_ID]: {} } } : {}),
       },
       // MRTR: an echoed `requestState` is verified (HMAC, TTL, principal+method binding) BEFORE
       // any handler runs; failure is answered as the frozen `-32602`.
@@ -155,7 +160,11 @@ export const v2ServerFactory = async (ctx: McpRequestContext): Promise<McpServer
       {
         ...(description ? { description } : {}),
         inputSchema: fromJsonSchema(tool.inputSchema as Record<string, unknown>),
-        ...(tool.outputSchema ? { outputSchema: fromJsonSchema(tool.outputSchema as Record<string, unknown>) } : {}),
+        // A task-capable tool may answer with a `CreateTaskResult` instead of structuredContent;
+        // the v2 output validator would reject that, so its outputSchema is not registered here.
+        ...(tool.outputSchema && !(feats.tasksEnabled && (tool as any).execution?.taskSupport)
+          ? { outputSchema: fromJsonSchema(tool.outputSchema as Record<string, unknown>) }
+          : {}),
         ...(tool.title ? { title: tool.title } : {}),
         ...(tool.annotations ? { annotations: tool.annotations } : {}),
         ...(tool.icons ? { icons: tool.icons } : {}),
@@ -177,15 +186,41 @@ export const v2ServerFactory = async (ctx: McpRequestContext): Promise<McpServer
           const { inputResponses } = toolCtx?.mcpReq ?? {};
           const stateAccessor = toolCtx?.mcpReq?.requestState;
           const requestStatePayload = typeof stateAccessor === 'function' ? stateAccessor() : undefined;
-          const response = await projectData.toolHandler({
-            name: tool.name,
-            arguments: args ?? {},
-            ...baseCtx,
-            ...(caps ? { clientCapabilities: caps } : {}),
+          const callToolHandler = (extra: {
+            signal?: AbortSignal;
+            inputResponses?: Record<string, unknown>;
+            requestStatePayload?: unknown;
+          }) =>
+            projectData.toolHandler({
+              name: tool.name,
+              arguments: args ?? {},
+              ...baseCtx,
+              ...(caps ? { clientCapabilities: caps } : {}),
+              ...extra,
+              sendProgress: () => {},
+            });
+          // Tasks extension: a task-capable tool called by a tasks-declaring client runs in the
+          // background; the call answers immediately with `resultType: "task"`.
+          if (feats.tasksEnabled) {
+            const taskResult = maybeStartModernTask({
+              tool,
+              caps,
+              subjectKey: subjectKeyFromAuth(ctx.authInfo),
+              runToolCall: async (extra) => {
+                const raw = await callToolHandler(extra);
+                return isInputRequiredResponse(raw)
+                  ? raw
+                  : truncateAndObserve(mirrorStructuredContent(raw as any, caps));
+              },
+            });
+            if (taskResult) {
+              return taskResult;
+            }
+          }
+          const response = await callToolHandler({
             ...(toolCtx?.signal ? { signal: toolCtx.signal } : {}),
             ...(inputResponses ? { inputResponses } : {}),
             ...(requestStatePayload !== undefined ? { requestStatePayload } : {}),
-            sendProgress: () => {},
           });
           if (isInputRequiredResponse(response)) {
             // Spec: MUST NOT send inputRequests the client has not declared capabilities for —
@@ -275,6 +310,9 @@ export const v2ServerFactory = async (ctx: McpRequestContext): Promise<McpServer
       withV2Errors(async (request) => completeCore((request.params ?? {}) as any, completionProvider!) as any),
     );
   }
+  // The extension's tasks/get|update|cancel methods are served at the HTTP layer in front of
+  // this handler (see `handleModernTaskMethod`): the v2 package's closed 2026 method registry
+  // answers the `tasks/*` spec names with -32601 before registered handlers run.
 
   return server;
 };

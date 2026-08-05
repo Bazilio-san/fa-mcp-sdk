@@ -21,6 +21,7 @@ import { checkPermanentToken } from '../auth/permanent.js';
 import { appConfig, getProjectData } from '../bootstrap/init-config.js';
 import { getMainDBConnectionStatus } from '../db/pg-db.js';
 import { getV2NodeHandler } from '../mcp/v2/handler.js';
+import { handleModernTaskMethod } from '../mcp/v2/tasks-methods.js';
 import { createJsonRpcErrorResponse, ServerError, toError, toStr } from '../errors/errors.js';
 import {
   PayloadTooLargeError,
@@ -969,6 +970,14 @@ export async function startHttpServer(): Promise<void> {
         // `close` fires after the response is fully sent OR the connection drops — both paths
         // must release the slot exactly once.
         res.once('close', () => releaseSlot(subjectKey));
+      }
+      // Tasks extension (2026-07-28): tasks/get|update|cancel are served here, in front of the
+      // v2 handler — its closed 2026 method registry would answer the `tasks/*` spec names with
+      // -32601 before any registered handler runs.
+      const taskAnswer = handleModernTaskMethod(req.body, (req as any).auth?.payload);
+      if (taskAnswer) {
+        res.status(taskAnswer.status).json(taskAnswer.json);
+        return;
       }
       if (HANDSHAKE_DEBUG) {
         logger.info(`POST /mcp → v2 stateless handler: ${describeMcpRequest(req)}`);
