@@ -77,6 +77,7 @@ const isPublicMcpRequest = async (req: Request): Promise<boolean> => {
     case 'ping':
     case 'initialize':
     case 'notifications/initialized':
+    case 'server/discover':
     case 'tools/list':
     case 'prompts/list':
     case 'resources/list':

@@ -79,6 +79,14 @@ mcp:
     pageSize:
       __name: MCP_PAGINATION_PAGE_SIZE
       __format: number
+  cacheHints:
+    listTtlMs:
+      __name: MCP_CACHE_LIST_TTL_MS
+      __format: number
+    readTtlMs:
+      __name: MCP_CACHE_READ_TTL_MS
+      __format: number
+    cacheScope: MCP_CACHE_SCOPE
   resources:
     subscribeEnabled:
       __name: MCP_RESOURCES_SUBSCRIBE_ENABLED
