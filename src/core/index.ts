@@ -4,6 +4,7 @@ export type { IADConfig, IDcConfig } from './_types_/active-directory-config.js'
 export type {
   IClientCapabilities,
   McpServerData,
+  IInputRequiredResponse,
   IToolHandlerParams,
   ITransportContext,
   TTransportType,
@@ -122,6 +123,7 @@ export { initMcpServer, gracefulShutdown } from './init-mcp-server.js';
 
 export { notifyResourceUpdated } from './mcp/resources.js';
 export { mcpNotify } from './mcp/v2/handler.js';
+export { formatInputRequired, isInputRequiredResponse } from './mcp/v2/mrtr.js';
 
 // Standard §8.7 — task-augmented execution storage (opt-in via mcp.tasks.enabled).
 export { getTaskStore, resetTaskStore, InMemoryTaskStore, toTaskDto, isTerminalTaskStatus } from './mcp/task-store.js';

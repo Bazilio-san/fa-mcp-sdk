@@ -1,8 +1,15 @@
-import { CLIENT_CAPABILITIES_META_KEY, McpServer, ProtocolError, fromJsonSchema } from '@modelcontextprotocol/server';
-import type { CacheHint, McpRequestContext } from '@modelcontextprotocol/server';
+import {
+  CLIENT_CAPABILITIES_META_KEY,
+  McpServer,
+  ProtocolError,
+  fromJsonSchema,
+  inputRequired,
+} from '@modelcontextprotocol/server';
+import type { CacheHint, McpRequestContext, ServerContext } from '@modelcontextprotocol/server';
 import type { Tool } from '@modelcontextprotocol/sdk/types.js';
 
 import { toMcpError } from '../../errors/errors.js';
+import { getRequestStateCodec, isInputRequiredResponse, missingCapabilitiesForInputRequests } from './mrtr.js';
 
 import { IClientCapabilities, ITransportContext } from '../../_types_/types.js';
 import { appConfig, getProjectData } from '../../bootstrap/init-config.js';
@@ -68,10 +75,20 @@ const withV2Errors =
     }
   };
 
-/** Per-request client capabilities from the `_meta` envelope (modern era); undefined for the v2 stateless legacy fallback. */
+/**
+ * Per-request client capabilities from the parsed request envelope (`ctx.mcpReq.envelope`, modern
+ * era); undefined for the v2 stateless legacy fallback (no per-request envelope).
+ */
 const capsFromHandlerCtx = (handlerCtx: unknown): IClientCapabilities | undefined => {
-  const meta = (handlerCtx as { mcpReq?: { _meta?: Record<string, unknown> } } | undefined)?.mcpReq?._meta;
-  return meta?.[CLIENT_CAPABILITIES_META_KEY] as IClientCapabilities | undefined;
+  const req = (
+    handlerCtx as
+      | {
+          mcpReq?: { envelope?: Record<string, unknown>; _meta?: Record<string, unknown> };
+        }
+      | undefined
+  )?.mcpReq;
+  const envelope = req?.envelope ?? req?._meta;
+  return envelope?.[CLIENT_CAPABILITIES_META_KEY] as IClientCapabilities | undefined;
 };
 
 /**
@@ -118,6 +135,11 @@ export const v2ServerFactory = async (ctx: McpRequestContext): Promise<McpServer
         ...(feats.hasPrompts ? { prompts: { listChanged: true } } : {}),
         ...(feats.completionsEnabled ? { completions: {} } : {}),
       },
+      // MRTR: an echoed `requestState` is verified (HMAC, TTL, principal+method binding) BEFORE
+      // any handler runs; failure is answered as the frozen `-32602`.
+      requestState: {
+        verify: (state: string, verifyCtx: ServerContext) => getRequestStateCodec().verify(state, verifyCtx),
+      },
     },
   );
 
@@ -139,20 +161,54 @@ export const v2ServerFactory = async (ctx: McpRequestContext): Promise<McpServer
         ...(tool.icons ? { icons: tool.icons } : {}),
         ...(tool._meta ? { _meta: tool._meta } : {}),
       },
-      (async (args: unknown, toolCtx: { signal?: AbortSignal }) => {
+      (async (
+        args: unknown,
+        toolCtx: {
+          signal?: AbortSignal;
+          mcpReq?: { inputResponses?: Record<string, unknown>; requestState?: unknown };
+        },
+      ) => {
         warnDeprecatedUsage('tool', tool.name, deprecation);
         const stopTimer = getMetrics()?.toolDuration.startTimer({ tool: tool.name });
         let outcome: 'ok' | 'error' = 'ok';
         try {
           const caps = capsFromHandlerCtx(toolCtx);
+          // MRTR retry inputs: client answers + the verified payload of the echoed requestState.
+          const { inputResponses } = toolCtx?.mcpReq ?? {};
+          const stateAccessor = toolCtx?.mcpReq?.requestState;
+          const requestStatePayload = typeof stateAccessor === 'function' ? stateAccessor() : undefined;
           const response = await projectData.toolHandler({
             name: tool.name,
             arguments: args ?? {},
             ...baseCtx,
             ...(caps ? { clientCapabilities: caps } : {}),
             ...(toolCtx?.signal ? { signal: toolCtx.signal } : {}),
+            ...(inputResponses ? { inputResponses } : {}),
+            ...(requestStatePayload !== undefined ? { requestStatePayload } : {}),
             sendProgress: () => {},
           });
+          if (isInputRequiredResponse(response)) {
+            // Spec: MUST NOT send inputRequests the client has not declared capabilities for —
+            // degrade into an actionable isError text the model can relay.
+            const missing = missingCapabilitiesForInputRequests(response.inputRequests, caps);
+            if (missing.length > 0) {
+              return {
+                content: [
+                  {
+                    type: 'text',
+                    text: `This tool needs additional user input (${missing.join(', ')}), but the client did not declare the required capabilit${missing.length > 1 ? 'ies' : 'y'}: ${missing.join(', ')}.`,
+                  },
+                ],
+                isError: true,
+              };
+            }
+            return inputRequired({
+              ...(response.inputRequests ? { inputRequests: response.inputRequests as any } : {}),
+              ...(response.state !== undefined
+                ? { requestState: await getRequestStateCodec().mint(response.state, toolCtx as any) }
+                : {}),
+            });
+          }
           return truncateAndObserve(mirrorStructuredContent(response as any, caps));
         } catch (error) {
           outcome = 'error';

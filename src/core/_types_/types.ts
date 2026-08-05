@@ -273,6 +273,35 @@ export interface IToolHandlerParams {
    * No-op when `progressToken` is absent — call it unconditionally.
    */
   sendProgress?: (progress: number, total?: number, message?: string) => void;
+  /**
+   * MRTR (2026-07-28): the client's answers on a retried call, keyed by the ids the handler used
+   * in `formatInputRequired({ inputRequests })`. `undefined` on a first (non-retry) call. Values
+   * are the raw MCP result objects (`ElicitResult` / `CreateMessageResult` / `ListRootsResult`) —
+   * for an accepted form elicitation read `inputResponses[key].content`.
+   */
+  inputResponses?: Record<string, unknown>;
+  /**
+   * MRTR (2026-07-28): the verified payload the handler placed in `formatInputRequired({ state })`
+   * on the previous round. Integrity (HMAC), TTL and principal/method binding have already been
+   * checked — a tampered or foreign `requestState` never reaches the handler. `undefined` on a
+   * first call or when the previous round carried no `state`.
+   */
+  requestStatePayload?: unknown;
+}
+
+/**
+ * MRTR (2026-07-28): the marker object a tool handler returns (via {@link formatInputRequired})
+ * to pause the call and ask the client for additional input. The SDK converts it into a
+ * `resultType: "input_required"` result with an HMAC-sealed `requestState`; when the client
+ * retries, the handler runs again with `inputResponses` / `requestStatePayload` filled in.
+ * Toward sessionful legacy clients (v1 path) the marker degrades into an `isError: true` text.
+ */
+export interface IInputRequiredResponse {
+  __inputRequired: true;
+  /** Server-assigned id → embedded MCP request (`elicitation/create`, `sampling/createMessage`, `roots/list`). */
+  inputRequests?: Record<string, { method: string; params?: Record<string, unknown> }>;
+  /** JSON-serializable state to restore on retry; sealed into `requestState` under HMAC. */
+  state?: unknown;
 }
 
 export interface ITransportContext {

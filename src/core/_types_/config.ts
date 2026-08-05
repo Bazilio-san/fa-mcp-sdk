@@ -229,6 +229,21 @@ interface IMCPConfig {
       cacheScope?: 'public' | 'private';
     };
     /**
+     * Multi Round-Trip Requests (MRTR, 2026-07-28) — a tool pauses mid-call with
+     * `resultType: "input_required"` and resumes when the client retries with the answers plus the
+     * server-minted `requestState` blob. The blob round-trips through the client, so its integrity
+     * is HMAC-protected (principal + method binding, TTL).
+     */
+    mrtr?: {
+      /**
+       * HMAC secret (min 32 characters). Empty → random per-process key generated at startup:
+       * fine for one instance; multiple instances behind a balancer MUST share one secret.
+       */
+      stateSecret?: string;
+      /** Lifetime of a minted `requestState`, seconds. Default 600. */
+      stateTtlSeconds?: number;
+    };
+    /**
      * Standard §6 (MAY) — Streamable HTTP SSE stream resumability via the `Last-Event-ID` header.
      * Off by default. When enabled, the server wires an in-memory `EventStore` into the transport
      * so a reconnecting client can replay the messages it missed. The store lives in process memory
