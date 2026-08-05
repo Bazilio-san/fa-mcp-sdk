@@ -226,6 +226,14 @@ export function unsubscribeResource(server: Server, uri: string): void {
 }
 
 export async function notifyResourceUpdated(server: Server, uri: string): Promise<void> {
+  // Modern era first: fan out to every open `subscriptions/listen` stream that opted in to this
+  // URI (the v2 handler correlates with `io.modelcontextprotocol/subscriptionId` itself).
+  try {
+    const { mcpNotify } = await import('./v2/handler.js');
+    mcpNotify.resourceUpdated(uri);
+  } catch {
+    // best-effort — the v2 handler may not be constructed in this process (e.g. pure stdio)
+  }
   const set = subscribersByServer.get(server);
   if (!set || !set.has(uri)) {
     return;

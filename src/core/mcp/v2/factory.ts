@@ -110,10 +110,12 @@ export const v2ServerFactory = async (ctx: McpRequestContext): Promise<McpServer
     {
       cacheHints: buildCacheHints(),
       // Capabilities for the hand-registered (non-registerTool) surface below; `tools` is merged
-      // in by `registerTool` itself.
+      // in by `registerTool` itself. `subscribe`/`listChanged` signal `subscriptions/listen`
+      // support: the v2 handler honors a listen-filter entry only when the matching capability is
+      // declared, and change events are published through `mcpNotify` (see `v2/handler.ts`).
       capabilities: {
-        resources: {},
-        ...(feats.hasPrompts ? { prompts: {} } : {}),
+        resources: { subscribe: true, listChanged: true },
+        ...(feats.hasPrompts ? { prompts: { listChanged: true } } : {}),
         ...(feats.completionsEnabled ? { completions: {} } : {}),
       },
     },
