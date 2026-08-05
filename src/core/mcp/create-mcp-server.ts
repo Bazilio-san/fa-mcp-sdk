@@ -452,7 +452,8 @@ export function createMcpServer(transportType: TTransportType): Server {
         const missing = required.filter((s) => !tokenScopes.includes(s));
         if (missing.length > 0) {
           getMetrics()?.toolCalls.inc({ tool: toolName, status: 'error' });
-          throw new McpError(-32004, `Missing scopes: ${missing.join(',')}`, {
+          // -32000 Server error: -32004 is reserved for Timeout (standard v2.0 Appendix B).
+          throw new McpError(-32000, `Missing scopes: ${missing.join(',')}`, {
             field: 'scope',
             reason: 'insufficient_scope',
             missing,

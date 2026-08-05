@@ -1,7 +1,7 @@
 {
   "name": "fa-mcp-sdk",
   "productName": "FA MCP SDK",
-  "version": "0.12.73",
+  "version": "0.12.74",
   "description": "Core infrastructure and templates for building Model Context Protocol (MCP) servers with TypeScript",
   "type": "module",
   "main": "dist/core/index.js",
@@ -87,7 +87,9 @@
   },
   "homepage": "https://github.com/Bazilio-san/fa-mcp-sdk#readme",
   "dependencies": {
+    "@modelcontextprotocol/node": "^2.0.0",
     "@modelcontextprotocol/sdk": "^1.29.0",
+    "@modelcontextprotocol/server": "^2.0.0",
     "@tsoa/runtime": "^6.6.0",
     "af-ad-ts": "^0.0.71",
     "af-db-ts": "^3.0.34",
@@ -115,6 +117,7 @@
     "ya-express-ntlm": "^1.0.39"
   },
   "devDependencies": {
+    "@modelcontextprotocol/client": "^2.0.0",
     "@tsoa/cli": "^6.6.0",
     "@types/config": "^4.4.0",
     "@types/cors": "^2.8.19",
@@ -123,8 +126,8 @@
     "@types/jsonwebtoken": "^9.0.10",
     "@types/mssql": "^9.1.11",
     "@types/node": "^26.1.1",
-    "@typescript/typescript6": "^6.0.2",
     "@types/swagger-ui-express": "^4.1.8",
+    "@typescript/typescript6": "^6.0.2",
     "oxfmt": "^0.60.0",
     "oxlint": "^1.75.0",
     "rimraf": "^6.1.3",
