@@ -215,6 +215,20 @@ interface IMCPConfig {
       maxTasks?: number;
     };
     /**
+     * Standard v2.0 §12.3 — cache hints (`ttlMs` / `cacheScope`) stamped on cacheable 2026-07-28
+     * results: `server/discover`, `tools/list`, `prompts/list`, `resources/list`,
+     * `resources/templates/list` (listTtlMs) and `resources/read` (readTtlMs). Legacy
+     * (2025-11-25) responses are not affected.
+     */
+    cacheHints?: {
+      /** Freshness hint for catalog results, milliseconds. Default 60_000 (1 minute). */
+      listTtlMs?: number;
+      /** Freshness hint for `resources/read` results, milliseconds. Default 0 (immediately stale). */
+      readTtlMs?: number;
+      /** Who may cache: `private` (per-token, safe default) or `public` (identical for all callers). */
+      cacheScope?: 'public' | 'private';
+    };
+    /**
      * Standard §6 (MAY) — Streamable HTTP SSE stream resumability via the `Last-Event-ID` header.
      * Off by default. When enabled, the server wires an in-memory `EventStore` into the transport
      * so a reconnecting client can replay the messages it missed. The store lives in process memory

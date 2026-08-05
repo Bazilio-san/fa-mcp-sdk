@@ -28,6 +28,7 @@ import { createAuthMW } from '../auth/middleware.js';
 import { checkPermanentToken } from '../auth/permanent.js';
 import { appConfig, getProjectData } from '../bootstrap/init-config.js';
 import { getMainDBConnectionStatus } from '../db/pg-db.js';
+import { getV2NodeHandler } from '../mcp/v2/handler.js';
 import { createJsonRpcErrorResponse, ServerError, toError, toStr } from '../errors/errors.js';
 import {
   PayloadTooLargeError,
@@ -660,6 +661,8 @@ export async function startHttpServer(): Promise<void> {
   // SDK transport handles protocol-version negotiation, error codes, notifications (202) and the
   // GET-SSE / DELETE-teardown semantics for us.
   const HTTP_SESSION_HEADER = 'mcp-session-id';
+  // v2 (2026-07-28) stateless handler for every non-sessionful POST /mcp request.
+  const v2NodeHandler = getV2NodeHandler();
   // Verbose connection/handshake tracing. Per-request dumps (method, headers, session routing)
   // are gated behind `DEBUG=mcp-handshake` so they don't flood logs on every tool call; the
   // key lifecycle events (initialize, session created/closed, no-session rejection) always log.
@@ -873,47 +876,6 @@ export async function startHttpServer(): Promise<void> {
   // Read-only catalog methods served statelessly (no session). The list methods power the home-page
   // catalog; `resources/read` and `prompts/get` power "view content" on the same page — without them
   // here, clicking a resource/prompt in the UI fails with -32600 because the browser holds no session.
-  const SESSIONLESS_CATALOG_METHODS = new Set([
-    'tools/list',
-    'prompts/list',
-    'prompts/get',
-    'resources/list',
-    'resources/read',
-  ]);
-
-  const isSessionlessListRequest = (body: unknown): boolean => {
-    const messages = Array.isArray(body) ? body : [body];
-    return (
-      messages.length > 0 &&
-      messages.every((message) => {
-        if (!message || typeof message !== 'object' || Array.isArray(message)) {
-          return false;
-        }
-        const rpc = message as { id?: unknown; method?: unknown };
-        return (
-          Object.hasOwn(rpc, 'id') && typeof rpc.method === 'string' && SESSIONLESS_CATALOG_METHODS.has(rpc.method)
-        );
-      })
-    );
-  };
-
-  const handleSessionlessListRequest = async (req: express.Request, res: express.Response): Promise<void> => {
-    if (HANDSHAKE_DEBUG) {
-      logger.info(`POST /mcp handling sessionless list request: ${describeMcpRequest(req)}`);
-    }
-
-    // Omit `sessionIdGenerator` to use the MCP SDK's stateless Streamable HTTP mode for this
-    // one-off catalog request. Stateful sessions are still created only by `initialize`.
-    const transport = new StreamableHTTPServerTransport();
-    const server = createMcpServer('http');
-    await server.connect(transport as any);
-    try {
-      await transport.handleRequest(req, res, req.body);
-    } finally {
-      await transport.close();
-    }
-  };
-
   const noSessionError = (req: express.Request, res: express.Response) => {
     // Always log: this path is otherwise silent, which is exactly why "-32600" appears on the
     // client with nothing on the server. We surface why the session was rejected.
@@ -1025,13 +987,15 @@ export async function startHttpServer(): Promise<void> {
         return;
       }
 
-      if (!sessionId && isSessionlessListRequest(req.body)) {
-        await handleSessionlessListRequest(req, res);
-        return;
+      // Everything else — modern (2026-07-28, per-request `_meta`) traffic and sessionless legacy
+      // traffic — is served statelessly by the v2 handler. It validates the request headers and
+      // `_meta` itself (`-32020` / `-32022` / `-32602`), answers `server/discover`, and stamps
+      // `resultType` / `serverInfo` / cache hints on modern results. `req.auth` (set by `authMW`)
+      // is forwarded as `authInfo` by the node adapter.
+      if (HANDSHAKE_DEBUG) {
+        logger.info(`POST /mcp → v2 stateless handler: ${describeMcpRequest(req)}`);
       }
-
-      // No session and not an `initialize` request → 400 per MCP transport semantics.
-      noSessionError(req, res);
+      await runHttpToolCall(req, res, () => v2NodeHandler(req, res, req.body));
     } catch (error: Error | any) {
       if (!error.printed) {
         logger.error('MCP request failed', toError(error));

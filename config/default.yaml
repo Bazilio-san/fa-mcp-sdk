@@ -372,6 +372,18 @@ mcp:
     #> Max number of simultaneously retained tasks across all subjects. Oldest finished tasks are
     #> evicted first when the cap is reached. Default 1000.
     maxTasks: 1000
+  #> Standard v2.0 §12.3 — cache hints (`ttlMs` / `cacheScope`) stamped on cacheable 2026-07-28
+  #> results: server/discover, tools/list, prompts/list, resources/list, resources/templates/list
+  #> (listTtlMs) and resources/read (readTtlMs). Legacy (2025-11-25) responses are not affected.
+  #> `private` is the safe default: results may vary per token. Set `cacheScope: public` only when
+  #> the catalog is identical for all callers.
+  cacheHints:
+    #> Freshness hint for catalog results, milliseconds. Default 60000 (1 minute).
+    listTtlMs: 60000
+    #> Freshness hint for resources/read results, milliseconds. Default 0 (immediately stale).
+    readTtlMs: 0
+    #> Who may cache: public | private. Default private.
+    cacheScope: private
   #> Standard §6 (MAY) — Streamable HTTP SSE stream resumability via the `Last-Event-ID` header.
   #> Off by default. When enabled, the server keeps recent SSE events in process memory so a
   #> reconnecting client can replay missed messages. The buffer is in-memory only: it is lost on
