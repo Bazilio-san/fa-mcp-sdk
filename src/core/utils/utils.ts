@@ -77,8 +77,12 @@ export const normalizeHeaders = (headers: Record<string, any>): Record<string, s
 
 export async function getTools(args: ITransportContext): Promise<Tool[]> {
   const toolsOrFn = global.__MCP_PROJECT_DATA__.tools;
-  const toolsArray: Tool[] = typeof toolsOrFn === 'function' ? await toolsOrFn(args) : (toolsOrFn as Tool[]);
-  assertToolNames(toolsArray);
+  const rawTools: Tool[] = typeof toolsOrFn === 'function' ? await toolsOrFn(args) : (toolsOrFn as Tool[]);
+  assertToolNames(rawTools);
+  // Standard v2.0 §12.3 — deterministic order (stable byte-wise sort by name) so clients and LLM
+  // prompt caches see an identical catalog on every call. Copy first: the project array must not
+  // be mutated.
+  const toolsArray = [...rawTools].sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));
   const { hideAnnotations } = appConfig.mcp.tools || {};
   if (!hideAnnotations) {
     return toolsArray;

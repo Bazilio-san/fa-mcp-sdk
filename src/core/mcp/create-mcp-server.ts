@@ -33,25 +33,24 @@ import { getTools, normalizeHeaders } from '../utils/utils.js';
 import { getCurrentRequestContext, IRequestContext, runWithRequestContext } from '../web/request-id.js';
 import { getMetrics } from '../metrics/metrics.js';
 
+import { readDeprecation, warnDeprecatedUsage } from './deprecation.js';
 import {
-  applyDeprecationToDescription,
-  assertDeprecationConsistency,
-  readDeprecation,
-  warnDeprecatedUsage,
-} from './deprecation.js';
-import { hostSupportsMcpApps } from './mcp-apps.js';
+  completeCore,
+  computeServedFeatures,
+  getPromptWithWarn,
+  listPromptsPage,
+  listResourcesPage,
+  listTemplatesPage,
+  listToolsPage,
+  mirrorStructuredContent,
+  readResourceWithWarn,
+  truncateAndObserve,
+} from './catalog.js';
 import { registerLoggingCapability } from './mcp-logging.js';
 import { paginate, parsePageSize } from './pagination.js';
-import { getPrompt, getPromptsList } from './prompts.js';
-import {
-  getResource,
-  getResourcesList,
-  getResourceTemplatesList,
-  subscribeResource,
-  unsubscribeResource,
-} from './resources.js';
+import { subscribeResource, unsubscribeResource } from './resources.js';
 import { getTaskStore, isTerminalTaskStatus, toTaskDto, ITaskRecord } from './task-store.js';
-import { truncateToolResponse, withToolTimeout } from './tool-limits.js';
+import { withToolTimeout } from './tool-limits.js';
 import { validateToolInput, validateToolOutput } from './validate-tool-args.js';
 
 /**
@@ -61,7 +60,7 @@ import { validateToolInput, validateToolOutput } from './validate-tool-args.js';
  */
 const inFlightBySubject = new Map<string, number>();
 
-function subjectKeyFromAuth(authInfo: any): string {
+export function subjectKeyFromAuth(authInfo: any): string {
   const sub = authInfo?.payload?.sub ?? authInfo?.payload?.user ?? authInfo?.username;
   if (typeof sub === 'string' && sub.trim()) {
     return sub.trim().toLowerCase();
@@ -74,7 +73,7 @@ function subjectKeyFromAuth(authInfo: any): string {
  * its `maxConcurrentPerSubject` cap (caller raises RateLimitedError). Shared by the synchronous
  * tools/call path and the task path so a `working` task occupies a slot exactly like a sync call.
  */
-function tryAcquireSlot(subjectKey: string, maxConcurrent: number): boolean {
+export function tryAcquireSlot(subjectKey: string, maxConcurrent: number): boolean {
   const current = inFlightBySubject.get(subjectKey) ?? 0;
   if (current >= maxConcurrent) {
     return false;
@@ -84,7 +83,7 @@ function tryAcquireSlot(subjectKey: string, maxConcurrent: number): boolean {
   return true;
 }
 
-function releaseSlot(subjectKey: string): void {
+export function releaseSlot(subjectKey: string): void {
   const after = (inFlightBySubject.get(subjectKey) ?? 1) - 1;
   if (after <= 0) {
     inFlightBySubject.delete(subjectKey);
@@ -109,49 +108,28 @@ function releaseSlot(subjectKey: string): void {
  * @param transportType — transport that owns this server instance, surfaced to handlers as
  *   `ITransportContext.transport`.
  */
-export function createMcpServer(transportType: TTransportType): Server {
-  const resourcesCfg = appConfig.mcp.resources;
-  const subscribeEnabled = resourcesCfg?.subscribeEnabled === true;
-  const templatesEnabled = resourcesCfg?.templatesEnabled === true;
+export function createMcpServer(
+  transportType: TTransportType,
+  presetCtx?: { headers?: Record<string, string>; payload?: { user: string; [key: string]: any } },
+): Server {
+  // Standard §8.2 — advertise only the capabilities the server actually supports. The single
+  // source of truth for the served feature set (shared with the v2 era factory) is
+  // `computeServedFeatures`; see its doc for the per-feature rules.
+  const projectData = getProjectData();
+  const {
+    hasPrompts,
+    completionsEnabled,
+    tasksEnabled,
+    subscribeEnabled,
+    templatesEnabled,
+    loggingCapEnabled,
+    validateInput,
+  } = computeServedFeatures(projectData);
   const resourceCapability: Record<string, boolean> = {};
   if (subscribeEnabled) {
     resourceCapability.subscribe = true;
     resourceCapability.listChanged = true;
   }
-
-  const loggingCapEnabled = appConfig.mcp.logging?.enabled !== false;
-
-  // Standard §8.2 — advertise only the capabilities the server actually supports.
-  //
-  // `resources` and `tools` are always advertised: built-in resources (project://*, use://auth,
-  // doc://readme) are present in every configuration, and an MCP SDK without tools has no purpose.
-  //
-  // `prompts` is conditional: a server configured without agent briefs and without customPrompts
-  // serves no prompts, so advertising the capability (and registering its handlers) would violate
-  // §8.2 — instead the prompts/* methods stay unregistered and return -32601 per §8.3.
-  const projectData = getProjectData();
-  const hasPrompts = Boolean(
-    (projectData?.agentBrief && projectData?.agentPrompt) ||
-    typeof projectData?.customPrompts === 'function' ||
-    (Array.isArray(projectData?.customPrompts) && projectData.customPrompts.length > 0),
-  );
-
-  // Standard §8.2 (MAY) — completion/complete is opt-in: requires both the config flag and a
-  // project-supplied provider. Without a provider there is nothing to serve, so the capability
-  // is not advertised and completion/complete returns -32601.
-  const completionsEnabled =
-    appConfig.mcp.completions?.enabled === true && typeof projectData?.completionProvider === 'function';
-
-  // Standard §8.7 (MAY) — task-augmented execution is opt-in. When off (default) the capability is
-  // NOT advertised and the tasks/* methods stay unregistered (returning -32601), exactly as §8.7
-  // requires for a server that does not support tasks. When on, the server advertises that it can
-  // list and cancel tasks, and that task creation is supported for `tools/call`.
-  const tasksEnabled = appConfig.mcp.tasks?.enabled === true;
-
-  // Standard §8.3 — validate tools/call arguments against the tool's inputSchema before dispatch.
-  // On by default; set `mcp.tools.validateInput: false` to skip it (e.g. when tools validate their
-  // own arguments, or to shave latency in trusted internal deployments).
-  const validateInput = appConfig.mcp.tools?.validateInput !== false;
 
   const server = new Server(
     {
@@ -185,8 +163,10 @@ export function createMcpServer(transportType: TTransportType): Server {
   }
 
   const ctx = (extra: { requestInfo?: { headers?: Record<string, any> }; authInfo?: any }): ITransportContext => {
-    const headers = extra.requestInfo?.headers ? normalizeHeaders(extra.requestInfo.headers) : undefined;
-    const payload = extra.authInfo?.payload as ITransportContext['payload'];
+    // `presetCtx` carries connection-scoped headers/payload for transports whose per-request
+    // `extra` is empty (legacy /sse preserves them from connection establishment).
+    const headers = extra.requestInfo?.headers ? normalizeHeaders(extra.requestInfo.headers) : presetCtx?.headers;
+    const payload = (extra.authInfo?.payload as ITransportContext['payload']) ?? presetCtx?.payload;
     const caps = server.getClientCapabilities() as IClientCapabilities | undefined;
     return {
       transport: transportType,
@@ -227,20 +207,7 @@ export function createMcpServer(transportType: TTransportType): Server {
   // Handler for listing available tools (standard §8.4 — server-side pagination).
   server.setRequestHandler(
     ListToolsRequestSchema,
-    withRequestContext(async (request, extra) => {
-      const raw = await getTools(ctx(extra));
-      const tools = raw.map((t: any) => {
-        const info = readDeprecation(t);
-        if (!info) {
-          return t;
-        }
-        assertDeprecationConsistency('tool', t.name, info);
-        return { ...t, description: applyDeprecationToDescription(t.description, info) };
-      });
-      const cursor = (request.params as any)?.cursor;
-      const { page, nextCursor } = paginate(tools, cursor, pageSize, (t) => t.name);
-      return nextCursor ? { tools: page, nextCursor } : { tools: page };
-    }),
+    withRequestContext(async (request, extra) => listToolsPage(ctx(extra), (request.params as any)?.cursor, pageSize)),
   );
 
   const progressThrottleMs = appConfig.mcp.progress?.throttleMs ?? 100;
@@ -299,36 +266,9 @@ export function createMcpServer(transportType: TTransportType): Server {
           errorCount: outputCheck.errorCount,
         });
       }
-      const uiClient = hostSupportsMcpApps(server.getClientCapabilities() as IClientCapabilities | undefined);
-      const existingContent = Array.isArray(response.content) ? response.content : undefined;
-      if (uiClient) {
-        // UI client: no copy; keep content as-is, ensure a valid (possibly empty) array on the wire.
-        if (!existingContent) {
-          response.content = [];
-        }
-      } else {
-        // §12.4 — copy structuredContent into content[0] as JSON text for plain clients.
-        const hasText = existingContent?.some((p: any) => p?.type === 'text' && typeof p?.text === 'string');
-        if (!hasText) {
-          let serialized: string;
-          try {
-            serialized = JSON.stringify(response.structuredContent ?? null, null, 2);
-          } catch {
-            serialized = '';
-          }
-          response.content = [{ type: 'text', text: serialized }, ...(existingContent ?? [])];
-        }
-      }
+      mirrorStructuredContent(response, server.getClientCapabilities() as IClientCapabilities | undefined);
     }
-
-    const truncated = truncateToolResponse(response) as any;
-    try {
-      const resultBytes = JSON.stringify(truncated ?? null).length;
-      getMetrics()?.resultBytes.observe(resultBytes);
-    } catch {
-      // ignore serialization-only failures
-    }
-    return truncated;
+    return truncateAndObserve(response);
   };
 
   const taskStore = tasksEnabled ? getTaskStore() : undefined;
@@ -660,81 +600,43 @@ export function createMcpServer(transportType: TTransportType): Server {
     // Handler for listing available prompts (standard §8.4 — server-side pagination).
     server.setRequestHandler(
       ListPromptsRequestSchema,
-      withRequestContext(async (request, extra) => {
-        const result = await getPromptsList(ctx(extra));
-        const prompts = result.prompts.map((p: any) => {
-          const info = readDeprecation(p);
-          if (!info) {
-            return p;
-          }
-          assertDeprecationConsistency('prompt', p.name, info);
-          return { ...p, description: applyDeprecationToDescription(p.description, info) };
-        });
-        const cursor = (request.params as any)?.cursor;
-        const { page, nextCursor } = paginate(prompts, cursor, pageSize, (p: any) => p.name);
-        return nextCursor ? { prompts: page, nextCursor } : { prompts: page };
-      }),
+      withRequestContext(async (request, extra) =>
+        listPromptsPage(ctx(extra), (request.params as any)?.cursor, pageSize),
+      ),
     );
 
     // Handler for getting prompt content
     server.setRequestHandler(
       GetPromptRequestSchema,
       // @ts-ignore
-      withRequestContext(async (request: IGetPromptRequest, extra) => {
-        const promptName = (request.params as any)?.name;
-        if (promptName) {
-          const { prompts } = await getPromptsList(ctx(extra));
-          const prompt = prompts.find((p: any) => p.name === promptName);
-          warnDeprecatedUsage('prompt', promptName, readDeprecation(prompt));
-        }
-        return await getPrompt(request, ctx(extra));
-      }),
+      withRequestContext(async (request: IGetPromptRequest, extra) => getPromptWithWarn(request, ctx(extra))),
     );
   }
 
   // Handler for listing available resources (standard §8.4 — server-side pagination).
   server.setRequestHandler(
     ListResourcesRequestSchema,
-    withRequestContext(async (request, extra) => {
-      const result = await getResourcesList(ctx(extra));
-      const resources = result.resources.map((r: any) => {
-        const info = readDeprecation(r);
-        if (!info) {
-          return r;
-        }
-        assertDeprecationConsistency('resource', r.uri, info);
-        return { ...r, description: applyDeprecationToDescription(r.description, info) };
-      });
-      const cursor = (request.params as any)?.cursor;
-      const { page, nextCursor } = paginate(resources, cursor, pageSize, (r: any) => r.uri);
-      return nextCursor ? { resources: page, nextCursor } : { resources: page };
-    }),
+    withRequestContext(async (request, extra) =>
+      listResourcesPage(ctx(extra), (request.params as any)?.cursor, pageSize),
+    ),
   );
 
   // Handler for reading resource content
   server.setRequestHandler(
     ReadResourceRequestSchema,
-    withRequestContext(async (request: IReadResourceRequest, extra) => {
-      const { uri } = request.params;
-      if (uri) {
-        const { resources } = await getResourcesList(ctx(extra));
-        const resource = resources.find((r: any) => r.uri === uri);
-        warnDeprecatedUsage('resource', uri, readDeprecation(resource));
-      }
-      return (await getResource(uri, ctx(extra))) as any;
-    }),
+    withRequestContext(
+      async (request: IReadResourceRequest, extra) =>
+        (await readResourceWithWarn(request.params.uri, ctx(extra))) as any,
+    ),
   );
 
   // Optional MAY: resources/templates/list — empty list if no templates configured.
   if (templatesEnabled) {
     server.setRequestHandler(
       ListResourceTemplatesRequestSchema,
-      withRequestContext(async (request, extra) => {
-        const templates = await getResourceTemplatesList(ctx(extra));
-        const cursor = (request.params as any)?.cursor;
-        const { page, nextCursor } = paginate(templates, cursor, pageSize, (t: any) => t.uriTemplate ?? t.name ?? '');
-        return nextCursor ? { resourceTemplates: page, nextCursor } : { resourceTemplates: page };
-      }),
+      withRequestContext(async (request, extra) =>
+        listTemplatesPage(ctx(extra), (request.params as any)?.cursor, pageSize),
+      ),
     );
   }
 
@@ -744,22 +646,7 @@ export function createMcpServer(transportType: TTransportType): Server {
     const completionProvider = projectData!.completionProvider!;
     server.setRequestHandler(
       CompleteRequestSchema,
-      withRequestContext(async (request) => {
-        const params = (request.params ?? {}) as {
-          ref: { type: 'ref/prompt' | 'ref/resource'; name?: string; uri?: string };
-          argument: { name: string; value: string };
-          context?: Record<string, unknown>;
-        };
-        const raw = await completionProvider({
-          ref: params.ref,
-          argument: params.argument,
-          ...(params.context ? { context: params.context } : {}),
-        });
-        const all = Array.isArray(raw) ? raw.map(String) : [];
-        // MCP caps completion results at 100 values; `hasMore` flags truncation.
-        const values = all.slice(0, 100);
-        return { completion: { values, total: all.length, hasMore: all.length > values.length } };
-      }),
+      withRequestContext(async (request) => completeCore((request.params ?? {}) as any, completionProvider)),
     );
   }
 
