@@ -384,6 +384,17 @@ mcp:
     readTtlMs: 0
     #> Who may cache: public | private. Default private.
     cacheScope: private
+  #> Multi Round-Trip Requests (MRTR, 2026-07-28): a tool may pause mid-call and ask the user for
+  #> confirmation or missing data (`resultType: input_required`); the client retries the call with
+  #> the answers and the opaque `requestState` blob minted by the server.
+  mrtr:
+    #> HMAC secret protecting `requestState` integrity (min 32 characters). Empty = a random
+    #> per-process key is generated at startup: fine for a single instance, but a restart
+    #> invalidates in-flight MRTR cycles, and multiple instances behind a load balancer MUST share
+    #> one secret set here (or via MCP_MRTR_STATE_SECRET).
+    stateSecret: ''
+    #> How long a minted requestState stays valid, seconds. Default 600 (10 minutes).
+    stateTtlSeconds: 600
   #> Standard §6 (MAY) — Streamable HTTP SSE stream resumability via the `Last-Event-ID` header.
   #> Off by default. When enabled, the server keeps recent SSE events in process memory so a
   #> reconnecting client can replay missed messages. The buffer is in-memory only: it is lost on

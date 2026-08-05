@@ -87,6 +87,11 @@ mcp:
       __name: MCP_CACHE_READ_TTL_MS
       __format: number
     cacheScope: MCP_CACHE_SCOPE
+  mrtr:
+    stateSecret: MCP_MRTR_STATE_SECRET
+    stateTtlSeconds:
+      __name: MCP_MRTR_STATE_TTL_SECONDS
+      __format: number
   resources:
     subscribeEnabled:
       __name: MCP_RESOURCES_SUBSCRIBE_ENABLED

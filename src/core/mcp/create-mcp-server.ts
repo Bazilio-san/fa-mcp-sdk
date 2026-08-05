@@ -256,6 +256,20 @@ export function createMcpServer(
    * MCP Apps UI clients — `structuredContent` is UI-only data that must not enter the model context.
    */
   const finalizeToolResponse = (tool: any, response: any): any => {
+    // MRTR marker toward a sessionful legacy client (v1 path, no multi-round-trip support):
+    // degrade into an actionable isError text. Modern and v2-stateless-legacy clients are served
+    // by the v2 factory, which handles the marker natively.
+    if (response && typeof response === 'object' && (response as any).__inputRequired === true) {
+      return {
+        content: [
+          {
+            type: 'text',
+            text: 'This tool requires additional user input (multi round-trip request, MCP 2026-07-28). The current client session uses a legacy protocol revision that cannot deliver it — retry over the modern protocol.',
+          },
+        ],
+        isError: true,
+      };
+    }
     if (response && typeof response === 'object' && 'structuredContent' in response) {
       const outputCheck = validateToolOutput(tool, response.structuredContent);
       if (!outputCheck.valid) {
