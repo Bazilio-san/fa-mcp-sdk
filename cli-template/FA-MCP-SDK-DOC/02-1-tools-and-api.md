@@ -76,13 +76,29 @@ violation throws with the offending name printed.
 **Standard §9.2 — `inputSchema` SHOULD declare `$schema: '…/draft/2020-12/schema'` and
 `additionalProperties: false`.** Both fields are recognised by the `IToolInputSchema` type.
 
-**Standard §9.3 (MUST) — arguments are validated server-side.** Before `toolHandler` is
-called, the SDK validates `request.params.arguments` against `inputSchema` via ajv (draft
-2020-12). On failure the response is JSON-RPC `-32602` and the handler is **not** invoked.
-This means tool code no longer needs to repeat shape checks — by the time the handler runs,
-`args` already matches the schema.
+**Standard §9.3 (MUST) — arguments are validated server-side.** Before the handler is called, the SDK
+validates `request.params.arguments` against `inputSchema`. On failure the handler is **not** invoked, so tool
+code never repeats shape checks — by the time the handler runs, `args` already matches the schema.
 
-The error carries a precise, English diagnostic. The `message` reads
+How a violation is surfaced depends on the protocol era the caller speaks:
+
+| Era                                | Surface of a schema violation                                                              |
+|------------------------------------|--------------------------------------------------------------------------------------------|
+| Modern (MCP 2026-07-28)            | A tool result with `isError: true` carrying field-level diagnostics — every violation in one message |
+| Legacy (MCP 2025-11-25 and earlier)| JSON-RPC `-32602 Invalid params` with a structured `error.data` payload                     |
+
+In the modern era an argument violation is a **tool** error rather than a protocol error: the model reads the
+diagnostic inside the conversation and retries the call with corrected arguments instead of hitting an opaque
+sandbox failure. Structural defects of the request itself remain protocol errors in both eras — an unparseable
+body, a missing required `_meta` envelope, or an unknown tool name.
+
+The modern-era text names each offending path and the constraint it broke, joined into a single line:
+
+```text
+Input validation error: Invalid arguments for tool convert_amount: amount: expected number, received string, currency: required
+```
+
+The legacy error carries the same information in machine-readable form. Its `message` reads
 `Invalid params: <field>: <reason>; …` and `error.data` lists every violation:
 
 ```jsonc
@@ -101,20 +117,38 @@ The error carries a precise, English diagnostic. The `message` reads
 }
 ```
 
-Diagnostics name the field, the violated constraint, and (for type errors) the actual JS type — never
-the offending value itself, so no caller-supplied data leaks outward (standard §13.3). At most 8
-failures are reported; the remainder are summarised as `(+N more)` in `message` and counted in
+Diagnostics in both eras name the field, the violated constraint, and (for type errors) the actual JS type —
+never the offending value itself, so no caller-supplied data leaks outward (standard §13.3). The legacy path
+reports at most 8 failures; the remainder are summarised as `(+N more)` in `message` and counted in
 `errorCount`.
 
-Input validation is on by default. It can be disabled with `mcp.tools.validateInput: false`
-(or the `MCP_TOOLS_VALIDATE_INPUT` environment variable) — useful when tools validate their own
-arguments or in a trusted internal deployment. The toggle does not affect `outputSchema` validation.
+`mcp.tools.validateInput: false` (or the `MCP_TOOLS_VALIDATE_INPUT` environment variable) turns validation off
+on the legacy path — useful when tools validate their own arguments or in a trusted internal deployment. The
+modern path always validates against the registered schema, and neither setting affects `outputSchema` checks.
+
+### Deterministic `tools/list` order
+
+`tools/list` returns tools sorted by `name` in both eras. The catalog a client sees is therefore byte-identical
+across calls as long as the tool set itself is unchanged, which keeps client-side caches and the model's prompt
+cache warm. Register tools in whatever order reads best in `src/tools/tools.ts` — the SDK sorts a copy of the
+array, so the project's own ordering is never mutated.
 
 ### Output schema and `structuredContent` (standard §9.4 / §12.4)
 
 A tool MAY declare `outputSchema` to describe its `structuredContent` payload. When set,
 the SDK validates the handler's response against the schema — a violation raises JSON-RPC
 `-32603` (internal error: the tool broke its own contract).
+
+**Declaring `outputSchema` is a promise that every result carries conforming `structuredContent`.** A
+text-only answer from a tool that advertises the schema breaks that promise, so the SDK publishes a tool's
+`outputSchema` to modern clients only where the deployment can actually keep it — that is, when
+`mcp.tools.answerAs: 'structuredContent'` and the tool is not task-capable. Two consequences follow:
+
+- In the default `answerAs: 'text'` mode `formatToolResult()` returns `content` only, so the schema stays
+  unadvertised. Set `mcp.tools.answerAs: 'structuredContent'`, or return `asJson()` explicitly from the
+  handler, to publish it and get result validation.
+- A task-capable tool (`execution.taskSupport`, see "Task-augmented execution" below) may answer with a task
+  handle instead of its own payload while the Tasks extension is enabled, so its schema stays unadvertised too.
 
 `content` and `structuredContent` are independent — a tool MAY return `structuredContent` alone with
 an empty `content`. For plain clients the SDK copies `structuredContent` into an empty `content` as a
@@ -151,9 +185,22 @@ export const tools: Tool[] = [{
 ### Tool Handler (per tool, in `src/tools/<tool-name>.ts`)
 
 Each tool's `handler` lives in that tool's own file (one tool = one file — see "Tool organization" above).
-It receives `IToolHandlerParams` — `{ name, arguments, headers, payload, transport, clientCapabilities,
-signal, sendProgress }` — where `payload: { user, … }` is present when JWT auth is enabled, `transport` is
-`'stdio' | 'sse' | 'http'`, and `headers` are normalized to lowercase keys:
+It receives `IToolHandlerParams`, where `payload: { user, … }` is present when JWT auth is enabled,
+`transport` is `'stdio' | 'sse' | 'http'`, and `headers` are normalized to lowercase keys:
+
+| Field                 | Meaning                                                                                     |
+|-----------------------|---------------------------------------------------------------------------------------------|
+| `name`                | The invoked tool's name                                                                      |
+| `arguments`           | Caller arguments, already validated against `inputSchema`                                    |
+| `transport`           | `'stdio' \| 'sse' \| 'http'`                                                                 |
+| `headers`             | Request headers, lowercase keys (HTTP/SSE only)                                              |
+| `payload`             | Authenticated principal (`{ user, … }`) when JWT auth is enabled                             |
+| `clientCapabilities`  | What the client declared it can do — see "Reading client capabilities" below                 |
+| `signal`              | `AbortSignal` flipped on client cancellation — see "Cancellation"                            |
+| `sendProgress`        | Emit `notifications/progress` for this request — see "Progress"                              |
+| `log`                 | Emit `notifications/message` to the client for this request — see "Client-visible logging"   |
+| `inputResponses`      | MRTR: the client's answers on a retried call — see "Multi round-trip requests"               |
+| `requestStatePayload` | MRTR: the verified state the handler sealed on the previous round                            |
 
 ```typescript
 // src/tools/my-custom-tool.ts
@@ -195,11 +242,12 @@ export const handleToolCall = async (params: IToolHandlerParams): Promise<TToolH
 > `switch (name)` for brevity, but in this template each belongs **inside its own tool's `handler(params)`** —
 > the dispatcher already routes by name, so you never write the `switch` yourself.
 
-The handler must return `TToolHandlerResponse` — a discriminated union of
-`IToolHandlerTextResponse` (`{ content: [{ type: 'text', text }] }`) and
-`IToolHandlerStructuredResponse<T>` (`{ structuredContent: T }`). The SDK forwards
-the value as-is to the MCP client over STDIO, SSE, and HTTP. Use `formatToolResult()`
-to pick the right shape based on `appConfig.mcp.tools.answerAs`.
+The handler must return `TToolHandlerResponse` — a discriminated union of `IToolHandlerTextResponse`
+(`{ content: [{ type: 'text', text }] }`), `IToolHandlerStructuredResponse<T>` (`{ structuredContent: T }`),
+and `IInputRequiredResponse` (the MRTR marker built by `formatInputRequired()`). The SDK forwards a finished
+result as-is to the MCP client over STDIO, SSE, and HTTP. Use `formatToolResult()` to pick the right shape
+based on `appConfig.mcp.tools.answerAs`, and `formatInputRequired()` when the call needs another round trip —
+the marker is part of the union, so no cast is needed.
 
 ### Returning errors — `isError: true` vs `throw`
 
@@ -415,6 +463,10 @@ never aborted — handlers should remain forward-compatible.
 carried `_meta.progressToken`. When the client did not request progress, the SDK passes a
 no-op so the handler can call it unconditionally — no `if` guard needed.
 
+In the modern era progress is delivered on that request's own response stream, so it reaches the caller
+without any long-lived side channel; a request that omits `_meta.progressToken` receives nothing. Legacy
+sessions receive the same notification over their session stream.
+
 Rules enforced server-side:
 
 - progress values MUST be monotonically non-decreasing (smaller values are silently dropped);
@@ -451,6 +503,162 @@ The client receives:
 Choose `total` only when the upper bound is known up-front; otherwise omit it and the client
 will render an indeterminate spinner.
 
+### Client-visible logging (`log`) — standard §15.2
+
+`IToolHandlerParams.log?(level, data, logger?)` emits a `notifications/message` to the calling client for
+**this** request — the way a tool narrates what it is doing ("querying the warehouse", "3 of 8 shards
+answered") to a human watching the client UI. It is fire-and-forget: it returns `void`, and a delivery failure
+never breaks the tool call. `level` is one of `'debug' | 'info' | 'notice' | 'warning' | 'error' |
+'critical' | 'alert' | 'emergency'`, `data` is any JSON-serializable value, and the optional `logger` string
+tags the source so clients can route or filter on it (`tool:my_tool` is the convention).
+
+The threshold is applied by the SDK, per era, so the handler calls `log` unconditionally and never inspects a
+level itself:
+
+- a **modern** request is filtered by its own `_meta["io.modelcontextprotocol/logLevel"]`. A request that
+  omits the field receives **no** log messages at all — that is a specification requirement, not a quirk, and
+  it is why a tool must not rely on `log` to report anything the caller actually needs;
+- a **legacy** session is filtered by the level its client set with `logging/setLevel`.
+
+```typescript
+async function handler (params: IToolHandlerParams): Promise<TToolHandlerResponse> {
+  const { arguments: args, log } = params;
+
+  log?.('info', `searching ${args.index} for "${args.query}"`, 'tool:search_docs');
+  const hits = await search(args.index, args.query);
+
+  if (hits.length === 0) {
+    log?.('notice', { index: args.index, matched: 0 }, 'tool:search_docs');
+  }
+  return formatToolResult({ hits });
+}
+```
+
+Everything that operators need — timings, upstream failures, audit records — belongs in the server log
+(`logger` from `fa-mcp-sdk`), not in `log`. Treat `log` strictly as an optional narration channel for the
+client, and never send credentials, tokens, or personal data through it: the payload is delivered verbatim to
+whoever made the call.
+
+### Multi round-trip requests (MRTR) — standard §12.4
+
+A tool that discovers mid-call that it needs a confirmation, a choice, or a missing parameter does not have to
+fail or invent a two-tool handshake. It returns the marker built by `formatInputRequired({ inputRequests,
+state })`; the client collects the answers from the user or the model and **retries the same call**, and the
+same handler runs again with the answers in hand. This is the modern replacement for server-initiated
+`elicitation/create`, `sampling/createMessage`, and `roots/list` round trips.
+
+```typescript
+import { formatInputRequired, formatToolResult, IToolHandlerParams, TToolHandlerResponse } from 'fa-mcp-sdk';
+
+interface IConfirmState { target: string }
+
+function handler (params: IToolHandlerParams): TToolHandlerResponse {
+  const { target } = params.arguments || {};
+  const answer = params.inputResponses?.confirm as { action?: string; content?: { confirm?: boolean } } | undefined;
+
+  if (!answer) {
+    // Round 1 — nothing to act on yet, so ask the user and remember what we were asked to do.
+    return formatInputRequired({
+      inputRequests: {
+        confirm: {
+          method: 'elicitation/create',
+          params: {
+            mode: 'form',
+            message: `Delete ${target}? This cannot be undone.`,
+            requestedSchema: {
+              type: 'object',
+              properties: { confirm: { type: 'boolean', description: 'Confirm the deletion' } },
+              required: ['confirm'],
+            },
+          },
+        },
+      },
+      state: { target } satisfies IConfirmState,
+    });
+  }
+
+  // Round 2 — the user answered. Prefer the sealed state over the arguments: it is the value the
+  // server itself minted and the SDK has already verified.
+  const restored = params.requestStatePayload as IConfirmState | undefined;
+  const confirmedTarget = restored?.target ?? target;
+
+  if (answer.action !== 'accept' || answer.content?.confirm !== true) {
+    return formatToolResult({ deleted: false, target: confirmedTarget, reason: 'The user declined.' });
+  }
+  return formatToolResult({ deleted: true, target: confirmedTarget, deletedAt: new Date().toISOString() });
+}
+```
+
+**`inputRequests`** maps server-assigned ids to embedded MCP requests — `{ method, params? }` where `method`
+is `elicitation/create`, `sampling/createMessage`, or `roots/list`. The id is yours to choose (`confirm`
+above); it is the key you read back from `inputResponses`. Each value in `inputResponses` is the raw MCP
+result object for that method, so an accepted form elicitation is read as
+`inputResponses[id].content`.
+
+**`state`** is any JSON-serializable value. The SDK seals it into the opaque `requestState` blob that travels
+to the client and back: HMAC-SHA256 integrity, a TTL, and binding to both the method and the authenticated
+principal. Nothing is stored on the server between rounds — that is exactly what makes the pattern survive a
+plain load balancer with no sticky sessions. A tampered, expired, or foreign blob is rejected with `-32602`
+before the handler is reached, so `requestStatePayload` is always trustworthy when it arrives. The blob is
+signed, not encrypted: put identifiers in it, never secrets.
+
+Configure it under `mcp.mrtr`: `stateSecret` (the HMAC key, at least 32 characters — **every instance behind
+a load balancer must share the same value**, otherwise an in-flight cycle breaks when the retry lands on
+another instance) and `stateTtlSeconds` (default 600). An empty `stateSecret` makes the server mint a random
+per-process key, which is fine for a single instance but invalidates in-flight cycles on restart.
+
+`formatInputRequired()` requires at least one of `inputRequests` / `state` and throws a `TypeError`
+otherwise. Both `IInputRequiredResponse` (the marker type) and the guard `isInputRequiredResponse()` are
+exported from `fa-mcp-sdk` alongside it.
+
+**Degradation is automatic and actionable.** The SDK never sends an `inputRequests` kind the client did not
+declare a capability for; such a call instead returns `isError: true` with text naming the missing capability,
+so the model can explain the limitation or take a different route. The same happens for a sessionful legacy
+client, which cannot do MRTR at all. Write the handler once, for the modern flow — nothing in it changes.
+
+A complete working example ships with every generated project as `src/tools/example-confirm.ts`.
+
+### Mirroring an argument into an HTTP header (`x-mcp-header`)
+
+Annotating a property of `inputSchema` with `x-mcp-header` tells a modern client to copy that argument's value
+into the HTTP header `Mcp-Param-{Name}` alongside the JSON body. Gateways, WAFs, rate limiters, and metering
+proxies can then route or account for the call without parsing the body. The server validates the header
+against the body on arrival and answers `-32020` (HeaderMismatch, HTTP 400) when the two disagree or the
+header is missing while the body carries the argument — so the annotation is a real contract, not a hint.
+
+```typescript
+inputSchema: {
+  $schema: 'https://json-schema.org/draft/2020-12/schema',
+  type: 'object',
+  properties: {
+    query: { type: 'string', description: 'Search query' },
+    region: {
+      type: 'string',
+      description: 'Data region to search in (e.g. "eu-west", "us-east")',
+      // The client mirrors this value into the `Mcp-Param-Region` request header.
+      'x-mcp-header': 'Region',
+    },
+  },
+  required: ['query'],
+  additionalProperties: false,
+}
+```
+
+Constraints on the annotation — a declaration that breaks any of them is skipped by conforming clients, and
+the SDK logs a warning at registration:
+
+- **Primitive types only** — `string`, `integer`, `boolean`. `number` is excluded, because a float has no
+  single canonical text form to compare against.
+- **Statically reachable from the schema root through `properties` only.** An annotated property must not sit
+  under `items`, `prefixItems`, `additionalProperties`, `patternProperties`, `oneOf` / `anyOf` / `allOf` /
+  `not`, `if` / `then` / `else`, or behind a `$ref` — a gateway has to find it without evaluating the schema.
+- **Header names unique case-insensitively** within one tool, and valid HTTP tokens (no spaces, control
+  characters, or delimiters).
+
+The handler reads the argument from `params.arguments` as usual and never touches the header: by the time it
+runs, header and body are guaranteed to agree. The generated project's `src/tools/example-search.ts` carries
+this annotation on its `region` parameter.
+
 ### Task-augmented execution (long-running tools) — standard §8.7
 
 A normal `tools/call` is synchronous: the client holds the connection open until the tool returns,
@@ -459,11 +667,14 @@ operations that legitimately take minutes — bulk exports, report generation, l
 SDK supports **task-augmented execution**: the server returns a task identifier immediately and runs
 the tool in the background; the client then polls for status and fetches the result when ready.
 
+In the modern era this is the official **extension** `io.modelcontextprotocol/tasks` rather than a core
+protocol feature: servers that have no long operations simply never advertise it, and the core stays smaller.
+
 This feature is **opt-in and off by default**. To enable it:
 
-1. Set `mcp.tasks.enabled: true` in the configuration. The server then advertises the `tasks`
-   capability and accepts the lifecycle methods `tasks/list`, `tasks/get`, `tasks/result` and
-   `tasks/cancel`.
+1. Set `mcp.tasks.enabled: true` in the configuration. The server then advertises the extension in
+   `server/discover` under `capabilities.extensions["io.modelcontextprotocol/tasks"]` and accepts the
+   lifecycle methods `tasks/get`, `tasks/update` and `tasks/cancel`.
 2. Mark the long-running tool with `execution.taskSupport` in its declaration:
 
 ```typescript
@@ -479,34 +690,48 @@ This feature is **opt-in and off by default**. To enable it:
 }
 ```
 
+A task is returned **only to a client that declared the extension** in its own capabilities. The very same
+tool called by a client without the extension runs synchronously and answers with an ordinary result, so a
+task-capable tool needs no alternate code path for plain clients.
+
 The same handler runs whether the tool is invoked synchronously or as a task — the SDK always
 supplies `signal` and `sendProgress`. When the tool runs as a task, `signal` is flipped by
-`tasks/cancel`, progress is delivered through `notifications/progress`, and the SDK emits a
-`notifications/tasks/status` on every status change. On completion the task transitions to
-`completed` (carrying the same result a synchronous call would return); on a thrown error it
-transitions to `failed` with a sanitized message; on cancellation it transitions to `cancelled`.
+`tasks/cancel` and progress is delivered through `notifications/progress`. On completion the task transitions
+to `completed` (carrying the same result a synchronous call would return); on a thrown error it transitions to
+`failed` with a sanitized message; on cancellation it transitions to `cancelled`.
 
-The client drives the lifecycle by sending a `task` parameter on `tools/call` and then polling:
+The client drives the modern lifecycle by sending a `task` parameter on `tools/call` and then polling:
 
 ```jsonc
-// 1. Create — returns immediately with { task: { taskId, status: "working", … } }
+// 1. Create — returns immediately with { resultType: "task", task: { taskId, status: "working", … } }
 { "method": "tools/call", "params": { "name": "generate_report", "arguments": {}, "task": {} } }
 
-// 2. Poll status until terminal
+// 2. Poll until terminal. tasks/get also carries the result once the task is completed.
 { "method": "tasks/get",    "params": { "taskId": "…" } }   // → { status: "working" | "completed" | … }
 
-// 3. Fetch the result once completed (same shape a synchronous tools/call returns)
-{ "method": "tasks/result", "params": { "taskId": "…" } }
+// 3. Deliver mid-flight input to a task waiting in `input_required` (see below)
+{ "method": "tasks/update", "params": { "taskId": "…", "inputResponses": { "confirm": { … } } } }
 
 // Optional — abort a running task
 { "method": "tasks/cancel", "params": { "taskId": "…" } }
 ```
 
+There is no `tasks/list` and no `tasks/result` in the modern era: the result is read from `tasks/get`, and a
+client tracks the task handles it created itself.
+
+**A task can go through the MRTR cycle.** When the handler of a running task returns
+`formatInputRequired(...)`, the task moves to status `input_required` and `tasks/get` exposes the pending
+`inputRequests`. The client answers with `tasks/update`, the task returns to `working`, and the same handler
+runs again with `inputResponses` and `requestStatePayload` filled in — exactly as in a synchronous call. A
+long export can therefore stop halfway to ask "this will overwrite 12 000 rows, continue?" without giving up
+its background execution.
+
 The default task store keeps records **in process memory only** — it does not survive a server
 restart, and it is scoped to a single instance (no shared store across a cluster). Retention,
 poll interval and the retained-task cap are configured under `mcp.tasks.*` (see
 [03-configuration.md](./03-configuration.md)); the full method contract is in
-[11-public-contract.md](./11-public-contract.md) §4.
+[11-public-contract.md](./11-public-contract.md) §4. Legacy-era clients keep their own task methods
+unchanged.
 
 > **Test progress and cancellation live.** The Agent Tester's **Tool Tester** tab exercises both this
 > `sendProgress` stream and `signal`-based cancellation without a hand-written client: Send Request
@@ -514,13 +739,17 @@ poll interval and the retained-task cap are configured under `mcp.tasks.*` (see
 > signal. See [08-agent-tester-and-headless-api.md](./08-agent-tester-and-headless-api.md) →
 > "Live progress & cancellation (`/api/mcp/call-tool-stream`)".
 
-### MCP Apps — Reading Client Capabilities
+### Reading client capabilities
 
-`params.clientCapabilities` carries the client's `initialize`-time capabilities (including the
-open-ended `extensions` map). Use it to branch a tool between UI-augmented and text-only
-output. See [10-mcp-apps.md → "Reading client capabilities from fa-mcp-sdk"](./10-mcp-apps.md)
-for the full helper surface (`getUiCapability`, `hostSupportsMcpApps`,
-`MCP_APPS_EXTENSION_ID`, `MCP_APPS_RESOURCE_MIME_TYPE`).
+`params.clientCapabilities` carries what the caller declared it can do, including the open-ended `extensions`
+map through which Tasks and MCP Apps are negotiated. The value is assembled per era: a modern request carries
+its capabilities in the per-request `_meta` envelope, while a legacy session inherits them from its
+`initialize` handshake. Either way the handler reads one field.
+
+`undefined` means "unknown" — treat it as "no extra capabilities" and fall back to the plain `content[]`
+contract. Use the field to branch a tool between UI-augmented and text-only output; see
+[10-mcp-apps.md → "Reading client capabilities from fa-mcp-sdk"](./10-mcp-apps.md) for the full helper
+surface (`getUiCapability`, `hostSupportsMcpApps`, `MCP_APPS_EXTENSION_ID`, `MCP_APPS_RESOURCE_MIME_TYPE`).
 
 ### Outbound Webhooks (`x-web-hook`)
 

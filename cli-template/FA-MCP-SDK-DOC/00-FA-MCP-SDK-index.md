@@ -2,6 +2,13 @@
 
 TypeScript framework for building MCP servers.
 
+**Base protocol: MCP `2026-07-28`**, with a dual-era compatibility window for `2025-11-25` clients. One `/mcp`
+endpoint serves both, with no configuration to choose between them: modern traffic is stateless (no `initialize`,
+no sessions, a per-request `_meta` envelope, header-mirrored requests), legacy traffic keeps the `initialize` +
+`Mcp-Session-Id` session flow. On STDIO the era is decided from the connection's opening message and pinned for the
+process lifetime. Era-dependent behaviour is flagged in each document; the config-level summary lives in
+[03-configuration → "Protocol Eras"](03-configuration.md).
+
 ## Quick Start
 
 ```bash
@@ -12,19 +19,19 @@ npm install fa-mcp-sdk
 
 | File | Content | Read When |
 |------|---------|-----------|
-| [01-getting-started](01-getting-started.md) | `initMcpServer()`, `McpServerData`, `IPromptData`, `IResourceData`, `AppConfig` | Starting new project |
+| [01-getting-started](01-getting-started.md) | `initMcpServer()`, `McpServerData`, `IPromptData`, `IResourceData`, `AppConfig`, **era-dependent `clientCapabilities`** | Starting new project |
 | [02-1-tools-and-api](02-1-tools-and-api.md) | Tool definitions, **snake_case name validation**, **`$schema` 2020-12 + `additionalProperties:false`**, **server-side `arguments` validation**, **`outputSchema` + `structuredContent` mirror**, `toolHandler`, outbound webhooks, REST API with tsoa, OpenAPI/Swagger | Creating tools, REST endpoints, webhook callbacks |
 | [02-2-prompts-and-resources](02-2-prompts-and-resources.md) | Standard/custom prompts, **parameterised prompts (`IPromptArgument[]`)**, resources, **built-in `project://version`, `use://auth`, `<name>://agent/brief\|prompt`**, **opt-in `resources/templates/list` + `resources/subscribe`**, `requireAuth` | Configuring prompts/resources |
-| [03-configuration](03-configuration.md) | `appConfig`, YAML config, access points, cache, **`mcp.limits` (payload/result/timeout)**, **`mcp.pagination`**, **`mcp.resources` (MAY)**, **`mcp.rateLimit.scope` + `maxConcurrentPerSubject` (§14)**, **`webServer.trustProxy`**, **`webServer.tokenCheck.allowQueryToken` (§7.1)**, **/health & /ready**, **CORS hardening**, **MCP error codes** (`-32002…-32005`) | Server configuration, external services, transport-level hardening |
+| [03-configuration](03-configuration.md) | `appConfig`, YAML config, access points, cache, **protocol eras**, **`mcp.cacheHints` (`ttlMs`/`cacheScope`)**, **`mcp.mrtr` (shared `stateSecret` for multi-instance)**, **`mcp.limits` (payload/result/timeout)**, **`mcp.pagination`**, **`mcp.tools` (`answerAs` gates `outputSchema`)**, **`mcp.logging` (per-request threshold)**, **`mcp.tasks` (`io.modelcontextprotocol/tasks`)**, **`mcp.resources` (MAY)**, **`mcp.rateLimit.scope` + `maxConcurrentPerSubject` (§14)**, **`webServer.trustProxy`**, **`webServer.tokenCheck.allowQueryToken` (§7.1)**, **/health & /ready**, **CORS hardening**, **MCP error codes** (`-32002…-32007`, `-32020…-32022`) | Server configuration, external services, transport-level hardening |
 | [04-authentication](04-authentication.md) | JWT (**4 modes: legacyAesCtr / embedded / localKey / remoteJwks**), Basic auth, server tokens, **OAuth discovery + `/oauth/token` + JWKS**, **`requiredScopes` enforcement (§7.5)**, **`WWW-Authenticate` realm + invalid_token (§7.4)**, **HTTP 403 `forbidden` flag**, `createAuthMW()`, Token Generator, CLI Token Generator (mode-aware), JWT Generation API | Authentication setup |
 | [05-ad-authorization](05-ad-authorization.md) | AD group authorization at HTTP/tool levels | AD group restrictions |
-| [06-utilities](06-utilities.md) | `ServerError`, `normalizeHeaders`, logging, MCP debug switches (`DEBUG=mcp:*`), **HTTP connection & RPC tracing (`DEBUG=mcp-handshake` / `mcp-rpc`, always-on session-lifecycle + `-32600` + error logging)**, JSON-lines sink (`mcp.debug.logFile` → `emitTrace`), built-in debug tools (`mcp.debug.builtinTools`), Consul, graceful shutdown | Error handling, utilities, request tracing, post-mortem analysis |
-| [07-testing-and-operations](07-testing-and-operations.md) | Test clients (STDIO, HTTP, SSE, Streamable HTTP); universal `debug-tool` fixture covering every `CallToolResult` shape | Testing, deployment, exercising client code against image/audio/resource/error/delay variants |
+| [06-utilities](06-utilities.md) | `ServerError`, `normalizeHeaders`, **modern protocol codes `-32020…-32022`**, **Streamable HTTP troubleshooting (`MCP-Protocol-Version` / `Mcp-Method` / `Mcp-Name` headers, legacy `-32001` sessions)**, **MRTR helpers (`formatInputRequired`)**, **`mcpNotify`**, **client-facing `log()`**, logging, MCP debug switches (`DEBUG=mcp:*`), HTTP connection & RPC tracing (`DEBUG=mcp-handshake` / `mcp-rpc`), JSON-lines sink (`mcp.debug.logFile` → `emitTrace`), built-in debug tools (`mcp.debug.builtinTools`), Consul, graceful shutdown | Error handling, utilities, request tracing, post-mortem analysis |
+| [07-testing-and-operations](07-testing-and-operations.md) | Test clients for both eras (`McpModernHttpClient`; legacy STDIO, HTTP, SSE, Streamable HTTP); universal `debug-tool` fixture covering every `CallToolResult` shape | Testing, deployment, exercising client code against image/audio/resource/error/delay variants |
 | [08-agent-tester-and-headless-api](08-agent-tester-and-headless-api.md) | Agent Tester, Headless API, structured logging, automated testing, UI `data-testid` reference. **MCP Apps mode**: capability negotiation, `appCalls[]` / `app_calls[]`, widget iframe bridge, App Inspector tab | Agent-driven tool development, CLI automation, UI E2E tests, MCP Apps host for development |
 | [09-database](09-database.md) | PostgreSQL sugar layer (`queryMAIN`, `execMAIN`, `getInsertSqlMAIN`, `getMergeSqlMAIN`, `mergeByBatch`), `pgvector`, secondary DBs | Database access, upserts, batching |
 | [10-mcp-apps](10-mcp-apps.md) | Self-contained digest of the MCP Apps protocol + SDK pinned to `@modelcontextprotocol/ext-apps v1.7.2` (spec 2026-01-26): `ui://` resources, `_meta.ui`, JSON-RPC messages, `App` class, host context, patterns, pitfalls. **Canonical example** (`examples/mcp-apps-canonical/`, `npm run example:mcp-apps`) and widget-side debug helpers (`mcp-debug-log`, `mcp-debug-refresh`). Cross-links to Agent Tester as a dev-host (doc 08) | Building / extending MCP Apps (UI-augmented tools) |
 | [11-public-contract](11-public-contract.md) | Formal public-contract surface of `fa-mcp-sdk`: transports, HTTP endpoints, JWT claims, tool/prompt/resource shape, error mapping, limits & headers (`X-Request-Id`, `traceparent`, `Retry-After`, `WWW-Authenticate`, `MCP-Session-Id`), semver policy, deprecation process | Pinning SDK version, planning a SDK upgrade, drafting CHANGELOG entries, deciding MAJOR vs MINOR vs PATCH |
-| [12-implementation-standard](12-implementation-standard.md) | Corporate MCP server implementation standard (Avatar profile on top of MCP 2025-11-25): transports, HTTP interface, auth/JWT profile, lifecycle, **tool side-effects & risk level**, error codes (`-32002…-32007`), limits, observability, health/readiness, deprecation, compliance checklist | Auditing a server against the corporate profile, drafting acceptance review, aligning a new server with company-wide MCP rules |
+| [12-implementation-standard](12-implementation-standard.md) | Corporate MCP server implementation standard v2.0 — an addendum to MCP `2026-07-28` (Avatar profile): transports, HTTP interface + required headers, auth/JWT profile, lifecycle, dual-era duty, **tool side-effects & risk level**, error codes (`-32002…-32007` corporate, `-32020…-32022` protocol), limits, observability, health/readiness, deprecation, compliance checklist | Auditing a server against the corporate profile, drafting acceptance review, aligning a new server with company-wide MCP rules |
 
 ## Key Exports
 
@@ -55,12 +62,25 @@ import {
   notifyResourceUpdated,                              // call to broadcast `notifications/resources/updated`
 } from 'fa-mcp-sdk';
 
-// SSE resumability (standard §6) — opt-in via mcp.sse.resumability; maskSensitive (§12.2) — opt-in
-// result masking, applied by the server inside a tool handler.
+// Change notifications for `subscriptions/listen` subscribers — mcpNotify.toolsChanged() /
+// promptsChanged() / resourcesChanged() / resourceUpdated(uri).
+import { mcpNotify } from 'fa-mcp-sdk';
+
+// Multi Round-Trip Requests (MRTR) — pause a tool call to ask the user, resume on the client's retry.
+// Secret + TTL come from `mcp.mrtr`; answers arrive in IToolHandlerParams.inputResponses.
+import { formatInputRequired, isInputRequiredResponse, IInputRequiredResponse } from 'fa-mcp-sdk';
+
+// The client-facing log emitter lives on IToolHandlerParams: log(level, data, logger?). Its `level`
+// is the Syslog ladder `TLoggingLevel` — 'debug' | 'info' | 'notice' | 'warning' | 'error' |
+// 'critical' | 'alert' | 'emergency'.
+
+// SSE resumability (standard §6) — legacy era only, opt-in via mcp.sse.resumability; maskSensitive
+// (§12.2) — opt-in result masking, applied by the server inside a tool handler.
 import { InMemoryEventStore, maskSensitive, IMaskRules } from 'fa-mcp-sdk';
 
 // Task-augmented execution (standard §8.7) — opt-in via mcp.tasks.enabled; declare a long-running
-// tool with execution.taskSupport. Storage is pluggable (default: in-memory, per-process).
+// tool with execution.taskSupport. Modern era: the `io.modelcontextprotocol/tasks` extension
+// (tasks/get|update|cancel). Storage is pluggable (default: in-memory, per-process).
 import {
   getTaskStore, resetTaskStore, InMemoryTaskStore, toTaskDto, isTerminalTaskStatus,
   ITaskStore, ITaskRecord, ITaskCreateInput, ITaskStoreOptions, TTaskStatus, TTaskPatch,
@@ -93,8 +113,12 @@ import {
   DEBUG_TOOL, DEBUG_TOOL_NAME, handleDebugTool, registerDebugTool,
 } from 'fa-mcp-sdk';
 
-// Test Clients
-import { McpHttpClient, McpStdioClient, McpSseClient, McpStreamableHttpClient } from 'fa-mcp-sdk';
+// Test Clients — McpModernHttpClient speaks the 2026-07-28 era (per-request `_meta`, mirrored headers,
+// no handshake); the other four exercise the legacy session flow.
+import {
+  McpModernHttpClient,
+  McpHttpClient, McpStdioClient, McpSseClient, McpStreamableHttpClient,
+} from 'fa-mcp-sdk';
 
 // AD Groups
 import { initADGroupChecker, IADConfig, IDcConfig } from 'fa-mcp-sdk';

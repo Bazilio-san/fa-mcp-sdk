@@ -5,6 +5,73 @@ All notable changes to `fa-mcp-sdk` are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.12.83] - 2026-08-06
+
+### Added
+
+- **MCP protocol revision `2026-07-28`, served alongside the previous revisions on the same endpoint.**
+  The server is dual-era: a request that carries the per-request `_meta` envelope (or the `server/discover`
+  probe) is served statelessly by the official `@modelcontextprotocol/server@2` package, while a client that
+  opens with `initialize` keeps the unchanged session-based path on `@modelcontextprotocol/sdk@1.29`. The same
+  rule applies to stdio, where the era is decided from the connection's opening message and pinned for the
+  process lifetime. Existing clients need no changes.
+- **`server/discover`** — supported protocol versions, capabilities, `serverInfo` and cache hints in one call;
+  a public method, like the other catalog listings.
+- **Request-metadata contract of the modern era.** The `MCP-Protocol-Version`, `Mcp-Method` and `Mcp-Name`
+  headers are validated against the request body (`-32020` on disagreement), `_meta` envelope validation
+  answers `-32602`, an unsupported version answers `-32022` with the supported list, and every result carries
+  `resultType` and `_meta["io.modelcontextprotocol/serverInfo"]`.
+- **Cache hints on catalog results** (`ttlMs` / `cacheScope`), configured by the new `mcp.cacheHints` section.
+  `tools/list` is additionally returned in deterministic order in both eras, which improves client-side and
+  LLM prompt caching.
+- **`subscriptions/listen`** — the single long-lived notification stream of the modern era, with acknowledgment
+  and `subscriptionId` correlation. New exported publisher `mcpNotify` (`toolsChanged`, `promptsChanged`,
+  `resourcesChanged`, `resourceUpdated`); the existing `notifyResourceUpdated` also reaches modern subscribers.
+- **Multi Round-Trip Requests (MRTR).** A tool handler returns `formatInputRequired({ inputRequests, state })`
+  to pause a call and ask the user for confirmation or missing data; the client retries with the answers and
+  the opaque `requestState` blob, and the handler resumes with `inputResponses` / `requestStatePayload`. The
+  blob is HMAC-protected, bound to the method and the authenticated principal, and expires — configured by the
+  new `mcp.mrtr` section. Multi-instance deployments must share `mcp.mrtr.stateSecret`.
+- **Tasks as the official extension `io.modelcontextprotocol/tasks`** in the modern era: advertised in
+  `server/discover`, methods `tasks/get` / `tasks/update` / `tasks/cancel`, mid-flight input through the MRTR
+  cycle, and a task returned only to a client that declared the extension.
+- **Per-request logging and progress.** Tool handlers get `log(level, data, logger?)` in
+  `IToolHandlerParams`; in the modern era the threshold comes from the request's own
+  `_meta.io.modelcontextprotocol/logLevel` (a request without it receives no log notifications at all), and
+  progress flows on that request's own response stream. The W3C trace context is now also read from `_meta`.
+- **`x-mcp-header` annotation** on tool input-schema properties, mirroring an argument into an
+  `Mcp-Param-{Name}` HTTP header so gateways can route without parsing the body.
+- **`McpModernHttpClient`** — a test client for the modern era built on the official
+  `@modelcontextprotocol/client@2` (`discover()`, `listen()`, `callToolWithInput()` for the MRTR loop).
+  `BaseMcpClient` gained `discover()` and a modern mode; `McpStdioClient` accepts `{ modern: true }`.
+- **Template examples**: `example_confirm` (a destructive tool that confirms through MRTR) and an
+  `x-mcp-header` annotated parameter on `example_search`.
+
+### Changed
+
+- **Corporate implementation standard rewritten as version 2.0** — an addendum over the MCP specification
+  rather than a restatement of it: protocol requirements are normative by reference, the document carries only
+  the corporate additions, and legacy-era rules live in a dedicated compatibility annex.
+- **A schema violation in `tools/call` reaches the model as `result.isError = true`** with field-level
+  diagnostics in the modern era, instead of a `-32602` protocol error. Structural defects of the request
+  itself (unparseable body, missing `_meta`, unknown tool name) remain protocol errors, and the legacy path
+  keeps its previous behaviour.
+- **A tool's `outputSchema` is advertised to modern clients only when the deployment actually returns
+  structured results** (`mcp.tools.answerAs: 'structuredContent'`) and the tool is not task-capable. Declaring
+  the schema obliges the server to return conforming `structuredContent`, which the default `text` mode does
+  not produce.
+- **"Resource not found" is `-32602` in the modern era** (`-32002` is emitted only toward legacy clients).
+- **The legacy `/sse` transport now runs the full request pipeline** — pagination, argument validation,
+  deprecation decoration, metrics, scope checks and limits — instead of a reduced duplicate handler set.
+
+### Fixed
+
+- **Insufficient scope on `tools/call` answered `-32004`**, the code reserved for Timeout. It is now `-32000`
+  with `data.reason: "insufficient_scope"`.
+- **A request carrying an unknown or expired `Mcp-Session-Id` was served statelessly with HTTP 200**, hiding
+  from the client that its session-scoped state (subscriptions, log level) was gone. It now answers HTTP 404
+  telling the client to re-initialize.
+
 ## [0.12.52] - 2026-07-26
 
 ### Added

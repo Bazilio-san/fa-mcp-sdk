@@ -9,21 +9,72 @@ is considered an implementation detail and may change in any release.
 
 ---
 
-## 1. Transports
+## 1. Transports and protocol eras
 
-| Transport          | Standard | Status | Notes                                                       |
-|--------------------|----------|--------|-------------------------------------------------------------|
-| `stdio`            | §6       | MUST   | Single JSON-RPC stream over stdin/stdout                    |
-| `streamable_http`  | §6       | MUST   | `POST/GET/DELETE /mcp` driven by the SDK transport          |
-| `legacy_http_sse`  | §6       | SHOULD | `GET /sse` + `POST /messages` — kept for backwards-compat   |
+The server is **dual-era**: one and the same endpoint serves two generations of the MCP protocol at the
+same time. The era of a request is derived from the request itself — there is no configuration switch, no
+second port, and no separate deployment.
+
+| Era        | Revision(s)              | Shape                                                                     |
+|------------|--------------------------|---------------------------------------------------------------------------|
+| **modern** | `2026-07-28`             | Stateless — no `initialize`, no sessions; every request carries a `_meta` envelope |
+| **legacy** | `2025-11-25` and earlier | `initialize` handshake plus `Mcp-Session-Id` session state                 |
+
+The modern era is served by the official `@modelcontextprotocol/server@2` package (`src/core/mcp/v2/`),
+the legacy era by `@modelcontextprotocol/sdk@1.29` (`src/core/mcp/create-mcp-server.ts`).
+
+| Transport          | Standard | Status | Eras   | Notes                                                        |
+|--------------------|----------|--------|--------|---------------------------------------------------------------|
+| `stdio`            | §6       | MUST   | both   | Single JSON-RPC stream over stdin/stdout; the era is pinned from the opening message |
+| `streamable_http`  | §6       | MUST   | both   | `POST /mcp` serves both eras; `GET` / `DELETE /mcp` serve legacy sessions only |
+| `legacy_http_sse`  | §6       | SHOULD | legacy | `GET /sse` + `POST /messages` — the Deprecated HTTP+SSE transport |
 
 All HTTP routes hosted by the SDK are listed in §2.
 
-**SSE resumability (opt-in, §6 MAY).** With `mcp.sse.resumability: true` the Streamable HTTP transport
-keeps recent SSE events in a per-process in-memory ring buffer (`mcp.sse.maxStoredEvents`, default 1000),
-so a client reconnecting to `GET /mcp` with a `Last-Event-ID` header replays the events it missed. Off by
-default. The buffer does not survive a restart and does not span multiple server instances — a persistent
-store would be required for that.
+### 1.1 The modern `_meta` envelope
+
+Every modern request MUST carry a `_meta` object inside `params`. It replaces everything the `initialize`
+handshake used to establish once per session:
+
+| `_meta` key                                  | Status | Value                                                              |
+|----------------------------------------------|--------|--------------------------------------------------------------------|
+| `io.modelcontextprotocol/protocolVersion`     | MUST   | `2026-07-28`                                                       |
+| `io.modelcontextprotocol/clientCapabilities`  | MUST   | Capability object (`elicitation`, `sampling`, `roots`, `extensions`) |
+| `io.modelcontextprotocol/clientInfo`          | MAY    | `{ name, version }` — client identity for logs and diagnostics     |
+| `io.modelcontextprotocol/logLevel`            | MAY    | Per-request `notifications/message` threshold (§4.2)               |
+
+A missing or malformed envelope is answered with `-32602`. A method that needs a client capability the
+envelope does not declare is answered with `-32021`. W3C trace context (`traceparent` / `tracestate`) is
+accepted in `_meta` as well as in HTTP headers; the HTTP headers win when both are present (§15.1).
+
+### 1.2 `POST /mcp` routing
+
+A single route decides the era per request, in this order:
+
+| Condition on the request                                      | Outcome                                                       |
+|---------------------------------------------------------------|---------------------------------------------------------------|
+| Carries a **known** `Mcp-Session-Id`                          | Legacy session path (v1 transport)                            |
+| Carries an **unknown / expired** `Mcp-Session-Id`, not `initialize` | HTTP 404 + `-32001` `Session not found: re-initialize to obtain a new session` |
+| Is an `initialize` request                                    | A legacy session is created; the server mints `Mcp-Session-Id` |
+| Anything else                                                 | The v2 stateless handler — modern traffic and sessionless legacy traffic |
+
+`GET /mcp` (server-initiated SSE stream) and `DELETE /mcp` (teardown) exist only for legacy sessions; both
+answer `-32001` when the session id is unknown. Modern clients need neither: server-initiated messages
+arrive on `subscriptions/listen` (§4.3) and there is no session to tear down.
+
+### 1.3 STDIO era selection
+
+STDIO is dual-era too. The era is a property of the connection, decided from its **opening message** and
+pinned for the process lifetime: an opening message that carries the `_meta` protocol-version key, or the
+`server/discover` probe, selects the modern path (`src/core/mcp/v2/stdio.ts`); anything else — `initialize`
+first of all — selects the unchanged legacy path. Messages that arrive before the decision is made are
+buffered and replayed into the branch that wins, so ordering is preserved.
+
+**SSE resumability (opt-in, §6 MAY, legacy era).** With `mcp.sse.resumability: true` the legacy Streamable
+HTTP transport keeps recent SSE events in a per-process in-memory ring buffer (`mcp.sse.maxStoredEvents`,
+default 1000), so a client reconnecting to `GET /mcp` with a `Last-Event-ID` header replays the events it
+missed. Off by default. The buffer does not survive a restart and does not span multiple server instances —
+a persistent store would be required for that.
 
 ---
 
@@ -31,12 +82,12 @@ store would be required for that.
 
 | Path                                              | Method | Auth | Level  | Purpose                                                       |
 |---------------------------------------------------|--------|------|--------|---------------------------------------------------------------|
-| `/mcp`                                            | POST   | Yes  | MUST   | JSON-RPC entry point (`initialize`, `tools/*`, …)             |
-| `/mcp`                                            | GET    | Yes  | MUST   | Server-initiated SSE stream for the active session            |
-| `/mcp`                                            | DELETE | Yes  | MUST   | Session teardown                                              |
-| `/sse`                                            | GET    | Yes  | SHOULD | Legacy SSE connect                                            |
-| `/sse`                                            | POST   | Yes  | SHOULD | Legacy direct JSON-RPC                                        |
-| `/messages`                                       | POST   | Yes  | SHOULD | Legacy SSE message channel                                    |
+| `/mcp`                                            | POST   | Yes  | MUST   | Dual-era JSON-RPC entry point — modern and legacy alike (§1.2) |
+| `/mcp`                                            | GET    | Yes  | MUST   | Server-initiated SSE stream for an active **legacy** session   |
+| `/mcp`                                            | DELETE | Yes  | MUST   | **Legacy** session teardown                                    |
+| `/sse`                                            | GET    | Yes  | SHOULD | Deprecated HTTP+SSE transport — connect                        |
+| `/sse`                                            | POST   | Yes  | SHOULD | Deprecated HTTP+SSE transport — direct JSON-RPC                |
+| `/messages`                                       | POST   | Yes  | SHOULD | Deprecated HTTP+SSE transport — message channel                |
 | `/health`                                         | GET    | No   | MUST   | Liveness; returns `{status, version, uptime, details}`        |
 | `/ready`                                          | GET    | No   | SHOULD | Readiness; `{status, checks}`                                 |
 | `/metrics`                                        | GET    | No   | SHOULD | Prometheus exposition (opt-in via `webServer.metrics.enabled`) |
@@ -85,41 +136,145 @@ Scopes are matched against `requiredScopes` on tools, prompts, and resources (§
 from MCP endpoints per §7.4. 403 responses (authenticated but forbidden) carry NO
 `WWW-Authenticate` header.
 
+A small set of discovery methods is served without authentication so that a client can learn what the
+server is before it presents a credential: `server/discover`, `initialize`,
+`notifications/initialized`, `ping`, `tools/list`, `prompts/list`, `resources/list`, plus
+`resources/read` / `prompts/get` for entries whose `requireAuth` is not `true`. Every other method
+requires a valid `Authorization` header.
+
 ---
 
 ## 4. MCP methods
 
-| Method                                | Status | Notes                                                     |
-|---------------------------------------|--------|-----------------------------------------------------------|
-| `initialize`                          | MUST   |                                                           |
-| `notifications/initialized`           | MUST   |                                                           |
-| `tools/list`                          | MUST   | Server-side pagination via `mcp.pagination.pageSize`      |
-| `tools/call`                          | MUST   | Honours `signal`, `_meta.progressToken`, `requiredScopes` |
-| `prompts/list`                        | MUST   | Capability advertised only when the server has prompts (§8.2) |
-| `prompts/get`                         | MUST   | Returns `-32601` when no prompts are configured           |
-| `resources/list`                      | MUST   | Same pagination contract                                  |
-| `resources/read`                      | MUST   | Returns `text` or base64 `blob` per entry (§11.4)         |
-| `resources/templates/list`            | MAY    | `mcp.resources.templatesEnabled`                          |
-| `resources/subscribe` / `unsubscribe` | MAY    | `mcp.resources.subscribeEnabled`                          |
-| `completion/complete`                 | MAY    | `mcp.completions.enabled` + `completionProvider` (§8.2)   |
-| `tasks/list`                          | MAY    | `mcp.tasks.enabled`; caller's own tasks, newest first, paginated (§8.7) |
-| `tasks/get`                           | MAY    | `mcp.tasks.enabled`; current task metadata (§8.7)        |
-| `tasks/result`                        | MAY    | `mcp.tasks.enabled`; the `tools/call` result once completed (§8.7) |
-| `tasks/cancel`                        | MAY    | `mcp.tasks.enabled`; aborts a running task, idempotent (§8.7) |
-| `logging/setLevel`                    | SHOULD | Capability `logging: {}` (default ON)                     |
-| `notifications/message`               | SHOULD | Emitted by `sendLoggingMessage()`                         |
-| `notifications/progress`              | SHOULD | Emitted by `IToolHandlerParams.sendProgress()` (§8.6)     |
-| `notifications/cancelled`             | SHOULD | Aborts `IToolHandlerParams.signal` (§8.5)                 |
-| `notifications/tasks/status`          | MAY    | Emitted on every task status transition (§8.7)           |
+The **Era** column says which protocol generation (§1) serves a method. `both` means the same handler
+answers the method for modern and legacy callers alike.
 
-When `mcp.tasks.enabled` is `true`, the server advertises the `tasks` capability
-(`{ list, cancel, requests: { tools: { call } } }`) and a `tools/call` carrying a `task` parameter
-is executed as a task: the server returns a `CreateTaskResult` (`{ task: { taskId, status, … } }`)
-immediately and runs the tool in the background. A tool opts in via `execution.taskSupport`
-(`optional` / `required` / `forbidden`, see §5) — sending `task` to a tool that does not support it,
-or omitting `task` for a `required` tool, returns `-32602`. The default task store keeps records in
-process memory only; it does **not** survive a restart. When `mcp.tasks.enabled` is `false` (the
-default) the capability is not advertised and all four `tasks/*` methods return `-32601`.
+| Method                                | Era     | Status | Notes                                                 |
+|---------------------------------------|---------|--------|-------------------------------------------------------|
+| `server/discover`                     | modern  | MUST   | Identity, capabilities and supported versions in one call (§4.1) |
+| `initialize`                          | legacy  | MUST   | Opens a session; the server mints `Mcp-Session-Id`    |
+| `notifications/initialized`           | legacy  | MUST   | Handshake completion                                  |
+| `ping`                                | legacy  | SHOULD | Liveness probe of an established session              |
+| `tools/list`                          | both    | MUST   | Deterministic order — tools sorted by `name`; pagination via `mcp.pagination.pageSize` |
+| `tools/call`                          | both    | MUST   | Honours `signal`, `_meta.progressToken`, `requiredScopes`; may answer `input_required` (§4.4) or `task` (§4.5) |
+| `prompts/list`                        | both    | MUST   | Capability advertised only when the server has prompts (§8.2) |
+| `prompts/get`                         | both    | MUST   | Returns `-32601` when no prompts are configured       |
+| `resources/list`                      | both    | MUST   | Same pagination contract                              |
+| `resources/read`                      | both    | MUST   | Returns `text` or base64 `blob` per entry (§11.4)     |
+| `resources/templates/list`            | both    | MAY    | `mcp.resources.templatesEnabled`                      |
+| `resources/subscribe` / `unsubscribe` | legacy  | MAY    | `mcp.resources.subscribeEnabled`; replaced by `subscriptions/listen` (§4.3) |
+| `subscriptions/listen`                | modern  | MUST   | Opt-in server→client notification stream (§4.3)       |
+| `completion/complete`                 | both    | MAY    | `mcp.completions.enabled` + `completionProvider` (§8.2) |
+| `tasks/get`                           | modern  | MAY    | Tasks extension; current task metadata and result (§4.5) |
+| `tasks/update`                        | modern  | MAY    | Tasks extension; supplies mid-flight input to a paused task (§4.5) |
+| `tasks/cancel`                        | modern  | MAY    | Tasks extension; aborts a running task, idempotent (§4.5) |
+| `tasks/list`                          | legacy  | MAY    | `mcp.tasks.enabled`; caller's own tasks, newest first, paginated (§8.7) |
+| `tasks/result`                        | legacy  | MAY    | `mcp.tasks.enabled`; the `tools/call` result once completed (§8.7) |
+| `logging/setLevel`                    | legacy  | SHOULD | Session-wide threshold; the modern era sets it per request (§4.2) |
+| `notifications/message`               | both    | SHOULD | Emitted by `sendLoggingMessage()` / `IToolHandlerParams.log()` |
+| `notifications/progress`              | both    | SHOULD | Emitted by `IToolHandlerParams.sendProgress()` (§4.2, §8.6) |
+| `notifications/cancelled`             | legacy  | SHOULD | Aborts `IToolHandlerParams.signal` (§8.5); a modern call is aborted by the client closing its own request |
+| `notifications/subscriptions/acknowledged` | modern | MUST | First message on every `subscriptions/listen` stream (§4.3) |
+| `notifications/tasks/status`          | legacy  | MAY    | Emitted on every task status transition (§8.7)        |
+
+### 4.1 `server/discover` and the result envelope
+
+`server/discover` is the modern era's replacement for the `initialize` handshake and the one method a
+modern client MUST be able to call before anything else. It needs no credential (§3) and returns:
+
+| Field                                       | Status | Value                                                        |
+|---------------------------------------------|--------|--------------------------------------------------------------|
+| `supportedVersions`                          | MUST   | `["2026-07-28"]`                                             |
+| `capabilities`                               | MUST   | `resources`, `prompts`, `tools`, `completions`, `logging`, `extensions` — each present only when served |
+| `instructions`                               | MAY    | Free-form guidance for the model                             |
+| `_meta["io.modelcontextprotocol/serverInfo"]`| MUST   | `{ name, version }` from `appConfig`                         |
+| `ttlMs` / `cacheScope`                       | MUST   | Cache hints, as on every cacheable result (below)            |
+
+**`resultType`.** Every modern result carries a `resultType` discriminator:
+
+| `resultType`     | Meaning                                                                       |
+|------------------|-------------------------------------------------------------------------------|
+| `complete`       | The ordinary, final result                                                     |
+| `input_required` | The call is paused and needs client input — multi round-trip requests (§4.4)   |
+| `task`           | The call was accepted as a background task — Tasks extension (§4.5)           |
+
+Every modern result — of any `resultType` — also carries `_meta["io.modelcontextprotocol/serverInfo"]`.
+
+**Cache hints.** Six results are cacheable and carry `ttlMs` (freshness in milliseconds) plus
+`cacheScope` (`public` or `private`): `server/discover`, `tools/list`, `prompts/list`, `resources/list`,
+`resources/templates/list` and `resources/read`. The values come from `mcp.cacheHints` — `listTtlMs`
+(default 60000) for the five catalog results, `readTtlMs` (default 0, i.e. immediately stale) for
+`resources/read`, and `cacheScope` (default `private`, safe when results vary per token) for all six.
+Legacy results carry no cache hints.
+
+**Deterministic `tools/list`.** In both eras the tool array is sorted by `name` before it is paginated,
+so the same catalog always produces the same page boundaries and the same ordering.
+
+### 4.2 Logging and progress in the modern era
+
+The `logging` capability is **Deprecated** in revision 2026-07-28 but remains functional for the whole
+deprecation window. What changes is where the threshold lives: instead of a session-wide
+`logging/setLevel`, a modern request declares its own level in `_meta.io.modelcontextprotocol/logLevel`,
+and the resulting `notifications/message` are delivered on that request's own response stream. **A
+request that omits the field receives no log notifications at all.** `logging/setLevel` stays a
+legacy-era method.
+
+`notifications/progress` follows the same request-scoped rule: it is emitted only when the request
+carried `_meta.progressToken`, is throttled by `mcp.progress.throttleMs`, and is delivered on the
+originating request's own stream.
+
+### 4.3 `subscriptions/listen`
+
+In the modern era a single method replaces both `resources/subscribe` and the standalone `GET /mcp`
+stream. The client opens a long-lived `subscriptions/listen` request carrying an **opt-in filter** —
+`toolsListChanged`, `promptsListChanged`, `resourcesListChanged` and `resourceSubscriptions` (a list of
+resource URIs). Notification types the filter did not name are never delivered on that stream.
+
+The first message on the stream is always `notifications/subscriptions/acknowledged`, which echoes the
+filter the server accepted. Every subsequent message carries
+`_meta["io.modelcontextprotocol/subscriptionId"]` so a client running several streams can correlate them.
+Closing the request unsubscribes.
+
+Server-side publishing goes through the exported **`mcpNotify`** facade — `toolsChanged()`,
+`promptsChanged()`, `resourcesChanged()` and `resourceUpdated(uri)` — each of which fans the notification
+out to every open stream that opted in. The legacy per-session `notifyResourceUpdated(server, uri)` calls
+into the same facade, so project code written against the legacy API also reaches modern subscribers.
+
+### 4.4 Multi round-trip requests (MRTR)
+
+A tool handler that needs confirmation or missing data mid-call returns
+`formatInputRequired({ inputRequests, state })` instead of a result. The client then sees
+`resultType: "input_required"` together with the server's `inputRequests` and an opaque `requestState`
+blob, and retries the same `tools/call` with `inputResponses` plus the echoed `requestState`; the handler
+resumes with those values in `IToolHandlerParams.inputResponses` / `requestStatePayload`.
+
+`requestState` integrity is HMAC-protected and verified **before** any handler runs, so a tampered,
+expired or foreign blob never reaches tool code. The key is `mcp.mrtr.stateSecret` (minimum 32
+characters; empty means a random per-process key, which is single-instance only — several instances
+behind a load balancer MUST share one secret), and the blob's lifetime is `mcp.mrtr.stateTtlSeconds`
+(default 600). The server never sends an input request kind the client did not declare a capability for:
+such a call degrades into an actionable `isError: true` text instead.
+
+### 4.5 Tasks
+
+In the modern era tasks are an **extension**, `io.modelcontextprotocol/tasks`, advertised in
+`server/discover` under `capabilities.extensions` when `mcp.tasks.enabled` is `true`. Its methods are
+`tasks/get`, `tasks/update` and `tasks/cancel` — there is no `tasks/list` and no `tasks/result` in the
+modern era; `tasks/get` returns the result once the task completes.
+
+A task is returned only to a client that declared the extension in its own `_meta` capabilities: such a
+client calling a task-capable tool gets an immediate `resultType: "task"` answer while the tool runs in
+the background. A client that did not declare the extension gets the ordinary synchronous result. A tool
+opts in via `execution.taskSupport` (`optional` / `required` / `forbidden`, see §5).
+
+In the legacy era the same store backs the `tasks` capability (`{ list, cancel, requests: { tools: { call } } }`)
+and a `tools/call` carrying a `task` parameter: the server returns a `CreateTaskResult`
+(`{ task: { taskId, status, … } }`) immediately and runs the tool in the background. Sending `task` to a
+tool that does not support it, or omitting `task` for a `required` tool, returns `-32602`.
+
+The default task store keeps records in process memory only; it does **not** survive a restart. When
+`mcp.tasks.enabled` is `false` (the default) the extension is not advertised and every `tasks/*` method
+returns `-32601`.
 
 ---
 
@@ -136,6 +291,13 @@ default) the capability is not advertised and all four `tasks/*` methods return 
 - `outputSchema` — MAY; when present, the SDK validates `structuredContent` against it. A tool MAY
   return `structuredContent` with an empty `content`; the SDK copies it into `content[0]` as JSON text
   only for plain clients, never for MCP Apps UI clients (`io.modelcontextprotocol/ui`).
+  **Advertisement to modern clients is conditional.** Declaring `outputSchema` obliges the server to
+  return conforming `structuredContent` on every call, and the modern era enforces that promise. The
+  schema is therefore advertised in a modern `tools/list` only when the deployment can actually keep it:
+  `mcp.tools.answerAs` is `structuredContent`, and the tool is not task-capable (a task-capable tool may
+  answer with a task object instead of its own payload). Under the default `answerAs: 'text'`,
+  `formatToolResult()` returns `content` only, so the schema is withheld rather than violated. Legacy
+  clients always see the declared schema.
 - `title` — SHOULD; user-facing label.
 - `execution.taskSupport` — MAY; one of `optional` / `required` / `forbidden` (default — absence is
   treated as `forbidden`, i.e. synchronous only). Controls task-augmented execution (§8.7); passed
@@ -192,19 +354,30 @@ the server.
 
 JSON-RPC errors follow Appendix B of the standard. Mapping (JSON-RPC → HTTP):
 
-| JSON-RPC code | HTTP | Class                | Trigger                                       |
-|---------------|------|----------------------|-----------------------------------------------|
-| `-32600`      | 400  | (none)               | Invalid Request                               |
-| `-32601`      | 404  | `ResourceNotFoundError` (when applicable) | Method/resource not found  |
-| `-32602`      | 400  | `ValidationError`    | Invalid params (input schema, unknown tool)   |
-| `-32603`      | 500  | `ServerError`        | Internal error                                |
-| `-32000`      | varies | `BaseMcpError`     | Generic SDK error                             |
-| `-32002`      | 404  | `ResourceNotFoundError` | Resource lookup failed                     |
-| `-32003`      | 429  | `RateLimitedError`   | Rate limit / concurrent-call cap (+ `Retry-After`) |
-| `-32004`      | 504  | `TimeoutError`       | `mcp.limits.toolTimeoutMs` exceeded           |
-| `-32005`      | 413  | `PayloadTooLargeError` | `mcp.limits.maxPayloadBytes` exceeded       |
-| `-32006`      | 503  | `UpstreamUnavailableError` | Dependency (DB / downstream) unreachable  |
-| `-32007`      | 409  | `ConflictError`      | State conflict (duplicate / optimistic lock)  |
+| JSON-RPC code | HTTP | Era    | Class                | Trigger                                     |
+|---------------|------|--------|----------------------|---------------------------------------------|
+| `-32600`      | 400  | both   | (none)               | Invalid Request                             |
+| `-32601`      | 404  | both   | `ResourceNotFoundError` (when applicable) | Method/resource not found |
+| `-32602`      | 400  | both   | `ValidationError`    | Invalid params (input schema, unknown tool); also a missing or malformed `_meta` envelope, and resource-not-found in the modern era |
+| `-32603`      | 500  | both   | `ServerError`        | Internal error                              |
+| `-32000`      | varies | both | `BaseMcpError`       | Generic SDK error                           |
+| `-32001`      | 404  | legacy | (none)               | Unknown or expired `Mcp-Session-Id` on a non-`initialize` request — re-initialize to obtain a new session |
+| `-32002`      | 404  | legacy | `ResourceNotFoundError` | Resource lookup failed                   |
+| `-32003`      | 429  | both   | `RateLimitedError`   | Rate limit / concurrent-call cap (+ `Retry-After`) |
+| `-32004`      | 504  | both   | `TimeoutError`       | `mcp.limits.toolTimeoutMs` exceeded         |
+| `-32005`      | 413  | both   | `PayloadTooLargeError` | `mcp.limits.maxPayloadBytes` exceeded     |
+| `-32006`      | 503  | both   | `UpstreamUnavailableError` | Dependency (DB / downstream) unreachable |
+| `-32007`      | 409  | both   | `ConflictError`      | State conflict (duplicate / optimistic lock) |
+| `-32020`      | 400  | modern | (none)               | HeaderMismatch — a required request header is missing, or disagrees with the body (§7.1) |
+| `-32021`      | 400  | modern | (none)               | The `_meta` envelope does not declare a client capability the method needs |
+| `-32022`      | 400  | modern | (none)               | Unsupported protocol version; `error.data` carries `supported` and `requested` |
+
+**Resource-not-found differs by era.** The modern era reports a failed resource lookup as `-32602`, per
+revision 2026-07-28 — `-32002` MUST NOT appear there. `-32002` remains the legacy-era code and is
+translated automatically on the way out of the shared catalog functions.
+
+**Notifications and unknown methods.** In the modern era a request without an `id` (a notification) is
+answered with HTTP 202 and an empty body, and an unknown method with HTTP 404 and `-32601`.
 
 Unrecognized internal errors are sanitized (§13.3 / Appendix C.3): the outward `error.message`
 collapses to `Internal error`, the full text is written to the internal log keyed by `requestId`,
@@ -236,6 +409,28 @@ reach the tool handler unchecked — only the JSON-RPC envelope shape is still e
 
 ## 7. Limits and headers
 
+### 7.1 Modern request headers
+
+Every modern `POST /mcp` MUST carry three headers. They exist so a proxy, gateway or audit log can route
+and classify a call without parsing the JSON-RPC body, and the server verifies that each one agrees with
+the body it accompanies:
+
+| Header                 | Status | Value                                                                    |
+|------------------------|--------|--------------------------------------------------------------------------|
+| `MCP-Protocol-Version` | MUST   | `2026-07-28`; an unsupported value is answered with `-32022`             |
+| `Mcp-Method`           | MUST   | Exactly the body's `method`                                              |
+| `Mcp-Name`             | MUST*  | `params.name` (or `params.uri`) for `tools/call`, `resources/read` and `prompts/get` |
+
+A missing required header, or a header that disagrees with the body, is answered with HTTP 400 and
+`-32020` (HeaderMismatch). A value that is not header-safe — non-ASCII, whitespace, control characters —
+is carried in the Base64 sentinel form `=?base64?<base64 of the value>?=`, which the server decodes
+before comparing it with the body.
+
+`Mcp-Session-Id` belongs to the legacy era only: the server mints it on `initialize` and every subsequent
+request of that session MUST echo it. Modern requests never send it (§1.2).
+
+### 7.2 Limits and response headers
+
 | Limit / Header               | Source / Default                                                        |
 |------------------------------|-------------------------------------------------------------------------|
 | `mcp.limits.maxPayloadBytes` | 1 MiB                                                                   |
@@ -253,17 +448,34 @@ reach the tool handler unchecked — only the JSON-RPC envelope shape is still e
 | `mcp.tasks.maxTtlMs`         | 86 400 000 ms (hard retention ceiling)                                  |
 | `mcp.tasks.pollIntervalMs`   | 1000 ms (suggested to client in every task object)                     |
 | `mcp.tasks.maxTasks`         | 1000 (retained tasks; oldest finished evicted first)                   |
+| `mcp.cacheHints.listTtlMs`   | 60 000 ms (catalog results; modern era only)                            |
+| `mcp.cacheHints.readTtlMs`   | 0 ms (`resources/read` — immediately stale)                             |
+| `mcp.cacheHints.cacheScope`  | `private` (`public` only when the catalog is identical for all callers) |
+| `mcp.mrtr.stateSecret`       | empty (a random per-process key — single-instance deployments only)     |
+| `mcp.mrtr.stateTtlSeconds`   | 600 s (lifetime of a minted `requestState`)                             |
 | `webServer.metrics.enabled`  | `false` (opt-in)                                                        |
 | `X-Request-Id` (response)    | Always present — generated when client did not supply one (§15.1)       |
 | `tracestate` (response)      | Echoed back unchanged when client supplied a valid value                |
 | `WWW-Authenticate`           | On every 401 from MCP endpoints (§7.4)                                  |
 | `Retry-After`                | On every 429 (§14)                                                      |
-| `MCP-Session-Id`             | Set by SDK on `initialize`; subsequent requests MUST echo it            |
-| `MCP-Protocol-Version`       | Negotiated by the SDK transport                                         |
+| `MCP-Session-Id`             | Legacy era — set on `initialize`, echoed by every later request (§7.1)  |
+| `MCP-Protocol-Version`       | Required on every modern request; negotiated by the transport in the legacy era |
+| `Mcp-Method` / `Mcp-Name`    | Required on every modern request, must agree with the body (§7.1)       |
+
+The per-subject concurrent-call cap (`mcp.rateLimit.maxConcurrentPerSubject`) is enforced at the HTTP
+layer, in front of the modern handler, so that exhausting it stays a genuine protocol error — HTTP 429
+with `-32003` and a `Retry-After` header — rather than being flattened into an `isError: true` tool
+result.
 
 ---
 
 ## 8. Versioning policy (§17.1)
+
+**Base protocol revision: MCP `2026-07-28`.** The SDK targets that revision and, for the duration of the
+compatibility window, serves revisions `2025-11-25` and earlier on the same endpoints at the same time
+(§1). Both eras are part of this contract: a change that breaks either one is a MAJOR change. The legacy
+era is a compatibility surface, not a growth area — new protocol features land in the modern era only,
+and the window closes in a future MAJOR release announced through the deprecation process of §9.
 
 | Change                                                          | Bump  |
 |-----------------------------------------------------------------|-------|
@@ -295,6 +507,7 @@ reach the tool handler unchecked — only the JSON-RPC envelope shape is still e
 | 0.8.x   | MINOR | Observability (X-Request-Id, traceparent, logging, metrics, progress)  |
 | 0.9.1   | MINOR | Conditional capabilities, `-32006`/`-32007`, binary `blob`, error sanitization, opt-in completions |
 | 0.10.0  | MINOR | Opt-in `tasks` capability (task-augmented execution), `execution.taskSupport`, in-memory task store |
+| 0.12.x  | MINOR | MCP 2026-07-28 served alongside the legacy era on one endpoint: `server/discover`, per-request `_meta`, `subscriptions/listen`, MRTR, the Tasks extension, cache hints |
 
 ---
 
@@ -343,9 +556,14 @@ The runtime sources of the contract above are:
   `IDeprecationInfo`, `McpServerData`.
 - `src/core/_types_/config.ts` — `AppConfig` (every documented configuration key).
 - `src/core/errors/BaseMcpError.ts` + `src/core/errors/specific-errors.ts` — error codes.
-- `src/core/mcp/create-mcp-server.ts` — handler contract.
+- `src/core/mcp/create-mcp-server.ts` — legacy-era handler contract.
+- `src/core/mcp/v2/factory.ts` — modern-era server surface: capabilities, cache hints, tool registration.
+- `src/core/mcp/v2/handler.ts` — modern HTTP handler and the `mcpNotify` publisher (§4.3).
+- `src/core/mcp/v2/mrtr.ts` — `formatInputRequired`, `requestState` codec (§4.4).
+- `src/core/mcp/v2/tasks-methods.ts` — the `io.modelcontextprotocol/tasks` extension (§4.5).
+- `src/core/mcp/v2/stdio.ts` — dual-era STDIO era selection (§1.3).
 - `src/core/mcp/task-store.ts` — `ITaskStore` / `InMemoryTaskStore`, task lifecycle (§8.7).
-- `src/core/web/server-http.ts` — HTTP endpoints, headers, response shape.
+- `src/core/web/server-http.ts` — HTTP endpoints, era routing, headers, response shape.
 - `src/core/web/request-id.ts` — `X-Request-Id` + W3C trace context middleware.
 - `src/core/mcp/mcp-logging.ts` — `logging` capability.
 - `src/core/metrics/metrics.ts` — Prometheus series.

@@ -161,12 +161,12 @@ Detailed fa-mcp-sdk docs are in `FA-MCP-SDK-DOC/`:
 | `04-authentication.md` | JWT, Basic auth, permanent tokens |
 | `05-ad-authorization.md` | AD group authorization, AD config |
 | `06-utilities.md` | Error handling, logging, Consul |
-| `07-testing-and-operations.md` | Test clients (STDIO, HTTP, SSE, Streamable HTTP) |
+| `07-testing-and-operations.md` | Test clients for both protocol eras (modern `McpModernHttpClient`, legacy STDIO/HTTP/SSE/Streamable HTTP) |
 | `08-agent-tester-and-headless-api.md` | Agent Tester, Headless API, structured logging, automated testing, MCP Apps mode (capability negotiation, `appCalls[]`, widget rendering, App Inspector) |
 | `09-database.md` | PostgreSQL sugar layer (`queryMAIN`, `execMAIN`, upserts, `mergeByBatch`), `pgvector`, secondary DBs |
 | `10-mcp-apps.md` | Building / extending MCP Apps (UI-augmented tools) — protocol contract, SDK surface, patterns, pitfalls |
 | `11-public-contract.md` | Formal SDK public contract — transports, endpoints, JWT claims, tool/prompt/resource format, error mapping, headers, semver & deprecation policy |
-| `12-implementation-standard.md` | Corporate MCP server implementation standard (Avatar profile over MCP 2025-11-25) — tool side-effects & risk level, error codes, limits, observability, deprecation, compliance checklist |
+| `12-implementation-standard.md` | Corporate MCP server implementation standard — an addendum over MCP 2026-07-28: tool side-effects & risk level, error codes, limits, observability, deprecation, compliance checklist, legacy compatibility annex |
 
 
 ## Development and Testing Through Agent Tester

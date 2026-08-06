@@ -49,11 +49,11 @@ interface IToolHandlerParams {
   headers?: Record<string, string>;
   payload?: { user: string; [key: string]: any };     // JWT payload if authenticated
   transport?: 'stdio' | 'sse' | 'http';
-  clientCapabilities?: IClientCapabilities;           // From MCP `initialize` handshake; see 10-mcp-apps.md
+  clientCapabilities?: IClientCapabilities;           // Era-dependent source, see below; also 10-mcp-apps.md
 }
 
-// Client capabilities reported during initialize, extended with the open-ended
-// `extensions` map MCP Apps and future SEPs publish.
+// What the client says it can do, extended with the open-ended `extensions`
+// map MCP Apps and future SEPs publish.
 type IClientCapabilities = ClientCapabilities & { extensions?: Record<string, unknown> };
 
 // Tool handler response — discriminated union, MCP SDK accepts either shape
@@ -71,6 +71,20 @@ by `appConfig.mcp.tools.answerAs` (`text` | `structuredContent`); use the
 `formatToolResult()` helper to produce the correct shape automatically. STDIO, SSE,
 and HTTP transports all forward the handler's return value to the MCP client without
 re-wrapping, so `structuredContent` is preserved end-to-end.
+
+### Where `clientCapabilities` Comes From
+
+A generated server serves two protocol eras on the same `/mcp` endpoint, and the source of the capabilities differs
+between them. A modern client (MCP revision `2026-07-28`) is stateless: it declares its capabilities in the `_meta`
+envelope of every single request, so the handler sees the values the caller sent with *this* call. A legacy client
+(`2025-11-25` and earlier) declares them once in the `initialize` handshake, and the SDK replays the session's
+values into each call — for Streamable HTTP that requires the client to echo its `Mcp-Session-Id` header, which is
+how the session is identified.
+
+`undefined` still means "unknown": a handler MUST treat absence as "no extra capabilities" and fall back to the
+plain text `content[]` contract rather than assuming a rich client. Nothing needs to be configured to serve both
+eras — the server routes each request by its own shape. The configuration keys whose meaning depends on the era are
+listed in [03-configuration → "Protocol Eras"](./03-configuration.md).
 
 ### IPromptData
 
