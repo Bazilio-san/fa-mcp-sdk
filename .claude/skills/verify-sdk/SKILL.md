@@ -47,9 +47,15 @@ node .claude/skills/verify-sdk/scripts/run-verification.js --keep-running  # lea
 node .claude/skills/verify-sdk/scripts/run-verification.js --list        # just list the steps
 ```
 
-The runner stops at the first failed step and exits with code 1. Per-step logs land in `_tmp/verify-sdk/`
-(ignored by git); the console shows only the last 25 lines of a failing step, so read the log file when the
-tail is not enough.
+The runner stops at the first failed step and exits with code 1. Per-step logs land in a `verify-sdk-logs`
+directory next to the test project (for `projectAbsPath: "D:/DEV/SAND/mcp-test"` that is
+`D:/DEV/SAND/verify-sdk-logs`) — deliberately outside this repository, where `_tmp/` is both git-ignored and
+hidden from the agent. The console prints only the last 25 lines of a failing step, so open the log file when
+that tail is not enough.
+
+The server is started as a tracked child process and stopped by its own process tree. Do not replace that with
+`scripts/kill-port.js`: that helper resolves the owner of the port through `netstat`, which also lists the
+*client* side of the health-probe connection, so it kills the verification runner along with the server.
 
 A run takes several minutes, most of it in the two dependency installs. Do not shorten the Bash timeout below
 20 minutes, and never interrupt an install — a half-written `node_modules` produces failures that have nothing
