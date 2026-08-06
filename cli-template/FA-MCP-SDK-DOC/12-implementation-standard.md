@@ -224,6 +224,8 @@ specification's authorization framework, including:
 - the server validates that the access token was issued specifically for this MCP server audience;
 - authorization servers SHOULD return the `iss` parameter per RFC 9207, and clients validate it before
   redeeming the authorization code;
+- a client performing Dynamic Client Registration specifies an appropriate `application_type`, so an OpenID
+  Connect authorization server does not reject its redirect URIs;
 - client credentials are bound to the issuing authorization server and MUST NOT be reused across issuers;
 - **Client ID Metadata Documents** is the preferred client registration mechanism; Dynamic Client Registration
   is Deprecated and remains only as a fallback for authorization servers without CIMD support;
@@ -289,6 +291,10 @@ Corporate constraints on top:
 - JSON Schema 2020-12 is the default dialect (per the specification). If draft-07 is used, `$schema` MUST be
   specified explicitly.
 - `inputSchema` MUST be a valid JSON Schema object, not `null`.
+- A `$ref` that resolves to a network URI MUST NOT be dereferenced automatically, and composition keywords
+  (`anyOf`, `oneOf`, `allOf`, `if`/`then`/`else`, `$defs`) MUST stay within the validator's resource bounds —
+  both are specification requirements against schema-driven denial of service. Internal servers SHOULD keep
+  schemas self-contained and avoid external references entirely.
 - `type: "object"` at the top level — SHOULD;
 - explicit `properties` and explicit `required` (even if empty) — SHOULD;
 - `additionalProperties: false` — SHOULD;

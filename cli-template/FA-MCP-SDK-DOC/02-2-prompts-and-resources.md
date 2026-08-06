@@ -112,9 +112,14 @@ interface ITransportContext {
   transport: 'stdio' | 'sse' | 'http';
   headers?: Record<string, string>;            // HTTP headers (HTTP/SSE only)
   payload?: { user: string; [key: string]: any };  // Auth payload (if authenticated HTTP/SSE only)
-  clientCapabilities?: IClientCapabilities;    // From MCP `initialize` handshake (see 10-mcp-apps.md)
+  clientCapabilities?: IClientCapabilities;    // What the caller declared it can do (see 10-mcp-apps.md)
 }
 ```
+
+`clientCapabilities` is assembled per protocol era: a modern (2026-07-28) request carries its capabilities in
+the per-request `_meta` envelope, while a legacy session inherits them from its `initialize` handshake. The
+consuming function reads one field either way. `undefined` means "unknown" — treat it as "no extra
+capabilities".
 
 Use for transport-based credential routing:
 ```typescript
@@ -341,22 +346,69 @@ const serverData: McpServerData = { ..., customResourceTemplates };
 If you do not register any templates the server still answers `resources/templates/list`
 with an empty array — clients can probe the capability safely.
 
-### `resources/subscribe` + change notifications
+### Change notifications
 
-When `subscribeEnabled: true`, the server advertises `subscribe` and `listChanged` in its
-`resources` capability. To notify subscribers when content changes call
-`notifyResourceUpdated(server, uri)`:
+Two mechanisms carry "something changed" to a client, one per protocol era. The server side is the same code
+either way: the project publishes an event and the SDK routes it to whoever asked for it.
+
+**Modern era — `subscriptions/listen`.** Instead of registering per-URI subscriptions one method call at a
+time, a client opens a single long-lived stream and states up front which notification types it wants:
+
+```jsonc
+{
+  "method": "subscriptions/listen",
+  "params": {
+    "notifications": {
+      "toolsListChanged": true,
+      "promptsListChanged": true,
+      "resourcesListChanged": true,
+      "resourceSubscriptions": ["project://version", "custom://status"]
+    }
+  }
+}
+```
+
+The server answers first with `notifications/subscriptions/acknowledged`, echoing the subset it actually
+honors — a filter the server cannot serve (for example `resourceSubscriptions` while `subscribeEnabled` is
+off) is dropped from the acknowledgement rather than silently accepted. Every message on that stream, the
+acknowledgement included, is tagged with `_meta["io.modelcontextprotocol/subscriptionId"]`, so a client
+running several streams can tell which one a notification belongs to.
+
+**Legacy era — `resources/subscribe` / `resources/unsubscribe`.** A sessionful client registers interest in
+one URI per call and receives `notifications/resources/updated` on its session stream. When
+`subscribeEnabled: true`, the server advertises `subscribe` and `listChanged` in its `resources` capability
+for those clients.
+
+**Publishing from project code — `mcpNotify`.** The facade exported from `fa-mcp-sdk` fans an event out to
+every open modern subscription that opted in. All four methods are synchronous and return `void`:
+
+```typescript
+import { mcpNotify } from 'fa-mcp-sdk';
+
+mcpNotify.toolsChanged();                       // notifications/tools/list_changed
+mcpNotify.promptsChanged();                     // notifications/prompts/list_changed
+mcpNotify.resourcesChanged();                   // notifications/resources/list_changed
+mcpNotify.resourceUpdated('project://version'); // notifications/resources/updated for that URI
+```
+
+Call them wherever the underlying data actually changes — after a catalog reload, after a background job
+rewrites a resource, after a feature flag adds a tool. A client that did not opt in to that notification type
+receives nothing, so publishing is always safe.
+
+`notifyResourceUpdated(server, uri)` remains available for the legacy path and additionally reaches modern
+subscribers, so code written against it keeps working unchanged:
 
 ```typescript
 import { notifyResourceUpdated } from 'fa-mcp-sdk';
 
-// Each HTTP session owns its own Server instance — track the server reference at the
-// point where you have it (e.g. inside a custom-resources content function).
+// Each legacy HTTP session owns its own Server instance — track the reference at the point where
+// you have it (e.g. inside a custom-resources content function).
 await notifyResourceUpdated(server, 'project://version');
 ```
 
-The helper emits `notifications/resources/updated` only to clients that previously called
-`resources/subscribe` for the given URI on that `Server`.
+It emits `notifications/resources/updated` to the legacy clients that subscribed to that URI on that `Server`,
+and forwards the same event to `mcpNotify.resourceUpdated(uri)`. When you have no `Server` reference at hand —
+the usual case in a background worker — call `mcpNotify.resourceUpdated(uri)` directly.
 
 ## Optional MAY capability — argument completion (standard §8.2)
 
@@ -389,6 +441,46 @@ const serverData: McpServerData = { ..., completionProvider };
 
 The SDK caps the response at 100 values and sets `completion.hasMore` / `completion.total`
 accordingly.
+
+## Cache hints (standard §12.3)
+
+In the modern era every cacheable result tells the client how long it may be reused and who may reuse it. The
+SDK stamps `ttlMs` and `cacheScope` onto `prompts/list`, `resources/list`, `resources/templates/list` and
+`resources/read` (as well as `server/discover` and `tools/list`) from the `mcp.cacheHints` configuration:
+
+```yaml
+mcp:
+  cacheHints:
+    listTtlMs: 60000     # freshness of catalog results, milliseconds — default 60000 (1 minute)
+    readTtlMs: 0         # freshness of resources/read results — default 0 (immediately stale)
+    cacheScope: private  # who may cache: public | private — default private
+```
+
+`cacheScope: private` is the safe default because a catalog may legitimately differ per token: dynamic
+prompts and resources are built from `ITransportContext`, so two callers can see two different lists. Set
+`public` only when the answer is provably identical for every caller. `readTtlMs: 0` likewise assumes live
+content — raise it for resources that are genuinely static (a logo, a bundled schema) to spare the server the
+repeated reads.
+
+A resource whose content function is expensive benefits most from a non-zero `readTtlMs`, but remember the
+hint is advisory: the client decides whether to honor it, and a change notification (see "Change
+notifications" above) is what actively invalidates a stale copy.
+
+## Reporting a missing resource
+
+`resources/read` for a URI the server does not publish is reported as `-32602 Invalid params` in the modern
+era — a missing resource is a bad argument, not a separate error class. The legacy-only code `-32002` is never
+emitted to modern clients. Custom resource content functions do not need to do anything special: throwing
+`ResourceNotFoundError` from `fa-mcp-sdk` produces the correct code for the caller's era automatically.
+
+## Multi round-trip requests for prompts and resources
+
+The MRTR pattern (`resultType: "input_required"`, described in
+[02-1-tools-and-api.md → "Multi round-trip requests"](./02-1-tools-and-api.md)) is defined at the protocol
+level for `prompts/get` and `resources/read` as well, so a client may receive an interim "I need more input"
+result from those methods too. The SDK's handler-level helper `formatInputRequired()` is aimed at tools; a
+prompt or resource that needs a value from the user should take it as a declared prompt argument or encode it
+in the URI template instead.
 
 ## Pagination (standard §8.4)
 

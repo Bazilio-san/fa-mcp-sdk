@@ -7,6 +7,7 @@ export type {
   IInputRequiredResponse,
   IToolHandlerParams,
   ITransportContext,
+  TLoggingLevel,
   TTransportType,
   IGetPromptParams,
   IGetPromptRequest,

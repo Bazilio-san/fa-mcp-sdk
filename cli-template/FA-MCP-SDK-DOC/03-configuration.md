@@ -130,31 +130,55 @@ mcp:
     # JSON-RPC code -32004, HTTP 504 Gateway Timeout.
     toolTimeoutMs: 30000           # 30 seconds
   tools:
-    answerAs: text   # text | structuredContent
+    # text | structuredContent. This switch also decides whether a tool's `outputSchema` is
+    # advertised to modern clients: declaring the schema obliges the server to answer with
+    # conforming `structuredContent`, which the default `text` mode does not produce.
+    answerAs: text
     hideAnnotations: false  # true — strip `annotations` from tool listings
     # Standard §8.3/§9.3 — validate tools/call arguments against each tool's inputSchema before
-    # dispatch. Default true. On failure the call is rejected with -32602 and a per-field diagnostic
-    # in error.data (field, reason, errors[]). Set false to skip input validation (tools self-validate,
-    # or trusted internal deployment); does not affect outputSchema checks. ENV: MCP_TOOLS_VALIDATE_INPUT.
+    # dispatch. Default true. In the modern era a violation comes back as a tool result with
+    # `isError: true` and per-field diagnostics; toward legacy clients it is JSON-RPC -32602 with the
+    # same diagnostics in error.data. Set false to skip input validation (tools self-validate, or
+    # trusted internal deployment); does not affect outputSchema checks. ENV: MCP_TOOLS_VALIDATE_INPUT.
     validateInput: true
   # Standard §8.4 — server-side pagination for tools/list, prompts/list, resources/list.
   pagination:
     pageSize: 100                # items per page (cursor is opaque base64(offset))
+  # Standard v2.0 §12.3 — freshness hints (`ttlMs` / `cacheScope`) stamped on the cacheable
+  # 2026-07-28 results: server/discover, tools/list, prompts/list, resources/list,
+  # resources/templates/list (listTtlMs) and resources/read (readTtlMs). Legacy responses carry none.
+  cacheHints:
+    listTtlMs: 60000             # catalog freshness hint, ms
+    readTtlMs: 0                 # resources/read freshness hint, ms (0 = immediately stale)
+    cacheScope: private          # public | private — `private` is the safe default (results vary per token)
+  # Multi Round-Trip Requests (MRTR, 2026-07-28) — a tool pauses mid-call to ask the user for
+  # confirmation or missing data, and the client retries with the answers plus the opaque
+  # `requestState` blob the server minted.
+  mrtr:
+    stateSecret: ''              # HMAC secret guarding requestState integrity, min 32 chars
+    stateTtlSeconds: 600         # lifetime of a minted requestState, seconds
   # Standard §11.5 — optional MAY resource capabilities. Off by default.
   resources:
-    subscribeEnabled: false      # advertise `subscribe` + `listChanged`; emit notifications/resources/updated
+    subscribeEnabled: false      # legacy `resources/subscribe` + notifications/resources/updated
     templatesEnabled: false      # advertise + serve resources/templates/list
+  # Standard §15.2 — `notifications/message` emission. In the modern era the severity threshold is
+  # per request (`_meta.io.modelcontextprotocol/logLevel`); legacy sessions set it via logging/setLevel.
+  logging:
+    enabled: true                # advertise the `logging` capability and emit notifications/message
+    defaultLevel: info           # legacy-session starting threshold on the Syslog ladder
+    maxBodyBytes: 4096           # serialized `data` payload ceiling; longer payloads are truncated
   # Standard §8.7 (MAY) — task-augmented execution (long-running / pollable tool calls). Off by
-  # default. When enabled, advertises the `tasks` capability and serves tasks/list|get|result|cancel.
-  # Long-running tools opt in per-tool via `execution.taskSupport`. Default store is in-memory only.
+  # default. Modern era: the official `io.modelcontextprotocol/tasks` extension (tasks/get|update|cancel);
+  # legacy era: the `tasks` capability with tasks/list|get|result|cancel. Long-running tools opt in
+  # per-tool via `execution.taskSupport`. The default store is in-memory only.
   tasks:
-    enabled: false               # advertise `tasks` capability and accept the lifecycle methods
+    enabled: false               # advertise the extension / capability and accept the lifecycle methods
     defaultTtlMs: 3600000        # finished-task retention from creation (clamped to [minTtlMs, maxTtlMs])
     minTtlMs: 0                  # lower bound a client-requested ttl is clamped to
     maxTtlMs: 86400000           # hard retention ceiling (24 h)
     pollIntervalMs: 1000         # suggested client poll interval, surfaced in every task object
     maxTasks: 1000               # retained tasks cap; oldest finished evicted first
-  # Standard §6 (MAY) — Streamable HTTP SSE resumability via Last-Event-ID. Off by default.
+  # Standard §6 (MAY) — Streamable HTTP SSE resumability via Last-Event-ID. Legacy era only, off by default.
   sse:
     resumability: false          # wire in-memory EventStore into the transport for replay on reconnect
     maxStoredEvents: 1000        # ring-buffer size: recent events retained per process for replay
@@ -463,6 +487,21 @@ db:
 ```
 
 
+## Protocol Eras and What They Change in the Config
+
+The server is dual-era: one `/mcp` endpoint serves both protocol generations, and no configuration key selects
+between them — the era is derived from the traffic itself.
+
+| Era | Revision | How it is recognised | Shape |
+|-----|----------|----------------------|-------|
+| Modern | `2026-07-28` | Per-request `_meta` envelope (or a `server/discover` probe) | Stateless: no `initialize`, no sessions, client capabilities and log level travel in every request |
+| Legacy | `2025-11-25` and earlier | An `initialize` request, or an `Mcp-Session-Id` header | Sessionful: handshake first, session-scoped capabilities, log level and subscriptions |
+
+Modern traffic is served by the official `@modelcontextprotocol/server@2` package; legacy traffic keeps the
+`@modelcontextprotocol/sdk@1.29` session path. On the STDIO transport the era is decided from the connection's
+opening message and pinned for the lifetime of the process. Several `mcp.*` keys therefore behave differently
+depending on which client is talking — each section below states the era it applies to.
+
 ## Pagination (`mcp.pagination`)
 
 Standard §8.4 — server-side pagination for `tools/list`, `prompts/list`, and
@@ -484,6 +523,67 @@ curl -s ... -d '{"jsonrpc":"2.0","method":"tools/list","id":1}'
 curl -s ... -d '{"jsonrpc":"2.0","method":"tools/list","id":1,"params":{"cursor":"NTA="}}'
 ```
 
+## Tool Response Shape and Input Validation (`mcp.tools`)
+
+| Key | Default | Notes |
+|-----|---------|-------|
+| `mcp.tools.answerAs` | `text` | `text` puts serialized JSON in `content[0].text`; `structuredContent` returns the object in `result.structuredContent`. It also gates `outputSchema`: a tool's schema is advertised to modern clients **only** under `structuredContent`, because declaring the schema obliges the server to answer with conforming `structuredContent` — which the `text` shape never produces. Env `MCP_TOOLS_ANSWER_AS`. |
+| `mcp.tools.hideAnnotations` | `false` | Strip `annotations` (`readOnlyHint`, `destructiveHint`, …) from tool listings. Env `MCP_TOOLS_HIDE_ANNOTATIONS`. |
+| `mcp.tools.validateInput` | `true` | Validate `tools/call` arguments against the tool's `inputSchema` before dispatch. Env `MCP_TOOLS_VALIDATE_INPUT`. |
+
+A schema violation is reported differently per era. Modern clients receive a normal tool result carrying
+`isError: true` plus the per-field diagnostics, so the model can read the complaint and retry with corrected
+arguments. Legacy clients receive the JSON-RPC protocol error `-32602` with the same diagnostics in `error.data`
+(`field`, `reason`, `errors[]`). Turning the flag off skips argument validation entirely in both eras; it never
+affects `outputSchema` checks, which the modern runtime always enforces once the schema is advertised.
+
+A task-capable tool (`execution.taskSupport`, with `mcp.tasks.enabled: true`) also keeps its `outputSchema`
+unadvertised, because its answer may be a task handle rather than the tool's own payload.
+
+## Cache Hints (`mcp.cacheHints`)
+
+MCP `2026-07-28` requires every cacheable result to state how long it stays fresh and who may keep it. The SDK
+stamps `ttlMs` and `cacheScope` on `server/discover`, `tools/list`, `prompts/list`, `resources/list`,
+`resources/templates/list` (all from `listTtlMs`) and on `resources/read` (from `readTtlMs`). Legacy-era responses
+carry no cache hints and are unaffected by this section.
+
+| Key | Default | Notes |
+|-----|---------|-------|
+| `mcp.cacheHints.listTtlMs` | `60000` | Freshness hint for catalog results, milliseconds. Raise it when the tool/prompt/resource catalog is static; lower it when tools appear and disappear per deployment. Env `MCP_CACHE_LIST_TTL_MS`. |
+| `mcp.cacheHints.readTtlMs` | `0` | Freshness hint for `resources/read` results, milliseconds. `0` means "immediately stale" — every read goes to the server. Env `MCP_CACHE_READ_TTL_MS`. |
+| `mcp.cacheHints.cacheScope` | `private` | `private` — only the caller that fetched the result may reuse it. `public` — any client or shared proxy may reuse it for any caller. Env `MCP_CACHE_SCOPE`. |
+
+`private` is the safe default because listings and reads may vary per token: a server that filters tools by scope
+or returns per-user resources would otherwise hand one caller's view to another through a shared cache. Set
+`cacheScope: public` only when the catalog and the resource bodies are provably identical for every caller.
+
+## Multi Round-Trip Requests (`mcp.mrtr`)
+
+MRTR is the `2026-07-28` mechanism that lets a tool pause in the middle of a call and ask the user for
+confirmation or for data the model did not supply. The server answers with `resultType: "input_required"` and an
+opaque `requestState` blob; the client collects the answers and retries the same call, echoing that blob back.
+Because the blob travels through the client, its integrity is protected by an HMAC signature, bound to the
+originating method and the authenticated principal, and limited by a TTL. Verification happens before any tool
+code runs, so a tampered, expired or foreign blob never reaches a handler.
+
+| Key | Default | Notes |
+|-----|---------|-------|
+| `mcp.mrtr.stateSecret` | `''` | HMAC secret protecting `requestState` integrity. Minimum 32 characters. Env `MCP_MRTR_STATE_SECRET`. |
+| `mcp.mrtr.stateTtlSeconds` | `600` | How long a minted `requestState` stays valid, seconds. A retry after this window is rejected and the client must start the call over. Env `MCP_MRTR_STATE_TTL_SECONDS`. |
+
+**Operational note — this is the key to set before scaling out.** When `stateSecret` is empty (the default), the
+server generates a random key at startup and keeps it in process memory. That is fine for a single instance, but it
+has two consequences: a restart invalidates every round trip that is still in flight (clients get a rejected
+`requestState` and must redo the call), and **multiple instances behind a load balancer MUST share one secret** —
+otherwise the instance that receives the retry cannot verify a blob minted by a sibling. Set the same value in
+`config/production.yaml` (or via `MCP_MRTR_STATE_SECRET`) on every replica. A secret shorter than 32 characters is
+refused: the server logs a warning and falls back to the random per-process key, so a too-short value behaves
+exactly like no value at all.
+
+The tool-side helpers (`formatInputRequired`, `isInputRequiredResponse`) and the handler fields that carry the
+answers back (`inputResponses`, `requestStatePayload`) are described in
+[06-utilities → "Multi Round-Trip Requests"](./06-utilities.md).
+
 ## Resource MAY capabilities (`mcp.resources`)
 
 Standard §11.5 — opt-in templates and subscriptions. Defaults keep the server in the
@@ -491,20 +591,61 @@ Standard §11.5 — opt-in templates and subscriptions. Defaults keep the server
 
 | Key | Default | Notes |
 |-----|---------|-------|
-| `mcp.resources.subscribeEnabled` | `false` | Advertise `subscribe` + `listChanged` and register `resources/subscribe`. Project code emits change events via `notifyResourceUpdated(server, uri)`. |
+| `mcp.resources.subscribeEnabled` | `false` | Legacy era: advertise `subscribe` + `listChanged` and register `resources/subscribe`. Project code emits change events via `notifyResourceUpdated(server, uri)`. |
 | `mcp.resources.templatesEnabled` | `false` | Advertise + serve `resources/templates/list`. Templates come from `McpServerData.customResourceTemplates`. |
 
-See [02-2-prompts-and-resources → "Optional MAY capabilities"](./02-2-prompts-and-resources.md#optional-may-capabilities-templates--subscribe-standard-115)
+Modern clients do not use `resources/subscribe` at all — they open a `subscriptions/listen` stream and receive
+the same change notifications through it, independently of this flag. Publish those events with the `mcpNotify`
+helper (`resourceUpdated(uri)`, `toolsChanged()`, …); `notifyResourceUpdated(server, uri)` also routes into it, so
+project code written against the legacy API reaches modern subscribers too. See
+[02-2-prompts-and-resources → "Optional MAY capabilities"](./02-2-prompts-and-resources.md#optional-may-capabilities-templates--subscribe-standard-115)
 for end-to-end examples.
 
-## SSE stream resumability (`mcp.sse`)
+## Log Notification Threshold (`mcp.logging`)
 
-Standard §6 (MAY) — opt-in replay of missed Streamable HTTP SSE events after a reconnect. Off by
-default; when off the transport behaves exactly as before. Only relevant for the HTTP transport.
+Standard §15.2 — the `notifications/message` channel a tool writes to through the `log()` emitter on
+`IToolHandlerParams`.
 
 | Key | Default | Notes |
 |-----|---------|-------|
-| `mcp.sse.resumability` | `false` | When `true`, an in-memory `InMemoryEventStore` is wired into the Streamable HTTP transport. A client reconnecting to `GET /mcp` with a `Last-Event-ID` header replays the events it missed. Env `MCP_SSE_RESUMABILITY`. |
+| `mcp.logging.enabled` | `true` | Advertise the `logging` capability and emit `notifications/message`. Env `MCP_LOGGING_ENABLED`. |
+| `mcp.logging.defaultLevel` | `info` | Starting severity threshold of a legacy session on the Syslog ladder (`debug` … `emergency`). Env `MCP_LOGGING_DEFAULT_LEVEL`. |
+| `mcp.logging.maxBodyBytes` | `4096` | Serialized `data` payload ceiling; longer payloads are truncated. Env `MCP_LOGGING_MAX_BODY_BYTES`. |
+
+The threshold is era-specific. A modern request carries its own level in `_meta.io.modelcontextprotocol/logLevel`
+and is filtered against that value alone — a request that omits the field receives no log notifications at all,
+which is what the specification prescribes, so `defaultLevel` has no effect on modern traffic. A legacy session is
+filtered by the level its client set with `logging/setLevel`, starting from `defaultLevel`.
+
+## Task-Augmented Execution (`mcp.tasks`)
+
+Standard §8.7 (MAY) — long-running tool calls the client polls instead of waiting on. Off by default; a tool opts in
+per-tool with `execution.taskSupport`. The default store keeps tasks in process memory only and does not survive a
+restart.
+
+| Key | Default | Notes |
+|-----|---------|-------|
+| `mcp.tasks.enabled` | `false` | Advertise task support and accept the lifecycle methods. Env `MCP_TASKS_ENABLED`. |
+| `mcp.tasks.defaultTtlMs` | `3600000` | Retention of a finished task from creation; a client-requested ttl is clamped to `[minTtlMs, maxTtlMs]`. |
+| `mcp.tasks.minTtlMs` / `maxTtlMs` | `0` / `86400000` | Clamp bounds for a client-requested ttl. |
+| `mcp.tasks.pollIntervalMs` | `1000` | Poll interval suggested to the client in every task object. |
+| `mcp.tasks.maxTasks` | `1000` | Cap on simultaneously retained tasks; the oldest finished tasks are evicted first. |
+
+In the modern era Tasks are the official extension `io.modelcontextprotocol/tasks`, advertised in
+`server/discover` under `capabilities.extensions` and returned only to clients that declare the same extension in
+their request. The modern method set is `tasks/get`, `tasks/update` (the re-entry point that feeds MRTR answers
+back into a paused tool) and `tasks/cancel` — there is no `tasks/list` and no `tasks/result` there. Legacy clients
+keep the `tasks` capability with `tasks/list`, `tasks/get`, `tasks/result` and `tasks/cancel`.
+
+## SSE stream resumability (`mcp.sse`)
+
+Standard §6 (MAY) — opt-in replay of missed Streamable HTTP SSE events after a reconnect. Legacy era only: the
+modern revision has neither sessions nor resumable streams, so this section is inert for modern clients. Off by
+default, and only relevant for the HTTP transport.
+
+| Key | Default | Notes |
+|-----|---------|-------|
+| `mcp.sse.resumability` | `false` | When `true`, an in-memory `InMemoryEventStore` is wired into the Streamable HTTP transport. A legacy client reconnecting to `GET /mcp` with a `Last-Event-ID` header replays the events it missed. Env `MCP_SSE_RESUMABILITY`. |
 | `mcp.sse.maxStoredEvents` | `1000` | Ring-buffer size — how many recent events are retained per process for replay. Env `MCP_SSE_MAX_STORED_EVENTS`. |
 
 The store is a per-process ring buffer: it does not survive a restart and is not shared across
@@ -540,10 +681,24 @@ Override per-environment in `config/{development,production,local}.yaml` or via 
 
 | Code | Class | HTTP | When |
 |------|-------|------|------|
-| `-32002` | `ResourceNotFoundError` | 404 | Session / resource not found (legacy SSE `/messages`, missing JWKS key, etc.) |
+| `-32002` | `ResourceNotFoundError` | 404 | Resource not found — emitted toward legacy clients only (legacy SSE `/messages`, missing JWKS key, etc.). In the modern era the same condition is reported as `-32602`. |
 | `-32003` | `RateLimitedError` | 429 | Per-client rate limit exceeded. Response carries the `Retry-After` HTTP header AND `error.data.retryAfter` (seconds). |
-| `-32004` | `TimeoutError` | 504 | Tool execution exceeded `mcp.limits.toolTimeoutMs`. |
+| `-32004` | `TimeoutError` | 504 | Tool execution exceeded `mcp.limits.toolTimeoutMs`. Timeout is the only meaning of this code — an insufficient-scope rejection is `-32000` with `error.data.reason: "insufficient_scope"`. |
 | `-32005` | `PayloadTooLargeError` | 413 | Request body exceeded `mcp.limits.maxPayloadBytes`. |
+| `-32006` | `UpstreamUnavailableError` | 503 | A downstream dependency the tool proxies is unreachable or answered 502/503/504. |
+| `-32007` | `ConflictError` | 409 | The requested change conflicts with the current state of the target entity. |
+
+Codes reserved by the specification and produced by the modern runtime itself (they are protocol-level
+rejections, so no SDK error class maps to them and project code MUST NOT allocate in `-32020…-32099`):
+
+| Code | Name | HTTP | When |
+|------|------|------|------|
+| `-32020` | HeaderMismatch | 400 | A required request header is missing or does not match the body — see the header rules in [06-utilities → "Streamable HTTP Troubleshooting"](./06-utilities.md). |
+| `-32021` | MissingRequiredClientCapability | 400 | The request needs a client capability the client did not declare in its `_meta` envelope. |
+| `-32022` | UnsupportedProtocolVersion | 400 | The requested protocol revision is not served; `error.data` lists the supported ones. |
+
+`-32001` is the legacy-era session error: an unknown or expired `Mcp-Session-Id` receives HTTP 404 with this code
+and the instruction to re-initialize.
 
 Import the classes (and the `MCP_ERROR_CODES` map) from the SDK root:
 

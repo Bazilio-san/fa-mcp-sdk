@@ -309,7 +309,7 @@ Only `message` is required. `mcpConfig` is required for tool calls.
 | `agentPrompt` | no | Agent prompt to send to the LLM as the system prompt. When provided, **replaces** the MCP server's `agent_prompt`. When omitted, the MCP server's `agent_prompt` is used (if available), otherwise a built-in default |
 | `customPrompt` | no | Additional instructions appended after `agentPrompt`. Use for per-request modifiers without replacing the main prompt |
 | `modelConfig` | no | LLM model settings (model name, temperature, maxTokens, maxTurns) |
-| `appMode` | no | Boolean. When `true`, advertises MCP Apps UI capability on the MCP `initialize` handshake (so the server returns UI-augmented tool variants), appends an MCP-Apps-aware system prompt, and records the would-be-rendered UI resource for each tool call in `trace.turns[].app_calls[]`. Default `false` — text-only behavior. See [MCP Apps Mode](#mcp-apps-mode) |
+| `appMode` | no | Boolean. When `true`, advertises MCP Apps UI capability in the client capabilities it declares (so the server returns UI-augmented tool variants), appends an MCP-Apps-aware system prompt, and records the would-be-rendered UI resource for each tool call in `trace.turns[].app_calls[]`. Default `false` — text-only behavior. See [MCP Apps Mode](#mcp-apps-mode) |
 
 #### Brief Response (default)
 
@@ -425,7 +425,7 @@ The headless API shares sessions with the chat UI. To start a fresh conversation
 ## MCP Apps Mode
 
 Agent Tester doubles as a developer-grade MCP Apps host. When activated, it advertises UI capability
-on the MCP `initialize` handshake so the connected server can branch between text-only and
+in the client capabilities it sends, so the connected server can branch between text-only and
 UI-augmented tool variants, renders returned UI resources inside sandboxed iframes alongside chat
 messages, and exposes the same wire-level events to headless tests. The mode is **fully optional**
 and orthogonal to existing features — when off, Agent Tester behaves exactly as before.
@@ -436,7 +436,7 @@ The header carries a global `Apps` checkbox (test-id `at-app-mode-toggle`) visib
 Toggling it:
 
 1. Persists the choice in `localStorage['agentTesterAppMode']`.
-2. Reconnects the MCP client with the new capability set. The capability sent on `initialize` is:
+2. Reconnects the MCP client with the new capability set. The capability it declares is:
    ```json
    { "capabilities": { "extensions": { "io.modelcontextprotocol/ui": { "mimeTypes": ["text/html;profile=mcp-app"] } } } }
    ```
@@ -452,7 +452,7 @@ Servers MUST gate UI-only behavior on `getUiCapability(clientCapabilities)` per 
 (`fa-mcp-sdk` re-exports `getUiCapability`, `hostSupportsMcpApps`, `MCP_APPS_EXTENSION_ID`,
 `MCP_APPS_RESOURCE_MIME_TYPE` — see [10-mcp-apps.md](10-mcp-apps.md) §6.1.1). With Agent Tester:
 
-| Toggle state | Sent on `initialize` | Server expected to |
+| Toggle state | Declared client capabilities | Server expected to |
 |---|---|---|
 | OFF (default) | no `extensions["io.modelcontextprotocol/ui"]` | return text-only `content[]`, ignore `_meta.ui.*` |
 | ON | `extensions["io.modelcontextprotocol/ui"]: { mimeTypes: ["text/html;profile=mcp-app"] }` | return text fallback **and** UI resource (embedded `content[]` entry or via tool's `_meta.ui.resourceUri`) |

@@ -40,6 +40,27 @@ class MyError extends BaseMcpError {
 | `UpstreamUnavailableError` | `UPSTREAM_UNAVAILABLE` | `-32006` | 503 | Appendix B |
 | `ConflictError` | `CONFLICT` | `-32007` | 409 | Appendix B |
 
+Two codes are narrower than they look, and reading them loosely sends debugging in the wrong direction:
+
+- **`-32004` means Timeout and nothing else.** It is emitted when a tool call outruns
+  `mcp.limits.toolTimeoutMs`. A call rejected because the token lacks a scope the tool requires is `-32000`
+  with `error.data.reason: "insufficient_scope"`, `error.data.field: "scope"` and the missing scope names in
+  `error.data.missing`.
+- **`ResourceNotFoundError` is `-32002` toward legacy clients only.** The `2026-07-28` revision forbids that
+  code, so the modern runtime reports "resource not found" as `-32602` with the same message and data. Throw the
+  class as usual — the translation is applied per era on the way out.
+
+### Protocol Codes of the Modern Era
+
+The `2026-07-28` runtime rejects malformed requests before any handler is reached, with codes reserved by the
+specification. No SDK error class maps to them, and project code MUST NOT allocate anything in `-32020…-32099`.
+
+| Code | Name | HTTP | When |
+|------|------|------|------|
+| `-32020` | HeaderMismatch | 400 | A required request header is missing or contradicts the body (see "Streamable HTTP Troubleshooting" below). |
+| `-32021` | MissingRequiredClientCapability | 400 | The request needs a client capability the client did not declare in its `_meta` envelope — for example a tool that asks for elicitation from a client that never announced it. |
+| `-32022` | UnsupportedProtocolVersion | 400 | The revision named in the request is not served; `error.data` carries the list of supported revisions. |
+
 ### Mapping a Downstream API Status to a Typed Error
 
 When a tool proxies a downstream HTTP API, translate the upstream status into one of these classes instead
@@ -169,6 +190,91 @@ function getJsonFromResult<T = any>(result: TToolHandlerResponse | any): T;
 - **`asTextContent()` / `asTextError()` / `asJson()` / `asJsonError()`** — Direct formatting,
   ignore `tools.answerAs`. Use when a specific shape is required.
 - **`getJsonFromResult()`** — Inverse of `formatToolResult()`. Extracts JSON from either format. Use in tests.
+
+## Multi Round-Trip Requests (`formatInputRequired`, `isInputRequiredResponse`)
+
+A tool that needs a confirmation or a value the model did not supply pauses the call instead of guessing. Return
+`formatInputRequired(...)` from the handler: the SDK turns it into a `resultType: "input_required"` result carrying
+an HMAC-sealed `requestState`, the client collects the answers, and the same handler runs again with
+`inputResponses` and `requestStatePayload` filled in. Configure the sealing secret and its lifetime through
+`mcp.mrtr` — see [03-configuration → "Multi Round-Trip Requests"](./03-configuration.md).
+
+```typescript
+import {
+  formatInputRequired, isInputRequiredResponse, formatToolResult, formatToolError, IToolHandlerParams,
+} from 'fa-mcp-sdk';
+
+export async function handler (params: IToolHandlerParams) {
+  const answer = params.inputResponses?.confirm as { content?: { proceed?: boolean } } | undefined;
+
+  if (!answer) {
+    // First round: pause and ask. `state` is any JSON-serializable value you want back on retry.
+    return formatInputRequired({
+      inputRequests: {
+        confirm: {
+          method: 'elicitation/create',
+          params: { message: `Delete ${params.arguments.id}?`, requestedSchema: confirmSchema },
+        },
+      },
+      state: { id: params.arguments.id },
+    });
+  }
+
+  // Second round: `requestStatePayload` is the verified `state` from above.
+  const { id } = params.requestStatePayload as { id: string };
+  return answer.content?.proceed ? formatToolResult(await remove(id)) : formatToolError('Cancelled by user');
+}
+```
+
+`formatInputRequired` requires at least one of `inputRequests` / `state` and throws a `TypeError` otherwise. The
+embedded request methods are `elicitation/create`, `sampling/createMessage` and `roots/list`; the SDK checks that
+the client declared the matching capability and, when it did not, converts the pause into an actionable
+`isError: true` text instead of sending a request the client cannot answer. Toward sessionful legacy clients the
+marker degrades into that same `isError: true` text, so a tool written this way stays usable in both eras.
+
+`isInputRequiredResponse(value)` is the type guard for the marker — useful in a dispatcher or in tests that wrap
+handler results before returning them.
+
+## Change Notifications (`mcpNotify`)
+
+Modern clients receive catalog and resource change events over a `subscriptions/listen` stream rather than through
+per-session notifications. `mcpNotify` publishes into that stream; call it whenever the server's surface changes.
+
+```typescript
+import { mcpNotify } from 'fa-mcp-sdk';
+
+mcpNotify.toolsChanged();               // notifications/tools/list_changed
+mcpNotify.promptsChanged();             // notifications/prompts/list_changed
+mcpNotify.resourcesChanged();           // notifications/resources/list_changed
+mcpNotify.resourceUpdated('db://orders/42');  // notifications/resources/updated for one URI
+```
+
+Each call fans out to every open listen subscription that opted in to that event. The legacy helper
+`notifyResourceUpdated(server, uri)` routes into `mcpNotify` as well, so existing project code reaches modern
+subscribers without changes.
+
+## Client-Facing Log Messages (`log()`)
+
+`IToolHandlerParams.log(level, data, logger?)` emits a `notifications/message` to the client that made the current
+call — the MCP-level channel, separate from the server's own `logger`, which writes to console and files. It is
+fire-and-forget: a delivery failure never breaks the tool call, and the call is a no-op when the client is not
+listening, so call it unconditionally.
+
+```typescript
+export async function handler (params: IToolHandlerParams) {
+  params.log?.('info', `Fetching ${params.arguments.symbol}`, `tool:${params.name}`);
+  const rows = await fetchRows(params.arguments);
+  params.log?.('debug', { rows: rows.length }, `tool:${params.name}`);
+  return formatToolResult(rows);
+}
+```
+
+`level` is the Syslog ladder (`TLoggingLevel`: `debug`, `info`, `notice`, `warning`, `error`, `critical`, `alert`,
+`emergency`), `data` is any JSON-serializable value (truncated at `mcp.logging.maxBodyBytes`), and the optional
+third argument tags the source so clients can route on it. The SDK applies the threshold: a modern request is
+filtered by the level in its own `_meta.io.modelcontextprotocol/logLevel` — a request that omits the field receives
+no log notifications at all — while a legacy session is filtered by the level its client set with
+`logging/setLevel`.
 
 ## Masking Sensitive Data (`maskSensitive`, standard §12.2)
 
@@ -356,6 +462,45 @@ echo "DEBUG=mcp:tool,mcp:resource" >> .env
 > `stdout` via `console.log`, so enabling `DEBUG=mcp:*` in STDIO mode **will corrupt the framing**
 > the client sees. Use these switches with HTTP/SSE transport, or redirect stdout.
 
+## Streamable HTTP Troubleshooting
+
+One `POST /mcp` endpoint serves both protocol eras, and the two have different admission rules. Read the failure
+by era first — most "the client cannot talk to my server" reports are a header or a session problem, not a tool
+problem.
+
+**Modern requests (`2026-07-28`) are stateless and header-checked.** There is no `initialize`, no session, and no
+`Mcp-Session-Id`; every request carries its own `_meta` envelope and must mirror its own body in the headers:
+
+| Header | Required on | Must equal |
+|--------|-------------|------------|
+| `MCP-Protocol-Version` | every request | The protocol revision the client speaks, e.g. `2026-07-28` |
+| `Mcp-Method` | every request | The JSON-RPC `method` in the body, e.g. `tools/call` |
+| `Mcp-Name` | `tools/call`, `resources/read`, `prompts/get` | The target name in `params` — the tool name, the resource URI, or the prompt name |
+
+A missing or contradicting header is rejected with HTTP **400** and JSON-RPC `-32020` (HeaderMismatch) before any
+handler runs, so the tool never executes and the log carries no tool trace. An unserved revision in
+`MCP-Protocol-Version` is HTTP **400** with `-32022` (UnsupportedProtocolVersion) and the supported list in
+`error.data`. A request that needs a client capability the `_meta` envelope did not declare is HTTP **400** with
+`-32021`.
+
+```bash
+curl -s http://localhost:9876/mcp \
+  -H 'Content-Type: application/json' -H 'Accept: application/json' \
+  -H 'MCP-Protocol-Version: 2026-07-28' -H 'Mcp-Method: tools/call' -H 'Mcp-Name: hello' \
+  -d '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"hello","arguments":{"name":"world"}}}'
+```
+
+**Sessions belong to the legacy era only.** A legacy client sends `initialize`, receives an `Mcp-Session-Id`, and
+echoes it on every later request. When that id is unknown or expired — a restart, an eviction, a request routed to
+a different replica — the server answers HTTP **404** with code `-32001` and the message
+`Session not found: re-initialize to obtain a new session`, which tells the client to redo the handshake. Serving
+such a request statelessly instead would silently drop the session-scoped state (subscriptions, log level), so the
+404 is deliberate. If legacy clients see it constantly behind a load balancer, either pin their sessions to one
+instance or move them to the modern era, which has no session state to lose.
+
+`McpModernHttpClient` (see [07-testing-and-operations](07-testing-and-operations.md)) builds the modern headers and
+envelope for you — reach for it before hand-rolling curl calls when checking a server end to end.
+
 ## HTTP Connection & RPC Tracing (`DEBUG=mcp-handshake`, `DEBUG=mcp-rpc`)
 
 Separate from the `mcp:*` channel switches above, the **Streamable HTTP transport** carries its own
@@ -368,17 +513,18 @@ actually send back?*
 
 | Env value             | What it logs                                                                          |
 |-----------------------|---------------------------------------------------------------------------------------|
-| *(always on)*         | Session created / closed / transport-closed (with active-session count); the `-32600` "no valid session" rejection with the reason. |
+| *(always on)*         | Legacy session created / closed / transport-closed (with active-session count); the unknown-session warning and the `-32600` "no valid session" rejection with its reason. |
 | `DEBUG=mcp-handshake` | Per-request dump for every `/mcp` call: JSON-RPC method + id, short session id, routing hit/miss, protocol version, `Accept` / `Content-Type`, whether an auth header is present, and client IP. |
 | `DEBUG=mcp-rpc`       | One-line summary of every **successful** JSON-RPC response (status, ids, `result=ok` / notifications). |
 
 Two things always log regardless of the switches, because they are otherwise silent failure modes:
 
-- **The `-32600` rejection.** When a request reaches `/mcp` without a valid session and is not an
-  `initialize`, the server now logs *why* — the client must send `initialize` first or echo a valid
-  `mcp-session-id` header — and notes when the supplied session id is unknown or expired (with the
-  count of known sessions). This is the trace to look for when the client reports `-32600` but the
-  server log was previously empty.
+- **Legacy session rejections.** A legacy client that presents an unknown or expired `mcp-session-id`
+  gets a logged warning with the count of still-known sessions, and the `-32600` rejections raised
+  inside the legacy transport are logged with the reason (the client must send `initialize` first or
+  echo a valid session id). These lines are what to look for when a legacy client reports a session
+  error and the rest of the log is silent. Modern requests never open a session and never reach this
+  branch.
 - **Every JSON-RPC error response.** A response tee on `POST /mcp` and the `GET`/`DELETE` session
   routes captures the outgoing body, parses it (auto-detecting a plain `application/json` answer vs.
   the `data:` frames of an SSE stream), and logs each error's HTTP status, request id, `code`,

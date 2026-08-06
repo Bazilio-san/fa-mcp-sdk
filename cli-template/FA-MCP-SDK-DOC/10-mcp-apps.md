@@ -43,7 +43,7 @@ through the protocol.
 ### Hosts that ship with this SDK
 
 `fa-mcp-sdk` includes **Agent Tester** (`/agent-tester`) — a developer-grade MCP Apps host. Toggle
-the `Apps` checkbox in the header to advertise UI capability on the MCP `initialize` handshake;
+the `Apps` checkbox in the header to advertise UI capability in the client capabilities it sends;
 returned widgets render inline under each chat message, Tool Tester gains a split-view raw/UI
 panel, and a dedicated **App Inspector** tab surfaces every `ui/*` JSON-RPC frame for debugging.
 The same `appMode: true` flag is accepted on the headless `POST /api/chat/test` endpoint so
@@ -99,8 +99,10 @@ non-`ui/notifications/sandbox-*` message between the inner View and the Host. Th
 any message to the View before receiving `ui/notifications/initialized`.
 
 **Capability negotiation.** The host advertises MCP Apps support via the
-`io.modelcontextprotocol/ui` extension key in `initialize.capabilities.extensions`, declaring at
-minimum the supported `mimeTypes` (`text/html;profile=mcp-app`). Servers SHOULD call
+`io.modelcontextprotocol/ui` extension key in its client capabilities — in
+`_meta["io.modelcontextprotocol/clientCapabilities"].extensions` on protocol revision `2026-07-28`,
+and in `initialize.capabilities.extensions` on the legacy revisions — declaring at minimum the
+supported `mimeTypes` (`text/html;profile=mcp-app`). Servers SHOULD call
 `getUiCapability(clientCapabilities)` before registering UI-enabled tools and MUST provide a
 text-only fallback for hosts that don't support the extension.
 
@@ -260,7 +262,9 @@ app-only tools.
 
 ### 5.3 Capability negotiation
 
-Host advertises support in the standard `initialize` capabilities envelope:
+Host advertises support in the standard client-capabilities envelope — carried by every request's
+`_meta` on protocol revision `2026-07-28`, and by the `initialize` handshake on the legacy
+revisions. The shape is the same in both:
 
 ```json
 {
@@ -459,8 +463,9 @@ registerAppResource(
 ```
 
 `getUiCapability(clientCapabilities)` returns the `McpUiClientCapabilities | undefined` payload from
-the host's `extensions["io.modelcontextprotocol/ui"]`. Use it in `server.server.oninitialized` to
-gate which tool variant to register.
+the host's `extensions["io.modelcontextprotocol/ui"]`. Read it from `params.clientCapabilities`
+inside the handler to pick the response shape — that works in both protocol eras, whereas a
+connection-scoped hook such as `server.server.oninitialized` exists only on the legacy path.
 
 `RESOURCE_MIME_TYPE === "text/html;profile=mcp-app"`. `RESOURCE_URI_META_KEY === "ui/resourceUri"`
 (legacy flat key, prefer the nested `_meta.ui.resourceUri` form).
@@ -492,11 +497,15 @@ import {
 
 `params.clientCapabilities` is populated automatically on every tool / prompt / resource call:
 
-| Transport | Source | Availability |
-|-----------|--------|--------------|
-| STDIO | `Server.getClientCapabilities()` (low-level SDK) read inside every handler in `createMcpServer()`. | Every call. |
-| SSE | Same as STDIO, but resolved per-connection (each SSE session owns its own `Server`). | Every call. |
-| Streamable HTTP | Same as STDIO — each session owns its own `Server` + `StreamableHTTPServerTransport` (stateful, keyed by `Mcp-Session-Id`, in-memory `Map` with soft FIFO cap of 4096 sessions). `getClientCapabilities()` is read per handler. | Every call within a session. A client that never sends `Mcp-Session-Id` cannot make post-`initialize` calls (→ 400), so handlers still treat `undefined` as text-only. |
+| Protocol era | Source | Availability |
+|--------------|--------|--------------|
+| Modern (MCP `2026-07-28`), HTTP and STDIO | The per-request `_meta` envelope: `io.modelcontextprotocol/clientCapabilities`, read by the v2 factory for every handler. | Every call — the capabilities travel with the request itself, so nothing depends on connection state. |
+| Legacy (`2025-11-25` and earlier), STDIO | `Server.getClientCapabilities()` (low-level SDK) read inside every handler in `createMcpServer()`. | Every call. |
+| Legacy, SSE | Same as legacy STDIO, resolved per connection (each SSE session owns its own `Server`). | Every call. |
+| Legacy, Streamable HTTP | Same as legacy STDIO — each session owns its own `Server` + `StreamableHTTPServerTransport` (keyed by `Mcp-Session-Id`, in-memory `Map` with a soft FIFO cap of 4096 sessions). | Every call within a session. |
+
+Handlers still treat `undefined` as "no extra capabilities" and fall back to the plain text
+`content[]` contract — a host that declares nothing gets a text-only result in either era.
 
 ```ts
 export const handleToolCall = async (params: IToolHandlerParams) => {
