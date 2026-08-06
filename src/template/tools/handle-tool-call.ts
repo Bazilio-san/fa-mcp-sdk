@@ -1,12 +1,7 @@
 import chalk from 'chalk';
 
-import {
-  debugMcpTool,
-  IToolHandlerParams,
-  logger as lgr,
-  ToolExecutionError,
-  TToolHandlerResponse,
-} from '../../core/index.js';
+import { debugMcpTool, logger as lgr, ToolExecutionError } from '../../core/index.js';
+import type { IToolHandlerParams, TToolHandlerResponse } from '../../core/index.js';
 
 import { templateTools } from './tools.js';
 
