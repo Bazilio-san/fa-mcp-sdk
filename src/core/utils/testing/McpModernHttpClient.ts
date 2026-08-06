@@ -46,6 +46,10 @@ export class McpModernHttpClient extends BaseMcpClient {
       // The reference client negotiates the LEGACY era by default (`mode: 'legacy'`); pinning the
       // revision is what makes it speak 2026-07-28 — no handshake, per-request `_meta`.
       versionNegotiation: { mode: { pin: '2026-07-28' } },
+      // Manual multi-round-trip mode: by default the client fulfils `input_required` itself through
+      // handlers registered with `setRequestHandler`. Here {@link callToolWithInput} drives the
+      // loop instead, so the interim result must reach the caller.
+      inputRequired: { autoFulfill: false },
     } as never);
   }
 
@@ -129,9 +133,11 @@ export class McpModernHttpClient extends BaseMcpClient {
       ...((inputResponses ?? argInputResponses) ? { inputResponses: inputResponses ?? argInputResponses } : {}),
       ...((requestState ?? argRequestState) ? { requestState: requestState ?? argRequestState } : {}),
     };
+    // For spec methods the result schema is inferred from the method name, so the options object
+    // is the SECOND argument; `allowInputRequired` hands an `input_required` interim result back
+    // to us instead of raising, which is what {@link callToolWithInput} drives.
     return this.client.request(
       { method, params: finalParams } as never,
-      undefined as never,
       {
         timeout: this.requestTimeoutMs,
         allowInputRequired: true,
