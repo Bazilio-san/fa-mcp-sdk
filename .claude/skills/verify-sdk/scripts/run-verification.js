@@ -19,15 +19,14 @@
  *   --list               print the step names and exit
  */
 
-import { spawnSync } from 'node:child_process';
-import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { spawn, spawnSync } from 'node:child_process';
+import { existsSync, mkdirSync, openSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const SKILL_DIR = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const REPO_ROOT = resolve(SKILL_DIR, '..', '..', '..');
 const CONFIG_PATH = join(SKILL_DIR, 'config.local.yaml');
-const LOG_DIR = join(REPO_ROOT, '_tmp', 'verify-sdk');
 
 const C = {
   reset: '\u001b[0m',
@@ -82,6 +81,9 @@ if (/[\\]/.test(config.projectAbsPath || '')) {
   process.exit(2);
 }
 
+// The logs live next to the test project, never inside this repository: the SDK ignores (and the agent
+// harness hides) _tmp/, which would make a failing log unreadable exactly when it is needed.
+const LOG_DIR = join(dirname(PROJECT_DIR), 'verify-sdk-logs');
 mkdirSync(LOG_DIR, { recursive: true });
 
 /** Runs one shell command, tees the output into a log file and returns { code, out }. */
@@ -106,12 +108,20 @@ const pass = (message) => ({ ok: true, message });
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
+/**
+ * Polls /health until the server answers. The probe asks for `Connection: close` so that no socket of ours
+ * lingers on the port — a lingering socket makes the process that owns it (this runner) look like a process
+ * "on the port" to netstat-based killers, which would then take the runner down together with the server.
+ */
 const probeHealth = async () => {
   const deadline = Date.now() + 90_000;
   let lastError = 'no response';
   while (Date.now() < deadline) {
     try {
-      const response = await fetch(`http://127.0.0.1:${PORT}/health`, { signal: AbortSignal.timeout(5000) });
+      const response = await fetch(`http://127.0.0.1:${PORT}/health`, {
+        signal: AbortSignal.timeout(5000),
+        headers: { connection: 'close' },
+      });
       const body = await response.text();
       if (response.status === 200 && /"status"\s*:\s*"healthy"/.test(body)) return { ok: true, body };
       lastError = `HTTP ${response.status}: ${body.slice(0, 200)}`;
@@ -123,10 +133,64 @@ const probeHealth = async () => {
   return { ok: false, error: lastError };
 };
 
-const stopServer = () => {
+/** Frees the port before a start — safe here, because the runner holds no connection of its own yet. */
+const freePortBeforeStart = () => {
   if (existsSync(join(PROJECT_DIR, 'scripts', 'kill-port.js'))) {
-    sh(`node scripts/kill-port.js ${PORT}`, { cwd: PROJECT_DIR, logName: 'zz-kill-port', timeout: 60_000 });
+    sh(`node scripts/kill-port.js ${PORT}`, { cwd: PROJECT_DIR, logName: '08-free-port', timeout: 60_000 });
   }
+};
+
+/** Stops the server by its own process tree, so nothing else that merely talks to the port gets killed. */
+const stopServer = (pid) => {
+  if (!pid) return;
+  if (process.platform === 'win32') {
+    sh(`taskkill /F /T /PID ${pid}`, { logName: '09-stop-server', timeout: 60_000 });
+  } else {
+    try {
+      process.kill(-pid, 'SIGKILL');
+    } catch {
+      try {
+        process.kill(pid, 'SIGKILL');
+      } catch {
+        /* already gone */
+      }
+    }
+  }
+};
+
+/** Runs git without a shell, so nothing has to be quoted for cmd.exe. */
+const git = (args) => {
+  const res = spawnSync('git', args, { cwd: REPO_ROOT, encoding: 'utf8', maxBuffer: 16 * 1024 * 1024 });
+  return (res.stdout || '').trim();
+};
+
+/**
+ * Lists the files that ship inside the npm package and changed after the given version was published.
+ * A bare version bump in package.json does not count — only real content changes do.
+ */
+const unpublishedPayloadChanges = (publishedVersion) => {
+  const commit = git(['log', '-1', '--format=%H', `-S"version": "${publishedVersion}"`, '--', 'package.json']);
+  if (!commit) return [];
+  const paths = ['src', 'bin', 'cli-template', 'config', 'scripts', 'package.json'];
+  const changed = git(['diff', '--name-only', `${commit}..HEAD`, '--', ...paths])
+    .split(/\r?\n/)
+    .filter(Boolean);
+  const withWorkingTree = new Set([
+    ...changed,
+    ...git(['status', '--porcelain', '--', ...paths])
+      .split(/\r?\n/)
+      .filter(Boolean)
+      .map((line) => line.slice(3).trim()),
+  ]);
+  if (withWorkingTree.has('package.json')) {
+    const diff = `${git(['diff', '-U0', `${commit}..HEAD`, '--', 'package.json'])}\n${git(['diff', '-U0', '--', 'package.json'])}`;
+    const meaningful = diff
+      .split(/\r?\n/)
+      .filter((line) => /^[+-][^+-]/.test(line))
+      .some((line) => !/^\s*[+-]\s*"version":/.test(line));
+    if (!meaningful) withWorkingTree.delete('package.json');
+  }
+  return [...withWorkingTree];
 };
 
 const steps = [
@@ -142,13 +206,17 @@ const steps = [
       const local = JSON.parse(readFileSync(join(REPO_ROOT, 'package.json'), 'utf8')).version;
 
       const note = `installed ${installedVersion}, working copy ${local}`;
-      if (installedVersion !== local) {
-        return {
-          ...pass(note),
-          warning: `The registry serves ${installedVersion} while this working copy is at ${local}. Fixes made here are NOT covered by this run until they are published.`,
-        };
-      }
-      return pass(note);
+      if (installedVersion === local) return pass(note);
+
+      // The pre-commit hook bumps the version on every commit, so "working copy ahead of the registry" is
+      // the normal state and says nothing by itself. What matters is whether anything that ships inside the
+      // package changed since the published version — that is what makes this run test stale code.
+      const unpublished = unpublishedPayloadChanges(installedVersion);
+      if (!unpublished.length) return pass(`${note} — nothing that ships in the package changed since then`);
+      return {
+        ...pass(note),
+        warning: `The registry serves ${installedVersion}, but files that ship inside the package changed here since then (${unpublished.slice(0, 6).join(', ')}${unpublished.length > 6 ? `, +${unpublished.length - 6} more` : ''}). This run tests the OLD package — publish first, then re-run.`,
+      };
     },
   },
   {
@@ -220,23 +288,36 @@ const steps = [
     name: 'start',
     title: 'Start the server (yarn start) and probe /health',
     run: async () => {
-      stopServer();
-      const logFile = join(LOG_DIR, '08-start.log');
+      freePortBeforeStart();
+      const logFile = join(LOG_DIR, '09-start.log');
       writeFileSync(logFile, '', 'utf8');
-      const command =
-        process.platform === 'win32'
-          ? `start /b cmd /c "yarn start > "${logFile}" 2>&1"`
-          : `yarn start > "${logFile}" 2>&1 &`;
-      spawnSync(command, { cwd: PROJECT_DIR, shell: true, stdio: 'ignore', timeout: 15_000 });
+      const logFd = openSync(logFile, 'a');
+      const child = spawn('yarn start', {
+        cwd: PROJECT_DIR,
+        shell: true,
+        detached: process.platform !== 'win32',
+        stdio: ['ignore', logFd, logFd],
+      });
+      child.unref();
 
       const health = await probeHealth();
       const startLog = existsSync(logFile) ? readFileSync(logFile, 'utf8') : '';
       if (!health.ok) {
-        stopServer();
+        stopServer(child.pid);
         return fail(`the server never answered on /health (${health.error})`, startLog);
       }
-      if (!hasFlag('--keep-running')) stopServer();
-      return pass(`/health answered: ${health.body.slice(0, 120)}`);
+      if (hasFlag('--keep-running')) return pass(`/health answered, the server stays up on port ${PORT}`);
+
+      stopServer(child.pid);
+      await sleep(1500);
+      const stillUp = await fetch(`http://127.0.0.1:${PORT}/health`, {
+        signal: AbortSignal.timeout(3000),
+        headers: { connection: 'close' },
+      })
+        .then(() => true)
+        .catch(() => false);
+      const note = stillUp ? ` (warning: something still listens on port ${PORT})` : '';
+      return pass(`/health answered: ${health.body.slice(0, 120)}${note}`);
     },
   },
 ];
