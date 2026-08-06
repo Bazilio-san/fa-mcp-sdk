@@ -193,6 +193,42 @@ export function mirrorStructuredContent<T extends { structuredContent?: unknown;
   return response;
 }
 
+/**
+ * Standard §8.6 — build the `sendProgress` emitter handed to a tool handler. Active only when the
+ * request carried `_meta.progressToken`; otherwise a no-op so handlers can call it
+ * unconditionally. Progress must be monotonically non-decreasing and is throttled to
+ * `mcp.progress.throttleMs`. `emit` is the era-specific notification sender (the legacy `Server`
+ * or the v2 request-scoped `ctx.mcpReq.notify`), so both eras share these rules.
+ */
+export function buildProgressEmitter(
+  progressToken: string | number | undefined | null,
+  throttleMs: number,
+  emit: (params: Record<string, unknown>) => void,
+): (progress: number, total?: number, message?: string) => void {
+  if (progressToken === undefined || progressToken === null) {
+    return () => {};
+  }
+  let lastEmit = 0;
+  let lastProgress = -Infinity;
+  return (progress: number, total?: number, message?: string) => {
+    if (typeof progress !== 'number' || Number.isNaN(progress) || progress < lastProgress) {
+      return;
+    }
+    const now = Date.now();
+    if (now - lastEmit < throttleMs) {
+      return;
+    }
+    lastEmit = now;
+    lastProgress = progress;
+    emit({
+      progressToken,
+      progress,
+      ...(total === undefined ? {} : { total }),
+      ...(message === undefined ? {} : { message }),
+    });
+  };
+}
+
 /** Truncate per `mcp.limits` and observe the result-size metric. Shared by all tool-call paths. */
 export function truncateAndObserve<T>(response: T): T {
   const truncated = truncateToolResponse(response as any) as T;

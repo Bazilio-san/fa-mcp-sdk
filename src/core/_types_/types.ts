@@ -230,6 +230,9 @@ export type CustomAuthValidator = (req: any) => Promise<AuthResult> | AuthResult
 
 export type TTransportType = 'stdio' | 'sse' | 'http';
 
+/** Syslog-style severity ladder of `notifications/message` (`debug` loosest, `emergency` tightest). */
+export type TLoggingLevel = 'debug' | 'info' | 'notice' | 'warning' | 'error' | 'critical' | 'alert' | 'emergency';
+
 /**
  * Standard §17.2 — structured deprecation block surfaced on tools / prompts / resources.
  * Authors set this instead of hand-rolling a `[DEPRECATED] …` description prefix.
@@ -273,6 +276,18 @@ export interface IToolHandlerParams {
    * No-op when `progressToken` is absent — call it unconditionally.
    */
   sendProgress?: (progress: number, total?: number, message?: string) => void;
+  /**
+   * Standard §15.2 — emit a `notifications/message` to the client for THIS request. Fire and
+   * forget: delivery failures never break the tool call.
+   *
+   * The threshold is era-specific and applied by the SDK: a modern (2026-07-28) request is
+   * filtered by its own `_meta.io.modelcontextprotocol/logLevel` — a request that omits the field
+   * gets no log messages at all, per the specification; a legacy session is filtered by the level
+   * its client set with `logging/setLevel`. Call it unconditionally.
+   *
+   * `logger` tags the source (e.g. `tool:my_tool`) so clients can route on it.
+   */
+  log?: (level: TLoggingLevel, data: unknown, logger?: string) => void;
   /**
    * MRTR (2026-07-28): the client's answers on a retried call, keyed by the ids the handler used
    * in `formatInputRequired({ inputRequests })`. `undefined` on a first (non-retry) call. Values
