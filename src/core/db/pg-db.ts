@@ -1,7 +1,15 @@
 // noinspection UnnecessaryLocalVariableJS
 
-import { getInsertSqlPg, getMergeSqlPg, IQueryPgArgs, queryPg, getPoolPg, TDBRecord, TRecordSet } from 'af-db-ts';
-import { IPoolClientPg } from 'af-db-ts/src/@types/i-pg.js';
+import {
+  getInsertSqlPg,
+  getMergeSqlPg,
+  IPoolClientPg,
+  IQueryPgArgs,
+  queryPg,
+  getPoolPg,
+  TDBRecord,
+  TRecordSet,
+} from 'af-db-ts';
 import { QueryResult, QueryResultRow } from 'pg';
 import pgvector from 'pgvector/pg';
 
