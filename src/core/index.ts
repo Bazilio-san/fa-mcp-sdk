@@ -172,6 +172,7 @@ export { maskSensitive } from './utils/mask-sensitive.js';
 export type { IMaskRules } from './utils/mask-sensitive.js';
 
 export { McpHttpClient } from './utils/testing/McpHttpClient.js';
+export { McpModernHttpClient } from './utils/testing/McpModernHttpClient.js';
 export { McpSseClient } from './utils/testing/McpSseClient.js';
 export { McpStdioClient } from './utils/testing/McpStdioClient.js';
 export { McpStreamableHttpClient } from './utils/testing/McpStreamableHttpClient.js';

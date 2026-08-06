@@ -906,6 +906,21 @@ export async function startHttpServer(): Promise<void> {
         await runHttpToolCall(req, res, () => existing.handleRequest(req, res, req.body));
         return;
       }
+      if (sessionId && !isInitializeRequest(req.body)) {
+        // A client that presents a session id is a legacy-era client, and its session is gone
+        // (expired or evicted). The 2025-11-25 transport answers HTTP 404 so the client
+        // re-initializes; silently serving it statelessly would hide the loss of its
+        // session-scoped state (subscriptions, log level).
+        logger.warn(
+          `MCP session ${shortSid(sessionId)} is unknown or expired (active sessions: ${mcpTransports.size}). ${describeMcpRequest(req)}`,
+        );
+        res.status(404).json({
+          jsonrpc: '2.0',
+          id: (req.body as any)?.id ?? null,
+          error: { code: -32001, message: 'Session not found: re-initialize to obtain a new session' },
+        });
+        return;
+      }
 
       if (isInitializeRequest(req.body)) {
         logger.info(

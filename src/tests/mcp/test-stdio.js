@@ -1,8 +1,10 @@
 #!/usr/bin/env node
 
 /**
- * STDIO transport tests for the template MCP server (src/template)
- * Uses a minimal NDJSON JSON-RPC client over child_process stdio
+ * STDIO transport tests for the template MCP server (src/template) — LEGACY protocol era: the
+ * opening `initialize` pins the connection to the 2025-era path. The modern (2026-07-28) stdio
+ * era is covered by `tests/modern-stdio.test.mjs`.
+ * Uses a minimal NDJSON JSON-RPC client over child_process stdio.
  */
 
 import { spawn } from 'child_process';

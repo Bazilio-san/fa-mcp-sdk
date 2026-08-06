@@ -1,8 +1,10 @@
 #!/usr/bin/env node
 
 /**
- * HTTP transport tests for the template MCP server (src/template)
- * Uses McpHttpClient (simple POST requests)
+ * HTTP transport tests for the template MCP server (src/template) — LEGACY protocol era
+ * (`initialize` handshake, 2025-11-25 and earlier). Uses McpHttpClient (simple POST requests).
+ *
+ * The modern revision (MCP 2026-07-28) of the same endpoint is covered by `test-http-modern.js`.
  */
 
 import { appConfig, McpHttpClient, getAuthHeadersForTests } from '../../../dist/core/index.js';

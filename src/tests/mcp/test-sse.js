@@ -1,8 +1,9 @@
 #!/usr/bin/env node
 
 /**
- * SSE transport tests for the template MCP server (src/template)
- * Uses McpSseClient to send requests via HTTP and receive responses via SSE
+ * SSE transport tests for the template MCP server (src/template) — LEGACY protocol era only:
+ * the HTTP+SSE transport is Deprecated in MCP 2026-07-28 and exists solely for existing consumers.
+ * Uses McpSseClient to send requests via HTTP and receive responses via SSE.
  */
 
 import { appConfig, McpSseClient, getAuthHeadersForTests } from '../../../dist/core/index.js';

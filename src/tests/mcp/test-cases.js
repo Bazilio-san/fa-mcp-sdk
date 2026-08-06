@@ -130,12 +130,18 @@ export const TEMPLATE_TESTS = {
       }
     },
     async (client) => {
-      const name = 'Call example_tool without query should fail';
+      const name = 'Call example_tool without query is rejected';
+      // Both shapes are correct, one per protocol era: the modern (2026-07-28) revision surfaces
+      // an `inputSchema` violation to the model as a tool result with `isError: true` (standard
+      // v2.0 §9.4), while the legacy path raises it as a `-32602` protocol error.
       try {
-        await client.callTool('example_tool', {});
-        return fail(name, { error: 'Expected failure, got success' });
+        const res = await client.callTool('example_tool', {});
+        if (res?.isError === true) {
+          return ok(name, { via: 'isError result', text: res.content?.[0]?.text });
+        }
+        return fail(name, { error: 'Expected a rejection, got a successful result' });
       } catch (e) {
-        return ok(name, { error: e?.message });
+        return ok(name, { via: 'protocol error', error: e?.message });
       }
     },
   ],
