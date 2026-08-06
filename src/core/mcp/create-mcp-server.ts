@@ -24,6 +24,7 @@ import {
   IGetPromptRequest,
   IReadResourceRequest,
   ITransportContext,
+  TLoggingLevel,
   TTransportType,
 } from '../_types_/types.js';
 import { appConfig, getProjectData } from '../bootstrap/init-config.js';
@@ -35,6 +36,7 @@ import { getMetrics } from '../metrics/metrics.js';
 
 import { readDeprecation, warnDeprecatedUsage } from './deprecation.js';
 import {
+  buildProgressEmitter,
   completeCore,
   computeServedFeatures,
   getPromptWithWarn,
@@ -46,7 +48,7 @@ import {
   readResourceWithWarn,
   truncateAndObserve,
 } from './catalog.js';
-import { registerLoggingCapability } from './mcp-logging.js';
+import { registerLoggingCapability, sendLoggingMessage } from './mcp-logging.js';
 import { paginate, parsePageSize } from './pagination.js';
 import { subscribeResource, unsubscribeResource } from './resources.js';
 import { getTaskStore, isTerminalTaskStatus, toTaskDto, ITaskRecord } from './task-store.js';
@@ -219,34 +221,18 @@ export function createMcpServer(
    */
   const buildSendProgress = (
     progressToken: string | number | undefined,
-  ): ((progress: number, total?: number, message?: string) => void) => {
-    if (progressToken === undefined || progressToken === null) {
-      return () => {};
-    }
-    let lastEmit = 0;
-    let lastProgress = -Infinity;
-    return (progress: number, total?: number, message?: string) => {
-      if (typeof progress !== 'number' || Number.isNaN(progress)) {
-        return;
-      }
-      if (progress < lastProgress) {
-        return;
-      }
-      const now = Date.now();
-      if (now - lastEmit < progressThrottleMs) {
-        return;
-      }
-      lastEmit = now;
-      lastProgress = progress;
-      const params: Record<string, unknown> = { progressToken, progress };
-      if (total !== undefined) {
-        params.total = total;
-      }
-      if (message !== undefined) {
-        params.message = message;
-      }
+  ): ((progress: number, total?: number, message?: string) => void) =>
+    buildProgressEmitter(progressToken, progressThrottleMs, (params) => {
       void server.notification({ method: 'notifications/progress', params }).catch(() => {});
-    };
+    });
+
+  /**
+   * Standard §15.2 — `notifications/message` emitter handed to tool handlers on the legacy path.
+   * The threshold is the session's `logging/setLevel` value; modern-era requests carry their own
+   * per-request threshold instead (see the v2 factory).
+   */
+  const sendLog = (level: TLoggingLevel, data: unknown, logger?: string): void => {
+    void sendLoggingMessage(server, level, data, logger);
   };
 
   /**
@@ -342,6 +328,8 @@ export function createMcpServer(
             signal: record.abort.signal,
             // Standard §8.6 — progress for the long-running task.
             sendProgress,
+            // Standard §15.2 — client-facing log emitter (session threshold on this era).
+            log: sendLog,
           })) as any;
           const processed = finalizeToolResponse(tool, raw);
           // Skip if the task was cancelled while the handler was still running.
@@ -489,6 +477,8 @@ export function createMcpServer(
               signal: extra.signal,
               // Standard §8.6 — progress emitter (no-op when no progressToken).
               sendProgress,
+              // Standard §15.2 — client-facing log emitter (session threshold on this era).
+              log: sendLog,
             }) as Promise<any>,
         )) as any;
 

@@ -13,11 +13,13 @@ import { getRequestStateCodec, isInputRequiredResponse, missingCapabilitiesForIn
 import { TASKS_EXTENSION_ID, maybeStartModernTask } from './tasks-methods.js';
 import { subjectKeyFromAuth } from '../create-mcp-server.js';
 
-import { IClientCapabilities, ITransportContext, TTransportType } from '../../_types_/types.js';
+import { IClientCapabilities, ITransportContext, TLoggingLevel, TTransportType } from '../../_types_/types.js';
 import { appConfig, getProjectData } from '../../bootstrap/init-config.js';
 import { getMetrics } from '../../metrics/metrics.js';
 import { getTools, normalizeHeaders } from '../../utils/utils.js';
+import { adoptTraceContextFromMeta } from '../../web/request-id.js';
 import {
+  buildProgressEmitter,
   completeCore,
   computeServedFeatures,
   getPromptWithWarn,
@@ -119,6 +121,9 @@ export const createV2ServerFactory =
       ...(payload ? { payload } : {}),
     };
     const ctxFor = (handlerCtx: unknown): ITransportContext => {
+      // Standard §15.1 — a modern request may carry the W3C trace context in `_meta`; adopt it
+      // into the ambient request context when the HTTP layer did not already supply one.
+      adoptTraceContextFromMeta((handlerCtx as { mcpReq?: { _meta?: Record<string, unknown> } })?.mcpReq?._meta);
       const caps = capsFromHandlerCtx(handlerCtx);
       return caps ? { ...baseCtx, clientCapabilities: caps } : baseCtx;
     };
@@ -138,6 +143,11 @@ export const createV2ServerFactory =
           resources: { subscribe: true, listChanged: true },
           ...(feats.hasPrompts ? { prompts: { listChanged: true } } : {}),
           ...(feats.completionsEnabled ? { completions: {} } : {}),
+          // `logging` is Deprecated in 2026-07-28 but remains functional during the deprecation
+          // window, and the v2 package gates `ctx.mcpReq.log` on the declaration. In the modern
+          // era the threshold is per-request (`_meta.io.modelcontextprotocol/logLevel`): a request
+          // that omits it receives no `notifications/message` at all, per the specification.
+          ...(feats.loggingCapEnabled ? { logging: {} } : {}),
           // Official Tasks extension (2026-07-28): advertised in `server/discover`; a task is
           // returned only to clients that declare the same extension per-request.
           ...(feats.tasksEnabled ? { extensions: { [TASKS_EXTENSION_ID]: {} } } : {}),
@@ -176,18 +186,39 @@ export const createV2ServerFactory =
           args: unknown,
           toolCtx: {
             signal?: AbortSignal;
-            mcpReq?: { inputResponses?: Record<string, unknown>; requestState?: unknown };
+            mcpReq?: {
+              inputResponses?: Record<string, unknown>;
+              requestState?: unknown;
+              _meta?: Record<string, unknown>;
+              notify?: (notification: { method: string; params?: Record<string, unknown> }) => Promise<void>;
+              log?: (level: TLoggingLevel, data: unknown, logger?: string) => Promise<void>;
+            };
           },
         ) => {
           warnDeprecatedUsage('tool', tool.name, deprecation);
           const stopTimer = getMetrics()?.toolDuration.startTimer({ tool: tool.name });
           let outcome: 'ok' | 'error' = 'ok';
           try {
+            adoptTraceContextFromMeta(toolCtx?.mcpReq?._meta);
             const caps = capsFromHandlerCtx(toolCtx);
             // MRTR retry inputs: client answers + the verified payload of the echoed requestState.
             const { inputResponses } = toolCtx?.mcpReq ?? {};
             const stateAccessor = toolCtx?.mcpReq?.requestState;
             const requestStatePayload = typeof stateAccessor === 'function' ? stateAccessor() : undefined;
+            // Standard §8.6 — progress flows on THIS request's own response stream
+            // (`ctx.mcpReq.notify`), throttled by `mcp.progress.throttleMs`, and only when the
+            // request carried `_meta.progressToken`.
+            const sendProgress = buildProgressEmitter(
+              toolCtx?.mcpReq?._meta?.progressToken as string | number | undefined,
+              appConfig.mcp.progress?.throttleMs ?? 100,
+              (params) => {
+                void toolCtx.mcpReq?.notify?.({ method: 'notifications/progress', params }).catch(() => {});
+              },
+            );
+            // Standard §15.2 — `notifications/message` filtered by the request's own log level.
+            const log = (level: TLoggingLevel, data: unknown, logger?: string): void => {
+              void toolCtx.mcpReq?.log?.(level, data, logger).catch(() => {});
+            };
             const callToolHandler = (extra: {
               signal?: AbortSignal;
               inputResponses?: Record<string, unknown>;
@@ -199,7 +230,8 @@ export const createV2ServerFactory =
                 ...baseCtx,
                 ...(caps ? { clientCapabilities: caps } : {}),
                 ...extra,
-                sendProgress: () => {},
+                sendProgress,
+                log,
               });
             // Tasks extension: a task-capable tool called by a tasks-declaring client runs in the
             // background; the call answers immediately with `resultType: "task"`.

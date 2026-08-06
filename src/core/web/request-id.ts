@@ -105,6 +105,32 @@ export function runWithRequestContext<T>(ctx: IRequestContext, fn: () => T): T {
   return requestIdStorage.run(ctx, fn);
 }
 
+/**
+ * Standard §15.1 — adopt the W3C trace context a modern (2026-07-28) request carries in its
+ * `_meta` (`traceparent` / `tracestate`, the specification's OpenTelemetry convention). HTTP
+ * headers win when both are present: they are the outer hop and cannot be forged by the message
+ * body alone. Enriches the ambient request context in place; a call outside a request scope, or a
+ * message without trace fields, is a no-op.
+ */
+export function adoptTraceContextFromMeta(meta: Record<string, unknown> | undefined): void {
+  const ctx = requestIdStorage.getStore();
+  if (!ctx || !meta) {
+    return;
+  }
+  if (!ctx.traceContext) {
+    const traceContext = parseTraceparent(meta.traceparent);
+    if (traceContext) {
+      ctx.traceContext = traceContext;
+    }
+  }
+  if (!ctx.tracestate) {
+    const tracestate = sanitizeTracestate(meta.tracestate);
+    if (tracestate) {
+      ctx.tracestate = tracestate;
+    }
+  }
+}
+
 export function getCurrentRequestContext(): IRequestContext | undefined {
   return requestIdStorage.getStore();
 }

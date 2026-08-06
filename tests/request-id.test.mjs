@@ -77,6 +77,38 @@ await test('valid traceparent is accepted (no echo, no header pollution)', async
 
 server.kill();
 
+// --- MCP 2026-07-28 §15.1: the W3C trace context may also arrive in a request's `_meta` ---
+
+const { adoptTraceContextFromMeta, getCurrentTraceContext, runWithRequestContext } =
+  await import('../dist/core/web/request-id.js');
+
+const TRACEPARENT = '00-0af7651916cd43dd8448eb211c80319c-b7ad6b7169203331-01';
+
+await test('_meta.traceparent is adopted when the HTTP layer supplied none', () => {
+  runWithRequestContext({ requestId: 'req-meta-1' }, () => {
+    adoptTraceContextFromMeta({ traceparent: TRACEPARENT, tracestate: 'vendor=abc' });
+    const ctx = getCurrentTraceContext();
+    assert.equal(ctx.traceId, '0af7651916cd43dd8448eb211c80319c');
+    assert.equal(ctx.parentId, 'b7ad6b7169203331');
+    assert.equal(ctx.flags, '01');
+  });
+});
+
+await test('an HTTP-supplied trace context wins over the one in _meta', () => {
+  const fromHeader = { traceId: 'a'.repeat(32), parentId: 'b'.repeat(16), flags: '01' };
+  runWithRequestContext({ requestId: 'req-meta-2', traceContext: fromHeader }, () => {
+    adoptTraceContextFromMeta({ traceparent: TRACEPARENT });
+    assert.equal(getCurrentTraceContext().traceId, fromHeader.traceId);
+  });
+});
+
+await test('a malformed _meta.traceparent is ignored', () => {
+  runWithRequestContext({ requestId: 'req-meta-3' }, () => {
+    adoptTraceContextFromMeta({ traceparent: 'not-a-traceparent' });
+    assert.equal(getCurrentTraceContext(), undefined);
+  });
+});
+
 if (failed > 0) {
   console.error(`\n${failed} test(s) failed`);
   process.exit(1);
