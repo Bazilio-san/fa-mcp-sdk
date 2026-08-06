@@ -471,4 +471,12 @@ export interface IToolHandlerStructuredResponse<T = any> {
   isError?: boolean;
 }
 
-export type TToolHandlerResponse<T = any> = IToolHandlerTextResponse | IToolHandlerStructuredResponse<T>;
+/**
+ * What a tool handler may return: a text result, a structured result, or — for a tool that needs
+ * more input mid-call — the MRTR marker from `formatInputRequired()` (MCP 2026-07-28), which pauses
+ * the call and asks the client for the missing information.
+ */
+export type TToolHandlerResponse<T = any> =
+  | IToolHandlerTextResponse
+  | IToolHandlerStructuredResponse<T>
+  | IInputRequiredResponse;

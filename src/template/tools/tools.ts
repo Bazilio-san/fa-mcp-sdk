@@ -2,6 +2,7 @@ import { Tool } from '@modelcontextprotocol/sdk/types.js';
 
 import { IResourceData } from '../../core/index.js';
 
+import { exampleConfirm } from './example-confirm.js';
 import { exampleLongTask } from './example-long-task.js';
 import { exampleSearch } from './example-search.js';
 import { exampleTool } from './example-tool.js';
@@ -17,7 +18,7 @@ import { ITemplateTool } from './tool.js';
  * create `src/tools/<your-tool>.ts` and add its export here; the dispatcher in `handle-tool-call.ts`
  * routes calls to it automatically.
  */
-export const templateTools: ITemplateTool[] = [exampleTool, exampleSearch, exampleLongTask, showWidget];
+export const templateTools: ITemplateTool[] = [exampleTool, exampleSearch, exampleLongTask, exampleConfirm, showWidget];
 
 /** MCP wire definitions advertised in `tools/list`, derived from the registry. */
 export const tools: Tool[] = templateTools.map((t) => t.definition);

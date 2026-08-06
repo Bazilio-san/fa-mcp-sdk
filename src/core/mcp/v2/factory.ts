@@ -80,6 +80,30 @@ const withV2Errors =
   };
 
 /**
+ * Whether a tool's `outputSchema` is advertised to modern clients.
+ *
+ * Declaring `outputSchema` is a promise that every result carries conforming `structuredContent`
+ * (spec: Tools; standard v2.0 §9.5), and the v2 package enforces it — a text-only result from a
+ * tool that declares the schema is rejected. Two deployments genuinely cannot keep that promise,
+ * and for them advertising the schema would be the actual violation:
+ *
+ *   - `mcp.tools.answerAs: 'text'` (the default): `formatToolResult()` returns `content` only, so
+ *     tools built on it never produce `structuredContent`. Set `answerAs: 'structuredContent'`
+ *     (or return `asJson()` explicitly) to publish the schema and get result validation.
+ *   - a task-capable tool (`execution.taskSupport`) with the Tasks extension enabled: its answer
+ *     may be a `CreateTaskResult` instead of the tool's own payload.
+ */
+const advertiseOutputSchema = (tool: Tool, tasksEnabled: boolean): boolean => {
+  if (!tool.outputSchema) {
+    return false;
+  }
+  if (tasksEnabled && (tool as { execution?: { taskSupport?: string } }).execution?.taskSupport) {
+    return false;
+  }
+  return appConfig.mcp.tools?.answerAs === 'structuredContent';
+};
+
+/**
  * Per-request client capabilities from the parsed request envelope (`ctx.mcpReq.envelope`, modern
  * era); undefined for the v2 stateless legacy fallback (no per-request envelope).
  */
@@ -172,9 +196,7 @@ export const createV2ServerFactory =
         {
           ...(description ? { description } : {}),
           inputSchema: fromJsonSchema(tool.inputSchema as Record<string, unknown>),
-          // A task-capable tool may answer with a `CreateTaskResult` instead of structuredContent;
-          // the v2 output validator would reject that, so its outputSchema is not registered here.
-          ...(tool.outputSchema && !(feats.tasksEnabled && (tool as any).execution?.taskSupport)
+          ...(advertiseOutputSchema(tool, feats.tasksEnabled)
             ? { outputSchema: fromJsonSchema(tool.outputSchema as Record<string, unknown>) }
             : {}),
           ...(tool.title ? { title: tool.title } : {}),

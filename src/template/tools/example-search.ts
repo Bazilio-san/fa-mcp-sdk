@@ -43,6 +43,17 @@ Accepts a text query, an optional result limit and a minimum similarity threshol
         minimum: 0,
         maximum: 1,
       },
+      region: {
+        type: 'string',
+        description: 'Data region to search in (e.g. "eu-west", "us-east")',
+        // MCP 2026-07-28 (Streamable HTTP → "Custom Headers from Tool Parameters"): a modern
+        // client mirrors this argument into the HTTP header `Mcp-Param-Region`, so gateways can
+        // route or meter by region without parsing the JSON body. The server validates that the
+        // header matches the body and answers `-32020 HeaderMismatch` when it does not.
+        // Constraints: primitive type (string / integer / boolean — not `number`), reachable from
+        // the schema root through `properties` only, and unique among the schema's header names.
+        'x-mcp-header': 'Region',
+      },
     },
     required: ['query'],
     additionalProperties: false,
