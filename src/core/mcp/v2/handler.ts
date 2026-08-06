@@ -5,7 +5,7 @@ import type { NodeMcpRequestHandler } from '@modelcontextprotocol/node';
 import chalk from 'chalk';
 
 import { logger as lgr } from '../../logger.js';
-import { v2ServerFactory } from './factory.js';
+import { createV2ServerFactory } from './factory.js';
 
 const logger = lgr.getSubLogger({ name: chalk.cyan('mcp-v2') });
 
@@ -26,7 +26,7 @@ let nodeHandler: NodeMcpRequestHandler | undefined;
  * `server-http.ts` and never reach this handler.
  */
 export const getV2HttpHandler = (): McpHttpHandler => {
-  httpHandler ??= createMcpHandler(v2ServerFactory, {
+  httpHandler ??= createMcpHandler(createV2ServerFactory('http'), {
     legacy: 'stateless',
     bus: new InMemoryServerEventBus((error: Error) => logger.error(`v2 event bus listener error: ${error.message}`)),
     maxSubscriptions: MAX_SUBSCRIPTIONS,

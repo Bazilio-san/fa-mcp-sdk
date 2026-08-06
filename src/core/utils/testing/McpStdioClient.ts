@@ -20,8 +20,14 @@ export class McpStdioClient extends BaseMcpClient {
   private pending: Map<number, PendingRequest>;
   private buffer: string;
 
-  constructor(proc: ChildProcess) {
-    super({});
+  /**
+   * @param proc — the spawned server process (stdio piped).
+   * @param options.modern — speak protocol revision 2026-07-28: every request carries the
+   *   per-request `_meta` envelope and no `initialize` handshake is sent. The server decides the
+   *   connection's era from the opening message, so the first call already selects the modern era.
+   */
+  constructor(proc: ChildProcess, options: { modern?: boolean; clientCapabilities?: Record<string, unknown> } = {}) {
+    super({}, options);
     this.proc = proc;
     this.pending = new Map();
     this.buffer = '';

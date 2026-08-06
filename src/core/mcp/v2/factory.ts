@@ -13,7 +13,7 @@ import { getRequestStateCodec, isInputRequiredResponse, missingCapabilitiesForIn
 import { TASKS_EXTENSION_ID, maybeStartModernTask } from './tasks-methods.js';
 import { subjectKeyFromAuth } from '../create-mcp-server.js';
 
-import { IClientCapabilities, ITransportContext } from '../../_types_/types.js';
+import { IClientCapabilities, ITransportContext, TTransportType } from '../../_types_/types.js';
 import { appConfig, getProjectData } from '../../bootstrap/init-config.js';
 import { getMetrics } from '../../metrics/metrics.js';
 import { getTools, normalizeHeaders } from '../../utils/utils.js';
@@ -103,216 +103,218 @@ const capsFromHandlerCtx = (handlerCtx: unknown): IClientCapabilities | undefine
  * `server-http.ts` and never reach this factory. Per-subject concurrency for `tools/call` is
  * enforced at the HTTP layer (before this handler) so its `-32003` stays a protocol error.
  */
-export const v2ServerFactory = async (ctx: McpRequestContext): Promise<McpServer> => {
-  const projectData = getProjectData();
-  const feats = computeServedFeatures(projectData);
-  const pageSize = parsePageSize(appConfig.mcp.pagination?.pageSize);
+export const createV2ServerFactory =
+  (transportType: TTransportType) =>
+  async (ctx: McpRequestContext): Promise<McpServer> => {
+    const projectData = getProjectData();
+    const feats = computeServedFeatures(projectData);
+    const pageSize = parsePageSize(appConfig.mcp.pagination?.pageSize);
 
-  // Connection-scoped part of ITransportContext; clientCapabilities join per handler call.
-  const headers = ctx.requestInfo ? normalizeHeaders(Object.fromEntries(ctx.requestInfo.headers)) : undefined;
-  const payload = (ctx.authInfo as { payload?: ITransportContext['payload'] } | undefined)?.payload;
-  const baseCtx: ITransportContext = {
-    transport: 'http',
-    ...(headers ? { headers } : {}),
-    ...(payload ? { payload } : {}),
-  };
-  const ctxFor = (handlerCtx: unknown): ITransportContext => {
-    const caps = capsFromHandlerCtx(handlerCtx);
-    return caps ? { ...baseCtx, clientCapabilities: caps } : baseCtx;
-  };
+    // Connection-scoped part of ITransportContext; clientCapabilities join per handler call.
+    const headers = ctx.requestInfo ? normalizeHeaders(Object.fromEntries(ctx.requestInfo.headers)) : undefined;
+    const payload = (ctx.authInfo as { payload?: ITransportContext['payload'] } | undefined)?.payload;
+    const baseCtx: ITransportContext = {
+      transport: transportType,
+      ...(headers ? { headers } : {}),
+      ...(payload ? { payload } : {}),
+    };
+    const ctxFor = (handlerCtx: unknown): ITransportContext => {
+      const caps = capsFromHandlerCtx(handlerCtx);
+      return caps ? { ...baseCtx, clientCapabilities: caps } : baseCtx;
+    };
 
-  // `server/discover` advertises the modern revisions only (v2 behavior): legacy clients never
-  // call discover, and a modern client would not select a legacy revision anyway. Legacy support
-  // is negotiated through the `initialize` handshake on the v1 session path.
-  const server = new McpServer(
-    { name: appConfig.name, version: appConfig.version },
-    {
-      cacheHints: buildCacheHints(),
-      // Capabilities for the hand-registered (non-registerTool) surface below; `tools` is merged
-      // in by `registerTool` itself. `subscribe`/`listChanged` signal `subscriptions/listen`
-      // support: the v2 handler honors a listen-filter entry only when the matching capability is
-      // declared, and change events are published through `mcpNotify` (see `v2/handler.ts`).
-      capabilities: {
-        resources: { subscribe: true, listChanged: true },
-        ...(feats.hasPrompts ? { prompts: { listChanged: true } } : {}),
-        ...(feats.completionsEnabled ? { completions: {} } : {}),
-        // Official Tasks extension (2026-07-28): advertised in `server/discover`; a task is
-        // returned only to clients that declare the same extension per-request.
-        ...(feats.tasksEnabled ? { extensions: { [TASKS_EXTENSION_ID]: {} } } : {}),
-      },
-      // MRTR: an echoed `requestState` is verified (HMAC, TTL, principal+method binding) BEFORE
-      // any handler runs; failure is answered as the frozen `-32602`.
-      requestState: {
-        verify: (state: string, verifyCtx: ServerContext) => getRequestStateCodec().verify(state, verifyCtx),
-      },
-    },
-  );
-
-  const tools: Tool[] = await getTools(baseCtx);
-  for (const tool of tools) {
-    const deprecation = readDeprecation(tool);
-    if (deprecation) {
-      assertDeprecationConsistency('tool', tool.name, deprecation);
-    }
-    const description = deprecation ? applyDeprecationToDescription(tool.description, deprecation) : tool.description;
-    server.registerTool(
-      tool.name,
+    // `server/discover` advertises the modern revisions only (v2 behavior): legacy clients never
+    // call discover, and a modern client would not select a legacy revision anyway. Legacy support
+    // is negotiated through the `initialize` handshake on the v1 session path.
+    const server = new McpServer(
+      { name: appConfig.name, version: appConfig.version },
       {
-        ...(description ? { description } : {}),
-        inputSchema: fromJsonSchema(tool.inputSchema as Record<string, unknown>),
-        // A task-capable tool may answer with a `CreateTaskResult` instead of structuredContent;
-        // the v2 output validator would reject that, so its outputSchema is not registered here.
-        ...(tool.outputSchema && !(feats.tasksEnabled && (tool as any).execution?.taskSupport)
-          ? { outputSchema: fromJsonSchema(tool.outputSchema as Record<string, unknown>) }
-          : {}),
-        ...(tool.title ? { title: tool.title } : {}),
-        ...(tool.annotations ? { annotations: tool.annotations } : {}),
-        ...(tool.icons ? { icons: tool.icons } : {}),
-        ...(tool._meta ? { _meta: tool._meta } : {}),
-      },
-      (async (
-        args: unknown,
-        toolCtx: {
-          signal?: AbortSignal;
-          mcpReq?: { inputResponses?: Record<string, unknown>; requestState?: unknown };
+        cacheHints: buildCacheHints(),
+        // Capabilities for the hand-registered (non-registerTool) surface below; `tools` is merged
+        // in by `registerTool` itself. `subscribe`/`listChanged` signal `subscriptions/listen`
+        // support: the v2 handler honors a listen-filter entry only when the matching capability is
+        // declared, and change events are published through `mcpNotify` (see `v2/handler.ts`).
+        capabilities: {
+          resources: { subscribe: true, listChanged: true },
+          ...(feats.hasPrompts ? { prompts: { listChanged: true } } : {}),
+          ...(feats.completionsEnabled ? { completions: {} } : {}),
+          // Official Tasks extension (2026-07-28): advertised in `server/discover`; a task is
+          // returned only to clients that declare the same extension per-request.
+          ...(feats.tasksEnabled ? { extensions: { [TASKS_EXTENSION_ID]: {} } } : {}),
         },
-      ) => {
-        warnDeprecatedUsage('tool', tool.name, deprecation);
-        const stopTimer = getMetrics()?.toolDuration.startTimer({ tool: tool.name });
-        let outcome: 'ok' | 'error' = 'ok';
-        try {
-          const caps = capsFromHandlerCtx(toolCtx);
-          // MRTR retry inputs: client answers + the verified payload of the echoed requestState.
-          const { inputResponses } = toolCtx?.mcpReq ?? {};
-          const stateAccessor = toolCtx?.mcpReq?.requestState;
-          const requestStatePayload = typeof stateAccessor === 'function' ? stateAccessor() : undefined;
-          const callToolHandler = (extra: {
-            signal?: AbortSignal;
-            inputResponses?: Record<string, unknown>;
-            requestStatePayload?: unknown;
-          }) =>
-            projectData.toolHandler({
-              name: tool.name,
-              arguments: args ?? {},
-              ...baseCtx,
-              ...(caps ? { clientCapabilities: caps } : {}),
-              ...extra,
-              sendProgress: () => {},
-            });
-          // Tasks extension: a task-capable tool called by a tasks-declaring client runs in the
-          // background; the call answers immediately with `resultType: "task"`.
-          if (feats.tasksEnabled) {
-            const taskResult = maybeStartModernTask({
-              tool,
-              caps,
-              subjectKey: subjectKeyFromAuth(ctx.authInfo),
-              runToolCall: async (extra) => {
-                const raw = await callToolHandler(extra);
-                return isInputRequiredResponse(raw)
-                  ? raw
-                  : truncateAndObserve(mirrorStructuredContent(raw as any, caps));
-              },
-            });
-            if (taskResult) {
-              return taskResult;
-            }
-          }
-          const response = await callToolHandler({
-            ...(toolCtx?.signal ? { signal: toolCtx.signal } : {}),
-            ...(inputResponses ? { inputResponses } : {}),
-            ...(requestStatePayload !== undefined ? { requestStatePayload } : {}),
-          });
-          if (isInputRequiredResponse(response)) {
-            // Spec: MUST NOT send inputRequests the client has not declared capabilities for —
-            // degrade into an actionable isError text the model can relay.
-            const missing = missingCapabilitiesForInputRequests(response.inputRequests, caps);
-            if (missing.length > 0) {
-              return {
-                content: [
-                  {
-                    type: 'text',
-                    text: `This tool needs additional user input (${missing.join(', ')}), but the client did not declare the required capabilit${missing.length > 1 ? 'ies' : 'y'}: ${missing.join(', ')}.`,
-                  },
-                ],
-                isError: true,
-              };
-            }
-            return inputRequired({
-              ...(response.inputRequests ? { inputRequests: response.inputRequests as any } : {}),
-              ...(response.state !== undefined
-                ? { requestState: await getRequestStateCodec().mint(response.state, toolCtx as any) }
-                : {}),
-            });
-          }
-          return truncateAndObserve(mirrorStructuredContent(response as any, caps));
-        } catch (error) {
-          outcome = 'error';
-          throw error;
-        } finally {
-          stopTimer?.();
-          getMetrics()?.toolCalls.inc({ tool: tool.name, status: outcome });
-        }
-      }) as any,
+        // MRTR: an echoed `requestState` is verified (HMAC, TTL, principal+method binding) BEFORE
+        // any handler runs; failure is answered as the frozen `-32602`.
+        requestState: {
+          verify: (state: string, verifyCtx: ServerContext) => getRequestStateCodec().verify(state, verifyCtx),
+        },
+      },
     );
-  }
 
-  // Prompts / resources / templates / completions — same core catalog functions as the legacy
-  // handlers, registered on the low-level v2 server so pagination and deprecation decoration stay
-  // identical across eras.
-  const rpc = server.server;
-  if (feats.hasPrompts) {
+    const tools: Tool[] = await getTools(baseCtx);
+    for (const tool of tools) {
+      const deprecation = readDeprecation(tool);
+      if (deprecation) {
+        assertDeprecationConsistency('tool', tool.name, deprecation);
+      }
+      const description = deprecation ? applyDeprecationToDescription(tool.description, deprecation) : tool.description;
+      server.registerTool(
+        tool.name,
+        {
+          ...(description ? { description } : {}),
+          inputSchema: fromJsonSchema(tool.inputSchema as Record<string, unknown>),
+          // A task-capable tool may answer with a `CreateTaskResult` instead of structuredContent;
+          // the v2 output validator would reject that, so its outputSchema is not registered here.
+          ...(tool.outputSchema && !(feats.tasksEnabled && (tool as any).execution?.taskSupport)
+            ? { outputSchema: fromJsonSchema(tool.outputSchema as Record<string, unknown>) }
+            : {}),
+          ...(tool.title ? { title: tool.title } : {}),
+          ...(tool.annotations ? { annotations: tool.annotations } : {}),
+          ...(tool.icons ? { icons: tool.icons } : {}),
+          ...(tool._meta ? { _meta: tool._meta } : {}),
+        },
+        (async (
+          args: unknown,
+          toolCtx: {
+            signal?: AbortSignal;
+            mcpReq?: { inputResponses?: Record<string, unknown>; requestState?: unknown };
+          },
+        ) => {
+          warnDeprecatedUsage('tool', tool.name, deprecation);
+          const stopTimer = getMetrics()?.toolDuration.startTimer({ tool: tool.name });
+          let outcome: 'ok' | 'error' = 'ok';
+          try {
+            const caps = capsFromHandlerCtx(toolCtx);
+            // MRTR retry inputs: client answers + the verified payload of the echoed requestState.
+            const { inputResponses } = toolCtx?.mcpReq ?? {};
+            const stateAccessor = toolCtx?.mcpReq?.requestState;
+            const requestStatePayload = typeof stateAccessor === 'function' ? stateAccessor() : undefined;
+            const callToolHandler = (extra: {
+              signal?: AbortSignal;
+              inputResponses?: Record<string, unknown>;
+              requestStatePayload?: unknown;
+            }) =>
+              projectData.toolHandler({
+                name: tool.name,
+                arguments: args ?? {},
+                ...baseCtx,
+                ...(caps ? { clientCapabilities: caps } : {}),
+                ...extra,
+                sendProgress: () => {},
+              });
+            // Tasks extension: a task-capable tool called by a tasks-declaring client runs in the
+            // background; the call answers immediately with `resultType: "task"`.
+            if (feats.tasksEnabled) {
+              const taskResult = maybeStartModernTask({
+                tool,
+                caps,
+                subjectKey: subjectKeyFromAuth(ctx.authInfo),
+                runToolCall: async (extra) => {
+                  const raw = await callToolHandler(extra);
+                  return isInputRequiredResponse(raw)
+                    ? raw
+                    : truncateAndObserve(mirrorStructuredContent(raw as any, caps));
+                },
+              });
+              if (taskResult) {
+                return taskResult;
+              }
+            }
+            const response = await callToolHandler({
+              ...(toolCtx?.signal ? { signal: toolCtx.signal } : {}),
+              ...(inputResponses ? { inputResponses } : {}),
+              ...(requestStatePayload !== undefined ? { requestStatePayload } : {}),
+            });
+            if (isInputRequiredResponse(response)) {
+              // Spec: MUST NOT send inputRequests the client has not declared capabilities for —
+              // degrade into an actionable isError text the model can relay.
+              const missing = missingCapabilitiesForInputRequests(response.inputRequests, caps);
+              if (missing.length > 0) {
+                return {
+                  content: [
+                    {
+                      type: 'text',
+                      text: `This tool needs additional user input (${missing.join(', ')}), but the client did not declare the required capabilit${missing.length > 1 ? 'ies' : 'y'}: ${missing.join(', ')}.`,
+                    },
+                  ],
+                  isError: true,
+                };
+              }
+              return inputRequired({
+                ...(response.inputRequests ? { inputRequests: response.inputRequests as any } : {}),
+                ...(response.state !== undefined
+                  ? { requestState: await getRequestStateCodec().mint(response.state, toolCtx as any) }
+                  : {}),
+              });
+            }
+            return truncateAndObserve(mirrorStructuredContent(response as any, caps));
+          } catch (error) {
+            outcome = 'error';
+            throw error;
+          } finally {
+            stopTimer?.();
+            getMetrics()?.toolCalls.inc({ tool: tool.name, status: outcome });
+          }
+        }) as any,
+      );
+    }
+
+    // Prompts / resources / templates / completions — same core catalog functions as the legacy
+    // handlers, registered on the low-level v2 server so pagination and deprecation decoration stay
+    // identical across eras.
+    const rpc = server.server;
+    if (feats.hasPrompts) {
+      rpc.setRequestHandler(
+        'prompts/list',
+        withV2Errors(async (request, handlerCtx) =>
+          listPromptsPage(ctxFor(handlerCtx), (request.params as { cursor?: string } | undefined)?.cursor, pageSize),
+        ),
+      );
+      rpc.setRequestHandler(
+        'prompts/get',
+        withV2Errors(async (request, handlerCtx) => getPromptWithWarn(request as any, ctxFor(handlerCtx)) as any),
+      );
+    }
     rpc.setRequestHandler(
-      'prompts/list',
-      withV2Errors(async (request, handlerCtx) =>
-        listPromptsPage(ctxFor(handlerCtx), (request.params as { cursor?: string } | undefined)?.cursor, pageSize),
-      ),
-    );
-    rpc.setRequestHandler(
-      'prompts/get',
-      withV2Errors(async (request, handlerCtx) => getPromptWithWarn(request as any, ctxFor(handlerCtx)) as any),
-    );
-  }
-  rpc.setRequestHandler(
-    'resources/list',
-    withV2Errors(
-      async (request, handlerCtx) =>
-        listResourcesPage(
-          ctxFor(handlerCtx),
-          (request.params as { cursor?: string } | undefined)?.cursor,
-          pageSize,
-        ) as any,
-    ),
-  );
-  rpc.setRequestHandler(
-    'resources/read',
-    withV2Errors(
-      async (request, handlerCtx) =>
-        readResourceWithWarn((request.params as { uri: string }).uri, ctxFor(handlerCtx)) as any,
-    ),
-  );
-  if (feats.templatesEnabled) {
-    rpc.setRequestHandler(
-      'resources/templates/list',
+      'resources/list',
       withV2Errors(
         async (request, handlerCtx) =>
-          listTemplatesPage(
+          listResourcesPage(
             ctxFor(handlerCtx),
             (request.params as { cursor?: string } | undefined)?.cursor,
             pageSize,
           ) as any,
       ),
     );
-  }
-  if (feats.completionsEnabled) {
-    const { completionProvider } = projectData;
     rpc.setRequestHandler(
-      'completion/complete',
-      withV2Errors(async (request) => completeCore((request.params ?? {}) as any, completionProvider!) as any),
+      'resources/read',
+      withV2Errors(
+        async (request, handlerCtx) =>
+          readResourceWithWarn((request.params as { uri: string }).uri, ctxFor(handlerCtx)) as any,
+      ),
     );
-  }
-  // The extension's tasks/get|update|cancel methods are served at the HTTP layer in front of
-  // this handler (see `handleModernTaskMethod`): the v2 package's closed 2026 method registry
-  // answers the `tasks/*` spec names with -32601 before registered handlers run.
+    if (feats.templatesEnabled) {
+      rpc.setRequestHandler(
+        'resources/templates/list',
+        withV2Errors(
+          async (request, handlerCtx) =>
+            listTemplatesPage(
+              ctxFor(handlerCtx),
+              (request.params as { cursor?: string } | undefined)?.cursor,
+              pageSize,
+            ) as any,
+        ),
+      );
+    }
+    if (feats.completionsEnabled) {
+      const { completionProvider } = projectData;
+      rpc.setRequestHandler(
+        'completion/complete',
+        withV2Errors(async (request) => completeCore((request.params ?? {}) as any, completionProvider!) as any),
+      );
+    }
+    // The extension's tasks/get|update|cancel methods are served at the HTTP layer in front of
+    // this handler (see `handleModernTaskMethod`): the v2 package's closed 2026 method registry
+    // answers the `tasks/*` spec names with -32601 before registered handlers run.
 
-  return server;
-};
+    return server;
+  };
