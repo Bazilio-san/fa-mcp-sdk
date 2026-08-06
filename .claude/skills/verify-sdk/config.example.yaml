@@ -1,0 +1,46 @@
+# Template for config.local.yaml, which the /verify-sdk scenario reads and hands to the `fa-mcp` CLI.
+# Copy this file to config.local.yaml next to it and adjust the two machine-specific values below.
+# Only config.local.yaml is used at run time; it stays out of version control (.gitignore rule `*.local.*`).
+#
+# projectAbsPath is a scratch directory: the verification runner DELETES it before every run, so point it
+# at a throw-away location. Always write it with forward slashes — inside double quotes a backslash starts
+# a YAML escape sequence, the file stops parsing and the CLI falls back to interactive questions.
+#
+# forceAcceptConfig: "y" is what makes the run unattended — keep it.
+
+project.name: "mcp-test"
+project.description: "MCP Server test"
+project.productName: "MCP test"
+port: "8888"                                     # the port the generated server listens on
+projectAbsPath: "D:/DEV/SAND/mcp-test"           # scratch directory, deleted on every run
+forceAcceptConfig: "y"
+author.email: "you@example.com"
+author.name: "you"
+git-base-url: "gitlab.company.com/PROJ_NAME"
+consul.service.enable: "false"
+consul.agent.dev.dc: "dc-dev"                    # Development datacenter name
+consul.agent.dev.host: "consul.my.ui"            # Development Consul UI hostname
+consul.agent.dev.token: "12345678-90ab-cdef-cdef-90ab12345678"  # Dev access token
+consul.agent.prd.dc: "dc-prod"                   # Production datacenter name
+consul.agent.prd.host: "consul.my.ui"            # Production Consul UI hostname
+consul.agent.prd.token: "21345678-90ab-cdef-cdef-90ab12345678"  # Prod access token
+consul.agent.reg.token: "12345678-90ab-cdef-cdef-90ab12345678"
+consul.envCode.dev: "envCode-dev"                # Development environment identifier
+consul.envCode.prod: "envCode-prod"              # Production environment identifier
+NODE_CONSUL_ENV: ""
+mcp.domain: "mcp-test.company.com"
+ssl-wildcard.conf.rel.path: "snippets/ssl-wildcard-company-com.conf"
+upstream: "mcp-test-company-com"
+webServer.auth.enabled: "false"
+webServer.auth.token.checkMCPName: "false"
+webServer.auth.token.encryptKey: "b7cdde45-3896-46a3-868a-ff4fe4"
+claude.isBypassPermissions: "true"
+isProduction: "false"
+NODE_ENV: "development"
+SERVICE_INSTANCE: "dev"
+PM2_NAMESPACE: "dev"
+logger.useFileLogger: "false"
+maintainerHref: "https://support.company.com/dept/1234"
+maintainerText: "Support"
+helpHref: "https://wiki.company.com/display/SD/MCP"
+helpText: "Help"
