@@ -30,9 +30,9 @@ This file is **not a skill** — nothing auto-invokes it. Read it before writing
   it in plain words in the same sentence. The test to apply: a reader must be able to decide whether this plan
   is worth doing without opening a single source file.
 
-  The register to aim for: "Сегодня человек нажимает кнопку прямо в карточке, но бот об этом не узнаёт. На
-  следующий вопрос он отвечает по устаревшей картине и уверенно описывает то, чего уже нет." Not one file name
-  in it, and it still says exactly what changes.
+  The register to aim for: "Today a person taps a button right inside the card, but the bot never learns about
+  it. On the next question it answers from a stale picture and confidently describes something that is no longer
+  there." Not one file name in it, and it still says exactly what changes.
 
 - **The note to the executor comes immediately after**, second section, before anything technical. It carries
   the standing instructions for whoever carries the plan out — ticking the checklist, asking when a fork is not
@@ -75,17 +75,17 @@ This file is **not a skill** — nothing auto-invokes it. Read it before writing
 
 ## Headings and language
 
-Headings are written in the language of the document, alongside the rest of the prose. The two opening
-headings are canonical and their Russian wording is fixed: in a Russian-language plan they read exactly
-`## Суть` and `## Исполнителю (LLM)`, and the four subsections of the first block read `### Проблема`,
-`### Текущее состояние`, `### Решение`, `### Как будет`. The skeleton below shows the English equivalents.
+Headings are written in the language of the document, alongside the rest of the prose. The two opening headings
+are canonical and their wording is fixed: they read exactly `## Essence` and `## For the executor (LLM)`, and the
+four subsections of the first block read `### The problem`, `### How things stand today`, `### The solution` and
+`### What it will be like`. The skeleton below spells the whole structure out.
 
 ## The skeleton
 
 ```markdown
 # <Plan title>
 
-## Essence                        <!-- Russian: ## Суть -->
+## Essence
 
 ### The problem
 <What hurts today, from the point of view of the person who will use this. Plain words only.>
@@ -100,7 +100,7 @@ no "today" to describe.>
 ### What it will be like
 <What a person will see or be able to do once the plan is carried out.>
 
-## For the executor (LLM)         <!-- Russian: ## Исполнителю (LLM) -->
+## For the executor (LLM)
 
 - Mark every checklist item `- [x]` in this file as soon as it is genuinely done — not when it is planned,
   not when it is half-written.

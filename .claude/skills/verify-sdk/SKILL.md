@@ -1,6 +1,6 @@
 ---
 name: verify-sdk
-description: "End-to-end check that the published fa-mcp-sdk actually works: installs the CLI globally from npm, regenerates a throw-away project from the skill's config.local.yaml, then runs npm install, a clean yarn ci, lint, format, clean build and a real server start with a /health probe. Repairs whatever breaks in the SDK sources, publishes the fix and re-verifies. Use when the user asks to verify/test that the SDK works, to run the end-to-end or smoke check of fa-mcp, or says 'проверь, что sdk работает', 'прогони сквозную проверку sdk'."
+description: "End-to-end check that the published fa-mcp-sdk actually works: installs the CLI globally from npm, regenerates a throw-away project from the skill's config.local.yaml, then runs npm install, a clean yarn ci, lint, format, clean build and a real server start with a /health probe. Repairs whatever breaks in the SDK sources, publishes the fix and re-verifies. Use when the user asks to verify/test that the SDK works, to run the end-to-end or smoke check of fa-mcp, or says 'check that the sdk is working', 'run end to end sdk verification'."
 allowed-tools: Bash(node *), Bash(npm *), Bash(yarn *), Bash(git *), Bash(ls *), Bash(cat *), Bash(rm *), Read, Write, Edit, Grep, Glob
 argument-hint: "[--from <step>] [--only <steps>] [--keep-running]"
 ---
