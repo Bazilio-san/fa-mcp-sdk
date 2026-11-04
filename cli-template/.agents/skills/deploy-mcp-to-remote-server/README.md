@@ -1,29 +1,33 @@
-# Устройство и диагностика размещения
+# Deployment internals and diagnostics
 
-Выбор сервера, настройки и команды описаны в [SKILL.md](SKILL.md). Все команды выполнять из корня проекта,
-явно указывая `--server <имя>`. Настоящие настройки хранятся в `configs/<имя>/`, а образец — в `configs/_example/`.
+See [SKILL.md](SKILL.md) for target selection, settings and commands. Run commands from the project root with an
+explicit `--server <alias>`. Real settings live in `configs/<alias>/`; the template lives in `configs/_example/`.
 
-## Контейнер и данные
+## Container and data
 
-Образ Ubuntu содержит Node.js и systemd. Исходники загружаются из репозитория при первом запуске. Контейнер
-использует сеть узла, `--privileged` и подключение cgroup; приложение слушает только `127.0.0.1` на заданном порту.
-Caddy или nginx обеспечивает внешний доступ и шифрование. Для потоковых ответов MCP используются проектные
-шаблоны из `deploy/`: отключение буферизации и длительное ожидание ответа должны сохраняться.
+The Ubuntu image contains Node.js and systemd. Application sources are cloned on first boot. The container uses
+host networking, `--privileged` and a cgroup mount; the application listens only on `127.0.0.1` at its configured
+port. Caddy or nginx provides public access and TLS. Preserve disabled buffering and long response timeouts from
+the project's `deploy/` templates for streaming MCP responses.
 
-Рабочая копия и зависимости находятся в именованном томе Docker. Постоянные данные приложения подключаются
-из `project.statePath` на сервере в `project.cacheDir` внутри проекта и сохраняются при удалении тома.
-Имя контейнера, образа, тома и каталогов по умолчанию включает имя размещения. При переносе старой установки
-задать прежнее `service.name` и прежние пути явно; переименование папки не переносит данные автоматически.
+The working copy and dependencies live in a named Docker volume. Persistent application data is mounted from
+`project.statePath` on the host into `project.cacheDir` inside the project and survives removal of the volume.
+Container, image, volume and path defaults include the installation alias. When migrating an existing deployment,
+set its previous `service.name` and paths explicitly; renaming a folder does not automatically move data.
 
-Закрытый ключ и настройки доставляются через стандартный ввод защищённого соединения во временную папку
-с закрытыми правами. До запуска контейнера файлы копируются в `/run-secrets`. Установка сохраняет ключ и
-настройки с правами `0600`; после успешного завершения временная папка удаляется. При ошибке первого запуска
-файлы остаются внутри контейнера для повторной установки. В параметрах окружения Docker секретов нет.
+The private key and settings are sent through SSH standard input into a private temporary directory. Before the
+container starts, files are copied to `/run-secrets`. Bootstrap installs the key and settings with mode `0600`;
+after successful setup, temporary files are removed. On initial boot failure, files remain inside the container
+for a retry. Secrets are not stored in Docker environment variables.
 
-`push-config` передаёт файлы через стандартный ввод прямо в контейнер. Временные копии удаляются при завершении
-команды, включая ошибку. Повторная передача одинаковых настроек не вызывает перезапуск.
+`config.yaml` supplies connection and deployment settings. Its `update` section and `project.branch` generate the
+container's `deploy/config.yml`; connection settings and workstation key paths are not included in that file.
+`local.yaml` is delivered verbatim as the application's `config/local.yaml`.
 
-## Проверка состояния
+`push-config` sends files directly into the container through standard input. Temporary copies are removed when
+the command finishes, including failures. Sending identical settings again does not trigger a restart.
+
+## Status checks
 
 ```bash
 node .agents/skills/deploy-mcp-to-remote-server/scripts/remote.cjs --server dev-1 status
@@ -32,16 +36,16 @@ node .agents/skills/deploy-mcp-to-remote-server/scripts/remote.cjs --server dev-
 node .agents/skills/deploy-mcp-to-remote-server/scripts/remote.cjs --server dev-1 updatelog 80
 ```
 
-При первом запуске дождаться сборки. Если локальный `/health` работает, а внешний адрес недоступен, проверить
-домен, сертификат и настройки Caddy или nginx. Не добавлять повторные заголовки защиты: приложение уже их выдаёт.
-Если поток MCP зависает, проверить отключение буферизации и длительное ожидание ответа в шаблоне внешнего доступа.
+Wait for the initial build to complete. If local `/health` works but public access fails, check the domain,
+certificate and Caddy or nginx settings. Do not add duplicate security headers: the application already provides
+them. For stalled MCP streams, check disabled buffering and long timeouts in the reverse proxy configuration.
 
-## Повтор обновления
+## Retrying updates
 
-Корневой `update.cjs` исключает параллельные запуски через `flock`. Состояние незавершённого обновления хранится
-в `.git/deploy-update-pending.json`, поэтому очистка рабочих файлов его не удаляет. Повтор выполняет необходимые
-установку зависимостей и сборку, перезапускает службу и ждёт готовности. Ошибка возвращает ненулевой код завершения.
-Автоматического возврата к предыдущей версии нет. Для исправления причины смотреть журнал последнего обновления.
+Root `update.cjs` uses `flock` to prevent concurrent runs. Pending state lives in `.git/deploy-update-pending.json`,
+so working-tree cleanup does not remove it. A retry runs the required dependency installation and build steps,
+restarts the service and waits for readiness. Failures return a nonzero exit code. There is no automatic rollback;
+inspect the last deployment log to identify and fix the cause.
 
-Команда `restart` только перезапускает приложение; `update` синхронизирует код. При изменении порта либо параметров
-контейнера требуется `deploy`. После любого изменения проверять также внешний адрес через `status`.
+`restart` only restarts the application; `update` synchronizes code. Port or container changes require `deploy`.
+After any change, also check public access with `status`.

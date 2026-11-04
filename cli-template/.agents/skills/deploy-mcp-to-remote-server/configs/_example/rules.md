@@ -1,15 +1,15 @@
-# Особенности размещения
+# Installation rules
 
-## Назначение
+## Purpose
 
-Укажите назначение экземпляра, ветку, имя службы и адрес проверки готовности. Опишите, входят ли изменения базы
-данных в обычное обновление. Отдельно укажите ограничения автоматического обновления, которое запускается каждую минуту.
+Describe the instance purpose, branch, service name and readiness URL. State whether routine updates include
+database changes. Document restrictions on automatic updates, which run every minute inside the container.
 
-## Сервер и сеть
+## Server and network
 
-Укажите особенности подключения, свободный порт приложения, домен, настройки Caddy или nginx и внешние зависимости.
-При нескольких размещениях на одном сервере каждому нужны отдельные порт, домен, контейнер и каталог постоянных данных.
+Describe connection requirements, a free application port, domain, Caddy or nginx settings and external services.
+Installations sharing a server need separate ports, domains, containers and persistent data directories.
 
-## Восстановление
+## Recovery
 
-Опишите расположение постоянных данных, порядок восстановления и известные причины отказов. Не записывайте секреты.
+Describe persistent data locations, recovery procedures and known failure causes. Do not include secret values.

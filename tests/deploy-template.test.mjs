@@ -166,11 +166,10 @@ test('named targets, argument separation, private delivery and failure propagati
       fs.mkdirSync(folder, { recursive: true });
       fs.writeFileSync(path.join(folder, 'rules.md'), 'Rules');
       fs.writeFileSync(
-        path.join(folder, 'remote-server-config.local.yaml'),
-        `server:\n  host: ${alias}.example.com\n  user: root\n  keyPath: ${key}\ngit:\n  repoUrl: git@example.com:repo\n  deployKeyPath: ${key}\nmcp:\n  dns: ${alias}.example.com\n`,
+        path.join(folder, 'config.yaml'),
+        `server:\n  host: ${alias}.example.com\n  user: root\n  keyPath: ${key}\ngit:\n  repoUrl: git@example.com:repo\n  deployKeyPath: ${key}\nmcp:\n  dns: ${alias}.example.com\nproject:\n  branch: main\nupdate:\n  healthUrl: http://localhost:9876/health\n  telegram:\n    botToken: "SECRET # token"\n    chatId: "00123"\n  smtp:\n    pass: "SMTP # secret"\n`,
       );
       fs.writeFileSync(path.join(folder, 'local.yaml'), 'webServer:\n  port: 9876\nsecret: SECRET_TEST\n');
-      fs.writeFileSync(path.join(folder, 'config.yml'), 'branch: main\n');
     }
     const context = vm.createContext({
       require: (name) =>
@@ -205,6 +204,20 @@ test('named targets, argument separation, private delivery and failure propagati
     assert.doesNotMatch(output.join('\n'), /SECRET_TEST|PRIVATE_KEY_TEST/);
     const selected = context.module.exports.selectServer(['--server', 'dev-1', 'exec', '--', '--server', 'child']);
     assert.deepEqual(Array.from(selected.rest), ['exec', '--', '--server', 'child']);
+    run(['--server', 'dev-1', 'show']);
+    const deployment = vm.runInContext('loadConfig("dev-1")', context);
+    const generated = require('yaml').parse(deployment.deployConfigYaml);
+    assert.equal(generated.branch, 'main');
+    assert.equal(generated.healthUrl, 'http://localhost:9876/health');
+    assert.equal(generated.telegram.botToken, 'SECRET # token');
+    assert.equal(generated.telegram.chatId, '00123');
+    assert.equal(generated.smtp.pass, 'SMTP # secret');
+    assert.equal(generated.server, undefined);
+    assert.equal(generated.git, undefined);
+    const legacyFile = path.join(skill, 'configs', 'dev-1', 'config.yml');
+    fs.writeFileSync(legacyFile, 'branch: old');
+    assert.throws(() => run(['--server', 'dev-1', 'show']), /exit 1/);
+    fs.unlinkSync(legacyFile);
     run(['--server', 'dev-1', 'deploy']);
     const script = calls.at(-1)[2].input;
     assert.match(script, /docker create/);

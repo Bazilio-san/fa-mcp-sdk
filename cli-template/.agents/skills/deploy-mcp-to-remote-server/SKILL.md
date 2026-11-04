@@ -1,91 +1,95 @@
 ---
 name: deploy-mcp-to-remote-server
 description: >-
-  Развёртывание, обновление, запуск, остановка и диагностика именованных размещений MCP-сервера на удалённых
-  серверах через Docker и systemd. Использовать для просьб «выкати на dev-1», «обнови prod-2», проверки состояния
-  и журналов конкретного размещения.
+  Deploy, update, start, stop and diagnose named MCP server installations on remote servers using Docker and
+  systemd. Use for requests such as "deploy to dev-1", "update prod-2", or inspect an installation's status and logs.
 allowed-tools: Bash, Read
 ---
 
-# Развёртывание MCP-сервера
+# Deploy an MCP server
 
-## Выбор размещения
+## Select an installation
 
-Работать из корня проекта. Если существует `servers.local.md` в корне проекта, прочитать его и сопоставить название
-из просьбы с папкой размещения. Затем прочитать `configs/<имя>/rules.md` и настройки этой папки, не выводя секреты.
-Если правила ссылаются на описание машины, прочитать его. Название папки само по себе также является допустимым именем.
-При неоднозначности уточнить цель; не выбирать похожее имя, первый сервер или рабочее окружение по умолчанию.
+Work from the project root. If `servers.local.md` exists there, read it and resolve the requested name to an
+installation folder. Read that folder's `configs/<alias>/rules.md` and settings without printing secrets. Read any
+machine description referenced by the rules. The folder name itself is also a valid installation name. If the
+request is ambiguous, ask for the target; never select a similar name, the first server or a default environment.
 
-Все команды получают `--server <имя>` явно. Параметр обозначает папку, а разговорные названия разрешаются по реестру.
-Не считать `dev` указанием на локальный компьютер. Папка `_example` не является целью развёртывания.
+Pass `--server <alias>` explicitly to every command. The alias identifies a folder; resolve conversational names
+through the registry. Do not interpret `dev` as the local workstation. `_example` is not a deployment target.
 
 ```bash
 node .agents/skills/deploy-mcp-to-remote-server/scripts/remote.cjs --server dev-1 show
 node .agents/skills/deploy-mcp-to-remote-server/scripts/remote.cjs --server dev-1 deploy
 ```
 
-Перед изменениями выполнить `show`: он выводит выбранный узел, ветку, контейнер, каталоги, порт и домен без секретов.
-Сверить их с просьбой и правилами размещения. Поддерживаемые операции выполнять через `remote.cjs`.
+Before making changes, run `show`: it prints the selected host, branch, container, paths, port and domain without
+secrets. Compare them with the request and installation rules. Use `remote.cjs` for supported operations.
 
-## Настройки размещения
+## Installation settings
 
-Создать `configs/<имя>/` копированием `configs/_example/`. Для имени использовать строчные латинские буквы, цифры,
-точку, дефис и подчёркивание; начинать с буквы или цифры. Внутри каждой папки находятся следующие файлы:
+Copy `configs/_example/` to `configs/<alias>/`. Use lowercase Latin letters, digits, dots, hyphens and underscores;
+start with a letter or digit. Each installation folder contains these files:
 
-- `remote-server-config.local.yaml`: подключение, репозиторий, домен, параметры контейнера и постоянных данных.
-- `local.yaml`: настройки приложения; копируются в его `config/local.yaml`.
-- `config.yml`: ветка, уведомления и необязательный `healthUrl` для проверки после обновления.
-- `rules.md`: особенности размещения, сети и восстановления. Дополнительные файлы хранить рядом.
+- `config.yaml`: connection, repository, domain, container, persistent data and the `update` section.
+- `local.yaml`: application settings, copied verbatim to the application's `config/local.yaml`.
+- `rules.md`: installation, networking and recovery requirements. Keep additional reference files alongside it.
 
-Запрашивать только недостающие значения. Настоящие папки и корневой `servers.local.md` исключены из Git; передавать
-их на новую рабочую машину отдельно. Формат реестра показан в корневом `servers.example.md`. Реестр необязателен.
-Старый каталог `config/` автоматически не используется: перенести его три заполненных файла в именованную папку,
-добавить `rules.md` и явно сохранить прежние `service.name`, `service.instance`, `project.projectPath` и
-`project.statePath`, чтобы обращение продолжало управлять существующим контейнером и данными.
+Ask only for missing values. Real installation folders and root `servers.local.md` are excluded from Git; transfer
+them separately to a new workstation. The optional registry format is shown in root `servers.example.md`.
 
-По умолчанию имя контейнера и его тома включает имя проекта и имя размещения. На одном сервере также должны
-различаться порты и домены. При явном `service.name` уникальность обеспечивает настройка. Версия Node.js берётся
-из `.envrc` либо `container.nodeVersion`. В `local.yaml` задавать `webServer.trustProxy: true`;
-`webServer.publicBaseUrl` не задавать: адрес формируется из `mcp.dns`.
+To migrate old settings, rename `remote-server-config.local.yaml` to `config.yaml`. Move `branch` from the separate
+`config.yml` to `project.branch`, move its remaining fields under `update` in `config.yaml`, then delete `config.yml`.
+Move `local.yaml` to the named folder, add `rules.md`, and preserve the previous `service.name`, `service.instance`,
+`project.projectPath` and `project.statePath` so commands continue managing the existing container and data.
 
-## Команды
+By default, container and volume names include the project name and installation alias. Installations sharing a
+host also need different ports and domains. An explicit `service.name` must be unique. Node.js comes from `.envrc`
+or `container.nodeVersion`. Set `webServer.trustProxy: true` in `local.yaml`; omit `webServer.publicBaseUrl`, which
+is derived from `mcp.dns`.
 
-| Действие | Команда после `--server <имя>` |
+## Commands
+
+| Action | Command after `--server <alias>` |
 |---|---|
-| Показать выбранное размещение без подключения | `show` |
-| Создать ключ чтения репозитория | `keygen` |
-| Создать или пересоздать контейнер и настроить Caddy или nginx | `deploy` |
-| Проверить контейнер, службу, версию, локальный и внешний `/health` | `status` |
-| Остановить или запустить контейнер | `stop`, `start` |
-| Перезапустить приложение без обновления кода | `restart` |
-| Применить обновление и проверить готовность | `update` |
-| Передать настройки и перезапустить приложение | `push-config` |
-| Только передать настройки либо перезапустить весь контейнер | `push-config --no-restart`, `push-config --container` |
-| Прочитать журналы приложения, первого запуска или обновления | `logs 200`, `bootlog 200`, `updatelog 80` |
-| Открыть оболочку либо выполнить команду внутри контейнера | `shell`, `exec -- <команда>` |
-| Показать команду подключения к серверу | `ssh` |
-| Удалить контейнер, образ, том и настройки внешнего доступа | `uninstall --yes` |
+| Show the selected installation without connecting | `show` |
+| Generate a read-only repository key | `keygen` |
+| Create or recreate the container and configure Caddy or nginx | `deploy` |
+| Check container, service, version, local and public `/health` | `status` |
+| Stop or start the container | `stop`, `start` |
+| Restart the application without updating code | `restart` |
+| Apply an update and check readiness | `update` |
+| Deliver settings and restart the application | `push-config` |
+| Deliver settings only, or restart the entire container | `push-config --no-restart`, `push-config --container` |
+| Read application, initial boot or update logs | `logs 200`, `bootlog 200`, `updatelog 80` |
+| Open a shell or run a command inside the container | `shell`, `exec -- <command>` |
+| Print the SSH connection command | `ssh` |
+| Remove container, image, volume and reverse proxy settings | `uninstall --yes` |
 
-Удаление применять только по прямой просьбе. При первом развёртывании добавить открытый ключ `keygen` в репозиторий
-с правом чтения. После `deploy` первая сборка продолжается внутри контейнера: проверять `status` и `bootlog` до
-готовности, не объявлять успех только по созданию контейнера. При отказе сборки сообщить причину и остановить повторы.
+Uninstall only when explicitly requested. For the first deployment, add the public key generated by `keygen` to
+the repository with read-only access. After `deploy`, the initial build continues inside the container: check
+`status` and `bootlog` until ready. Container creation alone does not mean success. Report build failures and stop
+retrying when the build fails.
 
-`push-config` не обновляет код. При изменении порта приложения или параметров подключения и контейнера нужен `deploy`.
-При первом запуске секреты передаются файлами с закрытыми правами и удаляются из временного расположения после
-успешной установки; значения секретов не передаются в окружении Docker. Не выводить содержимое файлов настроек.
+`push-config` does not update code. Changes to the application port, connection or container settings require
+`deploy`. Initial secrets are delivered as private files and removed from temporary storage after successful
+installation; secret values are not passed through Docker environment variables. Never print settings contents.
 
-## Обновление и диагностика
+## Updates and diagnostics
 
-Обновление выполняется корневым `update.cjs` вручную или каждую минуту внутри контейнера. Параллельные запуски
-исключены блокировкой. Перед изменением кода сохраняется отметка незавершённого обновления внутри `.git`; она
-удаляется после проверки готовности. При сбое следующий запуск повторяет необходимые этапы. Зависимости
-переустанавливаются при изменении их входных файлов или отсутствии `node_modules`. Сборка выполняется при
-изменениях, кроме документации, либо при отсутствии `dist`. Это повтор операции, а не автоматический возврат версии.
+Set the branch in `project.branch` and notifications in `update.email`, `update.smtp` and `update.telegram`.
+The container's `deploy/config.yml` is generated automatically from these settings and `update.healthUrl`.
 
-После обновления приложение должно ответить кодом 2xx на `healthUrl` из `config.yml` либо локальный `/health`
-на порту приложения. Иначе команда завершается ошибкой, сохраняет отметку и показывает журнал службы.
-Внешний доступ проверять отдельно через `status`: у приложения и Caddy или nginx могут быть разные причины отказа.
+Root `update.cjs` runs manually or every minute inside the container. A lock prevents concurrent runs. Before code
+changes, a pending-update marker is saved inside `.git`; it is removed after the readiness check. On failure, the
+next run retries the required steps. Dependencies are reinstalled when their inputs change or `node_modules` is
+missing. A build runs for changes beyond documentation or when `dist` is missing. This retries the operation;
+it does not automatically roll back the version.
 
-Сообщить выбранное размещение, фактическую версию, состояние приложения, внешний адрес и незавершённые этапы.
-Для устройства контейнера и ручной диагностики читать [README.md](README.md). Контейнер использует systemd,
-`--privileged` и сеть узла; перенос этого устройства на сервер должен соответствовать правилам размещения.
+After an update, the application must return 2xx from `update.healthUrl` or local `/health` on its listening port.
+Otherwise, the command fails, retains the marker and shows service logs. Check public access separately using
+`status`: application failures and Caddy or nginx failures may have different causes.
+
+Report the selected installation, actual version, application state, public URL and unfinished steps. Consult
+[README.md](README.md) for container internals and manual diagnostics. The container uses systemd, `--privileged`
+and host networking; deploying this design must comply with the installation rules.

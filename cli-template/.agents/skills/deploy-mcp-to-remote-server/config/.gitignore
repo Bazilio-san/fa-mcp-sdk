@@ -1,6 +1,0 @@
-# Real settings hold secrets (keys, tokens) — never commit them.
-# Only the *.example.* templates are versioned.
-*
-!.gitignore
-!*.example.yaml
-!*.example.yml

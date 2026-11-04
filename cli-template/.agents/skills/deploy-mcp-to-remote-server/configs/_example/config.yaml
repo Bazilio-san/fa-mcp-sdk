@@ -31,3 +31,18 @@ mcp:
 
 env:
   DEBUG: config-info   # DEBUG value passed into the container (optional; default: config-info)
+
+# Update settings; configure the branch only in project.branch.
+update:
+  # healthUrl: http://127.0.0.1:9049/health
+  # Defaults to /health on the application port.
+  email: ''
+  # telegram:
+  #   botToken: <token>
+  #   chatId: <recipient>
+  # smtp:
+  #   host: <mail server>
+  #   port: 587
+  #   from: <sender>
+  #   user: <username>
+  #   pass: <password>

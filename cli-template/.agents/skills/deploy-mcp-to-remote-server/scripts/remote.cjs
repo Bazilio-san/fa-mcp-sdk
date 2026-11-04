@@ -6,7 +6,7 @@
 // (runs on the developer workstation). Project-agnostic: copy this skill into any
 // such project, fill in the config, and it works. Everything project-specific is
 // derived from the host project (package.json name, .envrc node version) or read
-// from remote-server-config.local.yaml — nothing is hard-coded here.
+// from config.yaml — nothing is hard-coded here.
 //
 // Model: a self-contained systemd Docker image (docker/Dockerfile) carrying no app
 // code; at boot it clones the repo (read-only Deploy Key delivered as a private file), writes
@@ -22,7 +22,7 @@
 //   node remote.cjs stop        # stop the container (auto-update stops with it)
 //   node remote.cjs start       # start the container
 //   node remote.cjs restart     # restart just the app service (fast, no rebuild)
-//   node remote.cjs push-config # copy local.yaml + config.yml into the container and restart
+//   node remote.cjs push-config # generate and deliver application/update settings, then restart
 //   node remote.cjs update      # force update.cjs --force inside the container
 //   node remote.cjs logs [N]    # last N app-service journal lines (default 200)
 //   node remote.cjs updatelog   # auto-update verdict + error scan + last-run log
@@ -35,7 +35,7 @@ const path = require('path');
 const { spawnSync } = require('child_process');
 
 // Selected explicitly; never fall back to another installation.
-let CONFIG_DIR, CONFIG_FILE, LOCAL_YAML_FILE, CONFIG_YML_FILE;
+let CONFIG_DIR, CONFIG_FILE, LOCAL_YAML_FILE;
 function selectServer(args) {
   const rest = [];
   let alias;
@@ -53,9 +53,8 @@ function selectServer(args) {
     fail('Specify --server <alias>: an existing folder in configs/. No default server is selected.');
   }
   CONFIG_DIR = path.join(__dirname, '..', 'configs', alias);
-  CONFIG_FILE = path.join(CONFIG_DIR, 'remote-server-config.local.yaml');
+  CONFIG_FILE = path.join(CONFIG_DIR, 'config.yaml');
   LOCAL_YAML_FILE = path.join(CONFIG_DIR, 'local.yaml');
-  CONFIG_YML_FILE = path.join(CONFIG_DIR, 'config.yml');
   if (!fs.existsSync(path.join(CONFIG_DIR, 'rules.md'))) fail(`Missing installation rules: configs/${alias}/rules.md`);
   return { alias, rest };
 }
@@ -164,7 +163,11 @@ function loadConfig(alias) {
   if (!fs.existsSync(LOCAL_YAML_FILE)) {
     fail(`Missing ${LOCAL_YAML_FILE}\nCopy configs/_example/local.yaml to the selected installation folder.`);
   }
-  const cfg = parseYaml(fs.readFileSync(CONFIG_FILE, 'utf8'));
+  if (fs.existsSync(path.join(CONFIG_DIR, 'config.yml'))) {
+    fail(`Move config.yml settings into config.yaml: branch to project.branch, others to update; then remove config.yml.`);
+  }
+  const configText = fs.readFileSync(CONFIG_FILE, 'utf8');
+  const cfg = parseYaml(configText);
   const server = cfg.server || {};
   const project = cfg.project || {};
   const git = cfg.git || {};
@@ -180,11 +183,15 @@ function loadConfig(alias) {
   const localYaml = fs.readFileSync(LOCAL_YAML_FILE, 'utf8');
   const local = parseYaml(localYaml);
 
-  // The container's deploy/config.yml = config.yml verbatim (branch, email, optional smtp and the
-  // deploy skill's telegram block, all read by update.cjs).
-  if (!fs.existsSync(CONFIG_YML_FILE)) fail(`Missing ${CONFIG_YML_FILE}`);
-  const deployYml = fs.readFileSync(CONFIG_YML_FILE, 'utf8');
-  const dcfg = parseYaml(deployYml);
+  // Preserve notification values verbatim, including quoted secrets and YAML scalar types.
+  // Only the update section is delivered; workstation connection settings stay local.
+  const updateBlock = configText.match(/^update:[ \t]*(?:#.*)?\r?\n((?:(?:[ \t]+[^\n]*|)[\n]|[ \t]+[^\n]*$)*)/m);
+  if (cfg.update && !updateBlock) fail('Use an indented YAML mapping for update settings.');
+  if (cfg.update?.branch) fail('Set the deployment branch only in project.branch.');
+  const updateYaml = (updateBlock?.[1] || '').replace(/^  /gm, '');
+  const branch = project.branch || 'master';
+  const deployYml = `branch: ${JSON.stringify(branch)}\n${updateYaml}`;
+  const dcfg = cfg.update || {};
 
   const name = cfg.service?.name ? readProjectName(cfg) : `${readProjectName(cfg)}-${alias}`;
   const instance = (cfg.service && cfg.service.instance) || 'prod';
@@ -223,7 +230,7 @@ function loadConfig(alias) {
     keyPath: req(server.keyPath, 'server.keyPath'),
     repoUrl: req(project.repoUrl || git.repoUrl, 'project.repoUrl'),
     deployKeyPath: git.deployKeyPath || project.deployKeyPath || '',
-    branch: dcfg.branch || project.branch || 'master',
+    branch,
     projectPath: project.projectPath || `/opt/node/${name}`,
     statePath: project.statePath || `/opt/${name}`,
     // Subdir inside the project the persistent statePath is bind-mounted onto
@@ -234,7 +241,7 @@ function loadConfig(alias) {
     debug: envSection.DEBUG || 'config-info',
     appPort: (local.webServer && local.webServer.port) || '9049',
     localYaml, // verbatim -> container config/local.yaml
-    deployConfigYaml: `${deployYml.replace(/\n*$/, '')}\n`, // verbatim -> container deploy/config.yml
+    deployConfigYaml: `${deployYml.replace(/\n*$/, '')}\n`, // generated -> container deploy/config.yml
   };
 }
 
@@ -879,7 +886,7 @@ function main() {
   stop              Stop the container (auto-update stops with it)
   start             Start the container
   restart           Restart just the app service (fast, no rebuild)
-  push-config       Copy config/local.yaml + config.yml into the container and restart
+  push-config       Generate and deliver application/update settings, then restart
                       [--container] restart the whole container instead of the app service
                       [--no-restart] push only, restart later
   update            Force update.cjs --force inside the container

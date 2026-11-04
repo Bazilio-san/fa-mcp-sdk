@@ -6,7 +6,7 @@
 #
 # The skill reads only ONE thing from this file: webServer.port (the port the app listens on,
 # used for the reverse proxy + health checks). The deploy skill's own Telegram/e-mail settings
-# live in config.yml, NOT here.
+# live in config.yaml under update.
 #
 # Do NOT set webServer.publicBaseUrl — the skill injects it as https://<mcp.dns>.
 
