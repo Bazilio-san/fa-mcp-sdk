@@ -231,9 +231,11 @@ Before using the Agent Tester or Headless API, verify that the OpenAI API key is
 npm run check-llm
 ```
 
-The script checks that `agentTester.openAi.apiKey` is set and makes a minimal `chat.completions.create` request (max_tokens: 1) to verify the key works. Prints `OK` on success, `FAIL: <reason>` on failure. Exit code `0` = success, `1` = failure.
+Проверка использует Responses API, настроенный адрес поставщика и модель `agentTester.openAi.defaultModel`.
+Имя модели можно передать аргументом команды. Ключ доступа в вывод не попадает. Успех обозначается `OK`,
+ошибка — `FAIL: <причина>`. Код завершения равен соответственно `0` или `1`.
 
-For custom OpenAI-compatible endpoints where `gpt-4o-mini` doesn't exist, pass the model name:
+For custom OpenAI-compatible endpoints pass the model name:
 
 ```bash
 npm run check-llm -- my-custom-model
@@ -291,7 +293,7 @@ Same request body as `POST /api/chat/message`, but returns a **structured trace*
   "agentPrompt": "optional agent prompt override",
   "customPrompt": "optional additional instructions appended after agentPrompt",
   "modelConfig": {
-    "model": "gpt-4o",
+    "model": "gpt-6-luna",
     "temperature": 0.3,
     "maxTokens": 4096,
     "maxTurns": 10
@@ -354,7 +356,7 @@ Adds per-turn LLM request/response details:
   "turns": [
     {
       "turn": 1,
-      "llm_request": { "model": "gpt-4o", "messages_count": 3 },
+      "llm_request": { "model": "gpt-6-luna", "messages_count": 3 },
       "llm_response": {
         "finish_reason": "tool_calls",
         "content": null,
@@ -1015,3 +1017,39 @@ These test-ids are part of the public contract of the Agent Tester UI. Once adde
 - CSS class names (used for styling — may be renamed or removed during refactors)
 - Visible text (localized / editable copy — changes break tests)
 - XPath or positional selectors (brittle to layout changes)
+
+## Обращение к модели через Responses API
+
+Проверочный чат использует Responses API по умолчанию, включая создание краткого содержания истории.
+Обычный разговор и проверка с подробным протоколом используют общий цикл выполнения инструментов.
+В `modelConfig` запроса можно передать следующие параметры:
+
+| Поле | Назначение |
+|---|---|
+| `api` | `responses` по умолчанию; `chat-completions` — явно выбранная совместимость с другим поставщиком |
+| `reasoningEffort` | Уровень рассуждений, поддерживаемый выбранной моделью |
+| `temperature` | Передавать только для поддерживающих его моделей; при отсутствии поле не отправляется |
+| `maxTokens` | Максимальное число выходных токенов, включая рассуждения |
+
+Автоматического переключения способа обращения после ошибки нет. Адрес и ключ поставщика по-прежнему задаются
+через `agentTester.openAi` либо через существующие поля `modelConfig.baseURL` и `modelConfig.apiKey`.
+Параметры `api` и `reasoningEffort` доступны в запросе программного интерфейса; отдельных полей в окне настроек нет.
+`check-llm` проверяет основной способ обращения — Responses API.
+
+История хранится на нашем сервере; запросы содержат `store: false`. Исходные элементы ответа, включая зашифрованные
+рассуждения, сохраняются для последующего запроса. Вызовы функций связываются с результатами через `call_id`.
+Схемы произвольных MCP-инструментов передаются с `strict: false`. Сами инструменты выполняет наш MCP-клиент.
+Данные `appCalls` и полные результаты для отображения приложений сохраняются независимо от сокращённого текста,
+передаваемого модели. Идентификатор `callId` соответствует `call_id` Responses API.
+
+Сокращение истории выполняется по завершённым группам разговора после успешного создания краткого содержания.
+Последняя группа и текущий запрос сохраняются. При ошибке обращения история возвращается к предыдущему состоянию.
+Смена модели, поставщика, ключа либо способа обращения начинает новую историю модели в той же сессии отображения.
+Результаты уже выполненных инструментов вне истории автоматически не отменяются.
+
+Отказ модели и незавершённый ответ считаются ошибкой. Повторы сетевых запросов выполняет библиотека OpenAI;
+отдельного дополнительного цикла повторов нет. Потоковая выдача текста этим изменением не добавляется.
+Внутренний слой сохраняет привычное представление сообщений для существующего протокола проверки и дополнительно
+хранит исходный `output`; он не восстанавливает рассуждения из текстового протокола.
+
+Проверка реализации в репозитории библиотеки: `npm run build` и `node --test tests/responses.test.mjs`.

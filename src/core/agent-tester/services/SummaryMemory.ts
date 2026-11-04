@@ -5,6 +5,7 @@ export type SummaryState = {
   tail: OpenAI.Chat.ChatCompletionMessageParam[];
   estimatedTokens: number;
   lastSummarizedAt: Date;
+  compressionCount?: number;
 };
 
 export type SummaryConfig = {
@@ -64,20 +65,19 @@ export class SummaryMemory {
     const normalized = this.normalizeToolPayload(msg);
     state.tail.push(normalized);
     state.estimatedTokens += this.estimateTokens(normalized);
-
-    if (state.tail.length > this.config.tailSize) {
-      const removed = state.tail.splice(0, state.tail.length - this.config.tailSize);
-      for (const r of removed) {
-        state.estimatedTokens -= this.estimateTokens(r);
-      }
-      if (state.estimatedTokens < 0) {
-        state.estimatedTokens = 0;
-      }
-    }
   }
 
   public needsCompression(state: SummaryState): boolean {
-    return state.estimatedTokens > this.config.maxTokens;
+    state.compressionCount = 0;
+    const starts = state.tail.flatMap((message, index) => (message.role === 'user' ? [index] : []));
+    if (starts.length < 3) {
+      return false;
+    }
+    if (state.tail.length > this.config.tailSize || state.estimatedTokens > this.config.maxTokens) {
+      state.compressionCount = starts[starts.length - 2]!;
+      return true;
+    }
+    return false;
   }
 
   public getConfig(): SummaryConfig {
@@ -85,7 +85,9 @@ export class SummaryMemory {
   }
 
   public resetAfterCompression(state: SummaryState): void {
-    state.estimatedTokens = 0;
+    state.tail.splice(0, state.compressionCount ?? 0);
+    state.compressionCount = 0;
+    state.estimatedTokens = state.tail.reduce((total, message) => total + this.estimateTokens(message), 0);
     state.lastSummarizedAt = new Date();
   }
 

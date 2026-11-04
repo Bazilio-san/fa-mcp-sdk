@@ -1,11 +1,11 @@
 import chalk from 'chalk';
+import { createHash } from 'node:crypto';
 import OpenAI from 'openai';
 import { v4 as uuidv4 } from 'uuid';
 
 import { appConfig } from '../../bootstrap/init-config.js';
 import { logger as lgr } from '../../logger.js';
 import {
-  ITesterChatMessage,
   ITesterChatSession,
   ITesterMcpTool,
   ITesterChatRequest,
@@ -21,17 +21,26 @@ import {
 
 import { findEmbeddedAppResource, getToolUiResourceUri, readUiResource } from './mcp-apps-utils.js';
 
+import { createResponse } from './ResponsesClient.js';
 import { SummaryMemory, SummaryState } from './SummaryMemory.js';
 import { TesterMcpClientService } from './TesterMcpClientService.js';
 
 const logger = lgr.getSubLogger({ name: chalk.cyan('agent-tester:agent') });
 
 const REASONING_EFFORT_MIN: Record<string, string> = {
-  'gpt-5.2': 'low',
-  'gpt-5.1': 'none',
-  'gpt-5-nano': 'low',
-  'gpt-5-mini': 'low',
+  'gpt-6-luna': 'none',
+  'gpt-6.1-terra': 'none',
+  'gpt-6.1-sol': 'low',
 };
+
+// Keys also match model snapshots with a hyphenated suffix.
+// Longest match wins so a broader key never shadows a narrower one.
+function minReasoningEffortFor(model: string): string | undefined {
+  const key = Object.keys(REASONING_EFFORT_MIN)
+    .filter((k) => model === k || model.startsWith(`${k}-`))
+    .sort((a, b) => b.length - a.length)[0];
+  return key ? REASONING_EFFORT_MIN[key] : undefined;
+}
 
 interface AgentConfig {
   model: string;
@@ -49,7 +58,7 @@ export class TesterAgentService {
   private defaultConfig: AgentConfig;
   private openai: OpenAI | null = null;
 
-  private openaiHistories: Map<string, OpenAI.Chat.ChatCompletionMessageParam[]> = new Map();
+  private historyRoutes = new Map<string, string>();
 
   private summaryMemory = new SummaryMemory({
     tailSize: 6,
@@ -67,7 +76,7 @@ export class TesterAgentService {
     this.logJson = logJson || false;
     this.defaultConfig = {
       // Headless default model — driven by config (headlessTester.defaultModel); used when the request omits modelConfig.model.
-      model: appConfig.headlessTester?.defaultModel || 'gpt-5.4-mini',
+      model: appConfig.headlessTester?.defaultModel || 'gpt-6-luna',
       agentPrompt: 'You are a helpful AI assistant that can use MCP tools to help users.',
       temperature: 0.3,
       maxTokens: 4096,
@@ -87,8 +96,12 @@ export class TesterAgentService {
   public async cleanup(): Promise<void> {
     logger.info('Cleaning up TesterAgentService');
     this.sessions.clear();
-    this.openaiHistories.clear();
+    this.historyRoutes.clear();
     this.summaryMemory.clear();
+  }
+
+  private createModelResponse(llmClient: OpenAI, params: any, api?: 'responses' | 'chat-completions') {
+    return createResponse(llmClient, params, api);
   }
 
   /**
@@ -180,9 +193,14 @@ First consider the old summary, then merge with new messages.
 Output only the new Summary Memory.`;
   }
 
-  private async summarizeHistory(llmClient: OpenAI, state: SummaryState, model: string): Promise<void> {
+  private async summarizeHistory(
+    llmClient: OpenAI,
+    state: SummaryState,
+    model: string,
+    api?: 'responses' | 'chat-completions',
+  ): Promise<void> {
     const summaryPrompt = this.buildSummaryPrompt();
-    const payload = JSON.stringify(state.tail);
+    const payload = JSON.stringify(state.tail.slice(0, state.compressionCount));
 
     const summaryParams: any = {
       model,
@@ -190,383 +208,39 @@ Output only the new Summary Memory.`;
         { role: 'system', content: summaryPrompt },
         { role: 'user', content: `OLD SUMMARY:\n${state.summary || '(empty)'}\n\nNEW MESSAGES(JSON):\n${payload}` },
       ],
-      temperature: 0.2,
       max_completion_tokens: 1000,
     };
-    if (REASONING_EFFORT_MIN[model]) {
-      summaryParams.reasoning_effort = REASONING_EFFORT_MIN[model];
+    const minEffort = api === 'chat-completions' ? minReasoningEffortFor(model) : undefined;
+    if (minEffort) {
+      summaryParams.reasoning_effort = minEffort;
     }
 
-    const response = await llmClient.chat.completions.create(summaryParams);
+    const response = await this.createModelResponse(llmClient, summaryParams, api);
 
     state.summary = response.choices[0]?.message?.content?.trim() || state.summary;
     this.summaryMemory.resetAfterCompression(state);
   }
 
   public async processMessage(request: ITesterChatRequest): Promise<ITesterChatResponse> {
-    const startTime = Date.now();
-    const sessionId = request.sessionId || uuidv4();
-
-    try {
-      const { mcpConfig } = request;
-      const mcpServerUrl = mcpConfig?.url || request.mcpServerUrl;
-      // request.appMode is the convenience top-level flag (used by headless API
-      // callers); mcpConfig.appMode is the durable per-connection flag. We keep
-      // them in sync so downstream code reads one field.
-      const appMode = !!(request.appMode || mcpConfig?.appMode);
-      if (appMode && mcpConfig && !mcpConfig.appMode) {
-        mcpConfig.appMode = true;
-      }
-      const appCalls: IMcpAppCall[] = [];
-
-      // Get or create session
-      let session = this.sessions.get(sessionId);
-      if (!session) {
-        session = this.createSession(sessionId, request.agentPrompt, mcpServerUrl);
-        this.sessions.set(sessionId, session);
-      }
-
-      // Add user message to session
-      const userMessage: ITesterChatMessage = {
-        id: uuidv4(),
-        text: request.message,
-        sender: 'user',
-        timestamp: new Date(),
-      };
-      session.messages.push(userMessage);
-
-      // Get tools and agentPrompt from cached client
-      let cachedClient: ITesterCachedMcpClient | null = null;
-      let agentTools: ITesterMcpTool[] = [];
-
-      if (mcpConfig) {
-        try {
-          cachedClient = await this.mcpClientService.getOrCreateClient(mcpConfig);
-          agentTools = cachedClient.tools;
-          logger.info(`Using cached MCP client with ${agentTools.length} tools`);
-        } catch (error) {
-          logger.error('Failed to get MCP client:', error);
-        }
-      }
-
-      // Prepare system prompt: request > session > MCP server > default
-      const { agentPrompt: mcpAgentPrompt } = cachedClient || {};
-      let systemPrompt = request.agentPrompt || session.agentPrompt || mcpAgentPrompt || this.defaultConfig.agentPrompt;
-
-      if (request.customPrompt && request.customPrompt.trim()) {
-        systemPrompt += '\n\n' + request.customPrompt.trim();
-      }
-
-      if (appMode) {
-        systemPrompt += '\n\n' + this.buildAppModeSystemPrompt(agentTools);
-      }
-
-      // Get model configuration
-      const { modelConfig } = request;
-      const selectedModel = modelConfig?.model || request.model || this.defaultConfig.model;
-      const temperature = modelConfig?.temperature ?? this.defaultConfig.temperature;
-      const maxTokens = modelConfig?.maxTokens ?? this.defaultConfig.maxTokens;
-
-      // Create OpenAI client — use client-provided apiKey (required) and optional baseURL.
-      // Empty baseURL means OpenAI default. If client didn't send apiKey, fall back to server config.
-      let llmClient: OpenAI;
-      let isCustomLlm = false;
-      if (modelConfig?.apiKey) {
-        llmClient = new OpenAI({
-          apiKey: modelConfig.apiKey,
-          ...(modelConfig.baseURL ? { baseURL: modelConfig.baseURL } : {}),
-        });
-        isCustomLlm = !!modelConfig.baseURL;
-        if (isCustomLlm) {
-          logger.info(`Using custom LLM: ${modelConfig.baseURL}`);
-        }
-      } else if (this.openai) {
-        llmClient = this.openai;
-      } else {
-        throw new Error('Agent Tester OpenAI API key is not configured (agentTester.openAi.apiKey)');
-      }
-
-      // Create OpenAI function definitions from MCP tools
-      const functions = agentTools.map((tool) => ({
-        name: tool.name,
-        description: tool.description,
-        parameters: tool.inputSchema || { type: 'object', properties: {} },
-      }));
-
-      // Use persistent history
-      let openaiMessages = this.openaiHistories.get(sessionId);
-      if (!openaiMessages) {
-        openaiMessages = [];
-        this.openaiHistories.set(sessionId, openaiMessages);
-      }
-
-      // Update system prompt
-      if (openaiMessages.length === 0) {
-        openaiMessages.push({ role: 'system', content: systemPrompt });
-      } else if (openaiMessages[0]?.role === 'system') {
-        openaiMessages[0] = { role: 'system', content: systemPrompt };
-      } else {
-        openaiMessages.unshift({ role: 'system', content: systemPrompt });
-      }
-
-      openaiMessages.push({ role: 'user', content: request.message });
-
-      // Get summary state
-      const summaryState = this.summaryMemory.getState(sessionId);
-      this.summaryMemory.pushMessage(summaryState, { role: 'user', content: request.message });
-
-      if (this.summaryMemory.needsCompression(summaryState)) {
-        await this.summarizeHistory(llmClient, summaryState, selectedModel);
-      }
-
-      const summarizedContext = this.summaryMemory.buildMessages(systemPrompt, summaryState);
-
-      const useTemperature = selectedModel.startsWith('gpt-5') ? null : temperature;
-
-      let finalText = '';
-      const toolsUsed: string[] = [];
-
-      const safeJsonParse = (raw: string | undefined): unknown => {
-        if (!raw || !raw.trim()) {
-          return {};
-        }
-        try {
-          return JSON.parse(raw);
-        } catch {
-          return { __parse_error: true, raw };
-        }
-      };
-
-      const toolLimitChars = modelConfig?.toolResultLimitChars ?? this.defaultConfig.toolResultLimitChars ?? 20000;
-
-      const truncateForToolMessage = (value: unknown, limitChars = toolLimitChars): string => {
-        let str: string;
-        try {
-          str = typeof value === 'string' ? value : JSON.stringify(value);
-        } catch {
-          str = String(value);
-        }
-
-        if (str.length <= limitChars) {
-          return str;
-        }
-
-        return [
-          str.slice(0, limitChars),
-          '',
-          `[TRUNCATED tool result: original_length=${str.length} chars, kept=${limitChars}]`,
-        ].join('\n');
-      };
-
-      const maxTurns = modelConfig?.maxTurns ?? this.defaultConfig.maxTurns ?? 10;
-
-      for (let turn = 0; turn < maxTurns; turn++) {
-        const completionParams: any = {
-          model: selectedModel,
-          messages: summarizedContext,
-          temperature: useTemperature,
-          max_completion_tokens: maxTokens,
-        };
-        if (REASONING_EFFORT_MIN[selectedModel]) {
-          completionParams.reasoning_effort = REASONING_EFFORT_MIN[selectedModel];
-        }
-        if (functions.length > 0) {
-          completionParams.tools = functions.map((fn) => ({
-            type: 'function' as const,
-            function: fn,
-          }));
-          completionParams.tool_choice = 'auto';
-        }
-
-        // Single log per LLM call: the exact request payload sent to the API.
-        console.log(
-          chalk.blue(`${chalk.bgWhite.bold(`🔵 LLM REQUEST [Turn ${turn + 1}/${maxTurns}]:`)}
-Base URL: ${modelConfig?.baseURL || 'OpenAI default'}${isCustomLlm ? ' (custom)' : ''}
-Session ID: ${sessionId}
-MCP Server: ${mcpServerUrl || 'None'}
-Request JSON: ${JSON.stringify(completionParams, null, 2)}
-`),
-        );
-
-        const response = await llmClient.chat.completions.create(completionParams);
-
-        const choice = response.choices[0];
-        if (!choice) {
-          throw new Error('No response choice returned from OpenAI');
-        }
-
-        // Log response
-        const toolCallsInResponse = choice.message.tool_calls ?? [];
-        const toolCallNames = toolCallsInResponse
-          .filter(
-            (
-              tc,
-            ): tc is OpenAI.Chat.ChatCompletionMessageToolCall & {
-              type: 'function';
-            } => tc.type === 'function',
-          )
-          .map((tc) => tc.function.name);
-        console.log(
-          chalk.magenta(`${chalk.bgMagenta.bold(`🟣 LLM RESPONSE [Turn ${turn + 1}/${maxTurns}]:`)}
-Finish reason: ${choice.finish_reason}
-Tool calls: ${toolCallNames.length > 0 ? toolCallNames.join(', ') : 'None'}
-Content: ${choice.message.content ? choice.message.content.substring(0, 500) + (choice.message.content.length > 500 ? '...' : '') : '(no text content)'}
-Usage: ${response.usage ? `prompt=${response.usage.prompt_tokens}, completion=${response.usage.completion_tokens}, total=${response.usage.total_tokens}` : 'N/A'}
-`),
-        );
-
-        summarizedContext.push(choice.message as OpenAI.Chat.ChatCompletionMessageParam);
-        openaiMessages.push(choice.message as OpenAI.Chat.ChatCompletionMessageParam);
-        this.summaryMemory.pushMessage(summaryState, choice.message as OpenAI.Chat.ChatCompletionMessageParam);
-
-        if (choice.message.content) {
-          finalText = choice.message.content;
-        }
-
-        const toolCalls = choice.message.tool_calls ?? [];
-        if (toolCalls.length === 0) {
-          break;
-        }
-
-        if (!mcpConfig) {
-          finalText = finalText || 'Tools unavailable: no mcpConfig provided.';
-          break;
-        }
-
-        // Execute all tool calls
-        for (const tc of toolCalls) {
-          if (tc.type !== 'function') {
-            continue;
+    const result = await this.processMessageWithTrace(request);
+    const session = this.sessions.get(result.sessionId)!;
+    const message = session.messages[session.messages.length - 1]!;
+    return {
+      id: message.id,
+      message: result.message,
+      sessionId: result.sessionId,
+      metadata: { response_time: result.trace.total_duration_ms, tools_used: result.trace.tools_used },
+      ...(request.mcpConfig?.url || request.mcpServerUrl
+        ? {
+            metadata: {
+              response_time: result.trace.total_duration_ms,
+              tools_used: result.trace.tools_used,
+              mcp_server: (request.mcpConfig?.url || request.mcpServerUrl)!,
+            },
           }
-
-          const functionName = tc.function?.name;
-          if (!functionName) {
-            continue;
-          }
-
-          const functionArgs = safeJsonParse(tc.function.arguments) as Record<string, unknown>;
-          toolsUsed.push(functionName);
-
-          if ((functionArgs as { __parse_error?: boolean }).__parse_error) {
-            const toolMsg = {
-              role: 'tool' as const,
-              tool_call_id: tc.id,
-              content: truncateForToolMessage(
-                { ok: false, error: 'Invalid JSON arguments', raw: (functionArgs as { raw?: string }).raw },
-                toolLimitChars,
-              ),
-            };
-            summarizedContext.push(toolMsg);
-            openaiMessages.push(toolMsg);
-            this.summaryMemory.pushMessage(summaryState, toolMsg);
-            continue;
-          }
-
-          console.log(
-            chalk.green(`${chalk.bgGreen.bold(`🔧 TOOL CALL [${functionName}]:`)}
-Arguments: ${JSON.stringify(functionArgs, null, 2).substring(0, 1000)}
-`),
-          );
-
-          let toolResult: unknown;
-          let toolFailed = false;
-          try {
-            toolResult = await this.mcpClientService.callToolWithConfig(mcpConfig, functionName, functionArgs);
-          } catch (error) {
-            logger.error(`Error executing MCP tool ${functionName}:`, error);
-            toolFailed = true;
-            toolResult = {
-              ok: false,
-              error: error instanceof Error ? error.message : String(error),
-            };
-          }
-
-          if (appMode && mcpConfig && !toolFailed) {
-            const toolDef = agentTools.find((t) => t.name === functionName);
-            try {
-              const appCall = await this.extractAppCall(
-                toolDef,
-                tc.id,
-                functionName,
-                functionArgs,
-                toolResult,
-                mcpConfig,
-              );
-              appCalls.push(appCall);
-            } catch (e) {
-              logger.warn(`Failed to build appCall for ${functionName}:`, e);
-            }
-          }
-
-          const toolResultStr = truncateForToolMessage(toolResult, 2000);
-          console.log(
-            chalk.greenBright(`${chalk.bgGreen.bold(`🔧 TOOL RESULT [${functionName}]:`)}
-Result: ${toolResultStr}
-`),
-          );
-
-          const toolMsg = {
-            role: 'tool' as const,
-            tool_call_id: tc.id,
-            content: truncateForToolMessage(toolResult, toolLimitChars),
-          };
-          summarizedContext.push(toolMsg);
-          openaiMessages.push(toolMsg);
-          this.summaryMemory.pushMessage(summaryState, toolMsg);
-        }
-
-        if (turn === maxTurns - 1 && toolCalls.length > 0) {
-          finalText = finalText || 'Agent step limit reached. Increase maxTurns or refine your request.';
-        }
-      }
-
-      if (!finalText) {
-        finalText = 'Failed to get a text response from the agent.';
-      }
-      finalText = this.sanitizeResponseText(finalText);
-
-      console.log(
-        chalk.yellow(`${chalk.bgBlack.bold('🟡 LLM RESPONSE:')}
-Response Time: ${Date.now() - startTime}ms
-Tools Used: ${toolsUsed.length > 0 ? toolsUsed.join(', ') : 'None'}
-Response Text: ${finalText}
-`),
-      );
-
-      // Add assistant message to session
-      const assistantMessage: ITesterChatMessage = {
-        id: uuidv4(),
-        text: finalText,
-        sender: 'assistant',
-        timestamp: new Date(),
-        metadata: {
-          response_time: Date.now() - startTime,
-          tools_used: toolsUsed,
-        },
-      };
-      session.messages.push(assistantMessage);
-      session.updatedAt = new Date();
-
-      const response: ITesterChatResponse = {
-        id: assistantMessage.id,
-        message: finalText,
-        sessionId: sessionId,
-        metadata: {
-          response_time: Date.now() - startTime,
-          tools_used: toolsUsed,
-          ...(mcpServerUrl && { mcp_server: mcpServerUrl }),
-        },
-      };
-      if (appMode) {
-        response.appCalls = appCalls;
-      }
-      return response;
-    } catch (error) {
-      logger.error('Error processing message:', error);
-      throw new Error(`Failed to process message: ${error instanceof Error ? error.message : 'Unknown error'}`, {
-        cause: error,
-      });
-    }
+        : {}),
+      ...(result.appCalls ? { appCalls: result.appCalls } : {}),
+    };
   }
 
   public async processMessageWithTrace(
@@ -576,10 +250,12 @@ Response Text: ${finalText}
     const { verbose = false, maxTraceChars = 50000, maxResultChars = 4000 } = options;
     const startTime = Date.now();
     const sessionId = request.sessionId || uuidv4();
+    let historyBefore: SummaryState | undefined;
 
     try {
       const { mcpConfig } = request;
       const mcpServerUrl = mcpConfig?.url || request.mcpServerUrl;
+      const appCalls: IMcpAppCall[] = [];
       const appMode = !!(request.appMode || mcpConfig?.appMode);
       if (appMode && mcpConfig && !mcpConfig.appMode) {
         mcpConfig.appMode = true;
@@ -618,17 +294,16 @@ Response Text: ${finalText}
       let systemPrompt = request.agentPrompt || session.agentPrompt || mcpAgentPrompt || this.defaultConfig.agentPrompt;
 
       if (request.customPrompt?.trim()) {
-        systemPrompt += '\n\n' + request.customPrompt.trim();
+        systemPrompt = `${systemPrompt}\n\n${request.customPrompt.trim()}`;
       }
       if (appMode) {
-        systemPrompt += '\n\n' + this.buildAppModeSystemPrompt(agentTools);
+        systemPrompt = `${systemPrompt}\n\n${this.buildAppModeSystemPrompt(agentTools)}`;
       }
       const systemPromptSent = systemPrompt;
 
       // Get model configuration
       const { modelConfig } = request;
       const selectedModel = modelConfig?.model || request.model || this.defaultConfig.model;
-      const temperature = modelConfig?.temperature ?? this.defaultConfig.temperature;
       const maxTokens = modelConfig?.maxTokens ?? this.defaultConfig.maxTokens;
 
       // Create OpenAI client — baseURL optional (empty = OpenAI default)
@@ -651,32 +326,30 @@ Response Text: ${finalText}
         parameters: tool.inputSchema || { type: 'object', properties: {} },
       }));
 
-      // Use persistent history
-      let openaiMessages = this.openaiHistories.get(sessionId);
-      if (!openaiMessages) {
-        openaiMessages = [];
-        this.openaiHistories.set(sessionId, openaiMessages);
+      const route = createHash('sha256')
+        .update(
+          JSON.stringify([
+            selectedModel,
+            modelConfig?.baseURL || this.openAiConfig?.baseURL,
+            modelConfig?.apiKey || this.openAiConfig?.apiKey,
+            modelConfig?.api || 'responses',
+          ]),
+        )
+        .digest('hex');
+      if (this.historyRoutes.get(sessionId) !== route) {
+        this.summaryMemory.delete(sessionId);
       }
-
-      // Update system prompt
-      if (openaiMessages.length === 0) {
-        openaiMessages.push({ role: 'system', content: systemPrompt });
-      } else if (openaiMessages[0]?.role === 'system') {
-        openaiMessages[0] = { role: 'system', content: systemPrompt };
-      } else {
-        openaiMessages.unshift({ role: 'system', content: systemPrompt });
-      }
-      openaiMessages.push({ role: 'user', content: request.message });
-
+      this.historyRoutes.set(sessionId, route);
       // Summary state
       const summaryState = this.summaryMemory.getState(sessionId);
+      historyBefore = { ...summaryState, tail: [...summaryState.tail] };
       this.summaryMemory.pushMessage(summaryState, { role: 'user', content: request.message });
       if (this.summaryMemory.needsCompression(summaryState)) {
-        await this.summarizeHistory(llmClient, summaryState, selectedModel);
+        await this.summarizeHistory(llmClient, summaryState, selectedModel, modelConfig?.api);
       }
       const summarizedContext = this.summaryMemory.buildMessages(systemPrompt, summaryState);
 
-      const useTemperature = selectedModel.startsWith('gpt-5') ? null : temperature;
+      const useTemperature = modelConfig?.temperature;
       let finalText = '';
       const toolsUsed: string[] = [];
       const traceturns: ITesterTraceTurn[] = [];
@@ -727,15 +400,18 @@ Response Text: ${finalText}
           temperature: useTemperature,
           max_completion_tokens: maxTokens,
         };
-        if (REASONING_EFFORT_MIN[selectedModel]) {
-          completionParams.reasoning_effort = REASONING_EFFORT_MIN[selectedModel];
+        const minEffort =
+          modelConfig?.reasoningEffort ??
+          (modelConfig?.api === 'chat-completions' ? minReasoningEffortFor(selectedModel) : undefined);
+        if (minEffort) {
+          completionParams.reasoning_effort = minEffort;
         }
         if (functions.length > 0) {
           completionParams.tools = functions.map((fn) => ({ type: 'function' as const, function: fn }));
           completionParams.tool_choice = 'auto';
         }
 
-        const response = await llmClient.chat.completions.create(completionParams);
+        const response = await this.createModelResponse(llmClient, completionParams, modelConfig?.api);
         const choice = response.choices[0];
         if (!choice) {
           throw new Error('No response choice returned from OpenAI');
@@ -774,7 +450,7 @@ Response Text: ${finalText}
         }
 
         summarizedContext.push(choice.message as OpenAI.Chat.ChatCompletionMessageParam);
-        openaiMessages.push(choice.message as OpenAI.Chat.ChatCompletionMessageParam);
+
         this.summaryMemory.pushMessage(summaryState, choice.message as OpenAI.Chat.ChatCompletionMessageParam);
 
         if (choice.message.content) {
@@ -835,7 +511,7 @@ Response Text: ${finalText}
               content: truncateStr(errResult, toolLimitChars),
             };
             summarizedContext.push(toolMsg);
-            openaiMessages.push(toolMsg);
+
             this.summaryMemory.pushMessage(summaryState, toolMsg);
             continue;
           }
@@ -865,6 +541,7 @@ Response Text: ${finalText}
               );
               traceTurn.app_calls = traceTurn.app_calls || [];
               traceTurn.app_calls.push(appCall);
+              appCalls.push(appCall);
             } catch (e) {
               logger.warn(`Failed to build appCall for ${functionName}:`, e);
             }
@@ -903,7 +580,7 @@ Response Text: ${finalText}
             content: truncateStr(toolResult, toolLimitChars),
           };
           summarizedContext.push(toolMsg);
-          openaiMessages.push(toolMsg);
+
           this.summaryMemory.pushMessage(summaryState, toolMsg);
         }
 
@@ -955,8 +632,11 @@ Response Text: ${finalText}
       // Apply total trace size limit
       trace = this.truncateTraceData(trace, maxTraceChars);
 
-      return { message: finalText, sessionId, trace };
+      return { message: finalText, sessionId, trace, ...(appMode ? { appCalls } : {}) };
     } catch (error) {
+      if (historyBefore) {
+        Object.assign(this.summaryMemory.getState(sessionId), historyBefore);
+      }
       logger.error('Error processing message with trace:', error);
       throw new Error(`Failed to process message: ${error instanceof Error ? error.message : 'Unknown error'}`, {
         cause: error,
@@ -1002,7 +682,7 @@ Response Text: ${finalText}
   }
 
   public deleteSession(sessionId: string): boolean {
-    this.openaiHistories.delete(sessionId);
+    this.historyRoutes.delete(sessionId);
     this.summaryMemory.delete(sessionId);
     return this.sessions.delete(sessionId);
   }

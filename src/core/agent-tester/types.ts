@@ -34,6 +34,8 @@ export interface TesterMcpConfig {
 }
 
 export interface TesterModelConfig {
+  api?: 'responses' | 'chat-completions';
+  reasoningEffort?: 'none' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh';
   baseURL?: string;
   apiKey?: string;
   model: string;
@@ -196,6 +198,7 @@ export interface ITesterTraceData {
 }
 
 export interface ITesterTestResponse {
+  appCalls?: IMcpAppCall[];
   message: string;
   sessionId: string;
   trace: ITesterTraceData;

@@ -107,14 +107,11 @@ agentTester:
     exposeToClient: false
     #> Default model pre-filled in the Agent Tester chat UI when the user has not chosen one yet.
     #> Sent to the UI via GET /agent-tester/api/config (not a secret).
-    defaultModel: 'gpt-5.4-nano'
+    defaultModel: 'gpt-6-luna'
     #> List of model names shown in the Agent Tester UI model dropdown (the user can still type any name).
     models:
-      - gpt-5.4-nano
-      - gpt-5.4-mini
-      - gpt-5.4
-      - gpt-4.1-nano
-      - gpt-4.1-mini
+      - gpt-6-luna
+      - gpt-6.1-terra
 
   #> Key-value pairs for HTTP requests that should be auto-populated in agentTester. Example: X-User-Id: 12345
   httpHeaders:
@@ -123,7 +120,7 @@ agentTester:
 headlessTester:
   #> Default LLM model used for headless test requests when the request body omits modelConfig.model.
   #> Override per request by passing modelConfig.model (e.g. --model in headless-test.js).
-  defaultModel: 'gpt-5.4'
+  defaultModel: 'gpt-6.1-terra'
 
 #> --------------------------------------------------
 #> CACHING Reduces API calls by caching responses

@@ -1,5 +1,4 @@
 import OpenAI from 'openai';
-import { ChatCompletionCreateParamsNonStreaming } from 'openai/resources/chat/completions';
 
 import { appConfig } from '../bootstrap/init-config.js';
 import { isMainModule } from '../utils/utils.js';
@@ -13,18 +12,23 @@ export async function checkLlm(model?: string): Promise<boolean> {
   }
   const cfg = {
     apiKey,
+    timeout: 30000,
+    maxRetries: 0,
     ...(baseURL ? { baseURL: baseURL } : {}),
   };
 
   const openai = new OpenAI(cfg);
-  const data: ChatCompletionCreateParamsNonStreaming = {
-    model: model || 'gpt-4.1' || 'gpt-4o-mini',
-    messages: [{ role: 'user', content: 'Hi' }],
-    max_tokens: 100,
+  const data = {
+    model: model || appConfig.agentTester?.openAi?.defaultModel || 'gpt-6-luna',
+    input: 'Hi',
+    store: false,
+    max_output_tokens: 100,
   };
   try {
-    await openai.chat.completions.create(data);
-    console.log(`API KEY: ${cfg.apiKey.substring(0, 15)}...${cfg.apiKey.substr(-4)}`);
+    const response = await openai.responses.create(data);
+    if (response.status !== 'completed') {
+      throw new Error(`Model response: ${response.status}`);
+    }
     console.log('OK');
     return true;
   } catch (err: unknown) {

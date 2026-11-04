@@ -197,3 +197,17 @@ fragments. Use `${expr}` interpolation rather than `'…' + value` to splice val
 fit within 120 columns stay as plain quotes. For user-facing text where the exact spacing matters (no stray line
 breaks), keep the wording on one logical line inside the backticks even if that line is long — the formatter leaves
 template-literal contents untouched, which is exactly why they replace `+` wrapping.
+
+## Дополнительные правила работы
+
+Перед работой с отдельными рабочими копиями Git и общими изменениями читать
+[AGENTS-GIT-WORKTREE-RULES.md](/AGENTS-GIT-WORKTREE-RULES.md).
+
+Перед длительной загрузкой или массовой обработкой данных читать
+[AGENTS-LONG-RUNNING-JOBS.md](/AGENTS-LONG-RUNNING-JOBS.md).
+
+Перед созданием, изменением или выполнением плана задания читать
+[AGENTS-PROMPT-PLAN-RULES.md](/AGENTS-PROMPT-PLAN-RULES.md).
+
+Перед созданием или изменением инструкций модели и схем ответа читать
+[AGENTS-PROMPT-RULES.md](/AGENTS-PROMPT-RULES.md).

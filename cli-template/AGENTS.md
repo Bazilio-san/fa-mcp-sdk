@@ -278,7 +278,7 @@ yarn test:mcp-sse          # SSE transport tests
 #### Step 6: Iterative Refinement via Agent Tester
 
 Once the server starts cleanly, move to agent-level testing. 
-Use `gpt-5.4` as the model in Agent Tester — it provides the best balance of tool-calling accuracy and reasoning for MCP testing. Send real messages through the Headless API, observe how the LLM uses your tools, and refine:
+Use `gpt-6.1-terra` as the model in Agent Tester — it provides the best balance of tool-calling accuracy and reasoning for MCP testing. Send real messages through the Headless API, observe how the LLM uses your tools, and refine:
 
 - **Tool descriptions** — if the LLM picks the wrong tool or misunderstands its purpose
 - **Parameter schemas** — if the LLM sends wrong types or misses required params
@@ -437,16 +437,17 @@ breaks), keep the wording on one logical line inside the backticks even if that 
 template-literal contents untouched, which is exactly why they replace `+` wrapping.
 
 
-## Writing prompt-plan documents
 
-A prompt-plan is an implementation plan written as a prompt for an executor, human or agent. Its format lives in
-exactly one file — **`.claude/skills/_shared/prompt-plan-format.md`** — and that file is the authority. Read it
-before writing a plan; do not reconstruct the rules from memory and do not copy them into other documents.
+## Дополнительные правила работы
 
-What it prescribes, so you know when it applies: a plain-language opening block written for a non-programmer with
-nothing above it, a note to the executor as the second section, a checklist of implementation stages whose boxes
-the executor ticks in the plan itself as work genuinely lands, the documentation update as the final stage, and
-target-state wording throughout — decisions stated as decisions, never as a transition from an old state.
+Перед работой с отдельными рабочими копиями Git и общими изменениями читать
+[AGENTS-GIT-WORKTREE-RULES.md](/AGENTS-GIT-WORKTREE-RULES.md).
 
-The same file is used by the `create-mcp-wizard` and `feature-prompt-generator` skills, so a change made there
-takes effect everywhere at once.
+Перед длительной загрузкой или массовой обработкой данных читать
+[AGENTS-LONG-RUNNING-JOBS.md](/AGENTS-LONG-RUNNING-JOBS.md).
+
+Перед созданием, изменением или выполнением плана задания читать
+[AGENTS-PROMPT-PLAN-RULES.md](/AGENTS-PROMPT-PLAN-RULES.md).
+
+Перед созданием или изменением инструкций модели и схем ответа читать
+[AGENTS-PROMPT-RULES.md](/AGENTS-PROMPT-RULES.md).
