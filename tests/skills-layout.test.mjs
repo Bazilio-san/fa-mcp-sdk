@@ -138,6 +138,8 @@ test('update migrates old projects, preserves pins, custom skills and settings, 
   write(installed, 'cli-template/.claude/settings.local-example.json', '{}');
   write(installed, 'cli-template/.agents/skills/standard/SKILL.md', 'new skill');
   write(installed, 'cli-template/.agents/skills/pinned/SKILL.md', 'do not replace');
+  write(installed, 'cli-template/.agents/skills/deploy-mcp-to-remote-server/SKILL.md', 'new deployment');
+  write(installed, 'cli-template/.agents/skills/deploy-mcp-to-remote-server/configs/_example/rules.md', 'new example');
   write(root, '.claude/skills/standard/SKILL.md', 'old skill');
   write(root, '.claude/skills/standard/stale.txt', 'remove me');
   write(root, '.claude/skills/pinned/pin', '');
@@ -169,6 +171,17 @@ test('update migrates old projects, preserves pins, custom skills and settings, 
     assert.equal(read('.agents/other.txt'), 'unrelated');
     assert.match(read('.gitignore'), /\/\.claude\/skills/);
     assert.doesNotMatch(read('.gitignore'), /^\.agents\/$/m);
+    if (i === 0) {
+      write(root, '.agents/skills/deploy-mcp-to-remote-server/configs/dev-1/local.yaml', 'private settings');
+      write(root, '.agents/skills/deploy-mcp-to-remote-server/configs/dev-1/rules.md', 'private rules');
+      write(root, '.agents/skills/deploy-mcp-to-remote-server/config/local.yaml', 'legacy settings');
+    } else {
+      assert.equal(read('.agents/skills/deploy-mcp-to-remote-server/configs/dev-1/local.yaml'), 'private settings');
+      assert.equal(read('.agents/skills/deploy-mcp-to-remote-server/configs/dev-1/rules.md'), 'private rules');
+      assert.equal(read('.agents/skills/deploy-mcp-to-remote-server/config/local.yaml'), 'legacy settings');
+      assert.equal(read('.agents/skills/deploy-mcp-to-remote-server/configs/_example/rules.md'), 'new example');
+      assert.equal(read('.agents/skills/deploy-mcp-to-remote-server/SKILL.md'), 'new deployment');
+    }
   }
 });
 

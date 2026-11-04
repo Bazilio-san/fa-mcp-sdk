@@ -8,6 +8,8 @@ const https = require('https');
 const YAML = require('yaml');
 const { execSync, spawn } = require('child_process');
 const os = require('os');
+const { classifyChanges, readPending, writePending, waitForHealth } = require('./deploy/update-state.cjs');
+const { spawnSync } = require('child_process');
 
 const version = '2025.11.25-0506';
 console.log(`Update script version: ${version}`);
@@ -80,6 +82,7 @@ const lastDeployLogFile = path.join(VON, `deploy__${scriptDirName}__last_deploy.
 const cumulativeLogFile = path.join(VON, `deploy__${scriptDirName}__cumulative.log`);
 // Machine-readable one-line verdict of the last actual update, for external monitors
 // (e.g. the deploy skill's `status` / `updatelog`): "SUCCESS|FAIL | <ts> | <detail>".
+const pendingFile = path.join(CWD, '.git', 'deploy-update-pending.json');
 const statusFile = path.join(VON, `deploy__${scriptDirName}__status.log`);
 
 const clearColors = (text) => text.replace(/\x1B\[[0-9;]*[mGKH]/g, '');
@@ -285,6 +288,7 @@ function loadConfig() {
     return {
       branch: config.branch || DEFAULT_CONFIG.branch,
       nodeVersion: config.nodeVersion,
+      healthUrl: config.healthUrl,
       email: config.email || DEFAULT_CONFIG.email,
       smtp,
       telegramBotToken: telegram.botToken || DEFAULT_CONFIG.telegramBotToken,
@@ -334,8 +338,7 @@ function getServiceName() {
  */
 function systemctlServiceExists(serviceName) {
   try {
-    execCommand(`systemctl list-unit-files "${serviceName}.service"`);
-    return true;
+    return execCommand(`systemctl show "${serviceName}.service" -p LoadState --value`).trim() === 'loaded';
   } catch {
     return false;
   }
@@ -347,41 +350,6 @@ function pm2ServiceExists(serviceName) {
     return /\[\s*\d\s*]/.test(res);
   } catch {
     return false;
-  }
-}
-
-/**
- * Get git repository information
- */
-function getRepoInfo() {
-  try {
-    const branch = execCommand('git rev-parse --abbrev-ref HEAD').trim();
-    const headHash = execCommand('git rev-parse HEAD').trim();
-    // const headShortHash = execCommand('git rev-parse --short HEAD').trim();
-    const headCommitMessage = execCommand(`git log -n 1 --pretty=format:%s ${headHash}`).trim();
-    const headDdate = execCommand(
-      `git log -n 1 --format="%at" ${headHash} | xargs -I{} date -d @{} +%d.%m.%Y_%H:%M:%S`,
-    ).trim();
-    execCommand(`git fetch origin ${branch} --prune`);
-
-    const upstreamHash = execCommand(`git rev-parse ${branch}@{upstream}`).trim();
-    // const upstreamShortHash = execCommand(`git rev-parse --short ${branch}@{upstream}`).trim();
-    // const upstreamCommitMessage = execCommand(`git log -n 1 --pretty=format:%s ${upstreamHash}`).trim();
-
-    return {
-      branch,
-      headDdate,
-      headHash,
-      headCommitMessage,
-      upstreamHash,
-    };
-  } catch (error) {
-    const message = String(error.message).includes(error.stderr)
-      ? error.message
-      : [error.stderr, error.message].join('\n');
-
-    console.error('Error getting repo info:', message);
-    return null;
   }
 }
 
@@ -596,14 +564,6 @@ async function sendNotifications(config, status, body, serviceName) {
   await sendTelegramNotification(config, status, body, serviceName);
 }
 
-const printCurrenBranch = () => {
-  const i = getRepoInfo();
-  logIt(`Current branch: ${colorG.lg(i.branch)}
-Last commit: ${colorG.lg(i.headHash)}, date: ${colorG.lg(i.headDdate)}    
-Commit message: ${colorG.lg(i.headCommitMessage)}`);
-  return i;
-};
-
 let scriptsDirName = fs.existsSync(path.join(CWD, '_sh/npm/yarn-ci.sh')) ? '_sh' : 'scripts';
 
 const reinstallDependencies = () => {
@@ -646,8 +606,7 @@ const restartService = (serviceNamePM) => {
   } else if (pm2ServiceExists(serviceNamePM)) {
     srvc = 'pm2';
   } else {
-    logIt(`Service ${serviceNamePM} not found in systemctl or PM2`);
-    return;
+    throw new Error(`Service ${serviceNamePM} not found in systemctl or PM2`);
   }
   logIt(`Restarting service ${serviceNamePM} via ${srvc}`, true);
   execCommand(`${srvc} restart "${serviceNamePM}"`);
@@ -690,56 +649,69 @@ async function main() {
   const expectedBranch = args.expectedBranch || config.branch;
   let updateDeployedLogFile = false;
   try {
-    // 1) If there are local changes, roll back
-    const hasChanges = execCommand('git status --porcelain').trim().length > 0;
-    if (hasChanges) {
-      logIt(`Found uncommited changes. Reset to HEAD...`);
-      execCommand('git reset --hard HEAD');
-      execCommand(`git clean -fd`);
+    if (!/^[a-zA-Z0-9][a-zA-Z0-9_./-]*$/.test(expectedBranch) || expectedBranch.includes('..')) {
+      throw new Error('Invalid deployment branch');
     }
-
-    let needUpdate = false;
-    let updateReason = args.force ? 'force' : '';
-    const repoInfo = getRepoInfo();
-    let { branch, headHash, upstreamHash } = repoInfo;
-
-    // 2) If the branch is not the same, hard switch to the head of the deleted expectedBranch
-    const expectedUpstream = `origin/${expectedBranch}`;
-    if (branch !== expectedBranch) {
-      needUpdate = true;
-      updateReason += `${updateReason ? '. ' : ''}branch !== expectedBranch (${branch} != ${expectedBranch})`;
-      logIt(`Switch to branch ${expectedBranch}...`);
-      execCommand(`git fetch origin ${expectedBranch} --prune`);
-      execCommand(`git checkout -B ${expectedBranch} ${expectedUpstream}`);
-      execCommand(`git reset --hard ${expectedUpstream}`);
-      execCommand(`git clean -fd`);
-      const i = printCurrenBranch();
-      ({ branch, headHash, upstreamHash } = i);
-      if (branch !== expectedBranch) {
-        throw new Error(`Failed to switch to branch ${expectedBranch}`);
-      }
-    }
-
-    if (headHash !== upstreamHash) {
-      // 3) The branch is the same, but we need to tighten up the changes
-      needUpdate = true;
-      updateReason += `${updateReason ? '. ' : ''}headHash !== upstreamHash (${headHash} != ${upstreamHash})`;
-      printCurrenBranch();
-      logIt(`FOUND CHANGES. UPDATE branch ${expectedBranch}...`);
-      execCommand(`git fetch origin ${expectedBranch} --prune`);
-      execCommand(`git checkout -B ${expectedBranch} ${expectedUpstream}`);
-      execCommand(`git reset --hard ${expectedUpstream}`);
-      execCommand(`git clean -fd`);
-      printCurrenBranch();
-    }
-
+    execCommand(`git fetch origin ${expectedBranch} --prune`);
+    const target = `origin/${expectedBranch}`;
+    const before = execCommand('git rev-parse HEAD').trim();
+    const after = execCommand(`git rev-parse ${target}`).trim();
+    const pending = readPending(pendingFile);
+    const files = [
+      execCommand(`git diff --name-only HEAD ${target}`),
+      execCommand('git diff --name-only'),
+      execCommand('git diff --cached --name-only'),
+    ]
+      .join('\n')
+      .split(/\r?\n/)
+      .filter(Boolean);
+    const changes = classifyChanges(files);
+    changes.dependencies ||= Boolean(pending?.dependencies) || !fs.existsSync('node_modules');
+    changes.build ||= changes.dependencies || Boolean(pending?.build) || !fs.existsSync('dist');
+    const branch = execCommand('git branch --show-current').trim();
+    const needUpdate =
+      before !== after ||
+      branch !== expectedBranch ||
+      files.length > 0 ||
+      pending ||
+      changes.dependencies ||
+      changes.build;
+    const updateReason = `${before} -> ${after}${pending ? ' (retry pending update)' : ''}`;
     if (needUpdate || args.force) {
       updateDeployedLogFile = true;
+      writePending(pendingFile, { ...changes, before, after });
       logTryUpdate(updateReason);
-      reinstallDependencies();
-      compile();
-      buildQuasar();
+      execCommand(`git checkout -f -B ${expectedBranch} ${target}`);
+      execCommand(`git reset --hard ${target}`);
+      execCommand('git clean -fd');
+      if (changes.dependencies) {
+        reinstallDependencies();
+      }
+      if (changes.build) {
+        compile();
+        buildQuasar();
+      }
       restartService(serviceNamePM);
+      let { healthUrl } = config;
+      if (!healthUrl) {
+        const env = fs.existsSync('.env') ? fs.readFileSync('.env', 'utf8') : '';
+        const local = fs.existsSync('config/local.yaml')
+          ? YAML.parse(fs.readFileSync('config/local.yaml', 'utf8'))
+          : {};
+        const defaults = fs.existsSync('config/default.yaml')
+          ? YAML.parse(fs.readFileSync('config/default.yaml', 'utf8'))
+          : {};
+        const port = env.match(/^WS_PORT=(\d+)\s*$/m)?.[1] || local?.webServer?.port || defaults?.webServer?.port;
+        if (!port) {
+          throw new Error('Set healthUrl in deploy/config.yml or webServer.port in config/local.yaml');
+        }
+        healthUrl = `http://127.0.0.1:${port}/health`;
+      }
+      await waitForHealth(healthUrl);
+      if (systemctlServiceExists(serviceNamePM)) {
+        execCommand(`systemctl is-active --quiet "${serviceNamePM}"`);
+      }
+      fs.rmSync(pendingFile, { force: true });
 
       // Add completion info to build log
       logIt(`Update completed successfully at ${new Date().toISOString().replace('T', ' ').substring(0, 19)}`);
@@ -751,7 +723,13 @@ async function main() {
     }
   } catch (err) {
     const message = String(err.message).includes(err.stderr) ? err.message : [err.stderr, err.message].join('\n');
+    process.exitCode = 1;
     logError(message);
+    try {
+      logIt(execCommand(`journalctl -u "${serviceNamePM}" -n 80 --no-pager`));
+    } catch {
+      /* Preserve original failure. */
+    }
     writeStatus('FAIL', message);
     await sendNotifications(config, 'FAIL', logBuffer, serviceName);
   } finally {
@@ -774,9 +752,33 @@ process.on('SIGTERM', () => {
   process.exit(1);
 });
 
+// Serialize cron and manual updates; flock releases its lock even after an interrupted process.
+if (process.platform === 'linux' && !process.env.MCP_UPDATE_LOCKED) {
+  const locked = spawnSync(
+    'flock',
+    [
+      '-n',
+      '-E',
+      '75',
+      path.join(CWD, '.git', 'deploy-update.lock'),
+      process.execPath,
+      __filename,
+      ...process.argv.slice(2),
+    ],
+    {
+      stdio: 'inherit',
+      env: { ...process.env, MCP_UPDATE_LOCKED: '1' },
+    },
+  );
+  if (locked.status === 75) {
+    console.log('Another update is running; retry later.');
+  }
+  process.exit(locked.status ?? 1);
+}
+
 main()
   .then(() => {
-    process.exit(0);
+    process.exit(process.exitCode || 0);
   })
   .catch((error) => {
     console.error('Update failed:', error.message);

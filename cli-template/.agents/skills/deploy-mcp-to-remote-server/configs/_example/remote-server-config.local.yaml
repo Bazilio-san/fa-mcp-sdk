@@ -1,0 +1,33 @@
+server:
+  host: <server IP>            # SSH host of the target server
+  port: 22                     # SSH port
+  user: <username>             # SSH user (usually root)
+  keyPath: <path to SSH key>   # Local private key for SSH, e.g. C:\Users\you\.ssh\id_rsa
+
+git:
+  repoUrl: <git@github.com:org/repo.git>   # SSH URL the CONTAINER clones from
+  # Private key the container uses to clone. Best practice is a dedicated read-only
+  # GitHub Deploy Key — create one with:  node scripts/remote.cjs keygen
+  # then add the printed public key to the repo (Settings → Deploy keys, read-only).
+  # You may also point this at an existing key that already has GitHub access.
+  deployKeyPath: <path to git private key>   # e.g. C:\Users\you\.ssh\<name>-deploy
+
+project:
+  branch: master     # Branch the container tracks and auto-updates from
+  # projectPath and statePath are OPTIONAL — default to /opt/node/<name> and /opt/<name>.
+  # projectPath: /opt/node/<name>   # where the repo is cloned INSIDE the container
+  # statePath:   /opt/<name>        # HOST dir that persistently holds the app's data cache
+  # cacheDir:    data-cache         # subdir inside the project that statePath is mounted onto
+
+mcp:
+  dns: <public domain>   # Public domain the reverse proxy serves, e.g. app.example.com
+
+# OPTIONAL overrides (auto-detected if omitted):
+# service:
+#   name: <name>     # container/image/volume/service base name (default: package.json name + installation alias)
+#   instance: prod   # systemd instance suffix -> <name>--<instance>
+# container:
+#   nodeVersion: <x.y.z>   # node version baked into the image (default: from .envrc)
+
+env:
+  DEBUG: config-info   # DEBUG value passed into the container (optional; default: config-info)

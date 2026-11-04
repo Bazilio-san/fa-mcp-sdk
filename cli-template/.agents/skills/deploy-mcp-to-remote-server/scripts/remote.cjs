@@ -9,7 +9,7 @@
 // from remote-server-config.local.yaml — nothing is hard-coded here.
 //
 // Model: a self-contained systemd Docker image (docker/Dockerfile) carrying no app
-// code; at boot it clones the repo (read-only Deploy Key passed via env), writes
+// code; at boot it clones the repo (read-only Deploy Key delivered as a private file), writes
 // config/local.yaml (from config/local.yaml) + deploy/config.yml + .env, builds,
 // installs the app as a systemd service, and runs update.cjs from cron every minute.
 //
@@ -34,14 +34,31 @@ const fs = require('fs');
 const path = require('path');
 const { spawnSync } = require('child_process');
 
-// Settings live in the sibling config/ folder, split into three files:
-//   remote-server-config.local.yaml — connection + deploy params (server/git/project/mcp/env)
-//   local.yaml                       — the app's config/local.yaml, copied verbatim into the container
-//   config.yml                       — the container's deploy/config.yml base (branch, email)
-const CONFIG_DIR = path.join(__dirname, '..', 'config');
-const CONFIG_FILE = path.join(CONFIG_DIR, 'remote-server-config.local.yaml');
-const LOCAL_YAML_FILE = path.join(CONFIG_DIR, 'local.yaml');
-const CONFIG_YML_FILE = path.join(CONFIG_DIR, 'config.yml');
+// Selected explicitly; never fall back to another installation.
+let CONFIG_DIR, CONFIG_FILE, LOCAL_YAML_FILE, CONFIG_YML_FILE;
+function selectServer(args) {
+  const rest = [];
+  let alias;
+  for (let i = 0; i < args.length; i++) {
+    if (args[i] === '--') {
+      rest.push(...args.slice(i));
+      break;
+    }
+    if (args[i] === '--server') {
+      if (alias || !args[i + 1]) fail('Specify --server <alias> exactly once.');
+      alias = args[++i];
+    } else rest.push(args[i]);
+  }
+  if (!alias || alias === '_example' || !/^[a-z0-9][a-z0-9_.-]*$/.test(alias)) {
+    fail('Specify --server <alias>: an existing folder in configs/. No default server is selected.');
+  }
+  CONFIG_DIR = path.join(__dirname, '..', 'configs', alias);
+  CONFIG_FILE = path.join(CONFIG_DIR, 'remote-server-config.local.yaml');
+  LOCAL_YAML_FILE = path.join(CONFIG_DIR, 'local.yaml');
+  CONFIG_YML_FILE = path.join(CONFIG_DIR, 'config.yml');
+  if (!fs.existsSync(path.join(CONFIG_DIR, 'rules.md'))) fail(`Missing installation rules: configs/${alias}/rules.md`);
+  return { alias, rest };
+}
 const DOCKERFILE = path.join(__dirname, '..', 'docker', 'Dockerfile');
 // Host project root: .agents/skills/<skill>/scripts/remote.cjs -> up four levels.
 const PROJECT_ROOT = path.resolve(__dirname, '..', '..', '..', '..');
@@ -104,7 +121,13 @@ function sq(v) {
 
 // Docker/systemd-safe identifier derived from an arbitrary project name.
 function sanitizeName(n) {
-  return String(n).toLowerCase().replace(/^@/, '').replace(/\//g, '-').replace(/[^a-z0-9_.-]/g, '-') || 'mcp-app';
+  return (
+    String(n)
+      .toLowerCase()
+      .replace(/^@/, '')
+      .replace(/\//g, '-')
+      .replace(/[^a-z0-9_.-]/g, '-') || 'mcp-app'
+  );
 }
 
 // Service/container base name — from config override, else the host project's package.json name.
@@ -132,12 +155,14 @@ function readNodeVersion(cfg) {
   return '22.17.1';
 }
 
-function loadConfig() {
+function loadConfig(alias) {
   if (!fs.existsSync(CONFIG_FILE)) {
-    fail(`Config not found: ${CONFIG_FILE}\nCopy config/remote-server-config.example.yaml to it and fill it in.`);
+    fail(
+      `Config not found: ${CONFIG_FILE}\nCopy configs/_example/ to the selected installation folder and fill it in.`,
+    );
   }
   if (!fs.existsSync(LOCAL_YAML_FILE)) {
-    fail(`Missing ${LOCAL_YAML_FILE}\nCopy config/local.example.yaml to config/local.yaml (the app's config/local.yaml).`);
+    fail(`Missing ${LOCAL_YAML_FILE}\nCopy configs/_example/local.yaml to the selected installation folder.`);
   }
   const cfg = parseYaml(fs.readFileSync(CONFIG_FILE, 'utf8'));
   const server = cfg.server || {};
@@ -146,7 +171,7 @@ function loadConfig() {
   const mcp = cfg.mcp || {};
   const envSection = cfg.env || {};
   const req = (v, name) => {
-    if (!v) fail(`Missing required config value: ${name}`);
+    if (!v || /[<>]/.test(String(v))) fail(`Missing required config value: ${name}`);
     return v;
   };
 
@@ -157,12 +182,38 @@ function loadConfig() {
 
   // The container's deploy/config.yml = config.yml verbatim (branch, email, optional smtp and the
   // deploy skill's telegram block, all read by update.cjs).
-  const deployYml = fs.existsSync(CONFIG_YML_FILE) ? fs.readFileSync(CONFIG_YML_FILE, 'utf8') : 'branch: master\n';
+  if (!fs.existsSync(CONFIG_YML_FILE)) fail(`Missing ${CONFIG_YML_FILE}`);
+  const deployYml = fs.readFileSync(CONFIG_YML_FILE, 'utf8');
   const dcfg = parseYaml(deployYml);
 
-  const name = readProjectName(cfg);
+  const name = cfg.service?.name ? readProjectName(cfg) : `${readProjectName(cfg)}-${alias}`;
   const instance = (cfg.service && cfg.service.instance) || 'prod';
+  const safe = (value, pattern, label) => {
+    if (!pattern.test(String(value))) fail(`Invalid ${label}`);
+  };
+  safe(instance, /^[a-zA-Z0-9_.-]+$/, 'service.instance');
+  safe(readNodeVersion(cfg), /^\d+\.\d+\.\d+$/, 'container.nodeVersion');
+  safe(mcp.dns, /^(?=.{1,253}$)[a-zA-Z0-9][a-zA-Z0-9.-]*$/, 'mcp.dns');
+  for (const [value, label] of [
+    [local.webServer?.port || '9049', 'webServer.port'],
+    [server.port || '22', 'server.port'],
+  ]) {
+    if (!/^\d+$/.test(String(value)) || Number(value) < 1 || Number(value) > 65535) fail(`Invalid ${label}`);
+  }
+  for (const key of ['projectPath', 'statePath']) {
+    if (project[key] && (!/^\/[a-zA-Z0-9_./-]+$/.test(project[key]) || project[key].split('/').includes('..'))) {
+      fail(`Invalid project.${key}`);
+    }
+  }
+  if (
+    project.cacheDir &&
+    (!/^[a-zA-Z0-9_./-]+$/.test(project.cacheDir) ||
+      project.cacheDir.startsWith('/') ||
+      project.cacheDir.split('/').includes('..'))
+  )
+    fail('Invalid project.cacheDir');
   return {
+    alias,
     name,
     instance,
     nodeVersion: readNodeVersion(cfg),
@@ -190,10 +241,14 @@ function loadConfig() {
 // ── SSH helpers ──────────────────────────────────────────────────────────────
 function sshBaseArgs(cfg) {
   return [
-    '-i', cfg.keyPath,
-    '-p', String(cfg.port),
-    '-o', 'StrictHostKeyChecking=accept-new',
-    '-o', 'ConnectTimeout=15',
+    '-i',
+    cfg.keyPath,
+    '-p',
+    String(cfg.port),
+    '-o',
+    'StrictHostKeyChecking=accept-new',
+    '-o',
+    'ConnectTimeout=15',
     `${cfg.user}@${cfg.host}`,
   ];
 }
@@ -206,6 +261,7 @@ function sshRun(cfg, script, { interactive = false } = {}) {
   if (interactive) {
     const res = spawnSync('ssh', ['-t', ...sshBaseArgs(cfg), script], { stdio: 'inherit' });
     if (res.error) fail(`ssh failed to start: ${res.error.message}`);
+    if (res.status !== 0) process.exitCode = res.status || 1;
     return res.status;
   }
   const res = spawnSync('ssh', [...sshBaseArgs(cfg), 'bash -l'], {
@@ -213,6 +269,7 @@ function sshRun(cfg, script, { interactive = false } = {}) {
     stdio: ['pipe', 'inherit', 'inherit'],
   });
   if (res.error) fail(`ssh failed to start: ${res.error.message}`);
+  if (res.status !== 0) process.exitCode = res.status || 1;
   return res.status;
 }
 
@@ -223,6 +280,7 @@ function sshPipe(cfg, remoteCmd, input) {
     stdio: ['pipe', 'inherit', 'inherit'],
   });
   if (res.error) fail(`ssh failed to start: ${res.error.message}`);
+  if (res.status !== 0) process.exitCode = res.status || 1;
   return res.status;
 }
 
@@ -449,13 +507,14 @@ function cmdKeygen(cfg) {
   console.log(pub);
   console.log('──────────────────────────────────────────────────────────────');
   if (!cfg.deployKeyPath) {
-    console.log(`Then set  git.deployKeyPath: ${target}  in config/remote-server-config.local.yaml`);
+    console.log(`Then set  git.deployKeyPath: ${target}  in ${CONFIG_FILE}`);
   }
 }
 
 function cmdDeploy(cfg) {
   if (!cfg.deployKeyPath) fail('git.deployKeyPath is not set. Run: node remote.cjs keygen');
-  if (!fs.existsSync(cfg.deployKeyPath)) fail(`Deploy key not found: ${cfg.deployKeyPath}. Run: node remote.cjs keygen`);
+  if (!fs.existsSync(cfg.deployKeyPath))
+    fail(`Deploy key not found: ${cfg.deployKeyPath}. Run: node remote.cjs keygen`);
   if (!fs.existsSync(DOCKERFILE)) fail(`Dockerfile not found: ${DOCKERFILE}`);
 
   const keyB64 = b64(fs.readFileSync(cfg.deployKeyPath, 'utf8'));
@@ -475,18 +534,28 @@ docker version >/dev/null`;
   if (sshRun(cfg, preflight) !== 0) fail('Docker is not available on the server.');
 
   say(`Building image ${IMAGE} (node ${NODE_VERSION}) on ${cfg.user}@${cfg.host} (context-less)...`);
-  let code = sshPipe(cfg, `DOCKER_BUILDKIT=1 docker build --build-arg NODE_VERSION=${NODE_VERSION} -t ${IMAGE} -`, dockerfile);
+  let code = sshPipe(
+    cfg,
+    `DOCKER_BUILDKIT=1 docker build --build-arg NODE_VERSION=${NODE_VERSION} -t ${IMAGE} -`,
+    dockerfile,
+  );
   if (code !== 0) fail('Image build failed. See output above.');
 
   const runScript = `
 set -euo pipefail
+umask 077
+SECRET_DIR=$(mktemp -d)
+trap 'rm -rf -- "$SECRET_DIR"' EXIT
+printf '%s' ${sq(keyB64)} | base64 -d > "$SECRET_DIR/id_ed25519"
+printf '%s' ${sq(localYamlB64)} | base64 -d > "$SECRET_DIR/local.yaml"
+printf '%s' ${sq(deployCfgB64)} | base64 -d > "$SECRET_DIR/config.yml"
 echo 'Recreating container...'
 docker rm -f ${CONTAINER} >/dev/null 2>&1 || true
 docker volume create ${VOLUME} >/dev/null
 # Host directory that persistently holds the app's runtime data cache (data-cache),
 # bind-mounted over it so it survives container/volume removal.
 mkdir -p ${sq(cfg.statePath)}
-docker run -d --name ${CONTAINER} --restart unless-stopped \
+docker create --name ${CONTAINER} --restart unless-stopped \
   --privileged --cgroupns=host \
   --network host \
   --tmpfs /run --tmpfs /run/lock \
@@ -500,10 +569,10 @@ docker run -d --name ${CONTAINER} --restart unless-stopped \
   -e SERVICE_INSTANCE=${sq(cfg.instance)} \
   -e DEBUG=${sq(cfg.debug)} \
   -e PUBLIC_BASE_URL=${sq('https://' + cfg.dns)} \
-  -e GIT_SSH_KEY_B64=${sq(keyB64)} \
-  -e CONFIG_LOCAL_YAML_B64=${sq(localYamlB64)} \
-  -e DEPLOY_CONFIG_YAML_B64=${sq(deployCfgB64)} \
+  -e APP_PORT=${sq(cfg.appPort)} \
   ${IMAGE}
+docker cp "$SECRET_DIR" ${CONTAINER}:/run-secrets
+docker start ${CONTAINER}
 echo 'Container started. First boot clones + builds inside the container (a few minutes).'
 ${reverseProxySnippet(cfg)}
 `;
@@ -559,6 +628,19 @@ fi
   sshRun(cfg, script);
 }
 
+function healthScript(cfg) {
+  return `
+for attempt in $(seq 1 30); do
+  if docker exec ${CONTAINER} systemctl is-active --quiet ${SERVICE} &&
+    curl -fsS --max-time 2 http://127.0.0.1:${cfg.appPort}/health >/dev/null; then
+    echo 'Application ready'; exit 0
+  fi
+  sleep 1
+done
+docker exec ${CONTAINER} journalctl -u ${SERVICE} -n 80 --no-pager
+exit 1`;
+}
+
 function cmdStop(cfg) {
   say('Stopping container (auto-update stops with it)');
   sshRun(cfg, `docker stop ${CONTAINER} && echo stopped`);
@@ -566,12 +648,12 @@ function cmdStop(cfg) {
 
 function cmdStart(cfg) {
   say('Starting container');
-  sshRun(cfg, `docker start ${CONTAINER} && echo started`);
+  sshRun(cfg, `docker start ${CONTAINER} && ${healthScript(cfg)}`);
 }
 
 function cmdRestart(cfg) {
   say('Restarting the app service inside the container (no rebuild)');
-  sshRun(cfg, `docker exec ${CONTAINER} systemctl restart ${SERVICE} && echo restarted`);
+  sshRun(cfg, `docker exec ${CONTAINER} systemctl restart ${SERVICE} && ${healthScript(cfg)}`);
 }
 
 function cmdUpdate(cfg) {
@@ -579,111 +661,50 @@ function cmdUpdate(cfg) {
   sshRun(cfg, `docker exec ${CONTAINER} ${NODE_BIN} ${cfg.projectPath}/update.cjs --force`);
 }
 
-// Push the two local config files into the already-running container and restart — the fast path
-// for a settings change (tokens, telegram, rate limits) that would otherwise need a full `deploy`.
-//
-//   node remote.cjs push-config                  # push both files + restart the app service
-//   node remote.cjs push-config --container      # push both files + restart the whole container
-//   node remote.cjs push-config --no-restart     # push only, restart later with `restart`
-//
-// config/local.yaml (from the skill's config/local.yaml) and deploy/config.yml (from config.yml)
-// are copied into the checkout inside the container. Nothing is rebuilt and git is not touched.
-//
-// Why this is safe: the bootstrap writes those two files only on FIRST boot — its systemd unit
-// carries `ConditionPathExists=!/var/lib/deploy-bootstrap-done`. So a later container restart does
-// NOT re-materialise them from the (now stale) PID 1 environment, and what is pushed here survives.
-// The next `deploy`, however, recreates the container with fresh env values, so keep the local files
-// as the source of truth.
-//
-// File contents are never echoed: both hold secrets (JWT keys, permanent tokens, bot tokens). Only
-// created / updated / unchanged is reported, and the previous version is kept in /tmp inside the
-// container for the current session.
+// Push selected installation files without changing Git or rebuilding the image.
+// Bootstrap only writes them on first boot; later container restarts preserve them.
 function cmdPushConfig(cfg, args) {
   const restartContainer = args.includes('--container');
   const noRestart = args.includes('--no-restart');
   if (restartContainer && noRestart) fail('Use either --container or --no-restart, not both.');
 
-  const hasDeployYml = fs.existsSync(CONFIG_YML_FILE);
-  if (!hasDeployYml) {
-    say(`No ${CONFIG_YML_FILE} — pushing config/local.yaml only (deploy/config.yml left untouched).`);
-  }
-
-  // Applied inside the container: compare by hash, replace only what differs, exit 10 when nothing
-  // changed so the caller can skip a pointless restart.
   const inner = `
-set -uo pipefail
-cd ${cfg.projectPath} 2>/dev/null || { echo 'Project dir ${cfg.projectPath} not found inside the container.'; exit 2; }
-mkdir -p config deploy
-CHANGED=0
-push_file() {
-  src="$1"; dst="$2"
-  [ -f "$src" ] || return
-  if [ ! -f "$dst" ]; then
-    cp "$src" "$dst"; echo "  $dst — created"; CHANGED=1; return
-  fi
-  if [ "$(sha256sum "$src" | cut -d' ' -f1)" = "$(sha256sum "$dst" | cut -d' ' -f1)" ]; then
-    echo "  $dst — unchanged"; return
-  fi
-  cp "$dst" "/tmp/pc-prev-$(basename "$dst")"
-  cp "$src" "$dst"
-  echo "  $dst — updated (previous kept as /tmp/pc-prev-$(basename "$dst"))"
-  CHANGED=1
-}
-push_file /tmp/pc-local.yaml config/local.yaml
-push_file /tmp/pc-config.yml deploy/config.yml
-rm -f /tmp/pc-local.yaml /tmp/pc-config.yml
-[ "$CHANGED" = "1" ] || exit 10
-exit 0`;
-
-  const restartBlock = noRestart
-    ? `echo 'Restart skipped (--no-restart). Apply the new config with: node remote.cjs restart'`
-    : restartContainer
-      ? `echo 'Restarting the whole container...'
-docker restart ${CONTAINER} >/dev/null && echo 'Container restarted.'
-sleep 8`
-      : `echo 'Restarting the app service inside the container...'
-docker exec ${CONTAINER} systemctl restart ${SERVICE} && echo 'App service restarted.'
-sleep 3`;
-
-  const healthBlock = noRestart
-    ? ''
-    : `curl -fsS -m 8 "http://127.0.0.1:${cfg.appPort}/health" && echo || echo 'local /health FAILED — check: node remote.cjs logs 100'`;
-
-  const script = `
-set -uo pipefail
-docker inspect ${CONTAINER} >/dev/null 2>&1 || { echo 'Container ${CONTAINER} does not exist — run: node remote.cjs deploy'; exit 1; }
-RUNNING=$(docker inspect -f '{{.State.Running}}' ${CONTAINER} 2>/dev/null || echo false)
-[ "$RUNNING" = 'true' ] || { echo 'Container is not running — run: node remote.cjs start'; exit 1; }
-docker exec ${CONTAINER} test -f /var/lib/deploy-bootstrap-done || {
-  echo 'First boot has not finished yet — it writes these files itself and would overwrite the push.';
-  echo 'Watch it with: node remote.cjs status'; exit 1; }
+set -euo pipefail
 umask 077
-printf '%s' ${sq(b64(cfg.localYaml))} | base64 -d > /tmp/pc-local.yaml
-docker cp /tmp/pc-local.yaml ${CONTAINER}:/tmp/pc-local.yaml >/dev/null
-${hasDeployYml
-      ? `printf '%s' ${sq(b64(cfg.deployConfigYaml))} | base64 -d > /tmp/pc-config.yml
-docker cp /tmp/pc-config.yml ${CONTAINER}:/tmp/pc-config.yml >/dev/null`
-      : ''}
-rm -f /tmp/pc-local.yaml /tmp/pc-config.yml
-echo 'Applying config inside the container:'
-docker exec ${CONTAINER} bash -lc ${sq(inner)}
-RC=$?
-if [ "$RC" = '10' ]; then
-  echo 'Nothing to do — the container already has these exact files. Restart skipped.'
-  exit 0
+cd ${sq(cfg.projectPath)}
+TMP=$(mktemp -d)
+trap 'rm -rf -- "$TMP"' EXIT
+printf '%s' ${sq(b64(cfg.localYaml))} | base64 -d > "$TMP/local.yaml"
+printf '%s' ${sq(b64(cfg.deployConfigYaml))} | base64 -d > "$TMP/config.yml"
+mkdir -p config deploy
+if cmp -s "$TMP/local.yaml" config/local.yaml && cmp -s "$TMP/config.yml" deploy/config.yml; then
+  chmod 600 config/local.yaml deploy/config.yml
+  echo 'Configuration unchanged'; exit 10
 fi
-[ "$RC" = '0' ] || { echo "Config push FAILED (exit $RC) — nothing was restarted."; exit "$RC"; }
-${restartBlock}
-${healthBlock}
-if grep -qs "127.0.0.1:${cfg.appPort}" /etc/caddy/Caddyfile || grep -qs "127.0.0.1:${cfg.appPort}" /etc/nginx/sites-available/${cfg.dns}.conf; then
-  :
-else
-  echo '⚠ The reverse proxy does not forward to 127.0.0.1:${cfg.appPort} — webServer.port changed? Re-run: node remote.cjs deploy'
-fi
+install -m 600 "$TMP/local.yaml" config/local.yaml
+install -m 600 "$TMP/config.yml" deploy/config.yml
+echo 'Configuration updated'`;
+  const upload = `
+set -euo pipefail
+docker exec ${CONTAINER} test -f /var/lib/deploy-bootstrap-done
+# Send file contents through stdin, never through process arguments.
+docker exec -i ${CONTAINER} bash -s <<'MCP_CONFIG_INPUT'
+${inner}
+MCP_CONFIG_INPUT
 `;
-  say(`Pushing config to ${CONTAINER} on ${cfg.user}@${cfg.host}`);
-  const code = sshRun(cfg, script);
-  if (code !== 0) fail(`push-config failed (exit ${code}). Diagnose with: node remote.cjs status`);
+  const code = sshRun(cfg, upload);
+  if (code === 10) {
+    process.exitCode = 0;
+    return;
+  }
+  if (code !== 0) fail('Configuration upload failed');
+  if (!noRestart) {
+    const command = restartContainer
+      ? `docker restart ${CONTAINER}`
+      : `docker exec ${CONTAINER} systemctl restart ${SERVICE}`;
+    sshRun(cfg, `${command} && ${healthScript(cfg)}`);
+  }
+  say('If webServer.port changed, run deploy to update the container and reverse proxy.');
 }
 
 function cmdLogs(cfg, n) {
@@ -737,8 +758,10 @@ function cmdExec(cfg, args) {
 
 function cmdUninstall(cfg, yes) {
   if (!yes) {
-    fail('Destructive. Re-run with --yes to remove container, image, volume and Caddy block:\n' +
-      '  node remote.cjs uninstall --yes');
+    fail(
+      'Destructive. Re-run with --yes to remove container, image, volume and Caddy block:\n' +
+        '  node remote.cjs uninstall --yes',
+    );
   }
   const dnsEsc = cfg.dns.replace(/\./g, '\\.');
   const script = `
@@ -777,8 +800,16 @@ function cmdSsh(cfg) {
 
 // ── Entry point ──────────────────────────────────────────────────────────────
 function main() {
-  const [cmd, ...rest] = process.argv.slice(2);
-  const cfg = loadConfig();
+  const argv = process.argv.slice(2);
+  if (!argv.length || argv.includes('--help') || argv[0] === 'help') {
+    console.log(
+      'node remote.cjs --server <alias> <show|keygen|deploy|status|start|stop|restart|update|push-config|logs|bootlog|updatelog|shell|exec|uninstall|ssh>',
+    );
+    return;
+  }
+  const selected = selectServer(argv);
+  const [cmd, ...rest] = selected.rest;
+  const cfg = loadConfig(selected.alias);
   // Resolve all project-specific names from the config once.
   CONTAINER = cfg.name;
   IMAGE = `${cfg.name}:latest`;
@@ -786,23 +817,60 @@ function main() {
   SERVICE = `${cfg.name}--${cfg.instance}`;
   UPSTREAM = `${cfg.name.replace(/[^a-z0-9]/gi, '_')}_upstream`;
   NODE_VERSION = cfg.nodeVersion;
+  say(
+    `Target: ${cfg.alias}; host: ${cfg.host}; container: ${CONTAINER}; project: ${cfg.projectPath}; branch: ${cfg.branch}`,
+  );
   switch (cmd) {
-    case 'keygen': return cmdKeygen(cfg);
-    case 'deploy': return cmdDeploy(cfg);
-    case 'status': return cmdStatus(cfg);
-    case 'stop': return cmdStop(cfg);
-    case 'start': return cmdStart(cfg);
-    case 'restart': return cmdRestart(cfg);
+    case 'show':
+      console.log(
+        JSON.stringify(
+          {
+            server: cfg.alias,
+            host: cfg.host,
+            container: CONTAINER,
+            projectPath: cfg.projectPath,
+            statePath: cfg.statePath,
+            branch: cfg.branch,
+            service: SERVICE,
+            port: cfg.appPort,
+            domain: cfg.dns,
+          },
+          null,
+          2,
+        ),
+      );
+      return;
+    case 'keygen':
+      return cmdKeygen(cfg);
+    case 'deploy':
+      return cmdDeploy(cfg);
+    case 'status':
+      return cmdStatus(cfg);
+    case 'stop':
+      return cmdStop(cfg);
+    case 'start':
+      return cmdStart(cfg);
+    case 'restart':
+      return cmdRestart(cfg);
     case 'push-config':
-    case 'config': return cmdPushConfig(cfg, rest);
-    case 'update': return cmdUpdate(cfg);
-    case 'logs': return cmdLogs(cfg, rest[0]);
-    case 'bootlog': return cmdBootlog(cfg, rest[0]);
-    case 'updatelog': return cmdUpdatelog(cfg, rest[0]);
-    case 'shell': return cmdShell(cfg);
-    case 'exec': return cmdExec(cfg, rest);
-    case 'uninstall': return cmdUninstall(cfg, rest.includes('--yes'));
-    case 'ssh': return cmdSsh(cfg);
+    case 'config':
+      return cmdPushConfig(cfg, rest);
+    case 'update':
+      return cmdUpdate(cfg);
+    case 'logs':
+      return cmdLogs(cfg, rest[0]);
+    case 'bootlog':
+      return cmdBootlog(cfg, rest[0]);
+    case 'updatelog':
+      return cmdUpdatelog(cfg, rest[0]);
+    case 'shell':
+      return cmdShell(cfg);
+    case 'exec':
+      return cmdExec(cfg, rest);
+    case 'uninstall':
+      return cmdUninstall(cfg, rest.includes('--yes'));
+    case 'ssh':
+      return cmdSsh(cfg);
     default:
       console.log(`MCP deploy orchestrator (${cfg.name}) — subcommands:
   keygen            Create a read-only GitHub Deploy Key and print the public part
@@ -826,4 +894,5 @@ function main() {
   }
 }
 
-main();
+if (require.main === module) main();
+module.exports = { selectServer, loadConfig, parseYaml };

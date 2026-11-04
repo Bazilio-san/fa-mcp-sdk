@@ -4,8 +4,8 @@
 #
 # The image carries NO application code and hard-codes NOTHING project-specific.
 # On first boot the baked-in mcp-bootstrap.service clones the repository (read-only
-# Deploy Key passed via env), writes config/local.yaml + deploy/config.yml + .env
-# from env, builds the project and installs it as a systemd service through the
+# Deploy Key delivered as a private file), installs config/local.yaml + deploy/config.yml,
+# writes .env, builds the project and installs it as a systemd service through the
 # repo's own deploy/srv.cjs. A cron job then runs the repo's update.cjs every
 # minute, which git-pulls the branch and, on change, rebuilds and restarts the
 # service (and notifies, if the project configures it).
@@ -30,7 +30,7 @@ ENV DEBIAN_FRONTEND=noninteractive \
 RUN apt-get update \
  && apt-get install -y --no-install-recommends \
       systemd systemd-sysv cron git openssh-client curl ca-certificates tzdata \
-      build-essential python3 bash procps \
+      build-essential python3 bash procps util-linux \
  && ln -fs /usr/share/zoneinfo/$TZ /etc/localtime \
  && rm -rf /var/lib/apt/lists/*
 
@@ -55,13 +55,13 @@ RUN curl -fsSL https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.1/install.sh |
 COPY <<'BOOT' /usr/local/bin/mcp-bootstrap.sh
 #!/usr/bin/env bash
 set -euo pipefail
+umask 077
 
 # systemd starts services with a clean environment, so recover the variables
 # that `docker run -e ...` set on PID 1.
 while IFS= read -r -d '' kv; do
   case "$kv" in
-    REPO_URL=*|BRANCH=*|PROJECT_DIR=*|GIT_SSH_KEY_B64=*|CONFIG_LOCAL_YAML_B64=*|\
-DEPLOY_CONFIG_YAML_B64=*|DEBUG=*|PUBLIC_BASE_URL=*|NODE_VERSION=*|SERVICE_NAME=*|SERVICE_INSTANCE=*) export "$kv" ;;
+    REPO_URL=*|BRANCH=*|PROJECT_DIR=*|APP_PORT=*|DEBUG=*|PUBLIC_BASE_URL=*|NODE_VERSION=*|SERVICE_NAME=*|SERVICE_INSTANCE=*) export "$kv" ;;
   esac
 done < /proc/1/environ
 
@@ -82,10 +82,7 @@ set -u
 
 # Read-only Deploy Key for GitHub.
 mkdir -p /root/.ssh && chmod 700 /root/.ssh
-if [ -n "${GIT_SSH_KEY_B64:-}" ]; then
-  echo "$GIT_SSH_KEY_B64" | base64 -d > /root/.ssh/id_ed25519
-  chmod 600 /root/.ssh/id_ed25519
-fi
+install -m 600 /run-secrets/id_ed25519 /root/.ssh/id_ed25519
 ssh-keyscan -t ed25519,rsa github.com >> /root/.ssh/known_hosts 2>/dev/null || true
 
 # Materialise the checkout. PROJECT_DIR is never empty (the data-cache volume is
@@ -102,14 +99,10 @@ if [ ! -d "$PROJECT_DIR/.git" ]; then
   git branch --set-upstream-to="origin/$BRANCH" "$BRANCH" 2>/dev/null || true
 fi
 
-# Materialise runtime config from env (base64 to survive multi-line transport).
-if [ -n "${CONFIG_LOCAL_YAML_B64:-}" ]; then
-  echo "$CONFIG_LOCAL_YAML_B64" | base64 -d > config/local.yaml
-fi
-mkdir -p deploy
-if [ -n "${DEPLOY_CONFIG_YAML_B64:-}" ]; then
-  echo "$DEPLOY_CONFIG_YAML_B64" | base64 -d > deploy/config.yml
-fi
+# Retryable bootstrap keeps private input files until installation succeeds.
+mkdir -p config deploy
+install -m 600 /run-secrets/local.yaml config/local.yaml
+install -m 600 /run-secrets/config.yml deploy/config.yml
 
 # .env is the systemd EnvironmentFile for the app service. The container runs with
 # --network host (so it shares the host's connectivity, e.g. a Telegram tunnel), so
@@ -123,6 +116,7 @@ SERVICE_INSTANCE=$SERVICE_INSTANCE
 NODE_ENV=production
 DEBUG=$DEBUG
 WS_HOST=127.0.0.1
+WS_PORT=${APP_PORT:-9049}
 WS_PUBLIC_BASE_URL=${PUBLIC_BASE_URL:-}
 ENVV
 
@@ -140,6 +134,7 @@ cat > /etc/cron.d/mcp-update <<CRON
 CRON
 chmod 0644 /etc/cron.d/mcp-update
 
+rm -rf /run-secrets
 echo "mcp-bootstrap: done ($SERVICE_NAME--$SERVICE_INSTANCE)"
 BOOT
 
@@ -172,6 +167,6 @@ EXPOSE 9049
 STOPSIGNAL SIGRTMIN+3
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=300s --retries=5 \
-  CMD curl -fsS http://127.0.0.1:9049/health || exit 1
+  CMD curl -fsS http://127.0.0.1:${APP_PORT:-9049}/health || exit 1
 
 ENTRYPOINT ["/sbin/init"]

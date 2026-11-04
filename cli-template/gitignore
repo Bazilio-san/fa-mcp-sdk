@@ -95,3 +95,8 @@ preferred-language.txt
 # Generated skill links; canonical files live in .agents/skills
 .claude/skills
 .qwen/
+
+/servers.local.md
+/.agents/skills/deploy-mcp-to-remote-server/configs/*
+!/.agents/skills/deploy-mcp-to-remote-server/configs/_example/
+!/.agents/skills/deploy-mcp-to-remote-server/configs/.gitignore

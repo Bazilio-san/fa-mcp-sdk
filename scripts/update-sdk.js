@@ -119,6 +119,24 @@ for (const { name, src, dest, preserve = [], respectPin = false, exclude = [], p
   for (const entry of exclude) {
     pinned.add(entry);
   }
+  if (name === '.agents/skills') {
+    const deploy = 'deploy-mcp-to-remote-server';
+    const cards = join(dest, deploy, 'configs');
+    if (existsSync(cards)) {
+      for (const entry of readdirSync(cards)) {
+        if (entry !== '_example' && entry !== '.gitignore') {
+          pinned.add(join(deploy, 'configs', entry));
+        }
+      }
+    }
+    // Keep legacy credentials available for explicit migration to a named installation.
+    for (const file of ['remote-server-config.local.yaml', 'local.yaml', 'config.yml']) {
+      const rel = join(deploy, 'config', file);
+      if (existsSync(join(dest, rel))) {
+        pinned.add(rel);
+      }
+    }
+  }
   if (preserveUnknown && existsSync(dest)) {
     for (const entry of readdirSync(dest)) {
       if (!existsSync(join(src, entry))) {

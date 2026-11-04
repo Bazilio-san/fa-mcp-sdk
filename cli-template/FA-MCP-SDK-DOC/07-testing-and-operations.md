@@ -390,3 +390,17 @@ mutation are separate decisions and cannot be inferred from a tool's name.
 
 Run on Node.js 20 or later. Full Authorization diagnostics require both a diagnostic namespace such as
 `DEBUG=token:auth` and `MCP_DEBUG_SHOW_AUTHORIZATION=1`; this intentionally writes real credentials to logs.
+
+## Именованные размещения на удалённых серверах
+
+Навык `.agents/skills/deploy-mcp-to-remote-server/SKILL.md` использует отдельную папку `configs/<имя>/` для каждого
+размещения. Образец находится в `configs/_example/`; необязательный корневой `servers.local.md` связывает
+разговорные названия с папками. Для предварительного просмотра без подключения выполнить:
+
+```bash
+node .agents/skills/deploy-mcp-to-remote-server/scripts/remote.cjs --server dev-1 show
+```
+
+Тот же обязательный параметр применяется к `deploy`, `update`, `status` и другим командам. Секреты доставляются
+файлами с закрытыми правами. Обновление сохраняет состояние до изменения кода, повторяет незавершённые этапы и
+сообщает успех только после проверки готовности. Подробности настройки и переноса старого размещения — в навыке.
