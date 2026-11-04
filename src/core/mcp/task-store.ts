@@ -51,6 +51,8 @@ export interface ITaskRecord {
   subjectKey: string;
   /** Final tool result once status is `completed` (the same shape tools/call returns). */
   result?: unknown;
+  /** Sanitized protocol error for modern tasks. */
+  error?: { code: number; message: string; data?: Record<string, unknown> };
   /** AbortController whose signal is passed to the tool handler; aborted on tasks/cancel. */
   abort: AbortController;
 }
@@ -64,7 +66,7 @@ export interface ITaskCreateInput {
   ttlMs?: number;
 }
 
-export type TTaskPatch = Partial<Pick<ITaskRecord, 'status' | 'statusMessage' | 'result'>>;
+export type TTaskPatch = Partial<Pick<ITaskRecord, 'status' | 'statusMessage' | 'result' | 'error'>>;
 
 export interface ITaskStore {
   create(input: ITaskCreateInput): ITaskRecord;
@@ -179,6 +181,9 @@ export class InMemoryTaskStore implements ITaskStore {
     }
     if ('result' in patch) {
       record.result = patch.result;
+    }
+    if ('error' in patch) {
+      record.error = patch.error;
     }
     record.lastUpdatedAt = this.now();
     return record;

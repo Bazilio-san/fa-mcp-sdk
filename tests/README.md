@@ -93,3 +93,47 @@ Run against a server that is already up (`npm run build && npm start`; port from
 | `src/tests/mcp/test-cases.js` | — | Shared prompt/resource/tool assertions used by the scripts above |
 | `src/tests/mcp/sse/test-sse-npm-package.js` | legacy | Using `fa-mcp-sdk` as an npm package over SSE |
 | `src/tests/utils.ts` | — | Shared test utilities |
+
+## Independent conformance and hardening checks
+
+Build first with `npm run build`, then run each file sequentially on Windows, stopping on a nonzero exit code:
+
+```powershell
+$files = @('modern-conformance', 'http-hardening', 'resource-serialization', 'package-hardening')
+foreach ($name in $files) {
+  node --test "tests/$name.test.mjs"
+  if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+}
+```
+
+`modern-conformance` checks flat modern task results, every task state and the nested final result with pinned
+official schemas; it also tests malformed requests over HTTP and STDIO, multiple question rounds, duplicate
+keys, complete-answer requirements, concurrent updates, capabilities and preservation of ordinary tool arguments.
+`resource-serialization` checks legacy HTTP/STDIO strings, JSON objects and arrays, registration headers,
+binary content and serialization errors. `http-hardening` checks exact origin matching, preflight, the explicit
+disabled guard, authorization forms, custom-validator precedence, foreign tasks, disabled tasks and diagnostic
+masking/disclosure. `package-hardening` packs synthetic personal settings, checks the actual archive and runs
+the generator and TypeScript check using only the archive's SDK and templates. Its review artifacts remain
+under `_tmp/package-hardening-*`; dependencies are resolved locally without downloading or changing them.
+
+The worker helper clears inherited service configuration, uses temporary configuration and working directories,
+copies only shared defaults, disables external service startup, allocates local ports and terminates its own
+processes. Tests do not import personal configuration. Official schemas and original licenses are stored in
+`tests/fixtures/mcp-2026-07-28/README.md`; validation needs no network. These targeted checks do not establish
+complete protocol conformance. The legacy task suites verify that their nested `task`, `ttl` and `pollInterval`
+formats remain unchanged. The supported runtime is Node.js 20 or later.
+
+### Authorization compatibility matrix
+
+| Input | Expected behavior |
+| --- | --- |
+| Basic / Bearer with mixed case and spaces or tabs | Supported |
+| Bare token | Preserved for the bundled token generator and existing clients |
+| Unknown multi-part scheme or extra credential parts | Rejected |
+| Permanent token / JWT | Permanent-token lookup precedes JWT verification |
+| Custom validator | Runs first, including on a nonstandard Authorization value |
+| Authorization diagnostics by default | Entire value becomes `[masked]`, without token fragments |
+| `MCP_DEBUG_SHOW_AUTHORIZATION=1` plus `DEBUG=token:auth` | Actual credentials are deliberately logged |
+| Missing flag, `0`, `false`, arbitrary values | No disclosure |
+
+The full-output flag alone does not turn diagnostics on. Use synthetic secrets for all diagnostic checks.

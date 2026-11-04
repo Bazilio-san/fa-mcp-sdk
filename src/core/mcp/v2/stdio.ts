@@ -143,7 +143,7 @@ export async function startDualEraStdioServer(
     // Tasks extension (2026-07-28): the v2 method registry rejects the `tasks/*` spec names before
     // registered handlers run, so the extension is served in front of it — same as on HTTP.
     if (era === 'modern') {
-      const answer = handleModernTaskMethod(message, undefined);
+      const answer = handleModernTaskMethod(message, undefined, undefined, true);
       if (answer) {
         await transport.send(answer.json);
         return;

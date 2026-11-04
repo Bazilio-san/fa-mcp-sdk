@@ -989,7 +989,15 @@ export async function startHttpServer(): Promise<void> {
       // Tasks extension (2026-07-28): tasks/get|update|cancel are served here, in front of the
       // v2 handler — its closed 2026 method registry would answer the `tasks/*` spec names with
       // -32601 before any registered handler runs.
-      const taskAnswer = handleModernTaskMethod(req.body, (req as any).auth?.payload);
+      const taskAnswer = handleModernTaskMethod(
+        req.body,
+        (req as any).auth?.payload,
+        new Headers(
+          Object.entries(req.headers).flatMap(([key, value]) =>
+            value === undefined ? [] : [[key, Array.isArray(value) ? value.join(', ') : value]],
+          ),
+        ),
+      );
       if (taskAnswer) {
         res.status(taskAnswer.status).json(taskAnswer.json);
         return;

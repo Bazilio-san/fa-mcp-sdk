@@ -368,3 +368,25 @@ with the high-level SDK API — so the SDK does not pull in a hard dependency on
 - Enable auth for production
 - Validate all user inputs
 - Don't leak sensitive info in errors
+
+## Independent conformance and uncertain execution
+
+The SDK's `tests/modern-conformance.test.mjs` validates real HTTP and STDIO task responses against pinned
+official core and tasks schemas for revision `2026-07-28`. All task states, malformed messages, routing
+headers, multiple input rounds, duplicate keys, concurrent updates and tool-argument preservation are checked.
+The schemas and original licenses live under `tests/fixtures/mcp-2026-07-28/`; schema validation is offline.
+This is targeted evidence, not a declaration of complete protocol or authorization conformance.
+
+The additional suites `http-hardening`, `resource-serialization` and `package-hardening` check origin rejection,
+authorization compatibility and diagnostic disclosure, both generations of resource handling, package contents
+and generation from the archive. New worker processes use synthetic configuration, restricted environment
+variables and temporary working directories. They disable service discovery and external service startup,
+use their own local ports and close their own processes. The archive test uses synthetic local-file markers.
+
+Tasks reside in one process's memory and disappear on restart. Neither a cancelled task nor a timeout or
+broken response stream guarantees rollback of an external mutation. Verify its outcome in the external system
+before retrying it; use an API-defined idempotency key where available. A repeat of a read and a repeat of a
+mutation are separate decisions and cannot be inferred from a tool's name.
+
+Run on Node.js 20 or later. Full Authorization diagnostics require both a diagnostic namespace such as
+`DEBUG=token:auth` and `MCP_DEBUG_SHOW_AUTHORIZATION=1`; this intentionally writes real credentials to logs.

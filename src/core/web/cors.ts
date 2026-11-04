@@ -8,7 +8,30 @@ const { originHosts, cors: corsCfg } = config.webServer;
 /** CORS origin guard is on by default; only `webServer.cors.enabled === false` turns it off. */
 const corsGuardEnabled = corsCfg?.enabled !== false;
 
-const originTestRe = new RegExp(`https?:\\/\\/(${originHosts.join('|')})(:\\d+)?`, 'i');
+export const isAllowedOrigin = (origin: string | undefined): boolean => {
+  if (origin === undefined) {
+    return true;
+  }
+  try {
+    const requested = new URL(origin);
+    if (!['http:', 'https:'].includes(requested.protocol) || requested.origin !== origin) {
+      return false;
+    }
+    return originHosts.some((entry) => {
+      if (entry.includes('://')) {
+        try {
+          const allowed = new URL(entry);
+          return allowed.origin === entry && allowed.origin === requested.origin;
+        } catch {
+          return false;
+        }
+      }
+      return entry.toLowerCase() === requested.hostname.toLowerCase();
+    });
+  } catch {
+    return false;
+  }
+};
 
 /**
  * CORS setup (standard §6).
@@ -37,7 +60,7 @@ export const applyCors = (app: Express) => {
 
   const corsOptions = {
     origin(origin: any, callback: (err: Error | null, allow?: boolean) => void) {
-      if (!origin || originTestRe.test(origin)) {
+      if (isAllowedOrigin(origin)) {
         callback(null, true);
       } else {
         callback(new Error('CORS_ORIGIN_NOT_ALLOWED'));

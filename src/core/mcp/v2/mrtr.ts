@@ -51,6 +51,25 @@ export const missingCapabilitiesForInputRequests = (
     if (needed && !(caps as Record<string, unknown> | undefined)?.[needed]) {
       missing.add(needed);
     }
+    if (request.method === 'elicitation/create' && caps?.elicitation) {
+      const mode = request.params?.mode ?? 'form';
+      const declared = caps.elicitation as Record<string, unknown>;
+      // Match the reference library: a pre-mode bare declaration implies form support.
+      const impliedForm = mode === 'form' && declared.form === undefined && declared.url === undefined;
+      if (!declared[String(mode)] && !impliedForm) {
+        missing.add(`elicitation.${mode}`);
+      }
+    }
+    if (
+      request.method === 'sampling/createMessage' &&
+      (request.params?.tools !== undefined || request.params?.toolChoice !== undefined) &&
+      !caps?.sampling?.tools
+    ) {
+      missing.add('sampling.tools');
+    }
+    if (!needed) {
+      missing.add(request.method);
+    }
   }
   return [...missing];
 };

@@ -280,7 +280,7 @@ export const getResource = async (uri: string, args: ITransportContext): Promise
   if (typeof content === 'function') {
     content = await (content as (u: string) => any)(uri);
   }
-  if (!content) {
+  if (content === undefined || content === null) {
     emitTrace('mcp:resource', { kind: 'read-err', uri, ms: Date.now() - startedAt, error: 'no-content' });
     throw new ResourceNotFoundError('Resource has no content', { uri, reason: 'empty_content' });
   }
@@ -293,11 +293,23 @@ export const getResource = async (uri: string, args: ITransportContext): Promise
     mimeType: resource.mimeType,
     ...(resource._meta ? { _meta: resource._meta } : {}),
   };
+  let text: string | undefined;
+  if (!isBinary) {
+    try {
+      text = typeof content === 'string' ? content : JSON.stringify(content);
+      if (text === undefined) {
+        throw new TypeError('Not JSON serializable');
+      }
+    } catch {
+      throw new ResourceNotFoundError('Resource content cannot be serialized as JSON', {
+        uri,
+        reason: 'invalid_content',
+      });
+    }
+  }
   const result: IResource = {
     contents: [
-      isBinary
-        ? { ...baseEntry, blob: encodeBlob(content as IResourceBinaryContent) }
-        : { ...baseEntry, text: content as string | object },
+      isBinary ? { ...baseEntry, blob: encodeBlob(content as IResourceBinaryContent) } : { ...baseEntry, text: text! },
     ],
   };
   const ms = Date.now() - startedAt;

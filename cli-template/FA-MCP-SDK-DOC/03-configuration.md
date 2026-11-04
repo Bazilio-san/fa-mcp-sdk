@@ -715,3 +715,21 @@ All four extend `BaseMcpError`. The `createJsonRpcErrorResponse` helper emits th
 `error.data` shape from Appendix B.3 — `{ requestId?, field?, reason?, retryAfter?, … }`.
 Stack traces and internal paths are NEVER included in `error.data` (standard §13.3).
 
+## Runtime and packaged configuration
+
+Node.js 20 or later is required by the SDK and generated projects, including the direct MCP v2 dependencies.
+The package includes only `default.yaml`, `development.yaml`, `production.yaml`, `test.yaml`,
+`custom-environment-variables.yaml` and the generator template `_local.yaml` from `config/`.
+Personal `local.yaml`, `local-*.yaml`, `local_*.yaml` and other unlisted variants stay on disk and are excluded
+from the archive. The generator uses `_local.yaml` to produce both the example and the new project's settings.
+
+With the CORS guard enabled, a full origin in `webServer.originHosts` matches scheme, hostname and port exactly.
+A bare hostname permits HTTP and HTTPS on any port, with an exact hostname comparison. Wildcards, regular
+expressions, hostname suffixes, URL credentials and paths do not grant access. Requests without `Origin` pass;
+the literal `Origin: null` is rejected. A denied origin receives HTTP 403, including browser preflight requests.
+`webServer.cors.enabled: false` explicitly disables the guard and allows every origin.
+
+`DEBUG=token:auth` masks the entire Authorization value as `[masked]` by default. Set
+`MCP_DEBUG_SHOW_AUTHORIZATION=1` together with that diagnostic namespace only for deliberate troubleshooting:
+this writes real access credentials to logs. Unset, `0`, `false` and arbitrary values do not enable disclosure.
+The switch alone does not enable diagnostics.

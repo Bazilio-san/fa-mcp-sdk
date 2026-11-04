@@ -156,7 +156,7 @@ const removeIfExists = async (targetPath, relPath, options = {}) => {
   }
 };
 
-class MCPGenerator {
+export class MCPGenerator {
   constructor() {
     this.lastConfigPath = null;
     this.requiredParams = [
@@ -1005,7 +1005,13 @@ certificate's public and private keys`,
     await fs.rename(path.join(targetPath, 'gitignore'), path.join(targetPath, '.gitignore'));
     await fs.rename(path.join(targetPath, 'r'), path.join(targetPath, '.run'));
 
-    await this.copyDirectory(path.join(PROJ_ROOT, 'config'), path.join(targetPath, 'config'));
+    const sharedConfigs = JSON.parse(pjContent).files.filter(
+      (file) => file.startsWith('config/') && !file.includes('*'),
+    );
+    await fs.mkdir(path.join(targetPath, 'config'), { recursive: true });
+    for (const file of sharedConfigs) {
+      await fs.copyFile(path.join(PROJ_ROOT, file), path.join(targetPath, file));
+    }
 
     const scriptsTargetPath = path.join(targetPath, 'scripts');
     await this.copyDirectory(path.join(PROJ_ROOT, 'scripts'), scriptsTargetPath);
@@ -1139,5 +1145,7 @@ function escapeRegExp(string) {
 }
 
 // Run the generator
-const generator = new MCPGenerator();
-generator.run().catch(console.error);
+if (process.argv[1] && path.resolve(process.argv[1]) === __filename) {
+  const generator = new MCPGenerator();
+  generator.run().catch(console.error);
+}

@@ -561,3 +561,17 @@ generateTokenApp(1234);  // Custom port
 - `/admin/api/validate-token` - POST: Validate token
 - `/admin/api/service-info` - GET: Service info
 - `/admin/api/auth-status` - GET: Auth status
+
+## Authorization header compatibility and diagnostics
+
+The parser accepts `Basic <credentials>` and `Bearer <credentials>` with case-insensitive scheme names and
+one or more spaces or tabs between scheme and credentials. Surrounding whitespace is trimmed. Credentials
+cannot contain whitespace or extra parts. Unknown multi-part schemes are rejected instead of being treated
+as Bearer. Bare tokens remain explicitly supported for compatibility, including the bundled token generator.
+Within Bearer authentication, permanent tokens are checked before JWT; token shape alone does not select a
+validator. The custom validator still runs first and may authenticate a request independently of this parser.
+
+`DEBUG=token:auth` replaces the whole Authorization value with `[masked]`, irrespective of header-name casing.
+Only the exact `MCP_DEBUG_SHOW_AUTHORIZATION=1` value permits disclosure while diagnostics are enabled.
+This mode writes actual credentials to logs and is intended only for deliberate troubleshooting. The flag
+does not enable diagnostics by itself; other values leave masking enabled.

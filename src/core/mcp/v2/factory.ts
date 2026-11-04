@@ -241,19 +241,22 @@ export const createV2ServerFactory =
             const log = (level: TLoggingLevel, data: unknown, logger?: string): void => {
               void toolCtx.mcpReq?.log?.(level, data, logger).catch(() => {});
             };
-            const callToolHandler = (extra: {
-              signal?: AbortSignal;
-              inputResponses?: Record<string, unknown>;
-              requestStatePayload?: unknown;
-            }) =>
+            const callToolHandler = (
+              extra: {
+                signal?: AbortSignal;
+                inputResponses?: Record<string, unknown>;
+                requestStatePayload?: unknown;
+              },
+              background = false,
+            ) =>
               projectData.toolHandler({
                 name: tool.name,
                 arguments: args ?? {},
                 ...baseCtx,
                 ...(caps ? { clientCapabilities: caps } : {}),
                 ...extra,
-                sendProgress,
-                log,
+                sendProgress: background ? () => {} : sendProgress,
+                log: background ? () => {} : log,
               });
             // Tasks extension: a task-capable tool called by a tasks-declaring client runs in the
             // background; the call answers immediately with `resultType: "task"`.
@@ -263,7 +266,7 @@ export const createV2ServerFactory =
                 caps,
                 subjectKey: subjectKeyFromAuth(ctx.authInfo),
                 runToolCall: async (extra) => {
-                  const raw = await callToolHandler(extra);
+                  const raw = await callToolHandler(extra, true);
                   return isInputRequiredResponse(raw)
                     ? raw
                     : truncateAndObserve(mirrorStructuredContent(raw as any, caps));

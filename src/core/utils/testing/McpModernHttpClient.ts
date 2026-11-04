@@ -107,8 +107,9 @@ export class McpModernHttpClient extends BaseMcpClient {
     let inputResponses: InputResponses | undefined;
     let requestState: string | undefined;
     for (let round = 0; round < maxRounds; round++) {
-      const result: any = await this.callTool(toolName, {
-        ...args,
+      const result: any = await this.sendRequest('tools/call', {
+        name: toolName,
+        arguments: args,
         ...(inputResponses ? { inputResponses } : {}),
         ...(requestState ? { requestState } : {}),
       } as Record<string, unknown>);
@@ -123,21 +124,11 @@ export class McpModernHttpClient extends BaseMcpClient {
 
   protected override async sendRequest(method: string, params: any): Promise<any> {
     await this.ensureConnected();
-    // MRTR retry fields ride at the top level of `params`, not inside `arguments`.
-    const { inputResponses, requestState, ...rest } = (params ?? {}) as Record<string, any>;
-    const args = (rest.arguments ?? {}) as Record<string, unknown>;
-    const { inputResponses: argInputResponses, requestState: argRequestState, ...toolArgs } = args;
-    const finalParams = {
-      ...rest,
-      ...(rest.arguments ? { arguments: toolArgs } : {}),
-      ...((inputResponses ?? argInputResponses) ? { inputResponses: inputResponses ?? argInputResponses } : {}),
-      ...((requestState ?? argRequestState) ? { requestState: requestState ?? argRequestState } : {}),
-    };
     // For spec methods the result schema is inferred from the method name, so the options object
     // is the SECOND argument; `allowInputRequired` hands an `input_required` interim result back
     // to us instead of raising, which is what {@link callToolWithInput} drives.
     return this.client.request(
-      { method, params: finalParams } as never,
+      { method, params } as never,
       {
         timeout: this.requestTimeoutMs,
         allowInputRequired: true,

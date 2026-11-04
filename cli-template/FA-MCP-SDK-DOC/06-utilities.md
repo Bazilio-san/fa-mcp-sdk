@@ -723,3 +723,19 @@ process.on('SIGUSR2', () => gracefulShutdown('SIGUSR2', 0));
 
 // SDK auto-registers SIGINT/SIGTERM handlers
 ```
+
+## Retry inputs, resource text and diagnostic disclosure
+
+`McpModernHttpClient.callToolWithInput` preserves all original tool arguments on every round and sends
+`params.inputResponses` / `params.requestState` separately. Tool arguments with those same names are ordinary
+business data; `sendRequest` never promotes them into protocol fields. Retries use new JSON-RPC request IDs.
+
+Object and array resource content is JSON-serialized into `contents[].text`; strings stay unchanged and binary
+resources use base64 `blob`. Values that cannot be represented as JSON produce a controlled error.
+
+Timeouts, broken connections and cancellation do not prove that an external mutation was prevented or rolled
+back. Check the external result before retrying a mutation; use the external API's idempotency mechanism when
+available. Reading again and repeating a mutation have different safety requirements, independent of tool names.
+
+Authorization diagnostics mask credentials by default. Only `MCP_DEBUG_SHOW_AUTHORIZATION=1` together with
+the relevant `DEBUG` namespace enables full output; it deliberately records real access credentials in logs.

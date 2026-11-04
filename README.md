@@ -31,6 +31,8 @@ The framework uses dependency injection to keep the core completely agnostic of 
 
 ## Steps to Get Started
 
+Requires Node.js **20 or later**, matching the direct MCP v2 dependencies and the generated project.
+
 1) Install `fa-mcp-sdk` globally:
 
    ```bash

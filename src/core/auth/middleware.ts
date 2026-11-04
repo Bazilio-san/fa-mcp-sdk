@@ -23,7 +23,9 @@ const debugAuth = (req: Request, code: number, message: string): { code: number;
       headersStr = Object.entries(req.headers)
         .map(([k, v]) => {
           if (SHOW_HEADERS_SET.has(k.toLowerCase())) {
-            return `${cyan}${k}${lBlue}: ${magenta}${v}${reset}`;
+            const value =
+              k.toLowerCase() === 'authorization' && process.env.MCP_DEBUG_SHOW_AUTHORIZATION !== '1' ? '[masked]' : v;
+            return `${cyan}${k}${lBlue}: ${magenta}${value}${reset}`;
           }
           return undefined;
         })

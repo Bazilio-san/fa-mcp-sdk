@@ -451,7 +451,7 @@ webServer:
       #> Operating mode (see above). Default: legacyAesCtr (preserves existing behavior).
       mode: legacyAesCtr
       #> HS256 signing secret — used ONLY by legacyAesCtr mode (minimum 8 chars).
-      encryptKey: {{webServer.auth.token.encryptKey}}
+      encryptKey: '{{webServer.auth.token.encryptKey}}'
       #> If webServer.auth.enabled and the parameter true, the service name and the service specified in the token will be checked
       checkMCPName: {{webServer.auth.token.checkMCPName}}
       #> If true and JWT token contains non-empty 'ip' field,

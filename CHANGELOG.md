@@ -5,6 +5,32 @@ All notable changes to `fa-mcp-sdk` are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Changed
+
+- Require Node.js 20 or later, matching the MCP v2 runtime dependencies and generated projects.
+- Correct modern Tasks extension results to flat metadata with `ttlMs` and `pollIntervalMs`, and empty
+  update/cancel acknowledgements. Clients relying on the previously incorrect `result.task` or `ttl` shape
+  for revision `2026-07-28` must migrate. Legacy task formats remain unchanged.
+
+### Fixed
+
+- Validate task messages, versions, capabilities and routing headers before accessing or changing tasks.
+- Validate complete answer sets, prevent question-key reuse and duplicate execution, preserve safe protocol
+  errors and disable unsupported progress/log notifications during background task execution.
+- Preserve business arguments named `inputResponses` and `requestState` in the modern test client.
+- Serialize object and array resource text as JSON across both protocol generations.
+- Keep the generated JWT key placeholder quoted so default project settings remain valid YAML.
+
+### Security
+
+- Exclude personal local configuration from npm archives while preserving the generator template.
+- Mask Authorization diagnostics by default; retain deliberate full output through
+  `MCP_DEBUG_SHOW_AUTHORIZATION=1` while the corresponding diagnostics are enabled.
+- Reject unknown multi-part authentication schemes and extra credential parts, retaining explicit bare-token
+  compatibility and custom-validator precedence. Compare allowed origins exactly instead of using a regex.
+
 ## [0.12.97] - 2026-11-04
 
 ### Added

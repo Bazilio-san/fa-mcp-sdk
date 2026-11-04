@@ -700,11 +700,12 @@ supplies `signal` and `sendProgress`. When the tool runs as a task, `signal` is 
 to `completed` (carrying the same result a synchronous call would return); on a thrown error it transitions to
 `failed` with a sanitized message; on cancellation it transitions to `cancelled`.
 
-The client drives the modern lifecycle by sending a `task` parameter on `tools/call` and then polling:
+The client declares the tasks extension in its per-request capabilities. The server decides whether a
+task-capable `tools/call` runs in the background; no `task` parameter is required in the modern era:
 
 ```jsonc
-// 1. Create — returns immediately with { resultType: "task", task: { taskId, status: "working", … } }
-{ "method": "tools/call", "params": { "name": "generate_report", "arguments": {}, "task": {} } }
+// 1. Create — returns immediately with { resultType: "task", taskId, status: "working", ttlMs, pollIntervalMs, … }
+{ "method": "tools/call", "params": { "name": "generate_report", "arguments": {} } }
 
 // 2. Poll until terminal. tasks/get also carries the result once the task is completed.
 { "method": "tasks/get",    "params": { "taskId": "…" } }   // → { status: "working" | "completed" | … }
@@ -1120,3 +1121,28 @@ After starting the server with this controller:
 - Swagger UI available at `/docs`
 - Endpoints documented with authentication requirements
 - Request/response schemas generated from TypeScript types
+
+## Modern task result and input rules
+
+Modern task metadata is flat: `taskId`, `status`, `createdAt`, `lastUpdatedAt`, `ttlMs` and optional
+`pollIntervalMs`. Legacy creation keeps its nested `task` object and its `ttl` / `pollInterval` fields.
+`tasks/get` has `resultType: "complete"`; completed tasks include the original complete tool result in `result`,
+and failed tasks include a sanitized protocol `error`. A tool result with `isError: true` is `completed`.
+`tasks/update` and `tasks/cancel` return empty acknowledgements with common result fields only.
+On HTTP, all three task methods require `Mcp-Name: <taskId>` and matching method/version headers.
+
+Each input key must be unique throughout the task lifetime. Reusing a key fails the task before the question
+is exposed again. This implementation requires the entire pending answer set in one `tasks/update`:
+missing, partial and malformed pending answer sets receive `-32602` without rerunning the handler.
+While awaiting input, unknown or already satisfied keys are ignored and acknowledged without resuming the task.
+Only one simultaneous update can resume a waiting round. Each question requires the corresponding client
+capability, including `elicitation.form` or `elicitation.url`; polling uses the current request's capabilities.
+Background handlers receive inert `sendProgress` and `log` callbacks: the extension does not support these
+request-scoped notifications. Ordinary server diagnostics remain available.
+
+### Uncertain external outcome
+
+A timeout, lost connection or cancellation does not establish whether an external mutation happened and does
+not roll it back. Inspect the external system before repeating a mutation. Use an idempotency key when the
+external API defines one. Decide whether retry is safe from the operation's semantics, not its tool name;
+retrying a read and repeating a mutation are different decisions.

@@ -571,3 +571,22 @@ The runtime sources of the contract above are:
 
 Anything that lives outside this list (file names, internal helpers, log line formats, etc.) is
 **not** part of the contract and may change without notice.
+
+## Tasks extension wire correction (2026-07-28)
+
+The modern extension's `CreateTaskResult` is `Result & Task`: `resultType: "task"`, flat `taskId`, `status`,
+`createdAt`, `lastUpdatedAt`, `ttlMs` and optional `pollIntervalMs`. It does not wrap metadata in `result.task`.
+`GetTaskResult` uses these same modern names with `resultType: "complete"` and the status-specific payload.
+Its nested completed `result` is a complete result of the original method; `failed` carries a sanitized error
+with its protocol code and safe diagnostic fields. `isError: true` remains a completed tool execution.
+Update and cancellation acknowledgements contain only common result fields. Legacy task shapes are unchanged.
+
+Each question key is unique over a task's lifetime. The implementation rejects incomplete answer sets rather
+than accumulating them and never resumes on an unknown or already answered key. Current-request capabilities
+gate pending questions, including form versus URL elicitation. Unsupported questions are never emitted.
+Background execution emits no request-scoped progress or log notifications. The memory store requires one
+server instance and provides no restart recovery. Runtime requirement: Node.js 20 or later.
+
+These rules follow the separately versioned
+[Tasks extension](https://github.com/modelcontextprotocol/ext-tasks/blob/b3d28aceaa6d49f5f92258e3d06b61ad6f111e84/specification/2026-07-28/tasks.md).
+They are requirements when the extension is declared, not mandatory core protocol functionality.

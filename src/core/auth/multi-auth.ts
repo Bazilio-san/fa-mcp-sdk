@@ -39,7 +39,6 @@ const authOrder = {
 
 export type AuthScheme = 'basic' | 'bearer';
 
-const schemaRe = /^([^ ]+) +(.+)$/;
 export const getTokenFromHttpHeader = (
   req: Request,
 ): { scheme?: AuthScheme; credentials?: string; looksLikeJwt?: boolean } => {
@@ -47,12 +46,14 @@ export const getTokenFromHttpHeader = (
   if (!a) {
     return {};
   }
-  let scheme: string = '';
-  let credentials: string = a;
-  if (schemaRe.test(a)) {
-    [scheme = '', credentials = ''] = a.split(/ +/);
+  // Bare credentials are used by the bundled token generator and remain supported explicitly.
+  const match = /^(Basic|Bearer)[ \t]+([^\s]+)$/i.exec(a);
+  if (!match && /\s/.test(a)) {
+    return {};
   }
-  if (scheme.toLowerCase() === 'basic') {
+  const scheme = match?.[1]?.toLowerCase() ?? 'bearer';
+  const credentials = match?.[2] ?? a;
+  if (scheme === 'basic') {
     return { scheme: 'basic', credentials };
   }
   return { scheme: 'bearer', credentials, looksLikeJwt: jwtTokenRE.test(credentials) };

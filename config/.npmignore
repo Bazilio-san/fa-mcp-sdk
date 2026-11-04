@@ -1,0 +1,6 @@
+# Only shared configuration and the generator template belong in the package.
+local.*
+local-*
+local_*
+_local-*
+_local_*

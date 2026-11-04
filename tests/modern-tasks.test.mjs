@@ -74,7 +74,7 @@ const test = async (name, fn) => {
   }
 };
 
-const TASKS_CAPS = { extensions: { 'io.modelcontextprotocol/tasks': {} } };
+const TASKS_CAPS = { extensions: { 'io.modelcontextprotocol/tasks': {} }, elicitation: { form: {} } };
 let nextId = 0;
 const rpc = async (method, params = {}, { name, caps = TASKS_CAPS } = {}) => {
   const body = {
@@ -133,9 +133,9 @@ await test('tools/call by a tasks-declaring client → resultType "task", then t
   const { json } = await rpc('tools/call', { name: 'slow_tool', arguments: {} }, { name: 'slow_tool' });
   const r = json.result;
   assert.equal(r.resultType, 'task', `expected a task, got: ${JSON.stringify(json)}`);
-  assert.ok(r.task.taskId);
-  assert.equal(r.task.status, 'working');
-  const done = await pollUntil(r.task.taskId, 'completed');
+  assert.ok(r.taskId);
+  assert.equal(r.status, 'working');
+  const done = await pollUntil(r.taskId, 'completed');
   assert.match(done.result.content[0].text, /SLOW DONE/);
 });
 
@@ -148,7 +148,7 @@ await test('tools/call WITHOUT the extension declared → synchronous result, no
 
 await test('mid-flight input: input_required → tasks/update(inputResponses) → completed', async () => {
   const { json } = await rpc('tools/call', { name: 'approval_tool', arguments: {} }, { name: 'approval_tool' });
-  const { taskId } = json.result.task;
+  const { taskId } = json.result;
   const waiting = await pollUntil(taskId, 'input_required');
   assert.equal(waiting.inputRequests.approve.method, 'elicitation/create');
   const upd = await rpc('tasks/update', {
@@ -162,9 +162,11 @@ await test('mid-flight input: input_required → tasks/update(inputResponses) �
 
 await test('tasks/cancel → cancelled; unknown taskId → -32602', async () => {
   const { json } = await rpc('tools/call', { name: 'slow_tool', arguments: {} }, { name: 'slow_tool' });
-  const { taskId } = json.result.task;
+  const { taskId } = json.result;
   const cancelled = await rpc('tasks/cancel', { taskId });
-  assert.equal(cancelled.json.result.status, 'cancelled');
+  assert.equal(cancelled.json.result.resultType, 'complete');
+  assert.equal(cancelled.json.result.status, undefined);
+  await pollUntil(taskId, 'cancelled');
   const unknown = await rpc('tasks/get', { taskId: 'nope' });
   assert.equal(unknown.json.error?.code, -32602);
 });
