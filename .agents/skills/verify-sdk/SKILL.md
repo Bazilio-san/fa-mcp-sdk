@@ -40,11 +40,11 @@ back to interactive questions instead of running unattended. The runner rejects 
 ## Running it
 
 ```bash
-node .claude/skills/verify-sdk/scripts/run-verification.js               # the whole scenario
-node .claude/skills/verify-sdk/scripts/run-verification.js --from build  # resume from a step
-node .claude/skills/verify-sdk/scripts/run-verification.js --only lint,format
-node .claude/skills/verify-sdk/scripts/run-verification.js --keep-running  # leave the server up
-node .claude/skills/verify-sdk/scripts/run-verification.js --list        # just list the steps
+node .agents/skills/verify-sdk/scripts/run-verification.js               # the whole scenario
+node .agents/skills/verify-sdk/scripts/run-verification.js --from build  # resume from a step
+node .agents/skills/verify-sdk/scripts/run-verification.js --only lint,format
+node .agents/skills/verify-sdk/scripts/run-verification.js --keep-running  # leave the server up
+node .agents/skills/verify-sdk/scripts/run-verification.js --list        # just list the steps
 ```
 
 The runner stops at the first failed step and exits with code 1. Per-step logs land in a `verify-sdk-logs`

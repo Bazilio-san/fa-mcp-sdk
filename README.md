@@ -224,7 +224,7 @@ Note: The `dist/` directory (compiled JavaScript) is created after running `npm 
 | `node scripts/generate-jwt.js` | Generate JWT token (CLI) |
 | `/gen-jwt` | Generate JWT token (Claude Code skill) |
 | `/upgrade-guide` | Generate upgrade guide for downstream projects (Claude Code skill) |
-| `npm run agents:link` | Share `.claude/skills` with OpenAI Codex (creates `.agents/skills` symlink) |
+| `npm run agents:link` | Migrate skills to `.agents/skills` and create Claude Code / Qwen Code links |
 | `npm run agents:link:status` | Show current state of the Codex skills link |
 | `npm run agents:link:remove` | Remove the Codex skills link |
 | `npm run consul:unreg` | Deregister from Consul |
@@ -282,20 +282,25 @@ Analyzes git diff between two versions/commits and produces an MD file covering 
 
 Output language is English by default. Add a natural-language hint (e.g., "in Russian", "in German") to change it.
 
-Skill location: `.claude/skills/upgrade-guide/SKILL.md`
+Skill location: `.agents/skills/upgrade-sdk/SKILL.md`
 
 ## Sharing Skills with OpenAI Codex
 
-Claude Code skills (`.claude/skills/*`) can be reused from [OpenAI Codex](https://developers.openai.com/codex/)
-without duplication. Codex officially reads project Skills from `.agents/skills/` and supports symlinked skill
-folders. The bundled `scripts/claude-2-agents-symlink.js` creates the symlink (junction on Windows, relative symlink
-on macOS/Linux) so both tools share the same canonical storage in `.claude/skills/`.
+Skills are stored as real files in `.agents/skills/` and tracked by Git. Claude Code reads them through
+`.claude/skills -> ../.agents/skills`; Qwen Code uses `.qwen/skills` with the same target. The bundled helper
+creates junctions on Windows and relative directory links on macOS/Linux. Generated links are ignored by Git.
+The CLI creates these links automatically, and `npm install` recreates them through the `prepare` command.
 
 ```bash
-npm run agents:link          # create .agents/skills -> .claude/skills
+npm run agents:link          # migrate old storage; create .claude/skills and .qwen/skills -> .agents/skills
 npm run agents:link:status   # inspect current link state
 npm run agents:link:remove   # remove the link
 ```
+
+Setup also migrates the previous layout, including `.agents/skills -> .claude/skills`, preserving local files.
+If both directories contain different files at the same path, it stops before moving anything; merge those
+files manually and retry. `--force` replaces incorrect links only. `--dry-run` previews changes without writing.
+After migrating an existing Git checkout, stop tracking the old `.claude/skills` paths and track `.agents/skills`.
 
 Only **skills** are linked — other Claude Code entities (`.claude/agents/`, `.claude/commands/`, hooks, MCP
 config) use formats that are not compatible with Codex (TOML agents in `.codex/agents/`, MCP servers in

@@ -181,8 +181,11 @@ After the install succeeds, run the doc-and-template sync in the target:
 node <target>/node_modules/fa-mcp-sdk/scripts/update-sdk.js
 ```
 (use a `--cwd <target>` or `cd <target> && ...` wrapper so the script's `process.cwd()` is the target). This copies
-the latest `FA-MCP-SDK-DOC/` and `.claude/` content into the target. Pinned folders (any folder under the target's
-`.claude/` containing a direct file named `pin`) are preserved by the script.
+the latest `FA-MCP-SDK-DOC/`, `.agents/skills/` and Claude Code support files into the target. It migrates old
+skill storage and restores `.claude/skills` and `.qwen/skills` links. Settings, folders containing a direct `pin`
+file, and skills absent from the template are preserved. Conflicts between two real skill directories stop
+migration before moves. Update Git tracking to `.agents/skills/` after migration; the script does not change
+the Git index.
 
 ## Step 5: Analyze the diff — LOCAL git
 
@@ -260,7 +263,7 @@ match.
 | `cli-template/CLAUDE.md`                                         | `<target>/CLAUDE.md`                     | Merge — target may add custom sections |
 | `cli-template/jest.config.js`                                    | `<target>/jest.config.js`                | Overwrite unless customized |
 | `cli-template/deploy/`                                           | `<target>/deploy/`                       | Merge per file |
-| `cli-template/.claude/skills/<skill>/`                           | `<target>/.claude/skills/<skill>/`       | Overwrite unless locally customized |
+| `cli-template/.agents/skills/<skill>/`                           | `<target>/.agents/skills/<skill>/`       | Overwrite unless locally customized |
 | `cli-template/r/<name>.xml`                                      | `<target>/.run/<name>.run.xml`           | **Renamed** — see rule below |
 | `cli-template/gitignore`                                         | `<target>/.gitignore`                    | Source has no leading dot |
 | `cli-template/FA-MCP-SDK-DOC/`                                   | `<target>/FA-MCP-SDK-DOC/`               | Auto-updated by `update-sdk.js` in Step 4 |
@@ -353,7 +356,7 @@ For every change found in Step 5, assign one of three categories:
 - Copying a new template file the target doesn't have yet (scripts, `.run/` entries, new skill folders)
 - Applying a mechanical rename of a renamed SDK export across the target's `src/` when there's exactly one
   unambiguous replacement
-- Updating SDK-shipped skill files in `<target>/.claude/` via the target's `fcp.js` protocol when the target hasn't
+- Updating SDK-shipped skill files in `<target>/.agents/skills/` when the target hasn't
   customized them
 
 ### Needs-Input — LLM applies, but needs user input
@@ -413,7 +416,7 @@ Render the plan in the conversation (in the detected language):
 1. `<target>/config/local.yaml` overrides `webServer.auth` which restructured in <TO>. Options:
    (a) port overrides to new structure  (b) drop overrides  (c) leave + warn
 2. New config key `someService.apiKey` has no default. What value should I set?
-3. `<target>/.claude/skills/upgrade-sdk/SKILL.md` is locally customized. Overwrite / merge / skip?
+3. `<target>/.agents/skills/upgrade-sdk/SKILL.md` is locally customized. Overwrite / merge / skip?
 
 ### 👋 You'll need to do manually (K items)
 - [empty if everything is in Auto or Needs-Input]

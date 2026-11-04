@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { cpSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'fs';
 import { basename, dirname, join, relative, sep } from 'path';
+import { execFileSync } from 'node:child_process';
 
 const templateDir = join(process.cwd(), './node_modules/fa-mcp-sdk/cli-template');
 const cwd = process.cwd();
@@ -13,8 +14,27 @@ const targets = [
     dest: join(cwd, '.claude'),
     preserve: ['settings.json', 'settings.local.json'],
     respectPin: true,
+    exclude: ['skills'],
+  },
+  {
+    name: '.agents/skills',
+    src: join(templateDir, '.agents/skills'),
+    dest: join(cwd, '.agents/skills'),
+    respectPin: true,
+    preserveUnknown: true,
   },
 ];
+
+// Validate the installed template before migrating or replacing project files.
+for (const { src } of targets) {
+  if (!existsSync(src)) {
+    throw new Error(`Source not found: ${src}`);
+  }
+}
+const installedScripts = join(templateDir, '../scripts');
+execFileSync(process.execPath, [join(installedScripts, 'claude-2-agents-symlink.js'), '--repo', cwd], {
+  stdio: 'inherit',
+});
 
 // A folder containing a direct file named `pin` is preserved untouched —
 // it is neither deleted nor overwritten with new content from the template.
@@ -27,9 +47,7 @@ function findPinnedFolders(rootDir) {
     const entries = readdirSync(currentDir, { withFileTypes: true });
     if (entries.some((e) => e.isFile() && e.name === 'pin')) {
       const rel = relative(rootDir, currentDir);
-      if (rel) {
-        pinned.add(rel);
-      }
+      pinned.add(rel);
       return;
     }
     for (const entry of entries) {
@@ -50,7 +68,7 @@ function isInsidePinned(relPath, pinned) {
     return true;
   }
   for (const p of pinned) {
-    if (relPath.startsWith(p + sep)) {
+    if (relPath.startsWith(`${p}${sep}`)) {
       return true;
     }
   }
@@ -69,7 +87,7 @@ function cleanExceptPinned(rootDir, pinned) {
       if (pinned.has(fullRel)) {
         continue;
       }
-      const hasPinnedDescendant = [...pinned].some((p) => p.startsWith(fullRel + sep));
+      const hasPinnedDescendant = [...pinned].some((p) => p.startsWith(`${fullRel}${sep}`));
       if (entry.isDirectory() && hasPinnedDescendant) {
         walk(full);
       } else {
@@ -80,7 +98,7 @@ function cleanExceptPinned(rootDir, pinned) {
   walk(rootDir);
 }
 
-for (const { name, src, dest, preserve = [], respectPin = false } of targets) {
+for (const { name, src, dest, preserve = [], respectPin = false, exclude = [], preserveUnknown = false } of targets) {
   if (!existsSync(src)) {
     console.error('Source not found:', src);
     process.exit(1);
@@ -94,6 +112,20 @@ for (const { name, src, dest, preserve = [], respectPin = false } of targets) {
   }
 
   const pinned = respectPin ? findPinnedFolders(dest) : new Set();
+  if (pinned.has('')) {
+    console.log(`${name} preserved (pin)`);
+    continue;
+  }
+  for (const entry of exclude) {
+    pinned.add(entry);
+  }
+  if (preserveUnknown && existsSync(dest)) {
+    for (const entry of readdirSync(dest)) {
+      if (!existsSync(join(src, entry))) {
+        pinned.add(entry);
+      }
+    }
+  }
 
   if (existsSync(dest)) {
     if (pinned.size > 0) {
@@ -131,6 +163,17 @@ for (const { name, src, dest, preserve = [], respectPin = false } of targets) {
     console.log(`${name} updated`);
   }
 }
+
+// Old projects ignored the entire canonical directory. Track skills and ignore generated links instead.
+const gitignorePath = join(cwd, '.gitignore');
+let gitignore = existsSync(gitignorePath) ? readFileSync(gitignorePath, 'utf8') : '';
+gitignore = gitignore.replace(/^\/?\.agents\/?[\t ]*\r?$/gm, '');
+for (const pattern of ['/.claude/skills', '/.qwen/skills']) {
+  if (!gitignore.split(/\r?\n/).includes(pattern)) {
+    gitignore = `${gitignore.trimEnd()}\n${pattern}\n`;
+  }
+}
+writeFileSync(gitignorePath, gitignore);
 
 const scriptsSrcDir = join(cwd, './node_modules/fa-mcp-sdk/scripts');
 const scriptsDestDir = join(cwd, 'scripts');

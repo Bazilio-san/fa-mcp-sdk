@@ -92,5 +92,6 @@ glm.sh
 /claudedocs/
 preferred-language.txt
 /mcp-ext-apps/
-.agents/
+# Generated skill links; canonical files live in .agents/skills
+.claude/skills
 .qwen/

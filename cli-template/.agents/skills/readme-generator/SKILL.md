@@ -85,7 +85,7 @@ Collect, from the actual repository:
 - `src/api/` — existence + routes (custom REST API)
 - `src/prompts/` — existence + prompt list
 - `src/custom-resources.ts` — existence
-- `.claude/skills/*/SKILL.md` — catalog of in-project skills
+- `.agents/skills/*/SKILL.md` — catalog of in-project skills
 
 **Visuals**
 
@@ -229,7 +229,7 @@ Required markup is in `reference/templates.md`.
 
 ### Step 6 — Update `readme-docs/SKILLS.md`
 
-If `.claude/skills/` is non-empty, regenerate `readme-docs/SKILLS.md`. Keep the existing format
+If `.agents/skills/` is non-empty, regenerate `readme-docs/SKILLS.md`. Keep the existing format
 (per-skill sections with command, launch mode, arguments table, examples). Link it from the
 Documentation table so it is included in the `doc://readme` assembled document.
 
@@ -270,7 +270,7 @@ Run through this checklist before declaring done:
 1. `README.md` — the showcase page, restructured per Step 3
 2. `readme-docs/getting-started.md` and `readme-docs/tool-reference.md` — always
 3. `readme-docs/<topic>.md` — one per enabled feature that warrants a satellite
-4. `readme-docs/SKILLS.md` — regenerated if `.claude/skills/` is present
+4. `readme-docs/SKILLS.md` — regenerated if `.agents/skills/` is present
 5. `README.backup.md` — backup of previous README when rewriting
 
 ## References

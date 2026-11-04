@@ -11,6 +11,8 @@
  * Usage:
  *   node scripts/fcp.js <filePath> <contentFilePath>   # create/overwrite <filePath> with the contents of the temp file
  *   node scripts/fcp.js --rm <path> [<path> ...]       # delete the given path(s) (files or directories, recursive)
+ *   node scripts/fcp.js --move <destination> <source> # move without overwriting an existing destination
+ *   node scripts/fcp.js --link <link> <directory>     # create a directory link (junction on Windows)
  *
  * <filePath>        — destination path (absolute or relative to project root)
  * <contentFilePath> — path to a temp file whose contents will be written to <filePath>
@@ -30,6 +32,28 @@ const projectRoot = path.resolve(__dirname, '..');
 
 const argv = process.argv.slice(2);
 
+if (argv[0] === '--move' || argv[0] === '--link') {
+  if (argv.length !== 3) {
+    console.error('Usage: node scripts/fcp.js --move|--link <destination> <source>');
+    process.exit(1);
+  }
+  const destination = path.resolve(projectRoot, argv[1]);
+  const source = path.resolve(projectRoot, argv[2]);
+  // lstat also detects dangling links, which must never be overwritten implicitly.
+  if (fs.lstatSync(destination, { throwIfNoEntry: false })) {
+    throw new Error(`Destination already exists: ${destination}`);
+  }
+  fs.mkdirSync(path.dirname(destination), { recursive: true });
+  if (argv[0] === '--move') {
+    fs.renameSync(source, destination);
+  } else {
+    const target = process.platform === 'win32' ? source : path.relative(path.dirname(destination), source);
+    fs.symlinkSync(target, destination, process.platform === 'win32' ? 'junction' : 'dir');
+  }
+  console.log(`Saved: ${destination}`);
+  process.exit(0);
+}
+
 // Delete mode: `--rm` / `--delete` followed by one or more paths to remove.
 if (argv[0] === '--rm' || argv[0] === '--delete') {
   const targets = argv.slice(1);
@@ -39,7 +63,7 @@ if (argv[0] === '--rm' || argv[0] === '--delete') {
   }
   for (const raw of targets) {
     const target = path.isAbsolute(raw) ? raw : path.resolve(projectRoot, raw);
-    if (fs.existsSync(target)) {
+    if (fs.lstatSync(target, { throwIfNoEntry: false })) {
       fs.rmSync(target, { recursive: true, force: true });
       console.log(`Deleted: ${target}`);
     } else {
@@ -64,12 +88,12 @@ if (!fs.existsSync(sourcePath)) {
   process.exit(1);
 }
 
-const content = fs.readFileSync(sourcePath, 'utf-8');
+const content = fs.readFileSync(sourcePath);
 
 const targetDir = path.dirname(targetPath);
 if (!fs.existsSync(targetDir)) {
   fs.mkdirSync(targetDir, { recursive: true });
 }
 
-fs.writeFileSync(targetPath, content, 'utf-8');
-console.log(`Saved: ${targetPath} (${content.length} chars)`);
+fs.writeFileSync(targetPath, content);
+console.log(`Saved: ${targetPath} (${content.length} bytes)`);

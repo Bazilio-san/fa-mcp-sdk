@@ -391,6 +391,13 @@ This log serves as:
 - **Handoff document** — if the session is interrupted, the next session can read the log and continue
 
 
+## Project skills
+
+Canonical skill files live in `.agents/skills/`. The generated `.claude/skills` and `.qwen/skills` links point
+there. Edit skills through their canonical paths; keep Claude Code settings and hooks in `.claude/`.
+Run `npm run agents:link` after cloning to recreate links or migrate the old layout without overwriting conflicts.
+Commit `.agents/skills/`; the generated links are ignored by Git.
+
 ## Editing files in `.claude/` (Skill /edit-claude-files)
 
 Any edit or new file under `.claude/**` (SKILL.md, scripts, hooks, agents, `settings.json`) is blocked

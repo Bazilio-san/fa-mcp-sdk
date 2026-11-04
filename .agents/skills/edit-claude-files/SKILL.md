@@ -6,6 +6,11 @@ allowed-tools: Read, Write, Edit, Bash(node scripts/fcp.js *), Bash(rm:*)
 
 # Editing files in `.claude/`
 
+Skills are stored in `.agents/skills/`; edit their canonical paths normally. `.claude/skills` is a generated
+link to that directory. The protocol below still applies to changes made through `.claude/`, including settings,
+hooks and the link itself. Link maintenance uses `scripts/fcp.js --move <destination> <source>` and
+`scripts/fcp.js --link <link> <directory>`; neither command overwrites an existing destination.
+
 **Scope — read carefully.** This applies to **every file under `.claude/`** and to **every kind of change**:
 creating, editing, **deleting**, renaming, moving. It covers `SKILL.md`, scripts in
 `.claude/skills/<skill>/scripts/`, hooks in `.claude/hooks/`, supporting reference

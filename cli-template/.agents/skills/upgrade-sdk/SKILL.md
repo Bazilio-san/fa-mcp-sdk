@@ -156,7 +156,7 @@ This is the first mutating action. From here on, we're committed to either finis
 Run the bundled wrapper from the project root — it performs all three sub-steps in one go:
 
 ```bash
-node .claude/skills/upgrade-sdk/scripts/install-target-sdk.mjs <TO>
+node .agents/skills/upgrade-sdk/scripts/install-target-sdk.mjs <TO>
 ```
 
 where `<TO>` is either:
@@ -169,9 +169,11 @@ The wrapper sequentially:
    the existing file so the project always uses the updater shipped with the target SDK version);
 3. runs `node scripts/update-sdk.js` from the project root.
 
-`update-sdk.js` then copies the latest `FA-MCP-SDK-DOC/` and `.claude/` content from the SDK into the project.
-Pinned folders (any folder under the project's `.claude/` containing a direct file named `pin`) are preserved by
-the script as-is.
+`update-sdk.js` migrates legacy skills into `.agents/skills/`, restores `.claude/skills` and `.qwen/skills` links,
+and refreshes `FA-MCP-SDK-DOC/`, `.agents/skills/` and Claude Code support files. Settings, folders with a direct
+`pin` file, and skills absent from the template are preserved. Conflicting files in two real skill directories
+stop migration before moves. Update Git tracking from `.claude/skills/` to `.agents/skills/` after migration;
+the updater adjusts `.gitignore` but never modifies the Git index.
 
 If any sub-step fails, the wrapper exits non-zero with the error. Show it verbatim and ask the user how to proceed
 (retry, switch to a different TO ref, or abort).
@@ -233,7 +235,8 @@ After `yarn add fa-mcp-sdk@<TO>`, the SDK ships its template at `node_modules/fa
 canonical source for any template files in the project.
 
 **Scope:** the table below lists ONLY files that `scripts/update-sdk.js` (already executed in Step 4) does NOT
-copy. Anything inside `cli-template/FA-MCP-SDK-DOC/`, `cli-template/.claude/`, and the individual scripts under
+copy. Anything inside `cli-template/FA-MCP-SDK-DOC/`, `cli-template/.agents/skills/`, `cli-template/.claude/`,
+and the individual scripts under
 `node_modules/fa-mcp-sdk/scripts/` is refreshed by `update-sdk.js` automatically — do NOT re-process it here.
 
 | Template (source of truth)                                       | Project (destination)         | Notes |
@@ -273,8 +276,8 @@ The project has no `r/` directory — it was renamed to `.run/` at generation, a
 
 #### Editing `.claude/` files outside the auto-refresh
 
-If during Step 8 you need to write or merge an individual file under the project's `.claude/` (e.g. a custom
-non-template skill that `update-sdk.js` does NOT touch because its folder contains a `pin` marker), direct
+Edit skills through `.agents/skills/`, including custom skills and folders with `pin`. If during Step 8 you need
+to write or merge a file under the project's `.claude/` (for example a hook or settings file), direct
 `Write`/`Edit` is denied by the project's `settings.json`. Use the project's `scripts/fcp.js` workflow described in
 the `edit-claude-files` skill: write the new content to a temp file, then
 `node scripts/fcp.js .claude/<path> <temp-file>` to install it atomically.
@@ -355,13 +358,13 @@ For each hit, capture file:line and the exact replacement plan — needed for St
 For every change found in Step 5, assign one of four categories:
 
 ### Auto — LLM applies without asking
-- `node .claude/skills/upgrade-sdk/scripts/install-target-sdk.mjs <TO>` (already done in Step 4 — installs SDK,
+- `node .agents/skills/upgrade-sdk/scripts/install-target-sdk.mjs <TO>` (already done in Step 4 — installs SDK,
   refreshes `scripts/update-sdk.js`, and runs it)
 - Adding a brand-new config key to `config/default.yaml` when the project doesn't override it
 - Adding new env var mappings to `config/custom-environment-variables.yaml`
 - Adding a missing dependency to `package.json` under `dependencies`/`devDependencies`
 - Copying a new template file the project doesn't have yet (`.run/` entries from `cli-template/r/`, etc. — note that
-  `FA-MCP-SDK-DOC/`, `.claude/`, and individual SDK scripts are refreshed automatically by `update-sdk.js`, not here)
+  `FA-MCP-SDK-DOC/`, `.agents/skills/`, `.claude/`, and SDK scripts are refreshed automatically by `update-sdk.js`)
 - Applying a mechanical rename of a renamed SDK export across the project's `src/` when there's exactly one
   unambiguous replacement
 - Applying a mechanical type/interface migration when the fix is unambiguous (e.g. a newly required field has a
@@ -406,7 +409,7 @@ Render the plan in the conversation in the detected language:
 ## Upgrade plan: fa-mcp-sdk v<FROM> → v<TO>
 
 ### 🤖 I will do automatically (N items)
-1. ✅ node .claude/skills/upgrade-sdk/scripts/install-target-sdk.mjs <TO>   [already done]
+1. ✅ node .agents/skills/upgrade-sdk/scripts/install-target-sdk.mjs <TO>   [already done]
    (yarn add + refresh `scripts/update-sdk.js` + run `node scripts/update-sdk.js`)
 2. Add new key `webServer.foo` (default `bar`) to `config/default.yaml`
 3. Copy new template file `.run/new-task.run.xml` (renamed from `r/new-task.xml`)
@@ -418,7 +421,7 @@ Render the plan in the conversation in the detected language:
 1. `config/local.yaml` overrides `webServer.auth` which restructured in v<TO>. Options:
    (a) port overrides to new structure  (b) drop overrides  (c) leave + warn
 2. New config key `someService.apiKey` has no default. What value should I set?
-3. Project's `.claude/skills/upgrade-sdk/SKILL.md` is locally customized. Overwrite with new template,
+3. Project's `.agents/skills/upgrade-sdk/SKILL.md` is locally customized. Overwrite with new template,
    merge non-conflicting parts only, or skip?
 4. `IToolHandlerParams` gained required field `transport`. Project consumers at src/tools/handle-tool-call.ts:12
    need it — should I derive it from `params.transport ?? 'http'` or expose it as a new tool argument?
@@ -454,7 +457,7 @@ walk through Optional items one-by-one (default NO) — apply only those the use
 Be transparent about state — after each item is applied, output a one-line acknowledgment so the user can follow
 along, e.g. `✓ Added webServer.foo to config/default.yaml`.
 
-When touching files under `.claude/` that `update-sdk.js` did not just refresh (e.g. pinned custom skills), always
+When touching files under `.claude/` that `update-sdk.js` did not just refresh (e.g. custom hooks), always
 use the project's `scripts/fcp.js` workflow — see Step 5.3 → "Editing `.claude/` files outside the auto-refresh"
 and the project's `edit-claude-files` skill.
 
@@ -527,7 +530,7 @@ Apply the user's choice:
   to the relevant 5.4 entry and apply the migration plan, instead of debugging the error in isolation.
 - **retry** → rerun the failing step once. If it fails again, present the same four options.
 - **rollback** → re-run the wrapper with the previous ref:
-  `node .claude/skills/upgrade-sdk/scripts/install-target-sdk.mjs <FROM>` (uses a git URL form for commit hashes,
+  `node .agents/skills/upgrade-sdk/scripts/install-target-sdk.mjs <FROM>` (uses a git URL form for commit hashes,
   e.g. `https://github.com/Bazilio-san/fa-mcp-sdk#<FROM-commit>`), then `git checkout <pre-upgrade-hash> -- .`.
   If the user stashed changes in Step 3, restore them with `git stash pop`. Report what was rolled back.
 - **leave-as-is** → no further changes. Final report will clearly mark the failure and what remains unverified.
@@ -603,7 +606,7 @@ Pre-upgrade commit: <hash>
 - Prior SDK version: `v<FROM>`
 - To roll back manually:
   ```bash
-  node .claude/skills/upgrade-sdk/scripts/install-target-sdk.mjs <FROM>
+  node .agents/skills/upgrade-sdk/scripts/install-target-sdk.mjs <FROM>
   git checkout <hash> -- .
   ```
 

@@ -122,6 +122,13 @@ const logger = lgr.getSubLogger({ name: chalk.cyan('module-name') });
 
 The Agent Tester UI (`/agent-tester`) and other visual components must be tested using the **MCP Playwright** server — use `browser_navigate`, `browser_snapshot`, `browser_take_screenshot`, and other Playwright tools to verify UI changes. The dev server must be running first (`npm run build && npm start`).
 
+## Project skills
+
+Canonical skill files live in `.agents/skills/`. The generated `.claude/skills` and `.qwen/skills` links point
+there. Edit skills through their canonical paths; keep Claude Code settings and hooks in `.claude/`.
+Run `npm run agents:link` after cloning to recreate links or migrate the old layout without overwriting conflicts.
+Commit `.agents/skills/`; the generated links are ignored by Git.
+
 ## Editing files in `.claude/` (Skill /edit-claude-files)
 
 **Never touch anything under `.claude/**` directly — and never even attempt it.** This is absolute and covers

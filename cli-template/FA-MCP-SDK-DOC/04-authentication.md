@@ -490,7 +490,7 @@ Runs `node scripts/generate-jwt.js` under the hood.
 /gen-jwt for vpupkin, ticket REQ-12345, for 1 year, role=admin, IP 10.0.0.0/24
 ```
 
-Skill location: `.claude/skills/gen-jwt/SKILL.md`
+Skill location: `.agents/skills/gen-jwt/SKILL.md`
 
 ## JWT Generation API
 

@@ -1,6 +1,6 @@
 # Skills (Claude Code)
 
-Skills are specialized instructions for Claude Code, located in `.claude/skills/`. They are invoked inside Claude Code
+Skills are specialized instructions for Claude Code, located in `.agents/skills/`. They are invoked inside Claude Code
 chat — either by a `/command` or automatically by trigger phrases.
 
 ## Available Skills
@@ -38,7 +38,7 @@ Generates a migration guide for upgrading the `fa-mcp-sdk` dependency in this pr
 
 - `config/*.yaml` — new/removed/changed keys and defaults (correlates `default.yaml`, `_local.yaml`, `local.yaml`)
 - `cli-template/` — `package.json` (new deps only), `tsconfig.json`, `.oxlintrc.json`, `.oxfmtrc.json`, `CLAUDE.md`, `deploy/`,
-  `.claude/skills/`, `.run/` (from `r/`)
+  `.agents/skills/`, `.run/` (from `r/`)
 - `scripts/` — new or updated SDK utilities (excluding SDK-internal `copy-static.js`, `publish.js`, `scripts/publish-README.md`)
 - `dist/core/index.js` — added/removed/renamed exports and breaking type changes
 - project `src/` — imports and config keys affected by the upgrade
@@ -109,7 +109,7 @@ tools / how to use); reference tables, priority rules, and long technical topics
 What it does:
 
 - **Inventories** the project: `package.json`, `config/*.yaml`, `src/tools/`, `src/api/`,
-  `src/prompts/`, `.claude/skills/`
+  `src/prompts/`, `.agents/skills/`
 - **Detects enabled SDK subsystems** (Consul, AD, Database, Admin Panel, Agent Tester, Swagger,
   Cache, Webhooks, Impersonation, JWT, configurable tool set) and project-specific capabilities
 - **Classifies each finding** — drop / inline / satellite — and produces the satellite file set
@@ -259,7 +259,7 @@ Characteristics:
   and GitLab creds may be supplied inline or asked interactively
 - **Ground rules**: every step explicit and verified; free-form inputs asked in plain prose (never
   predefined options); exclusions from the brief honoured; dev defaults intentionally lenient;
-  `.claude/`, `deploy/`, `FA-MCP-SDK-DOC/` are NOT modified unless the brief explicitly says to
+  `.agents/`, `.claude/`, `deploy/`, `FA-MCP-SDK-DOC/` are NOT modified unless the brief explicitly says to
 - **Reporting language**: all generated artifacts (`claudedocs/*.md`, commit messages, user-facing
   summaries) are written in a language resolved in this order: (1) explicit directive in the
   feature brief, else (2) contents of `preferred-language.txt` in the project root, else

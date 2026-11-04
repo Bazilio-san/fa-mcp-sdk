@@ -4,6 +4,7 @@ import fss from 'fs';
 import fs from 'fs/promises';
 import path from 'path';
 import readline from 'readline';
+import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'url';
 
 import chalk from 'chalk';
@@ -811,6 +812,11 @@ certificate's public and private keys`,
       const sourcePath = path.join(source, entry.name);
       const targetPath = path.join(target, entry.name);
 
+      // Skill links belong to the generated project and are recreated after copying.
+      if (entry.name === 'skills' && ['.claude', '.qwen'].includes(path.basename(source))) {
+        continue;
+      }
+
       if (entry.isDirectory()) {
         await fs.mkdir(targetPath, { recursive: true });
         await this.copyDirectory(sourcePath, targetPath);
@@ -1094,6 +1100,9 @@ certificate's public and private keys`,
     const pathsToRemove = [{ rel: 'package-lock.json' }];
 
     await Promise.all(pathsToRemove.map(({ rel, options }) => removeIfExists(targetPath, rel, options)));
+    execFileSync(process.execPath, [path.join(scriptsTargetPath, 'claude-2-agents-symlink.js'), '--repo', targetPath], {
+      stdio: 'inherit',
+    });
   }
 
   async run() {

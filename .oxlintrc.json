@@ -108,6 +108,7 @@
     "coverage/**",
     "cli-template/**",
     ".claude/**",
+    ".agents/**",
     ".idea/**",
     ".run/**",
     "_misc/**",

@@ -54,7 +54,7 @@ All supporting scripts live in `${CLAUDE_SKILL_DIR}/scripts/` and are invoked wi
   Step 6 plan. They are shared with other skills; do not copy their contents into project files.
 - **You are already inside the project root.** All paths are relative to the current working
   directory unless stated otherwise. Use `pwd` once at the start to confirm.
-- **Do not touch `.claude/`, `deploy/`, or `FA-MCP-SDK-DOC/`.** These directories are maintained
+- **Do not touch `.agents/`, `.claude/`, `deploy/`, or `FA-MCP-SDK-DOC/`.** These directories are maintained
   by the CLI / skill infrastructure and by the SDK maintainer. Do NOT modify, add, or delete files
   inside them unless the accompanying text explicitly instructs you to. This applies to every step
   below — implementation, tests, dev report, everything. Reading them is expected and encouraged; the

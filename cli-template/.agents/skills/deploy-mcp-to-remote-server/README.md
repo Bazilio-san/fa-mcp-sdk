@@ -8,7 +8,7 @@ automatically from the project, everything else comes from the config.
 The normal way to operate it is the orchestrator subcommands (run from the project root):
 
 ```bash
-node .claude/skills/deploy-mcp-to-remote-server/scripts/remote.cjs <command>
+node .agents/skills/deploy-mcp-to-remote-server/scripts/remote.cjs <command>
 # keygen | deploy | status | stop | start | restart | update
 # push-config [--container | --no-restart]
 # logs [N] | bootlog [N] | updatelog [N] | shell | exec -- <cmd...> | uninstall --yes | ssh
@@ -38,7 +38,7 @@ To get a ready-to-use SSH command: `node .../remote.cjs ssh`.
 
 ```bash
 # Prints the exact ssh command from your config:
-node .claude/skills/deploy-mcp-to-remote-server/scripts/remote.cjs ssh
+node .agents/skills/deploy-mcp-to-remote-server/scripts/remote.cjs ssh
 # then connect with the printed command, e.g.:
 # ssh -i <keyPath> -p <port> <user>@<host>
 ```
@@ -96,7 +96,7 @@ File contents are never printed, since both hold secrets. By hand the same thing
 
 ```bash
 # from the workstation, with the skill's config/ files as the source
-base64 -w0 .claude/skills/deploy-mcp-to-remote-server/config/local.yaml   # copy the output
+base64 -w0 .agents/skills/deploy-mcp-to-remote-server/config/local.yaml   # copy the output
 # on the server:
 echo '<base64>' | base64 -d > /tmp/local.yaml
 docker cp /tmp/local.yaml <CONTAINER>:<PROJECT_DIR>/config/local.yaml
@@ -120,7 +120,7 @@ node .../remote.cjs update
 ## Full container rebuild (image + container)
 
 ```bash
-node .claude/skills/deploy-mcp-to-remote-server/scripts/remote.cjs deploy
+node .agents/skills/deploy-mcp-to-remote-server/scripts/remote.cjs deploy
 ```
 
 Builds the image on the server context-lessly (`docker build -`, the Dockerfile is piped over SSH),

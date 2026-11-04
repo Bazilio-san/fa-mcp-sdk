@@ -43,7 +43,7 @@ const CONFIG_FILE = path.join(CONFIG_DIR, 'remote-server-config.local.yaml');
 const LOCAL_YAML_FILE = path.join(CONFIG_DIR, 'local.yaml');
 const CONFIG_YML_FILE = path.join(CONFIG_DIR, 'config.yml');
 const DOCKERFILE = path.join(__dirname, '..', 'docker', 'Dockerfile');
-// Host project root: .claude/skills/<skill>/scripts/remote.cjs -> up four levels.
+// Host project root: .agents/skills/<skill>/scripts/remote.cjs -> up four levels.
 const PROJECT_ROOT = path.resolve(__dirname, '..', '..', '..', '..');
 
 // Stable node path baked into the image (a symlink to the nvm-installed node), so

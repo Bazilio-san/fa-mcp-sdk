@@ -24,6 +24,7 @@
     "quality:fix": "npm run lint:fix && npm run format:fix",
     "lint-fix-build": "oxlint --fix . && oxfmt . && rimraf dist && node ./node_modules/typescript7/bin/tsc",
     "generate-token": "node node_modules/fa-mcp-sdk/dist/core/auth/token-generator/server.js",
+    "prepare": "node ./scripts/claude-2-agents-symlink.js setup",
     "agents:link": "node scripts/claude-2-agents-symlink.js setup",
     "agents:link:status": "node scripts/claude-2-agents-symlink.js status",
     "agents:link:remove": "node scripts/claude-2-agents-symlink.js remove",

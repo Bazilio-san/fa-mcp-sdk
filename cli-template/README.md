@@ -160,7 +160,7 @@ Add to `~\.qwen\settings.json`:
 
 ## Claude Code Skills
 
-The project ships with custom skills in `.claude/skills/`:
+The project ships with custom skills in `.agents/skills/`; Claude Code accesses them through `.claude/skills`:
 
 | Command                     | Description                                                                  |
 |-----------------------------|------------------------------------------------------------------------------|
@@ -175,15 +175,20 @@ Details, launch modes, and examples: [SKILLS](readme-docs/SKILLS.md)
 
 ### Sharing Skills with OpenAI Codex
 
-The skills in `.claude/skills/` can also be used from [OpenAI Codex](https://developers.openai.com/codex/) —
-Codex officially reads project Skills from `.agents/skills/` and supports symlinked skill folders. Run the
-bundled helper once to create the link (junction on Windows, relative symlink on macOS/Linux):
+Skills are stored as real files in `.agents/skills/`, shared by Codex, Claude Code and Qwen Code. The generator
+creates `.claude/skills` and `.qwen/skills` links automatically; `npm install` restores them after cloning.
+These are junctions on Windows and relative links on macOS/Linux. Only `.agents/skills/` is tracked by Git.
 
 ```bash
-npm run agents:link          # create .agents/skills -> .claude/skills
+npm run agents:link          # migrate old storage; create .claude/skills and .qwen/skills -> .agents/skills
 npm run agents:link:status   # inspect current link state
 npm run agents:link:remove   # remove the link
 ```
+
+`node scripts/update-sdk.js` migrates the old layout before refreshing `.agents/skills/`, documentation and
+Claude Code support files. It preserves settings, folders containing `pin`, and skills absent from the template.
+If both skill directories contain different files at the same path, migration stops for manual resolution.
+After migrating an existing Git checkout, stop tracking old `.claude/skills` paths and track `.agents/skills`.
 
 Only skills are linked. Other Claude Code entities (`.claude/commands/`, hooks, MCP config)
 use formats incompatible with Codex (TOML agents in `.codex/agents/`, MCP servers in `.codex/config.toml`) and

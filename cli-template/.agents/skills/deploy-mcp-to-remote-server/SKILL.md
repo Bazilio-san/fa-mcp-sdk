@@ -24,7 +24,7 @@ orchestrator encapsulates them.
 ## The one command you run
 
 ```bash
-node .claude/skills/deploy-mcp-to-remote-server/scripts/remote.cjs <subcommand>
+node .agents/skills/deploy-mcp-to-remote-server/scripts/remote.cjs <subcommand>
 ```
 
 | User intent | Subcommand | What it does |
@@ -52,7 +52,7 @@ Report exactly what the script printed (health, git verdict, errors) — do not 
 
 ## Configuration
 
-Settings live in `.claude/skills/deploy-mcp-to-remote-server/config/` — three real files (out of
+Settings live in `.agents/skills/deploy-mcp-to-remote-server/config/` — three real files (out of
 version control via `config/.gitignore`; each has an `*.example.*` template beside it):
 
 - **`remote-server-config.local.yaml`** — connection + deploy params. Required: `server.*`,

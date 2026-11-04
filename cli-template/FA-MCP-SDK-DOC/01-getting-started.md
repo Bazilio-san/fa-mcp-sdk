@@ -1,5 +1,18 @@
 # Getting Started
 
+## Project skills
+
+The CLI stores skill files in `.agents/skills/` and creates `.claude/skills` and `.qwen/skills` links to that
+directory. Git tracks the real files and ignores the generated links. `npm install` restores links through
+`prepare`; `npm run agents:link` also restores them explicitly after cloning or moving a project.
+
+`node scripts/update-sdk.js` first migrates legacy `.claude/skills/` storage, including the old reverse link,
+then refreshes SDK documentation, template skills and support scripts. Settings, folders marked with `pin`, and
+project skills absent from the template are preserved. Conflicting files in two real skill directories stop
+migration before any moves; resolve those conflicts manually and retry. `--force` only replaces incorrect links.
+Use `node scripts/claude-2-agents-symlink.js --dry-run` to preview migration. After migrating an existing Git
+checkout, stop tracking `.claude/skills` and track `.agents/skills` instead; the updater does not change the index.
+
 ## initMcpServer(data: McpServerData): Promise<void>
 
 Primary function for starting your MCP server.

@@ -107,6 +107,7 @@
     "**/dist/**",
     "coverage/**",
     ".claude/**",
+    ".agents/**",
     ".idea/**",
     ".run/**",
     "_misc/**",

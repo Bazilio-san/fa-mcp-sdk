@@ -10,7 +10,7 @@
  * whole scenario is clean; 1 means at least one step failed.
  *
  * Usage:
- *   node .claude/skills/verify-sdk/scripts/run-verification.js [options]
+ *   node .agents/skills/verify-sdk/scripts/run-verification.js [options]
  *
  * Options:
  *   --from <step>        start at this step, skipping the earlier ones
