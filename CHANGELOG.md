@@ -5,6 +5,34 @@ All notable changes to `fa-mcp-sdk` are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.12.97] - 2026-11-04
+
+### Added
+
+- Add `modelConfig.reasoningEffort` to control model reasoning effort.
+- Export `TLoggingLevel` from the `fa-mcp-sdk` package root.
+
+### Changed
+
+- Use Responses API by default in Agent Tester; select `modelConfig.api: 'chat-completions'` for compatibility.
+- Preserve Responses API output items, including tool calls and encrypted reasoning, across conversation turns.
+- Set `config.agentTester.openAi.defaultModel` and `config.headlessTester.defaultModel` to `gpt-6.1-terra`.
+- Send `temperature` to the model only when explicitly provided in `modelConfig`.
+- Update the corporate implementation standard for MCP protocol revision `2026-07-28`.
+
+### Fixed
+
+- Preserve recent messages when compressing conversation history, without summarizing them twice.
+- Reset conversation history when the model, provider address, access key or `modelConfig.api` changes.
+- Report incomplete model responses and refusals as errors instead of treating them as successful answers.
+- Move `@modelcontextprotocol/client` to runtime dependencies so modern MCP clients work in generated projects.
+- Import `IPoolClientPg` from the public `af-db-ts` entry point to fix PostgreSQL type resolution.
+- Generate a preformatted tool dispatcher so new projects pass `oxfmt --check`.
+
+### Security
+
+- Disable Responses API response storage with `store: false`.
+
 ## [0.12.83] - 2026-08-06
 
 ### Added
