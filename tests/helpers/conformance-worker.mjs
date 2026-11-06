@@ -21,7 +21,10 @@ let calls = 0;
 globalThis.__MCP_PROJECT_DATA__ = {
   agentBrief: '',
   agentPrompt: '',
-  usedHttpHeaders: [{ name: 'Authorization', description: 'Synthetic test header' }],
+  usedHttpHeaders: [
+    { name: 'Authorization', description: 'Synthetic test header' },
+    { name: 'x-project-secret', description: 'Synthetic private header', isOptional: true, isSecret: true },
+  ],
   customAuthValidator: async (req) =>
     req.headers['x-test-subject']
       ? { success: true, payload: { sub: req.headers['x-test-subject'] } }
