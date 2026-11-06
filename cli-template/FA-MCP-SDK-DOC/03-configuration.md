@@ -267,7 +267,8 @@ webServer:
       publicKeyPath: ''            # localKey: PEM public key path
       privateKeyPath: ''           # localKey: optional — enables local issuance
       jwksUri: ''                  # remoteJwks: external JWKS endpoint
-      expectedIssuer: ''           # required for embedded/localKey/remoteJwks (standard §7.2)
+      expectedIssuer: ''           # string or string[]; required for localKey/remoteJwks by default
+      allowAnyIssuer: false        # weakened mode: skip only the JWT `iss` check
       expectedAudience: ''         # defaults to appConfig.name
       jwksCacheTtl: 600            # JWKS cache, seconds
       jwksCooldown: 30             # min interval between repeat fetches when kid missing

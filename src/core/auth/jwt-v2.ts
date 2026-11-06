@@ -55,9 +55,9 @@ export async function generateTokenV2(user: string, liveTimeSec: number, payload
   }
 
   const { algorithm, privateKey, kid } = resolver.getSignContext();
-  const { expectedIssuer, expectedAudience } = getJwtRuntimeConfig();
+  const { expectedIssuers, expectedAudience } = getJwtRuntimeConfig();
 
-  const issuer = expectedIssuer || `urn:fa-mcp:${appConfig.shortName || appConfig.name}`;
+  const issuer = expectedIssuers[0] || `urn:fa-mcp:${appConfig.shortName || appConfig.name}`;
   const audience = service || expectedAudience || appConfig.name;
 
   const builder = new SignJWT(inputPayload)
@@ -99,7 +99,7 @@ export async function verifyJwtV2(arg: {
     return { errorReason: 'JWT verifier not initialized (legacy mode)' };
   }
 
-  const { expectedIssuer, expectedAudience, clockSkew } = getJwtRuntimeConfig();
+  const { expectedIssuers, allowAnyIssuer, expectedAudience, clockSkew } = getJwtRuntimeConfig();
   const checkMCPName = appConfig.webServer?.auth?.jwtToken?.checkMCPName || false;
   const isCheckIP = appConfig.webServer?.auth?.jwtToken?.isCheckIP || false;
   const wantService = arg.expectedService ?? expectedAudience ?? appConfig.name;
@@ -107,7 +107,9 @@ export async function verifyJwtV2(arg: {
   let payloadDecoded: Record<string, any>;
   try {
     const { payload } = await jwtVerify(token, (header) => resolver.getVerifyKey(header) as any, {
-      ...(expectedIssuer ? { issuer: expectedIssuer } : {}),
+      ...(!allowAnyIssuer && expectedIssuers.length > 0
+        ? { issuer: expectedIssuers.length === 1 ? expectedIssuers[0] : expectedIssuers }
+        : {}),
       // jose's audience check passes when the token's aud (string or array) intersects ours.
       // We do our own check below to surface the same error wording as legacy code.
       clockTolerance: clockSkew,

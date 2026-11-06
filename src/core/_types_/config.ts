@@ -49,8 +49,12 @@ interface IWebServerConfig {
         privateKeyPath?: string;
         // Remote JWKS endpoint (used only in mode=remoteJwks). e.g. https://idp.example.com/.well-known/jwks.json
         jwksUri?: string;
-        // Expected `iss` claim — required match in modes embedded/localKey/remoteJwks.
-        expectedIssuer?: string;
+        // Accepted `iss` claim values — one issuer or a non-empty list.
+        // The first list item is used when this server issues tokens and publishes OIDC metadata.
+        expectedIssuer?: string | string[];
+        // Explicitly disable `iss` validation in asymmetric modes. Default false.
+        // Signature, expiry, subject and optional audience checks remain active.
+        allowAnyIssuer?: boolean;
         // Expected `aud` claim — token must contain this audience. Defaults to appConfig.name.
         expectedAudience?: string;
         // JWKS in-memory cache TTL in seconds. Default: 600.

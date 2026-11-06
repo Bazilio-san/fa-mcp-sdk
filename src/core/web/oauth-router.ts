@@ -31,14 +31,14 @@ const logger = lgr.getSubLogger({ name: chalk.bgYellow('oauth-router') });
 
 /**
  * Compose the canonical issuer URL for embedded mode. Resolution order:
- *   1. expectedIssuer (config) — explicit, wins always
+ *   1. first expectedIssuer value (config) — explicit, wins always
  *   2. Public webServer.host + port (if usable)
  *   3. http://localhost:<port>
  */
 function getEmbeddedIssuer(req?: Request): string {
-  const { expectedIssuer } = getJwtRuntimeConfig();
-  if (expectedIssuer) {
-    return expectedIssuer;
+  const { expectedIssuers } = getJwtRuntimeConfig();
+  if (expectedIssuers[0]) {
+    return expectedIssuers[0];
   }
   if (req) {
     const protocol = req.protocol || 'http';

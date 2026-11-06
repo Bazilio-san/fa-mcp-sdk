@@ -476,9 +476,11 @@ webServer:
       #> Remote JWKS endpoint URL. Used only in mode=remoteJwks.
       #> Example: https://idp.example.com/.well-known/jwks.json
       jwksUri: ''
-      #> Expected `iss` claim. Required match in modes embedded/localKey/remoteJwks.
-      #> In embedded mode auto-derived from request origin if empty.
+      #> Accepted `iss` claim: one string or a list. The first item is used for locally issued tokens and OIDC metadata.
+      #> Required in localKey/remoteJwks unless allowAnyIssuer is explicitly enabled.
       expectedIssuer: ''
+      #> Weakened mode: do not validate `iss`. Signature and other claim checks remain active. Default false.
+      allowAnyIssuer: false
       #> Expected `aud` claim. Defaults to appConfig.name when empty.
       expectedAudience: ''
       #> JWKS in-memory cache TTL (seconds). Default: 600 (10 min).

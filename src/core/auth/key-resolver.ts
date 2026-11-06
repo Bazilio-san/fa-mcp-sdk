@@ -23,6 +23,17 @@ const logger = lgr.getSubLogger({ name: chalk.cyan('key-resolver') });
 
 export type JwtAsymmetricAlgorithm = 'ES256' | 'RS256';
 
+export function normalizeExpectedIssuers(value: unknown): string[] {
+  if (value === undefined || value === null || value === '') {
+    return [];
+  }
+  const values = Array.isArray(value) ? value : [value];
+  if (values.some((entry) => typeof entry !== 'string' || !entry.trim())) {
+    throw new Error('jwtToken.expectedIssuer must be a non-empty string or an array of non-empty strings');
+  }
+  return [...new Set((values as string[]).map((entry) => entry.trim()))];
+}
+
 export interface KeyResolver {
   /** Resolve a verification key for the given JWT header. */
   getVerifyKey(header: JWSHeaderParameters): Promise<KeyLike | Uint8Array>;
@@ -73,6 +84,7 @@ export function getJwtRuntimeConfig() {
   const mode: 'legacyAesCtr' | 'embedded' | 'localKey' | 'remoteJwks' =
     rawMode === 'embedded' || rawMode === 'localKey' || rawMode === 'remoteJwks' ? rawMode : 'legacyAesCtr';
   const algorithm: JwtAsymmetricAlgorithm = jwt?.algorithm === 'RS256' ? 'RS256' : 'ES256';
+  const expectedIssuers = normalizeExpectedIssuers(jwt?.expectedIssuer);
   return {
     mode,
     algorithm,
@@ -80,7 +92,9 @@ export function getJwtRuntimeConfig() {
     publicKeyPath: jwt?.publicKeyPath || '',
     privateKeyPath: jwt?.privateKeyPath || '',
     jwksUri: jwt?.jwksUri || '',
-    expectedIssuer: jwt?.expectedIssuer || '',
+    expectedIssuer: Array.isArray(jwt?.expectedIssuer) ? expectedIssuers : expectedIssuers[0] || '',
+    expectedIssuers,
+    allowAnyIssuer: jwt?.allowAnyIssuer === true,
     expectedAudience: jwt?.expectedAudience || '',
     jwksCacheTtl: typeof jwt?.jwksCacheTtl === 'number' ? jwt.jwksCacheTtl : 600,
     jwksCooldown: typeof jwt?.jwksCooldown === 'number' ? jwt.jwksCooldown : 30,

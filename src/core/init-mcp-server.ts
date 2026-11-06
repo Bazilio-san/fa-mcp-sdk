@@ -7,6 +7,7 @@ import { Tool } from '@modelcontextprotocol/sdk/types.js';
 import { ITransportContext, IToolHandlerParams, McpServerData, TToolHandlerResponse } from './_types_/types.js';
 import { dotEnvResult } from './bootstrap/dotenv.js';
 import { appConfig } from './bootstrap/init-config.js';
+import { getJwtRuntimeConfig } from './auth/key-resolver.js';
 import { startupInfo } from './bootstrap/startup-info.js';
 import { accessPointUpdater } from './consul/access-points-updater.js';
 import { registerCyclic } from './consul/register.js';
@@ -229,6 +230,7 @@ export async function initMcpServer(data: McpServerData): Promise<void> {
       // Fail fast on misconfigured non-legacy modes so a server with broken auth never starts.
       const jwt = appConfig.webServer?.auth?.jwtToken;
       const jwtMode = jwt?.mode ?? 'legacyAesCtr';
+      const jwtRuntime = getJwtRuntimeConfig();
       const skewLimit = 60;
       if (typeof jwt?.clockSkew === 'number' && jwt.clockSkew > skewLimit) {
         throw new Error(
@@ -241,9 +243,18 @@ export async function initMcpServer(data: McpServerData): Promise<void> {
       if (jwtMode === 'localKey' && !(jwt?.publicKeyPath || '').trim()) {
         throw new Error('webServer.auth.jwtToken.publicKeyPath is required for mode=localKey.');
       }
-      if ((jwtMode === 'remoteJwks' || jwtMode === 'localKey') && !(jwt?.expectedIssuer || '').trim()) {
+      if (
+        (jwtMode === 'remoteJwks' || jwtMode === 'localKey') &&
+        !jwtRuntime.allowAnyIssuer &&
+        jwtRuntime.expectedIssuers.length === 0
+      ) {
         throw new Error(
-          `webServer.auth.jwtToken.expectedIssuer is required for mode=${jwtMode} (standard §7.2 / Appendix A.2).`,
+          `webServer.auth.jwtToken.expectedIssuer is required for mode=${jwtMode}; set allowAnyIssuer=true only for an explicitly weakened issuer policy.`,
+        );
+      }
+      if (jwtMode !== 'legacyAesCtr' && jwtRuntime.allowAnyIssuer) {
+        lgr.warn(
+          `webServer.auth.jwtToken.allowAnyIssuer=true — JWT issuer validation is disabled; token signatures and other claims are still verified.`,
         );
       }
       if (jwtMode === 'legacyAesCtr' && isProd && appConfig.webServer?.auth?.enabled) {

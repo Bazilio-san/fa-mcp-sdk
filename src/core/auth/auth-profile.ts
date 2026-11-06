@@ -18,7 +18,8 @@ export interface IAuthProfile {
   jwt?: {
     mode: 'legacyAesCtr' | 'embedded' | 'localKey' | 'remoteJwks';
     algorithm?: 'ES256' | 'RS256' | 'HS256';
-    expectedIssuer?: string;
+    expectedIssuer?: string | string[];
+    allowAnyIssuer?: boolean;
     expectedAudience?: string;
     jwksUri?: string;
   };
@@ -76,8 +77,11 @@ export function collectAuthProfile(): IAuthProfile {
     mode: jwtRt.mode,
     algorithm: jwtRt.mode === 'legacyAesCtr' ? 'HS256' : jwtRt.algorithm,
   };
-  if (jwtRt.expectedIssuer) {
+  if (jwtRt.expectedIssuers.length > 0) {
     jwt.expectedIssuer = jwtRt.expectedIssuer;
+  }
+  if (jwtRt.allowAnyIssuer) {
+    jwt.allowAnyIssuer = true;
   }
   if (jwtRt.expectedAudience) {
     jwt.expectedAudience = jwtRt.expectedAudience;

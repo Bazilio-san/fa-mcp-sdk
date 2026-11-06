@@ -5,7 +5,8 @@
  * Run after build: node tests/jwt-v2.test.mjs
  */
 import { spawnSync } from 'node:child_process';
-import { mkdtempSync, rmSync } from 'node:fs';
+import { generateKeyPairSync } from 'node:crypto';
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -272,5 +273,172 @@ try {
 assert.ok(threw, 'generateToken must throw in remoteJwks mode');
 `,
 });
+
+// ────────────────────────────────────────────────────────────────────────────
+// 7. expectedIssuer list: every listed issuer accepted, other issuers rejected
+// ────────────────────────────────────────────────────────────────────────────
+
+const tmpIssuerList = mkdtempSync(join(tmpdir(), 'fa-mcp-issuer-list-'));
+try {
+  runSubprocess('expectedIssuer list: accepts listed issuers and rejects an unlisted issuer', {
+    config: {
+      webServer: {
+        auth: {
+          enabled: true,
+          jwtToken: {
+            mode: 'embedded',
+            algorithm: 'ES256',
+            keyStoragePath: tmpIssuerList,
+            checkMCPName: false,
+            expectedIssuer: ['urn:test-primary', 'urn:test-secondary'],
+          },
+        },
+      },
+    },
+    code: `
+import assert from 'node:assert';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
+import { importPKCS8, SignJWT } from 'jose';
+import { generateToken, checkJwtToken } from './dist/core/auth/jwt.js';
+
+const primary = await generateToken('alice', 60);
+assert.strictEqual((await checkJwtToken({ token: primary })).payload?.iss, 'urn:test-primary');
+const key = await importPKCS8(readFileSync(resolve(${JSON.stringify(tmpIssuerList)}, 'private.pem'), 'utf8'), 'ES256');
+const makeToken = (issuer) => {
+  let token = new SignJWT({}).setProtectedHeader({ alg: 'ES256' }).setSubject('alice').setIssuedAt()
+    .setExpirationTime(Math.floor(Date.now() / 1000) + 60);
+  if (issuer !== undefined) token = token.setIssuer(issuer);
+  return token.sign(key);
+};
+const secondary = await checkJwtToken({ token: await makeToken('urn:test-secondary') });
+assert.ok(!secondary.errorReason, secondary.errorReason);
+const outsider = await checkJwtToken({ token: await makeToken('urn:test-outsider') });
+assert.match(outsider.errorReason || '', /iss|issuer/i);
+`,
+  });
+} finally {
+  rmSync(tmpIssuerList, { recursive: true, force: true });
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// 8. allowAnyIssuer: issuer check disabled while signature and standard claims remain enforced
+// ────────────────────────────────────────────────────────────────────────────
+
+const tmpAnyIssuer = mkdtempSync(join(tmpdir(), 'fa-mcp-any-issuer-'));
+try {
+  runSubprocess('allowAnyIssuer: accepts arbitrary or missing iss but still rejects a bad signature', {
+    config: {
+      webServer: {
+        auth: {
+          enabled: true,
+          jwtToken: {
+            mode: 'embedded',
+            algorithm: 'ES256',
+            keyStoragePath: tmpAnyIssuer,
+            checkMCPName: false,
+            expectedIssuer: '',
+            allowAnyIssuer: true,
+          },
+        },
+      },
+    },
+    code: `
+import assert from 'node:assert';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
+import { importPKCS8, SignJWT } from 'jose';
+import { generateToken, checkJwtToken } from './dist/core/auth/jwt.js';
+
+await generateToken('bootstrap', 60);
+const key = await importPKCS8(readFileSync(resolve(${JSON.stringify(tmpAnyIssuer)}, 'private.pem'), 'utf8'), 'ES256');
+const makeToken = (issuer) => {
+  let token = new SignJWT({}).setProtectedHeader({ alg: 'ES256' }).setSubject('alice').setIssuedAt()
+    .setExpirationTime(Math.floor(Date.now() / 1000) + 60);
+  if (issuer !== undefined) token = token.setIssuer(issuer);
+  return token.sign(key);
+};
+for (const issuer of ['urn:arbitrary', undefined]) {
+  const result = await checkJwtToken({ token: await makeToken(issuer) });
+  assert.ok(!result.errorReason, result.errorReason);
+}
+const token = await makeToken('urn:arbitrary');
+const parts = token.split('.');
+parts[2] = (parts[2][0] === 'A' ? 'B' : 'A') + parts[2].slice(1);
+assert.match((await checkJwtToken({ token: parts.join('.') })).errorReason || '', /signature/i);
+`,
+  });
+} finally {
+  rmSync(tmpAnyIssuer, { recursive: true, force: true });
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// 9. startup policy: localKey requires issuers unless weakened mode is explicit
+// ────────────────────────────────────────────────────────────────────────────
+
+const tmpStartupPolicy = mkdtempSync(join(tmpdir(), 'fa-mcp-issuer-policy-'));
+try {
+  const { publicKey } = generateKeyPairSync('ec', { namedCurve: 'P-256' });
+  const publicKeyPath = join(tmpStartupPolicy, 'public.pem');
+  writeFileSync(publicKeyPath, publicKey.export({ type: 'spki', format: 'pem' }));
+  const commonConfig = {
+    mcp: { transportType: 'http' },
+    webServer: {
+      host: '127.0.0.1',
+      port: 39879,
+      originHosts: ['localhost'],
+      auth: {
+        enabled: true,
+        permanentServerTokens: [],
+        jwtToken: {
+          mode: 'localKey',
+          algorithm: 'ES256',
+          publicKeyPath,
+          checkMCPName: false,
+        },
+      },
+    },
+    consul: { service: { enable: false } },
+    adminPanel: { enabled: false },
+    agentTester: { enabled: false },
+  };
+  const serverData = `{
+    tools: [],
+    toolHandler: async () => ({ content: [] }),
+    agentBrief: 'test',
+    agentPrompt: 'test',
+  }`;
+  runSubprocess('localKey startup: rejects missing issuer policy by default', {
+    config: commonConfig,
+    code: `
+import assert from 'node:assert';
+import { initMcpServer } from './dist/core/init-mcp-server.js';
+await assert.rejects(() => initMcpServer(${serverData}), /expectedIssuer/);
+process.exit(0);
+`,
+  });
+  runSubprocess('localKey startup: allowAnyIssuer explicitly permits a missing expectedIssuer', {
+    config: {
+      ...commonConfig,
+      webServer: {
+        ...commonConfig.webServer,
+        auth: {
+          ...commonConfig.webServer.auth,
+          jwtToken: { ...commonConfig.webServer.auth.jwtToken, allowAnyIssuer: true },
+        },
+      },
+    },
+    code: `
+import assert from 'node:assert';
+import { initMcpServer } from './dist/core/init-mcp-server.js';
+await initMcpServer(${serverData});
+const response = await fetch('http://127.0.0.1:39879/health');
+assert.strictEqual(response.status, 200);
+process.exit(0);
+`,
+  });
+} finally {
+  rmSync(tmpStartupPolicy, { recursive: true, force: true });
+}
 
 console.log('\nAll jwt-v2 tests passed!');

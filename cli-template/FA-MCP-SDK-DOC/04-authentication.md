@@ -35,7 +35,7 @@ Pre-flight checks (`init-mcp-server.ts`) reject misconfigured non-legacy modes a
 
 - `remoteJwks` without `jwksUri` → throws
 - `localKey` without `publicKeyPath` → throws
-- non-legacy without `expectedIssuer` → throws (standard §7.2)
+- `localKey` / `remoteJwks` without `expectedIssuer` → throws unless `allowAnyIssuer: true` is explicitly set
 - `clockSkew > 60s` → throws (standard Appendix A.1)
 - `production` + `legacyAesCtr` + `auth.enabled=true` → warn (asymmetric required by standard)
 
@@ -54,6 +54,26 @@ webServer:
       jwksCooldown: 30
       clockSkew: 30
 ```
+
+`expectedIssuer` accepts either one issuer or a list. Verification accepts a token when its `iss` matches any item;
+the first item is used when a local server issues tokens or publishes OIDC metadata:
+
+```yaml
+expectedIssuer:
+  - 'https://idp-primary.corp'
+  - 'https://idp-migration.corp'
+```
+
+To deliberately skip only the `iss` check, enable the weakened mode. Signature, expiration, subject, revocation and
+configured audience checks continue to run:
+
+```yaml
+expectedIssuer: ''
+allowAnyIssuer: true
+```
+
+Do not enable this mode merely to work around a wrong issuer value. It is intended for trusted-network migrations
+and compatibility cases where the verification key is controlled but the token issuer cannot be normalized.
 
 Discovery endpoints mounted automatically when `mode != 'legacyAesCtr'`:
 

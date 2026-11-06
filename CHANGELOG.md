@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.12.108] - 2026-11-06
+
+### Added
+
+- Accept one or several trusted values in `webServer.auth.jwtToken.expectedIssuer`, and add the explicit
+  `allowAnyIssuer` compatibility mode for deployments that deliberately skip only JWT issuer validation.
+
 ### Changed
 
 - Require Node.js 20 or later, matching the MCP v2 runtime dependencies and generated projects.
