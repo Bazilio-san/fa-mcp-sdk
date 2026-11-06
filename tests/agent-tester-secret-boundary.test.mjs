@@ -66,6 +66,26 @@ try {
   assert.match(toolCallText, /ordinaryReceived\\?":true/);
   assert.doesNotMatch(toolCallText, new RegExp(marker));
 
+  for (const [headers, expected] of [
+    [{ 'x-project-secret': marker }, { secret: true, ordinary: false }],
+    [{ 'x-project-visible': 'visible' }, { secret: false, ordinary: true }],
+  ]) {
+    const singleUpdate = await fetch(`${tester.url}/agent-tester/api/mcp/headers`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ serverName, headers, headerRequirements: [ordinaryRequirement, requirement] }),
+    });
+    assert.equal(singleUpdate.status, 200);
+    const singleCall = await fetch(`${tester.url}/agent-tester/api/mcp/call-tool`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ serverName, toolName: 'header_probe', parameters: {} }),
+    });
+    const singleText = await singleCall.text();
+    assert.match(singleText, new RegExp(`exactSecretReceived\\\\?":${expected.secret}`));
+    assert.match(singleText, new RegExp(`ordinaryReceived\\\\?":${expected.ordinary}`));
+  }
+
   const badConnect = await fetch(`${tester.url}/agent-tester/api/mcp/connect`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
