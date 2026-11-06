@@ -176,6 +176,8 @@ for (const mode of ['http', 'stdio']) {
       if (uri === 'use://http-headers') {
         assert.deepEqual(JSON.parse(msg.result.contents[0].text), [
           { name: 'Authorization', description: 'Synthetic test header' },
+          { name: 'x-project-visible', description: 'Synthetic ordinary header', isOptional: true },
+          { name: 'x-project-secret', description: 'Synthetic private header', isOptional: true, isSecret: true },
         ]);
       }
     }

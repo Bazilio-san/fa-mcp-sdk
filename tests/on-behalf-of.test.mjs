@@ -42,3 +42,4 @@ for (const invalid of [
 }
 
 console.log('on-behalf-of identity tests passed');
+process.exit(0);
