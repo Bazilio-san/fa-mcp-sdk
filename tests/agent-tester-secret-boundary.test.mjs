@@ -11,7 +11,7 @@ const requirement = {
   isOptional: true,
   isSecret: true,
 };
-const worker = await isolatedWorker('http');
+const worker = await isolatedWorker('http', {}, { EXPECTED_SECRET_HEADER: marker });
 const tester = spawnServer({
   port: 39860,
   label: 'secret-boundary',
@@ -49,6 +49,16 @@ try {
   const serversText = await (await fetch(`${tester.url}/agent-tester/api/mcp/servers`)).text();
   assert.doesNotMatch(serversText, new RegExp(marker));
   assert.match(serversText, /"x-project-visible":"visible"/);
+
+  const toolCall = await fetch(`${tester.url}/agent-tester/api/mcp/call-tool`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ serverName, toolName: 'header_probe', parameters: {} }),
+  });
+  const toolCallText = await toolCall.text();
+  assert.equal(toolCall.status, 200);
+  assert.match(toolCallText, /exactSecretReceived\\?":true/);
+  assert.doesNotMatch(toolCallText, new RegExp(marker));
 
   const badConnect = await fetch(`${tester.url}/agent-tester/api/mcp/connect`, {
     method: 'POST',

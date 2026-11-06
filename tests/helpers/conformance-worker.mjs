@@ -45,6 +45,7 @@ globalThis.__MCP_PROJECT_DATA__ = {
     'echo',
     'echo_input',
     'stats',
+    'header_probe',
   ].map((name) => ({
     name,
     inputSchema: { type: 'object' },
@@ -58,6 +59,17 @@ globalThis.__MCP_PROJECT_DATA__ = {
     { uri: 'test://invalid', name: 'invalid', content: () => ({ value: 1n }) },
   ],
   toolHandler: async (p) => {
+    if (p.name === 'header_probe') {
+      const received = p.headers?.['x-project-secret'];
+      return {
+        content: [
+          {
+            type: 'text',
+            text: JSON.stringify({ exactSecretReceived: received === process.env.EXPECTED_SECRET_HEADER }),
+          },
+        ],
+      };
+    }
     if (p.name === 'stats') {
       return { content: [{ type: 'text', text: String(calls) }] };
     }
