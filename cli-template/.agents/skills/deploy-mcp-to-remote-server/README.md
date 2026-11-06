@@ -11,9 +11,11 @@ port. Caddy or nginx provides public access and TLS. Preserve disabled buffering
 the project's `deploy/` templates for streaming MCP responses.
 
 The working copy and dependencies live in a named Docker volume. Persistent application data is mounted from
-`project.statePath` on the host into `project.cacheDir` inside the project and survives removal of the volume.
-Container, image, volume and path defaults include the installation alias. When migrating an existing deployment,
-set its previous `service.name` and paths explicitly; renaming a folder does not automatically move data.
+`project.statePath` on the host into `project.cacheDir` inside the project. `uninstall --yes` removes the container,
+image, named volume and any host directory at `project.projectPath`, but deliberately preserves
+`project.statePath`. Container, image, volume and path defaults include the installation alias. When migrating an
+existing deployment, set its previous `service.name` and paths explicitly; renaming a folder does not automatically
+move data.
 
 The private key and settings are sent through SSH standard input into a private temporary directory. Before the
 container starts, files are copied to `/run-secrets`. Bootstrap installs the key and settings with mode `0600`;

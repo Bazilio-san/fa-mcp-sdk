@@ -26,7 +26,7 @@
 //   node remote.cjs update      # force update.cjs --force inside the container
 //   node remote.cjs logs [N]    # last N app-service journal lines (default 200)
 //   node remote.cjs updatelog   # auto-update verdict + error scan + last-run log
-//   node remote.cjs uninstall --yes   # remove container, image, volume, Caddy block
+//   node remote.cjs uninstall --yes   # remove container, image, volume, project checkout and reverse proxy
 //   node remote.cjs ssh         # print the raw ssh command
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -766,17 +766,75 @@ function cmdExec(cfg, args) {
 function cmdUninstall(cfg, yes) {
   if (!yes) {
     fail(
-      'Destructive. Re-run with --yes to remove container, image, volume and Caddy block:\n' +
+      'Destructive. Re-run with --yes to remove container, image, volume, project checkout and reverse proxy:\n' +
         '  node remote.cjs uninstall --yes',
     );
   }
+  const projectPath = cfg.projectPath.replace(/\/+$/, '') || '/';
+  const statePath = cfg.statePath.replace(/\/+$/, '') || '/';
+  const protectedPaths = new Set(['/', '/opt', '/opt/node', '/var', '/var/opt', '/var/opt/node']);
+  if (protectedPaths.has(projectPath) || projectPath.split('/').filter(Boolean).length < 3) {
+    fail(`Refusing to remove unsafe project.projectPath: ${projectPath}`);
+  }
+  if (statePath === projectPath || statePath.startsWith(`${projectPath}/`)) {
+    fail(`Refusing to remove project.projectPath because project.statePath is inside it: ${statePath}`);
+  }
   const dnsEsc = cfg.dns.replace(/\./g, '\\.');
   const script = `
-set -uo pipefail
-echo 'Removing container, image and volume...'
-docker rm -f ${CONTAINER} 2>/dev/null || true
-docker volume rm ${VOLUME} 2>/dev/null || true
-docker rmi ${IMAGE} 2>/dev/null || true
+set -euo pipefail
+PROJECT_PATH=${sq(projectPath)}
+STATE_PATH=${sq(statePath)}
+echo 'Checking project path and dependent Docker objects...'
+if [ -L "$PROJECT_PATH" ]; then
+  echo "Refusing to remove symbolic-link project path: $PROJECT_PATH" >&2
+  exit 1
+fi
+if [ -e "$PROJECT_PATH" ]; then
+  RESOLVED_PROJECT_PATH=$(readlink -f -- "$PROJECT_PATH")
+  if [ "$RESOLVED_PROJECT_PATH" != "$PROJECT_PATH" ]; then
+    echo "Refusing to remove project path resolved as: $RESOLVED_PROJECT_PATH" >&2
+    exit 1
+  fi
+fi
+IMAGE_ID=''
+if docker image inspect ${IMAGE} >/dev/null 2>&1; then
+  IMAGE_ID=$(docker image inspect --format '{{.Id}}' ${IMAGE})
+fi
+TARGET_CONTAINER_ID=$(docker inspect --format '{{.Id}}' ${CONTAINER} 2>/dev/null || true)
+while IFS= read -r ID; do
+  [ -n "$ID" ] || continue
+  [ "$ID" = "$TARGET_CONTAINER_ID" ] && continue
+  NAME=$(docker inspect --format '{{.Name}}' "$ID" | sed 's#^/##')
+  USED_IMAGE=$(docker inspect --format '{{.Image}}' "$ID")
+  if [ -n "$IMAGE_ID" ] && [ "$USED_IMAGE" = "$IMAGE_ID" ]; then
+    echo "Refusing to remove image used by container: $NAME" >&2
+    exit 1
+  fi
+  if docker inspect --format '{{range .Mounts}}{{println .Source}}{{end}}' "$ID" | grep -Fxq "$PROJECT_PATH"; then
+    echo "Refusing to remove project path used by container: $NAME" >&2
+    exit 1
+  fi
+done < <(docker ps -aq)
+echo 'Removing container, image, volume and project checkout...'
+if [ -n "$TARGET_CONTAINER_ID" ]; then
+  docker rm -f ${CONTAINER}
+fi
+if docker volume inspect ${VOLUME} >/dev/null 2>&1; then
+  docker volume rm ${VOLUME}
+fi
+if [ -n "$IMAGE_ID" ]; then
+  docker rmi -f "$IMAGE_ID"
+  if docker image inspect "$IMAGE_ID" >/dev/null 2>&1; then
+    echo "Image still exists after removal: $IMAGE_ID" >&2
+    exit 1
+  fi
+fi
+rm -rf -- "$PROJECT_PATH"
+if [ -e "$PROJECT_PATH" ] || [ -L "$PROJECT_PATH" ]; then
+  echo "Project path still exists after removal: $PROJECT_PATH" >&2
+  exit 1
+fi
+echo "Preserved state path: $STATE_PATH"
 echo 'Removing Caddy block for ${cfg.dns}...'
 CF=/etc/caddy/Caddyfile
 if [ -f "$CF" ] && grep -qE "^\\s*${dnsEsc}\\s*\\{" "$CF"; then
@@ -895,7 +953,7 @@ function main() {
   updatelog [N]     Last auto-update verdict + error scan + last-run log (default 80)
   shell             Open an interactive bash shell inside the container
   exec -- <cmd...>  Run an arbitrary command inside the container
-  uninstall --yes   Remove container, image, volume and Caddy block
+  uninstall --yes   Remove container, image, volume, project checkout and proxy; preserve statePath
   ssh               Print the raw ssh command for manual access`);
       if (cmd && cmd !== 'help') process.exit(1);
   }

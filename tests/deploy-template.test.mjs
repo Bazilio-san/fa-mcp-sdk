@@ -223,6 +223,14 @@ test('named targets, argument separation, private delivery and failure propagati
     assert.match(script, /docker create/);
     assert.match(script, /docker cp/);
     assert.doesNotMatch(script, /-e (GIT_SSH_KEY|CONFIG_LOCAL|DEPLOY_CONFIG)/);
+    run(['--server', 'dev-1', 'uninstall', '--yes']);
+    const uninstallScript = calls.at(-1)[2].input;
+    assert.match(uninstallScript, /docker rm -f example-dev-1/);
+    assert.match(uninstallScript, /docker volume rm example-dev-1-data/);
+    assert.match(uninstallScript, /docker rmi -f "\$IMAGE_ID"/);
+    assert.match(uninstallScript, /rm -rf -- "\$PROJECT_PATH"/);
+    assert.match(uninstallScript, /Preserved state path: \$STATE_PATH/);
+    assert.doesNotMatch(uninstallScript, /rm -rf -- "\$STATE_PATH"/);
     const bash = process.platform === 'win32' ? 'C:/Program Files/Git/bin/bash.exe' : '/bin/bash';
     if (fs.existsSync(bash)) {
       run(['--server', 'dev-1', 'push-config']);
