@@ -117,6 +117,18 @@ The SDK accepts the following `Authorization` schemes, picked by header format (
 - `Basic <base64>` — HTTP Basic auth.
 - Optional `customAuthValidator` — last fallback for project-specific schemes.
 
+Keep these three header roles independent:
+
+1. `Authorization` admits the MCP client to the server and is interpreted by the SDK authentication layer.
+2. `x-on-behalf-of-user` optionally identifies the person represented by the already admitted client. The SDK parses
+   it into `onBehalfOf`, but it does not authenticate the upstream system.
+3. Project-declared direct upstream credentials, conventionally `x-username` and `x-password`, are optional project
+   data. The SDK neither derives the first two roles from them nor derives them from `Authorization` or
+   `x-on-behalf-of-user`.
+
+An MCP can therefore use any one of these roles without requiring either of the others. A project that does not need
+direct personal upstream login should not declare the recommended credential pair.
+
 JWT modes are documented in [04-authentication](04-authentication.md). Public contract:
 
 | Claim       | Required | Notes                                                                    |
