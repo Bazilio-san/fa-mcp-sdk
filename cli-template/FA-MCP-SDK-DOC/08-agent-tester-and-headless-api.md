@@ -873,6 +873,11 @@ at-toast-<type>                e.g. at-toast-success, at-toast-error
 
 **Sidebar — HTTP headers section**
 
+Headers declared with `isSecret: true` use password inputs with browser autocomplete disabled. Agent Tester forwards
+a non-empty value to the current MCP connection but does not restore it after reload, place it in `localStorage`, or
+return it from tester service routes. Changing the MCP URL, disconnecting the server, or logging out clears the value.
+Declarations without `isSecret` keep the existing text-input and per-URL persistence behavior.
+
 | testid | Element |
 |---|---|
 | `at-headers-section` | Headers section container |

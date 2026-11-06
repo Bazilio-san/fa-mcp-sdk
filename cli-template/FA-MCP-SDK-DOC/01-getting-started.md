@@ -45,7 +45,7 @@ interface McpServerData {
   agentPrompt: string;                                // System prompt
   toolPrompt?: TPromptContentFunction;                // tool_prompt content (args.tool); default → ''
   customPrompts?: IPromptData[];                      // Additional prompts
-  usedHttpHeaders?: IUsedHttpHeader[] | null;         // HTTP headers for auth
+  usedHttpHeaders?: IUsedHttpHeader[] | null;         // Declared HTTP headers used by the project
   customResources?: IResourceData[] | null;           // Custom resources
   customAuthValidator?: CustomAuthValidator;          // Runs FIRST: bypass or fallback to standard auth
   tokenGenAuthHandler?: TokenGenAuthHandler;          // Token Generator auth
@@ -54,6 +54,13 @@ interface McpServerData {
   getConsulUIAddress?: (serviceId: string) => string;
   customStartupInfo?: [string, string][];             // Extra [key, value] rows in startup banner
   loggerSettings?: Partial<ILoggerSettings>;          // Override af-logger-ts settings (shallow merge over defaults)
+}
+
+interface IUsedHttpHeader {
+  name: string;
+  description: string;
+  isOptional?: boolean;
+  isSecret?: boolean;                                // Protect this value in Agent Tester
 }
 
 interface IToolHandlerParams {

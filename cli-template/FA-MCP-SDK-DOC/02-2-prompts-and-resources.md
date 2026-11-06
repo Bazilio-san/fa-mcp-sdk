@@ -304,11 +304,15 @@ const serverData: McpServerData = {
   usedHttpHeaders: [
     { name: 'Authorization', description: 'JWT token in Bearer format' },
     { name: 'X-Request-ID', description: 'Request tracking ID', isOptional: true },
+    { name: 'x-username', description: 'Direct upstream login', isOptional: true },
+    { name: 'x-password', description: 'Direct upstream password', isOptional: true, isSecret: true },
   ],
 };
 ```
 
-Exposed via `use://http-headers` resource.
+The declaration is exposed unchanged through `use://http-headers` and `/used-http-headers`. `isSecret: true` tells
+Agent Tester to use a password field, keep the value only for the current page connection, exclude it from
+`localStorage`, clear it when the page connection ends, and mask it in tester diagnostics and service responses.
 
 ## requireAuth
 
