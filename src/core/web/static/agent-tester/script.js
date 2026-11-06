@@ -2385,7 +2385,7 @@ class McpAgentTester {
 
   renderHeaderInputs() {
     this.dynamicHeaders.innerHTML = '';
-    const savedHeaders = this.loadHeaderValuesFromStorage();
+    const savedHeaders = this.removeSecretHeaderValuesFromStorage();
 
     this.usedHeaders.forEach((header) => {
       const headerGroup = document.createElement('div');
@@ -2534,9 +2534,15 @@ class McpAgentTester {
 
   saveHeaderValuesToStorage() {
     const headers = this.getHeadersFromForm();
+    const secretNames = new Set(
+      this.usedHeaders.filter((header) => header.isSecret === true).map((header) => header.name.toLowerCase()),
+    );
+    const persistentHeaders = Object.fromEntries(
+      Object.entries(headers).filter(([name]) => !secretNames.has(name.toLowerCase())),
+    );
     const key = this.getHeaderStorageKey();
     try {
-      localStorage.setItem(key, JSON.stringify(headers));
+      localStorage.setItem(key, JSON.stringify(persistentHeaders));
     } catch (error) {
       console.error('Error saving header values to storage:', error);
     }
@@ -2551,6 +2557,24 @@ class McpAgentTester {
       console.error('Error loading header values from storage:', error);
       return {};
     }
+  }
+
+  removeSecretHeaderValuesFromStorage() {
+    const headers = this.loadHeaderValuesFromStorage();
+    const secretNames = new Set(
+      this.usedHeaders.filter((header) => header.isSecret === true).map((header) => header.name.toLowerCase()),
+    );
+    const cleaned = Object.fromEntries(
+      Object.entries(headers).filter(([name]) => !secretNames.has(name.toLowerCase())),
+    );
+    if (Object.keys(cleaned).length !== Object.keys(headers).length) {
+      try {
+        localStorage.setItem(this.getHeaderStorageKey(), JSON.stringify(cleaned));
+      } catch (error) {
+        console.error('Error removing secret header values from storage:', error);
+      }
+    }
+    return cleaned;
   }
 
   scheduleHeadersUpdate() {
