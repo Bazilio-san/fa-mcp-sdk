@@ -61,7 +61,7 @@ umask 077
 # that `docker run -e ...` set on PID 1.
 while IFS= read -r -d '' kv; do
   case "$kv" in
-    REPO_URL=*|BRANCH=*|PROJECT_DIR=*|APP_PORT=*|DEBUG=*|PUBLIC_BASE_URL=*|NODE_VERSION=*|SERVICE_NAME=*|SERVICE_INSTANCE=*) export "$kv" ;;
+    REPO_URL=*|BRANCH=*|PROJECT_DIR=*|APP_PORT=*|APP_HOST=*|DEBUG=*|PUBLIC_BASE_URL=*|NODE_VERSION=*|SERVICE_NAME=*|SERVICE_INSTANCE=*) export "$kv" ;;
   esac
 done < /proc/1/environ
 
@@ -83,7 +83,10 @@ set -u
 # Read-only Deploy Key for GitHub.
 mkdir -p /root/.ssh && chmod 700 /root/.ssh
 install -m 600 /run-secrets/id_ed25519 /root/.ssh/id_ed25519
-ssh-keyscan -t ed25519,rsa github.com >> /root/.ssh/known_hosts 2>/dev/null || true
+GIT_HOST=$(node -p 'new URL(process.env.REPO_URL).hostname')
+GIT_PORT=$(node -p 'new URL(process.env.REPO_URL).port || 22')
+ssh-keyscan -p "$GIT_PORT" -t ed25519,rsa "$GIT_HOST" >> /root/.ssh/known_hosts
+chmod 600 /root/.ssh/known_hosts
 
 # Materialise the checkout. PROJECT_DIR is never empty (the data-cache volume is
 # bind-mounted at PROJECT_DIR/data-cache), so `git clone` would refuse it — instead
@@ -115,14 +118,14 @@ SERVICE_NAME=$SERVICE_NAME
 SERVICE_INSTANCE=$SERVICE_INSTANCE
 NODE_ENV=production
 DEBUG=$DEBUG
-WS_HOST=127.0.0.1
+WS_HOST=${APP_HOST:-127.0.0.1}
 WS_PORT=${APP_PORT:-9049}
 WS_PUBLIC_BASE_URL=${PUBLIC_BASE_URL:-}
 ENVV
 
 # Dependencies + build.
-yarn install --frozen-lockfile
-yarn cb
+node scripts/runtime/run-progress.cjs dependencies npm ci --no-audit --no-fund
+node scripts/runtime/run-progress.cjs build npm run cb
 
 # Install (or reinstall) the app as a systemd service via the repo's own script.
 node deploy/srv.cjs install

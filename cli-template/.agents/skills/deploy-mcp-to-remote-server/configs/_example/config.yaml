@@ -4,33 +4,39 @@ server:
   user: <username>             # SSH user (usually root)
   keyPath: <path to SSH key>   # Local private key for SSH, e.g. C:\Users\you\.ssh\id_rsa
 
+deployment:
+  # systemd is the default: clone into projectPath and run the app as a host service.
+  # Use docker explicitly for the privileged systemd-in-container deployment.
+  mode: systemd
+
 git:
-  repoUrl: <git@github.com:org/repo.git>   # SSH URL the CONTAINER clones from
-  # Private key the container uses to clone. Best practice is a dedicated read-only
+  repoUrl: <git@github.com:org/repo.git>   # SSH URL cloned by the selected runtime
+  # Private key the server uses to clone. Best practice is a dedicated read-only
   # GitHub Deploy Key — create one with:  node scripts/remote.cjs keygen
   # then add the printed public key to the repo (Settings → Deploy keys, read-only).
   # You may also point this at an existing key that already has GitHub access.
   deployKeyPath: <path to git private key>   # e.g. C:\Users\you\.ssh\<name>-deploy
 
 project:
-  branch: master     # Branch the container tracks and auto-updates from
-  # projectPath and statePath are OPTIONAL — default to /opt/node/<name> and /opt/<name>.
-  # projectPath: /opt/node/<name>   # where the repo is cloned INSIDE the container
-  # statePath:   /opt/<name>        # HOST dir that persistently holds the app's data cache
-  # cacheDir:    data-cache         # subdir inside the project that statePath is mounted onto
+  branch: master     # Branch the service tracks and auto-updates from
+  # projectPath is optional and defaults to /opt/node/<name>.
+  # projectPath: /opt/node/<name>   # host checkout in systemd mode; mounted checkout in docker mode
+  # cacheDir:    data-cache         # real project directory in systemd mode
+  # statePath:   /opt/<name>        # docker mode only; host directory mounted at cacheDir
 
 mcp:
   dns: <public domain>   # Public domain the reverse proxy serves, e.g. app.example.com
 
 # OPTIONAL overrides (auto-detected if omitted):
 # service:
-#   name: <name>     # container/image/volume/service base name (default: package.json name + installation alias)
+#   name: <name>     # runtime/service base name (default: package.json name + installation alias)
 #   instance: prod   # systemd instance suffix -> <name>--<instance>
+#   aliasSource: <name> # optional source words for the restart alias; default: package.json name
 # container:
 #   nodeVersion: <x.y.z>   # node version baked into the image (default: from .envrc)
 
 env:
-  DEBUG: config-info   # DEBUG value passed into the container (optional; default: config-info)
+  DEBUG: config-info   # DEBUG value passed to the service (optional; default: config-info)
 
 # Update settings; configure the branch only in project.branch.
 update:

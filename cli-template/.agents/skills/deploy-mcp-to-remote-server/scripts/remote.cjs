@@ -26,7 +26,7 @@
 //   node remote.cjs update      # force update.cjs --force inside the container
 //   node remote.cjs logs [N]    # last N app-service journal lines (default 200)
 //   node remote.cjs updatelog   # auto-update verdict + error scan + last-run log
-//   node remote.cjs uninstall --yes   # remove container, image, volume, project checkout and reverse proxy
+//   node remote.cjs uninstall --yes   # remove container, image, project checkout and reverse proxy
 //   node remote.cjs ssh         # print the raw ssh command
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -67,7 +67,7 @@ const PROJECT_ROOT = path.resolve(__dirname, '..', '..', '..', '..');
 const NODE_BIN = '/usr/local/bin/node';
 
 // Derived names — set once in main() from the resolved config (see resolveNames()).
-let CONTAINER, IMAGE, VOLUME, SERVICE, UPSTREAM, NODE_VERSION;
+let CONTAINER, IMAGE, SERVICE, UPSTREAM, NODE_VERSION;
 
 // ── Minimal nested-YAML reader (maps + scalars, 2-space indent, no arrays) ────
 function parseYaml(text) {
@@ -141,6 +141,31 @@ function readProjectName(cfg) {
   return 'mcp-app';
 }
 
+function readPackageName() {
+  try {
+    const pkg = JSON.parse(fs.readFileSync(path.join(PROJECT_ROOT, 'package.json'), 'utf8'));
+    if (pkg.name) return sanitizeName(pkg.name);
+  } catch {
+    /* fall through */
+  }
+  return 'mcp-app';
+}
+
+function restartAliasCandidates(value) {
+  const words = String(value)
+    .toLowerCase()
+    .split(/[^\p{L}\p{N}]+/u)
+    .filter(Boolean);
+  if (!words.length) return ['mcp'];
+  const base = words.map((word) => Array.from(word)[0]).join('');
+  const last = Array.from(words.at(-1));
+  const candidates = [base];
+  for (let length = 2; length <= last.length; length++) {
+    candidates.push(`${base}${last.slice(1, length).join('')}`);
+  }
+  return [...new Set(candidates)];
+}
+
 // Node version to bake into the image — from config override, else the project's .envrc
 // (`nvm use X.Y.Z`); srv.cjs reads the same .envrc, so they must match.
 function readNodeVersion(cfg) {
@@ -170,6 +195,7 @@ function loadConfig(alias) {
   const cfg = parseYaml(configText);
   const server = cfg.server || {};
   const project = cfg.project || {};
+  const deployment = cfg.deployment || {};
   const git = cfg.git || {};
   const mcp = cfg.mcp || {};
   const envSection = cfg.env || {};
@@ -195,10 +221,12 @@ function loadConfig(alias) {
 
   const name = cfg.service?.name ? readProjectName(cfg) : `${readProjectName(cfg)}-${alias}`;
   const instance = (cfg.service && cfg.service.instance) || 'prod';
+  const deploymentMode = deployment.mode || 'systemd';
   const safe = (value, pattern, label) => {
     if (!pattern.test(String(value))) fail(`Invalid ${label}`);
   };
   safe(instance, /^[a-zA-Z0-9_.-]+$/, 'service.instance');
+  safe(deploymentMode, /^(?:systemd|docker)$/, 'deployment.mode');
   safe(readNodeVersion(cfg), /^\d+\.\d+\.\d+$/, 'container.nodeVersion');
   safe(mcp.dns, /^(?=.{1,253}$)[a-zA-Z0-9][a-zA-Z0-9.-]*$/, 'mcp.dns');
   for (const [value, label] of [
@@ -219,10 +247,18 @@ function loadConfig(alias) {
       project.cacheDir.split('/').includes('..'))
   )
     fail('Invalid project.cacheDir');
+  const projectPath = project.projectPath || `/opt/node/${name}`;
+  const cacheDir = project.cacheDir || 'data-cache';
+  if (deploymentMode === 'systemd' && project.statePath) {
+    fail('project.statePath is available only in docker mode; systemd uses projectPath/cacheDir directly');
+  }
+  const statePath = deploymentMode === 'systemd' ? `${projectPath}/${cacheDir}` : project.statePath || `/opt/${name}`;
   return {
     alias,
     name,
     instance,
+    deploymentMode,
+    restartAliasCandidates: restartAliasCandidates(cfg.service?.aliasSource || readPackageName()),
     nodeVersion: readNodeVersion(cfg),
     host: req(server.host, 'server.host'),
     port: server.port || '22',
@@ -231,12 +267,17 @@ function loadConfig(alias) {
     repoUrl: req(project.repoUrl || git.repoUrl, 'project.repoUrl'),
     deployKeyPath: git.deployKeyPath || project.deployKeyPath || '',
     branch,
-    projectPath: project.projectPath || `/opt/node/${name}`,
-    statePath: project.statePath || `/opt/${name}`,
+    projectPath,
+    statePath,
     // Subdir inside the project the persistent statePath is bind-mounted onto
     // (the app's on-disk cache). Default suits fa-mcp-sdk apps; override if needed.
-    cacheDir: project.cacheDir || 'data-cache',
+    cacheDir,
     dns: req(mcp.dns, 'mcp.dns'),
+    reverseProxy: mcp.reverseProxy !== 'false',
+    appHost: local.webServer?.host || '127.0.0.1',
+    publicUrl: mcp.publicUrl || (mcp.reverseProxy === 'false'
+      ? `http://${mcp.dns}:${local.webServer?.port || '9049'}`
+      : `https://${mcp.dns}`),
     email: dcfg.email || '',
     debug: envSection.DEBUG || 'config-info',
     appPort: (local.webServer && local.webServer.port) || '9049',
@@ -518,7 +559,151 @@ function cmdKeygen(cfg) {
   }
 }
 
-function cmdDeploy(cfg) {
+function restartAliasRegistrationScript(cfg) {
+  const candidates = cfg.restartAliasCandidates.map(sq).join(' ');
+  return `
+if command -v restart >/dev/null 2>&1; then
+  ALIAS_LIST=$(restart ls 2>/dev/null || true)
+  RESTART_ALIAS=''
+  for CANDIDATE in ${candidates}; do
+    CURRENT=$(printf '%s\n' "$ALIAS_LIST" | awk -v alias="$CANDIDATE" '$1 == alias && $2 == "->" { print $3 }')
+    if [ -z "$CURRENT" ]; then
+      restart add "$CANDIDATE" ${SERVICE}
+      RESTART_ALIAS="$CANDIDATE"
+      break
+    fi
+    if [ "$CURRENT" = ${sq(SERVICE)} ]; then
+      RESTART_ALIAS="$CANDIDATE"
+      echo "Restart alias already registered: $RESTART_ALIAS -> ${SERVICE}"
+      break
+    fi
+  done
+  if [ -z "$RESTART_ALIAS" ]; then
+    PREFIX=${sq(cfg.restartAliasCandidates.at(-1))}
+    SUFFIX=2
+    while :; do
+      CANDIDATE="\${PREFIX}\${SUFFIX}"
+      CURRENT=$(printf '%s\n' "$ALIAS_LIST" | awk -v alias="$CANDIDATE" '$1 == alias && $2 == "->" { print $3 }')
+      if [ -z "$CURRENT" ]; then
+        restart add "$CANDIDATE" ${SERVICE}
+        RESTART_ALIAS="$CANDIDATE"
+        break
+      fi
+      SUFFIX=$((SUFFIX + 1))
+    done
+  fi
+  echo "Restart alias: $RESTART_ALIAS -> ${SERVICE}"
+else
+  echo 'Command restart is not installed; alias registration skipped.'
+fi`;
+}
+
+function cmdDeploySystemd(cfg) {
+  if (!cfg.deployKeyPath) fail('git.deployKeyPath is not set. Run: node remote.cjs keygen');
+  if (!fs.existsSync(cfg.deployKeyPath))
+    fail(`Deploy key not found: ${cfg.deployKeyPath}. Run: node remote.cjs keygen`);
+
+  const keyB64 = b64(fs.readFileSync(cfg.deployKeyPath, 'utf8'));
+  const localYamlB64 = b64(cfg.localYaml);
+  const deployCfgB64 = b64(cfg.deployConfigYaml);
+  const cronName = sanitizeName(cfg.name);
+  const script = `
+set -euo pipefail
+umask 077
+PROJECT_PATH=${sq(cfg.projectPath)}
+STATE_PATH=${sq(cfg.statePath)}
+CACHE_PATH="$PROJECT_PATH/${cfg.cacheDir}"
+DEPLOY_KEY="$HOME/.ssh/${cfg.name}-deploy"
+SECRET_DIR=$(mktemp -d)
+trap 'rm -rf -- "$SECRET_DIR"' EXIT
+
+for COMMAND in git node npm systemctl; do
+  command -v "$COMMAND" >/dev/null 2>&1 || { echo "Required command is missing: $COMMAND" >&2; exit 1; }
+done
+printf '%s' ${sq(keyB64)} | base64 -d > "$SECRET_DIR/id_ed25519"
+printf '%s' ${sq(localYamlB64)} | base64 -d > "$SECRET_DIR/local.yaml"
+printf '%s' ${sq(deployCfgB64)} | base64 -d > "$SECRET_DIR/config.yml"
+mkdir -p "$HOME/.ssh" "$PROJECT_PATH"
+chmod 700 "$HOME/.ssh"
+install -m 600 "$SECRET_DIR/id_ed25519" "$DEPLOY_KEY"
+GIT_HOST=$(node -p 'new URL(process.argv[1]).hostname' ${sq(cfg.repoUrl)})
+GIT_PORT=$(node -p 'new URL(process.argv[1]).port || 22' ${sq(cfg.repoUrl)})
+ssh-keyscan -p "$GIT_PORT" -t ed25519,rsa "$GIT_HOST" >> "$HOME/.ssh/known_hosts" 2>/dev/null
+sort -u "$HOME/.ssh/known_hosts" -o "$HOME/.ssh/known_hosts"
+chmod 600 "$HOME/.ssh/known_hosts"
+
+git config --global --add safe.directory "$PROJECT_PATH"
+cd "$PROJECT_PATH"
+if [ ! -d .git ]; then
+  UNEXPECTED=$(find . -mindepth 1 -maxdepth 1 ! -name ${sq(cfg.cacheDir.split('/')[0])} -print -quit)
+  if [ -n "$UNEXPECTED" ]; then
+    echo "Project path contains data other than the permitted cache directory: $UNEXPECTED" >&2
+    exit 1
+  fi
+  git init -q
+  git remote add origin ${sq(cfg.repoUrl)}
+else
+  git remote set-url origin ${sq(cfg.repoUrl)}
+fi
+git config core.sshCommand "ssh -i $DEPLOY_KEY -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new"
+git fetch --prune origin ${sq(cfg.branch)}
+git checkout -f -B ${sq(cfg.branch)} origin/${cfg.branch}
+git branch --set-upstream-to=origin/${cfg.branch} ${sq(cfg.branch)} 2>/dev/null || true
+git clean -fd -e ${sq(`/${cfg.cacheDir}/`)}
+
+if [ -L "$CACHE_PATH" ]; then
+  echo "Systemd mode requires a real cache directory, not a symbolic link: $CACHE_PATH" >&2
+  exit 1
+fi
+mkdir -p "$CACHE_PATH"
+chmod 700 "$CACHE_PATH"
+
+mkdir -p config deploy
+install -m 600 "$SECRET_DIR/local.yaml" config/local.yaml
+install -m 600 "$SECRET_DIR/config.yml" deploy/config.yml
+cat > .env <<'MCP_ENV'
+SERVICE_NAME=${cfg.name}
+SERVICE_INSTANCE=${cfg.instance}
+NODE_ENV=production
+DEBUG=${cfg.debug}
+WS_HOST=${cfg.appHost}
+WS_PORT=${cfg.appPort}
+WS_PUBLIC_BASE_URL=${cfg.publicUrl}
+MCP_ENV
+chmod 600 .env
+
+export HOME=${sq('/root')}
+export NVM_DIR="$HOME/.nvm"
+if [ -s "$NVM_DIR/nvm.sh" ]; then
+  set +u
+  . "$NVM_DIR/nvm.sh"
+  nvm use ${sq(cfg.nodeVersion)} >/dev/null
+  set -u
+fi
+ACTUAL_NODE=$(node --version | sed 's/^v//')
+[ "$ACTUAL_NODE" = ${sq(cfg.nodeVersion)} ] || {
+  echo "Node.js ${cfg.nodeVersion} is required, found $ACTUAL_NODE" >&2; exit 1; }
+node scripts/runtime/run-progress.cjs dependencies npm ci --no-audit --no-fund
+node scripts/runtime/run-progress.cjs build npm run cb
+node deploy/srv.cjs install
+systemctl restart ${SERVICE}
+
+NODE_BIN=$(command -v node)
+cat > /etc/cron.d/mcp-update-${cronName} <<CRON
+* * * * * root $NODE_BIN $PROJECT_PATH/update.cjs >/tmp/mcp-update-${cronName}.log 2>&1
+CRON
+chmod 0644 /etc/cron.d/mcp-update-${cronName}
+${restartAliasRegistrationScript(cfg)}
+${healthScript(cfg)}
+${cfg.reverseProxy ? reverseProxySnippet(cfg) : "echo 'Прямое внутреннее подключение; настройки nginx не изменяются.'"}
+`;
+  say(`Deploying ${cfg.name} as a host systemd service on ${cfg.user}@${cfg.host}`);
+  const code = sshRun(cfg, script);
+  if (code !== 0) fail(`Deploy failed (exit ${code}). Run: node remote.cjs --server ${cfg.alias} status`);
+  say(`Done. systemd service ${SERVICE} is ready at ${cfg.publicUrl}`);
+}
+
+function cmdDeployDocker(cfg) {
   if (!cfg.deployKeyPath) fail('git.deployKeyPath is not set. Run: node remote.cjs keygen');
   if (!fs.existsSync(cfg.deployKeyPath))
     fail(`Deploy key not found: ${cfg.deployKeyPath}. Run: node remote.cjs keygen`);
@@ -527,7 +712,7 @@ function cmdDeploy(cfg) {
   const keyB64 = b64(fs.readFileSync(cfg.deployKeyPath, 'utf8'));
   const localYamlB64 = b64(cfg.localYaml);
   const deployCfgB64 = b64(cfg.deployConfigYaml);
-  const dockerfile = fs.readFileSync(DOCKERFILE, 'utf8');
+  const dockerfile = fs.readFileSync(DOCKERFILE, 'utf8').replace(/\r\n/g, '\n');
 
   say('Ensuring Docker is installed on the server...');
   const preflight = `
@@ -558,7 +743,7 @@ printf '%s' ${sq(localYamlB64)} | base64 -d > "$SECRET_DIR/local.yaml"
 printf '%s' ${sq(deployCfgB64)} | base64 -d > "$SECRET_DIR/config.yml"
 echo 'Recreating container...'
 docker rm -f ${CONTAINER} >/dev/null 2>&1 || true
-docker volume create ${VOLUME} >/dev/null
+mkdir -p ${sq(cfg.projectPath)}
 # Host directory that persistently holds the app's runtime data cache (data-cache),
 # bind-mounted over it so it survives container/volume removal.
 mkdir -p ${sq(cfg.statePath)}
@@ -567,7 +752,7 @@ docker create --name ${CONTAINER} --restart unless-stopped \
   --network host \
   --tmpfs /run --tmpfs /run/lock \
   -v /sys/fs/cgroup:/sys/fs/cgroup:rw \
-  -v ${VOLUME}:${cfg.projectPath} \
+  -v ${sq(cfg.projectPath)}:${cfg.projectPath} \
   -v ${sq(cfg.statePath)}:${cfg.projectPath}/${cfg.cacheDir} \
   -e REPO_URL=${sq(cfg.repoUrl)} \
   -e BRANCH=${sq(cfg.branch)} \
@@ -575,22 +760,27 @@ docker create --name ${CONTAINER} --restart unless-stopped \
   -e SERVICE_NAME=${sq(cfg.name)} \
   -e SERVICE_INSTANCE=${sq(cfg.instance)} \
   -e DEBUG=${sq(cfg.debug)} \
-  -e PUBLIC_BASE_URL=${sq('https://' + cfg.dns)} \
+  -e PUBLIC_BASE_URL=${sq(cfg.publicUrl)} \
+  -e APP_HOST=${sq(cfg.appHost)} \
   -e APP_PORT=${sq(cfg.appPort)} \
   ${IMAGE}
 docker cp "$SECRET_DIR" ${CONTAINER}:/run-secrets
 docker start ${CONTAINER}
 echo 'Container started. First boot clones + builds inside the container (a few minutes).'
-${reverseProxySnippet(cfg)}
+${cfg.reverseProxy ? reverseProxySnippet(cfg) : "echo 'Прямое внутреннее подключение; настройки nginx не изменяются.'"}
 `;
   say('Starting container and wiring up the reverse proxy (Caddy or nginx)...');
   code = sshRun(cfg, runScript);
   if (code !== 0) fail(`Deploy failed (exit ${code}). Run: node remote.cjs status`);
   say(`Done. First boot builds inside the container; watch it with: node remote.cjs status`);
-  say(`Public endpoint (once built): https://${cfg.dns}/health`);
+  say(`Endpoint (once built): ${cfg.publicUrl}/health`);
 }
 
-function cmdStatus(cfg) {
+function cmdDeploy(cfg) {
+  return cfg.deploymentMode === 'docker' ? cmdDeployDocker(cfg) : cmdDeploySystemd(cfg);
+}
+
+function cmdStatusDocker(cfg) {
   const dnsEsc = cfg.dns.replace(/\./g, '\\.');
   const lp = logPaths(cfg);
   const script = `
@@ -607,7 +797,7 @@ docker exec ${CONTAINER} bash -lc 'cd ${cfg.projectPath} 2>/dev/null && git log 
 echo
 echo '===== HEALTH ====='
 curl -fsS -m 5 "http://127.0.0.1:${cfg.appPort}/health" && echo || echo 'local /health FAILED'
-curl -fsS -m 8 "https://${cfg.dns}/health" && echo || echo 'public /health FAILED'
+curl -fsS -m 8 "${cfg.publicUrl}/health" && echo || echo 'external /health FAILED'
 echo
 echo '===== AUTO-UPDATE ====='
 docker exec ${CONTAINER} cat /etc/cron.d/mcp-update 2>/dev/null || echo 'cron file not present yet'
@@ -635,35 +825,114 @@ fi
   sshRun(cfg, script);
 }
 
+function cmdStatusSystemd(cfg) {
+  const dnsEsc = cfg.dns.replace(/\./g, '\\.');
+  const lp = logPaths(cfg);
+  const script = `
+echo '===== DEPLOYMENT ====='
+echo 'mode: systemd'
+echo 'project: ${cfg.projectPath}'
+echo 'state: ${cfg.statePath}'
+echo
+echo '===== APP SERVICE ====='
+systemctl is-active ${SERVICE} || true
+systemctl status ${SERVICE} --no-pager --lines=12 || true
+echo
+echo '===== GIT ====='
+git -C ${sq(cfg.projectPath)} log -1 --pretty='HEAD %h %ci %s' 2>/dev/null || echo '(repo not cloned yet)'
+echo
+echo '===== HEALTH ====='
+curl -fsS -m 5 "http://127.0.0.1:${cfg.appPort}/health" && echo || echo 'local /health FAILED'
+curl -fsS -m 8 "${cfg.publicUrl}/health" && echo || echo 'external /health FAILED'
+echo
+echo '===== AUTO-UPDATE ====='
+cat /etc/cron.d/mcp-update-${sanitizeName(cfg.name)} 2>/dev/null || echo 'cron file not present'
+echo -n 'last update verdict: '
+if [ -f ${lp.status} ]; then
+  cat ${lp.status}
+elif [ -f /tmp/mcp-update-${sanitizeName(cfg.name)}.log ]; then
+  echo '(cron ran; no deployment verdict was created because no update was needed)'
+else
+  echo '(cron has not run yet)'
+fi
+echo
+echo '===== RESTART ALIAS ====='
+if command -v restart >/dev/null 2>&1; then
+  restart ls 2>/dev/null | awk -v service=${sq(SERVICE)} '$2 == "->" && $3 == service { print $0 }'
+else
+  echo 'restart command not installed'
+fi
+echo
+echo '===== REVERSE PROXY ====='
+if grep -qE "^\\s*${dnsEsc}\\s*\\{" /etc/caddy/Caddyfile 2>/dev/null; then
+  echo 'Caddy block present'
+elif [ -f /etc/nginx/sites-enabled/${cfg.dns}.conf ]; then
+  echo 'nginx site present'
+else
+  echo 'no reverse-proxy config for this domain'
+fi
+`;
+  say(`Diagnostics for ${cfg.dns}`);
+  sshRun(cfg, script);
+}
+
+function cmdStatus(cfg) {
+  return cfg.deploymentMode === 'docker' ? cmdStatusDocker(cfg) : cmdStatusSystemd(cfg);
+}
+
 function healthScript(cfg) {
+  const activeCheck =
+    cfg.deploymentMode === 'docker'
+      ? `docker exec ${CONTAINER} systemctl is-active --quiet ${SERVICE}`
+      : `systemctl is-active --quiet ${SERVICE}`;
+  const logs =
+    cfg.deploymentMode === 'docker'
+      ? `docker exec ${CONTAINER} journalctl -u ${SERVICE} -n 80 --no-pager`
+      : `journalctl -u ${SERVICE} -n 80 --no-pager`;
   return `
 for attempt in $(seq 1 30); do
-  if docker exec ${CONTAINER} systemctl is-active --quiet ${SERVICE} &&
+  if ${activeCheck} &&
     curl -fsS --max-time 2 http://127.0.0.1:${cfg.appPort}/health >/dev/null; then
     echo 'Application ready'; exit 0
   fi
   sleep 1
 done
-docker exec ${CONTAINER} journalctl -u ${SERVICE} -n 80 --no-pager
+${logs}
 exit 1`;
 }
 
 function cmdStop(cfg) {
+  if (cfg.deploymentMode === 'systemd') {
+    say(`Stopping systemd service ${SERVICE}`);
+    return sshRun(cfg, `systemctl stop ${SERVICE} && echo stopped`);
+  }
   say('Stopping container (auto-update stops with it)');
   sshRun(cfg, `docker stop ${CONTAINER} && echo stopped`);
 }
 
 function cmdStart(cfg) {
+  if (cfg.deploymentMode === 'systemd') {
+    say(`Starting systemd service ${SERVICE}`);
+    return sshRun(cfg, `systemctl start ${SERVICE} && ${healthScript(cfg)}`);
+  }
   say('Starting container');
   sshRun(cfg, `docker start ${CONTAINER} && ${healthScript(cfg)}`);
 }
 
 function cmdRestart(cfg) {
+  if (cfg.deploymentMode === 'systemd') {
+    say(`Restarting systemd service ${SERVICE}`);
+    return sshRun(cfg, `systemctl restart ${SERVICE} && ${healthScript(cfg)}`);
+  }
   say('Restarting the app service inside the container (no rebuild)');
   sshRun(cfg, `docker exec ${CONTAINER} systemctl restart ${SERVICE} && ${healthScript(cfg)}`);
 }
 
 function cmdUpdate(cfg) {
+  if (cfg.deploymentMode === 'systemd') {
+    say('Forcing update.cjs --force in the host project checkout');
+    return sshRun(cfg, `cd ${sq(cfg.projectPath)} && ${NODE_BIN} update.cjs --force`);
+  }
   say('Forcing update.cjs --force inside the container');
   sshRun(cfg, `docker exec ${CONTAINER} ${NODE_BIN} ${cfg.projectPath}/update.cjs --force`);
 }
@@ -674,6 +943,7 @@ function cmdPushConfig(cfg, args) {
   const restartContainer = args.includes('--container');
   const noRestart = args.includes('--no-restart');
   if (restartContainer && noRestart) fail('Use either --container or --no-restart, not both.');
+  if (restartContainer && cfg.deploymentMode === 'systemd') fail('--container is available only in docker mode.');
 
   const inner = `
 set -euo pipefail
@@ -691,14 +961,14 @@ fi
 install -m 600 "$TMP/local.yaml" config/local.yaml
 install -m 600 "$TMP/config.yml" deploy/config.yml
 echo 'Configuration updated'`;
-  const upload = `
+  const upload = cfg.deploymentMode === 'docker' ? `
 set -euo pipefail
 docker exec ${CONTAINER} test -f /var/lib/deploy-bootstrap-done
 # Send file contents through stdin, never through process arguments.
 docker exec -i ${CONTAINER} bash -s <<'MCP_CONFIG_INPUT'
 ${inner}
 MCP_CONFIG_INPUT
-`;
+` : inner;
   const code = sshRun(cfg, upload);
   if (code === 10) {
     process.exitCode = 0;
@@ -706,22 +976,29 @@ MCP_CONFIG_INPUT
   }
   if (code !== 0) fail('Configuration upload failed');
   if (!noRestart) {
-    const command = restartContainer
-      ? `docker restart ${CONTAINER}`
-      : `docker exec ${CONTAINER} systemctl restart ${SERVICE}`;
+    const command = cfg.deploymentMode === 'systemd'
+      ? `systemctl restart ${SERVICE}`
+      : restartContainer
+        ? `docker restart ${CONTAINER}`
+        : `docker exec ${CONTAINER} systemctl restart ${SERVICE}`;
     sshRun(cfg, `${command} && ${healthScript(cfg)}`);
   }
-  say('If webServer.port changed, run deploy to update the container and reverse proxy.');
+  say('If webServer.port changed, run deploy to update the runtime and reverse proxy.');
 }
 
 function cmdLogs(cfg, n) {
   const lines = /^\d+$/.test(String(n)) ? n : '200';
   say(`Last ${lines} app-service log lines`);
-  sshRun(cfg, `docker exec ${CONTAINER} journalctl -o cat --no-pager -n ${lines} -u ${SERVICE}`);
+  const prefix = cfg.deploymentMode === 'docker' ? `docker exec ${CONTAINER} ` : '';
+  sshRun(cfg, `${prefix}journalctl -o cat --no-pager -n ${lines} -u ${SERVICE}`);
 }
 
 function cmdBootlog(cfg, n) {
   const lines = /^\d+$/.test(String(n)) ? n : '200';
+  if (cfg.deploymentMode === 'systemd') {
+    say(`Systemd mode has no separate bootstrap unit; showing the last ${lines} application log lines`);
+    return sshRun(cfg, `journalctl -o cat --no-pager -n ${lines} -u ${SERVICE}`);
+  }
   say(`Last ${lines} bootstrap (clone/build) log lines`);
   sshRun(cfg, `docker exec ${CONTAINER} journalctl -o cat --no-pager -n ${lines} -u mcp-bootstrap.service`);
 }
@@ -731,17 +1008,22 @@ function cmdBootlog(cfg, n) {
 function cmdUpdatelog(cfg, n) {
   const lines = /^\d+$/.test(String(n)) ? n : '80';
   const lp = logPaths(cfg);
+  const readPrefix = cfg.deploymentMode === 'docker' ? `docker exec ${CONTAINER} ` : '';
   const script = `
 echo '===== LAST UPDATE VERDICT ====='
-docker exec ${CONTAINER} cat ${lp.status} 2>/dev/null || echo '(no update has run yet — cron checks every minute)'
+${readPrefix}cat ${lp.status} 2>/dev/null || echo '(no update has run yet — cron checks every minute)'
 echo
 echo '===== ERROR LINES (last run + history) ====='
-{ docker exec ${CONTAINER} grep -aF '[ERROR]' ${lp.lastDeploy} 2>/dev/null;
-  docker exec ${CONTAINER} grep -aF '[ERROR]' ${lp.cumulative} 2>/dev/null; } | tail -20
-docker exec ${CONTAINER} sh -c "grep -aqF '[ERROR]' ${lp.lastDeploy} ${lp.cumulative} 2>/dev/null" && true || echo '(no [ERROR] entries found)'
+{ ${readPrefix}grep -aF '[ERROR]' ${lp.lastDeploy} 2>/dev/null;
+  ${readPrefix}grep -aF '[ERROR]' ${lp.cumulative} 2>/dev/null; } | tail -20
+${readPrefix}sh -c "grep -aqF '[ERROR]' ${lp.lastDeploy} ${lp.cumulative} 2>/dev/null" && true || echo '(no [ERROR] entries found)'
 echo
 echo '===== LAST UPDATE RUN LOG (tail ${lines}) ====='
-docker exec ${CONTAINER} tail -n ${lines} ${lp.lastDeploy} 2>/dev/null || echo '(no completed update run recorded yet)'
+${readPrefix}tail -n ${lines} ${lp.lastDeploy} 2>/dev/null || echo '(no completed update run recorded yet)'
+${cfg.deploymentMode === 'systemd' ? `
+echo
+echo '===== HOST CRON OUTPUT ====='
+tail -n ${lines} /tmp/mcp-update-${sanitizeName(cfg.name)}.log 2>/dev/null || echo '(cron has not run yet)'` : ''}
 `;
   say('Auto-update log and error scan');
   sshRun(cfg, script);
@@ -749,6 +1031,10 @@ docker exec ${CONTAINER} tail -n ${lines} ${lp.lastDeploy} 2>/dev/null || echo '
 
 // Open an interactive shell inside the container (for debugging/testing).
 function cmdShell(cfg) {
+  if (cfg.deploymentMode === 'systemd') {
+    say(`Opening a shell in ${cfg.projectPath} (exit to leave)`);
+    return sshRun(cfg, `cd ${sq(cfg.projectPath)} && exec bash -l`, { interactive: true });
+  }
   say('Opening an interactive shell inside the container (exit to leave)');
   sshRun(cfg, `docker exec -it ${CONTAINER} bash -l`, { interactive: true });
 }
@@ -759,82 +1045,17 @@ function cmdExec(cfg, args) {
   const parts = idx >= 0 ? args.slice(idx + 1) : args;
   if (!parts.length) fail('Usage: node remote.cjs exec -- <command...>');
   const inner = parts.join(' ');
+  if (cfg.deploymentMode === 'systemd') {
+    say(`Running in the host project checkout: ${inner}`);
+    return sshRun(cfg, `cd ${sq(cfg.projectPath)} && bash -lc ${sq(inner)}`);
+  }
   say(`Running in container: ${inner}`);
   sshRun(cfg, `docker exec ${CONTAINER} bash -lc ${sq(inner)}`);
 }
 
-function cmdUninstall(cfg, yes) {
-  if (!yes) {
-    fail(
-      'Destructive. Re-run with --yes to remove container, image, volume, project checkout and reverse proxy:\n' +
-        '  node remote.cjs uninstall --yes',
-    );
-  }
-  const projectPath = cfg.projectPath.replace(/\/+$/, '') || '/';
-  const statePath = cfg.statePath.replace(/\/+$/, '') || '/';
-  const protectedPaths = new Set(['/', '/opt', '/opt/node', '/var', '/var/opt', '/var/opt/node']);
-  if (protectedPaths.has(projectPath) || projectPath.split('/').filter(Boolean).length < 3) {
-    fail(`Refusing to remove unsafe project.projectPath: ${projectPath}`);
-  }
-  if (statePath === projectPath || statePath.startsWith(`${projectPath}/`)) {
-    fail(`Refusing to remove project.projectPath because project.statePath is inside it: ${statePath}`);
-  }
+function reverseProxyRemovalScript(cfg) {
   const dnsEsc = cfg.dns.replace(/\./g, '\\.');
-  const script = `
-set -euo pipefail
-PROJECT_PATH=${sq(projectPath)}
-STATE_PATH=${sq(statePath)}
-echo 'Checking project path and dependent Docker objects...'
-if [ -L "$PROJECT_PATH" ]; then
-  echo "Refusing to remove symbolic-link project path: $PROJECT_PATH" >&2
-  exit 1
-fi
-if [ -e "$PROJECT_PATH" ]; then
-  RESOLVED_PROJECT_PATH=$(readlink -f -- "$PROJECT_PATH")
-  if [ "$RESOLVED_PROJECT_PATH" != "$PROJECT_PATH" ]; then
-    echo "Refusing to remove project path resolved as: $RESOLVED_PROJECT_PATH" >&2
-    exit 1
-  fi
-fi
-IMAGE_ID=''
-if docker image inspect ${IMAGE} >/dev/null 2>&1; then
-  IMAGE_ID=$(docker image inspect --format '{{.Id}}' ${IMAGE})
-fi
-TARGET_CONTAINER_ID=$(docker inspect --format '{{.Id}}' ${CONTAINER} 2>/dev/null || true)
-while IFS= read -r ID; do
-  [ -n "$ID" ] || continue
-  [ "$ID" = "$TARGET_CONTAINER_ID" ] && continue
-  NAME=$(docker inspect --format '{{.Name}}' "$ID" | sed 's#^/##')
-  USED_IMAGE=$(docker inspect --format '{{.Image}}' "$ID")
-  if [ -n "$IMAGE_ID" ] && [ "$USED_IMAGE" = "$IMAGE_ID" ]; then
-    echo "Refusing to remove image used by container: $NAME" >&2
-    exit 1
-  fi
-  if docker inspect --format '{{range .Mounts}}{{println .Source}}{{end}}' "$ID" | grep -Fxq "$PROJECT_PATH"; then
-    echo "Refusing to remove project path used by container: $NAME" >&2
-    exit 1
-  fi
-done < <(docker ps -aq)
-echo 'Removing container, image, volume and project checkout...'
-if [ -n "$TARGET_CONTAINER_ID" ]; then
-  docker rm -f ${CONTAINER}
-fi
-if docker volume inspect ${VOLUME} >/dev/null 2>&1; then
-  docker volume rm ${VOLUME}
-fi
-if [ -n "$IMAGE_ID" ]; then
-  docker rmi -f "$IMAGE_ID"
-  if docker image inspect "$IMAGE_ID" >/dev/null 2>&1; then
-    echo "Image still exists after removal: $IMAGE_ID" >&2
-    exit 1
-  fi
-fi
-rm -rf -- "$PROJECT_PATH"
-if [ -e "$PROJECT_PATH" ] || [ -L "$PROJECT_PATH" ]; then
-  echo "Project path still exists after removal: $PROJECT_PATH" >&2
-  exit 1
-fi
-echo "Preserved state path: $STATE_PATH"
+  return `
 echo 'Removing Caddy block for ${cfg.dns}...'
 CF=/etc/caddy/Caddyfile
 if [ -f "$CF" ] && grep -qE "^\\s*${dnsEsc}\\s*\\{" "$CF"; then
@@ -850,13 +1071,95 @@ fi
 echo 'Removing nginx site for ${cfg.dns} (if any)...'
 if [ -f /etc/nginx/sites-available/${cfg.dns}.conf ] || [ -L /etc/nginx/sites-enabled/${cfg.dns}.conf ]; then
   rm -f /etc/nginx/sites-enabled/${cfg.dns}.conf /etc/nginx/sites-available/${cfg.dns}.conf
-  nginx -t >/dev/null 2>&1 && systemctl reload nginx && echo 'nginx site removed.' || echo 'nginx reload skipped (check nginx -t).'
+  nginx -t >/dev/null 2>&1 && systemctl reload nginx && echo 'nginx site removed.' || echo 'nginx reload skipped.'
 fi
-echo 'Note: the TLS certificate for ${cfg.dns} is left in place (remove with: certbot delete --cert-name ${cfg.dns}).'
+echo 'Note: an existing TLS certificate is left in place.'`;
+}
+
+function validateUninstallPaths(cfg, preserveState) {
+  const projectPath = cfg.projectPath.replace(/\/+$/, '') || '/';
+  const statePath = cfg.statePath.replace(/\/+$/, '') || '/';
+  const protectedPaths = new Set(['/', '/opt', '/opt/node', '/var', '/var/opt', '/var/opt/node']);
+  if (protectedPaths.has(projectPath) || projectPath.split('/').filter(Boolean).length < 3) {
+    fail(`Refusing to remove unsafe project.projectPath: ${projectPath}`);
+  }
+  if (preserveState && (statePath === projectPath || statePath.startsWith(`${projectPath}/`))) {
+    fail(`Refusing to remove project.projectPath because project.statePath is inside it: ${statePath}`);
+  }
+  return { projectPath, statePath };
+}
+
+function cmdUninstallSystemd(cfg, yes) {
+  if (!yes) fail('Destructive. Re-run with --yes to remove the systemd service and project checkout.');
+  const { projectPath, statePath } = validateUninstallPaths(cfg, false);
+  const script = `
+set -euo pipefail
+PROJECT_PATH=${sq(projectPath)}
+STATE_PATH=${sq(statePath)}
+if [ -L "$PROJECT_PATH" ]; then
+  echo "Refusing to remove symbolic-link project path: $PROJECT_PATH" >&2; exit 1
+fi
+if [ -e "$PROJECT_PATH" ] && [ "$(readlink -f -- "$PROJECT_PATH")" != "$PROJECT_PATH" ]; then
+  echo 'Refusing to remove project path with an unexpected resolved path' >&2; exit 1
+fi
+if command -v restart >/dev/null 2>&1; then
+  while IFS= read -r ALIAS; do
+    [ -n "$ALIAS" ] && restart del "$ALIAS"
+  done < <(restart ls 2>/dev/null | awk -v service=${sq(SERVICE)} '$2 == "->" && $3 == service { print $1 }')
+fi
+systemctl disable --now ${SERVICE} 2>/dev/null || true
+rm -f /etc/systemd/system/${SERVICE}.service
+systemctl daemon-reload
+rm -f /etc/cron.d/mcp-update-${sanitizeName(cfg.name)}
+rm -f "$HOME/.ssh/${cfg.name}-deploy"
+rm -rf -- "$PROJECT_PATH"
+[ ! -e "$PROJECT_PATH" ] || { echo "Project path still exists: $PROJECT_PATH" >&2; exit 1; }
+echo "Removed systemd state with project path: $STATE_PATH"
+${reverseProxyRemovalScript(cfg)}
 echo 'Done.'
 `;
-  say(`Uninstalling ${cfg.name} from the server`);
+  say(`Uninstalling systemd service ${SERVICE} from the server`);
   sshRun(cfg, script);
+}
+
+function cmdUninstallDocker(cfg, yes) {
+  if (!yes) fail('Destructive. Re-run with --yes to remove the container, image and project checkout.');
+  const { projectPath, statePath } = validateUninstallPaths(cfg, true);
+  const script = `
+set -euo pipefail
+PROJECT_PATH=${sq(projectPath)}
+STATE_PATH=${sq(statePath)}
+IMAGE_ID=$(docker image inspect --format '{{.Id}}' ${IMAGE} 2>/dev/null || true)
+TARGET_CONTAINER_ID=$(docker inspect --format '{{.Id}}' ${CONTAINER} 2>/dev/null || true)
+if [ -L "$PROJECT_PATH" ]; then
+  echo "Refusing to remove symbolic-link project path: $PROJECT_PATH" >&2; exit 1
+fi
+while IFS= read -r ID; do
+  [ -n "$ID" ] || continue
+  [ "$ID" = "$TARGET_CONTAINER_ID" ] && continue
+  NAME=$(docker inspect --format '{{.Name}}' "$ID" | sed 's#^/##')
+  USED_IMAGE=$(docker inspect --format '{{.Image}}' "$ID")
+  if [ -n "$IMAGE_ID" ] && [ "$USED_IMAGE" = "$IMAGE_ID" ]; then
+    echo "Refusing to remove image used by container: $NAME" >&2; exit 1
+  fi
+  if docker inspect --format '{{range .Mounts}}{{println .Source}}{{end}}' "$ID" | grep -Fxq "$PROJECT_PATH"; then
+    echo "Refusing to remove project path used by container: $NAME" >&2; exit 1
+  fi
+done < <(docker ps -aq)
+[ -z "$TARGET_CONTAINER_ID" ] || docker rm -f ${CONTAINER}
+if [ -n "$IMAGE_ID" ]; then docker rmi -f "$IMAGE_ID"; fi
+rm -rf -- "$PROJECT_PATH"
+[ ! -e "$PROJECT_PATH" ] || { echo "Project path still exists: $PROJECT_PATH" >&2; exit 1; }
+echo "Preserved state path: $STATE_PATH"
+${reverseProxyRemovalScript(cfg)}
+echo 'Done.'
+`;
+  say(`Uninstalling Docker deployment ${cfg.name} from the server`);
+  sshRun(cfg, script);
+}
+
+function cmdUninstall(cfg, yes) {
+  return cfg.deploymentMode === 'docker' ? cmdUninstallDocker(cfg, yes) : cmdUninstallSystemd(cfg, yes);
 }
 
 function cmdSsh(cfg) {
@@ -878,12 +1181,11 @@ function main() {
   // Resolve all project-specific names from the config once.
   CONTAINER = cfg.name;
   IMAGE = `${cfg.name}:latest`;
-  VOLUME = `${cfg.name}-data`;
   SERVICE = `${cfg.name}--${cfg.instance}`;
   UPSTREAM = `${cfg.name.replace(/[^a-z0-9]/gi, '_')}_upstream`;
   NODE_VERSION = cfg.nodeVersion;
   say(
-    `Target: ${cfg.alias}; host: ${cfg.host}; container: ${CONTAINER}; project: ${cfg.projectPath}; branch: ${cfg.branch}`,
+    `Target: ${cfg.alias}; mode: ${cfg.deploymentMode}; host: ${cfg.host}; project: ${cfg.projectPath}; branch: ${cfg.branch}`,
   );
   switch (cmd) {
     case 'show':
@@ -891,12 +1193,14 @@ function main() {
         JSON.stringify(
           {
             server: cfg.alias,
+            deploymentMode: cfg.deploymentMode,
             host: cfg.host,
-            container: CONTAINER,
+            ...(cfg.deploymentMode === 'docker' ? { container: CONTAINER } : {}),
             projectPath: cfg.projectPath,
             statePath: cfg.statePath,
             branch: cfg.branch,
             service: SERVICE,
+            restartAliasCandidate: cfg.restartAliasCandidates[0],
             port: cfg.appPort,
             domain: cfg.dns,
           },
@@ -939,25 +1243,25 @@ function main() {
     default:
       console.log(`MCP deploy orchestrator (${cfg.name}) — subcommands:
   keygen            Create a read-only GitHub Deploy Key and print the public part
-  deploy            Build the image on the server + (re)create the container + Caddy
-  status            Diagnostics: container, app service, git, health, cron, Caddy
-  stop              Stop the container (auto-update stops with it)
-  start             Start the container
+  deploy            Deploy using deployment.mode (systemd by default, docker when selected)
+  status            Diagnostics: runtime, app service, git, health, cron and proxy
+  stop              Stop the configured service runtime
+  start             Start the configured service runtime
   restart           Restart just the app service (fast, no rebuild)
   push-config       Generate and deliver application/update settings, then restart
                       [--container] restart the whole container instead of the app service
                       [--no-restart] push only, restart later
-  update            Force update.cjs --force inside the container
+  update            Force update.cjs --force in the configured runtime
   logs [N]          Last N app-service journal lines (default 200)
   bootlog [N]       Last N bootstrap (clone/build) journal lines (default 200)
   updatelog [N]     Last auto-update verdict + error scan + last-run log (default 80)
-  shell             Open an interactive bash shell inside the container
-  exec -- <cmd...>  Run an arbitrary command inside the container
-  uninstall --yes   Remove container, image, volume, project checkout and proxy; preserve statePath
+  shell             Open an interactive shell in the project runtime
+  exec -- <cmd...>  Run a command in the project runtime
+  uninstall --yes   Remove runtime and project checkout; preserve statePath
   ssh               Print the raw ssh command for manual access`);
       if (cmd && cmd !== 'help') process.exit(1);
   }
 }
 
 if (require.main === module) main();
-module.exports = { selectServer, loadConfig, parseYaml };
+module.exports = { selectServer, loadConfig, parseYaml, restartAliasCandidates };

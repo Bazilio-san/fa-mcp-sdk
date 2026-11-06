@@ -167,7 +167,7 @@ test('named targets, argument separation, private delivery and failure propagati
       fs.writeFileSync(path.join(folder, 'rules.md'), 'Rules');
       fs.writeFileSync(
         path.join(folder, 'config.yaml'),
-        `server:\n  host: ${alias}.example.com\n  user: root\n  keyPath: ${key}\ngit:\n  repoUrl: git@example.com:repo\n  deployKeyPath: ${key}\nmcp:\n  dns: ${alias}.example.com\nproject:\n  branch: main\nupdate:\n  healthUrl: http://localhost:9876/health\n  telegram:\n    botToken: "SECRET # token"\n    chatId: "00123"\n  smtp:\n    pass: "SMTP # secret"\n`,
+        `server:\n  host: ${alias}.example.com\n  user: root\n  keyPath: ${key}\ndeployment:\n  mode: ${alias === 'prod-2' ? 'docker' : 'systemd'}\ngit:\n  repoUrl: git@example.com:repo\n  deployKeyPath: ${key}\nmcp:\n  dns: ${alias}.example.com\nproject:\n  branch: main\nupdate:\n  healthUrl: http://localhost:9876/health\n  telegram:\n    botToken: "SECRET # token"\n    chatId: "00123"\n  smtp:\n    pass: "SMTP # secret"\n`,
       );
       fs.writeFileSync(path.join(folder, 'local.yaml'), 'webServer:\n  port: 9876\nsecret: SECRET_TEST\n');
     }
@@ -206,6 +206,8 @@ test('named targets, argument separation, private delivery and failure propagati
     assert.deepEqual(Array.from(selected.rest), ['exec', '--', '--server', 'child']);
     run(['--server', 'dev-1', 'show']);
     const deployment = vm.runInContext('loadConfig("dev-1")', context);
+    assert.equal(deployment.deploymentMode, 'systemd');
+    assert.equal(deployment.statePath, '/opt/node/example-dev-1/data-cache');
     const generated = require('yaml').parse(deployment.deployConfigYaml);
     assert.equal(generated.branch, 'main');
     assert.equal(generated.healthUrl, 'http://localhost:9876/health');
@@ -220,17 +222,31 @@ test('named targets, argument separation, private delivery and failure propagati
     fs.unlinkSync(legacyFile);
     run(['--server', 'dev-1', 'deploy']);
     const script = calls.at(-1)[2].input;
-    assert.match(script, /docker create/);
-    assert.match(script, /docker cp/);
+    assert.match(script, /node deploy\/srv\.cjs install/);
+    assert.match(script, /systemctl restart example-dev-1--prod/);
+    assert.match(script, /command -v restart/);
+    assert.match(script, /restart add "\$CANDIDATE" example-dev-1--prod/);
+    assert.match(script, /git clean -fd -e '\/data-cache\/'/);
+    assert.doesNotMatch(script, /docker create|docker cp/);
     assert.doesNotMatch(script, /-e (GIT_SSH_KEY|CONFIG_LOCAL|DEPLOY_CONFIG)/);
     run(['--server', 'dev-1', 'uninstall', '--yes']);
     const uninstallScript = calls.at(-1)[2].input;
-    assert.match(uninstallScript, /docker rm -f example-dev-1/);
-    assert.match(uninstallScript, /docker volume rm example-dev-1-data/);
-    assert.match(uninstallScript, /docker rmi -f "\$IMAGE_ID"/);
+    assert.match(uninstallScript, /restart del "\$ALIAS"/);
+    assert.match(uninstallScript, /systemctl disable --now example-dev-1--prod/);
     assert.match(uninstallScript, /rm -rf -- "\$PROJECT_PATH"/);
-    assert.match(uninstallScript, /Preserved state path: \$STATE_PATH/);
-    assert.doesNotMatch(uninstallScript, /rm -rf -- "\$STATE_PATH"/);
+    assert.match(uninstallScript, /Removed systemd state with project path: \$STATE_PATH/);
+    assert.doesNotMatch(uninstallScript, /docker rm|docker rmi/);
+    run(['--server', 'prod-2', 'deploy']);
+    const dockerScript = calls.findLast((call) => call[2]?.input?.includes('docker create'))[2].input;
+    assert.match(dockerScript, /docker create/);
+    assert.match(dockerScript, /docker cp/);
+    assert.match(dockerScript, /-v '\/opt\/node\/example-prod-2':\/opt\/node\/example-prod-2/);
+    run(['--server', 'prod-2', 'uninstall', '--yes']);
+    const dockerUninstallScript = calls.at(-1)[2].input;
+    assert.match(dockerUninstallScript, /docker rm -f example-prod-2/);
+    assert.match(dockerUninstallScript, /docker rmi -f "\$IMAGE_ID"/);
+    assert.match(dockerUninstallScript, /Preserved state path: \$STATE_PATH/);
+    assert.doesNotMatch(dockerUninstallScript, /rm -rf -- "\$STATE_PATH"/);
     const bash = process.platform === 'win32' ? 'C:/Program Files/Git/bin/bash.exe' : '/bin/bash';
     if (fs.existsSync(bash)) {
       run(['--server', 'dev-1', 'push-config']);

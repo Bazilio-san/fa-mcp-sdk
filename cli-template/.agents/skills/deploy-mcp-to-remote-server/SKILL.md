@@ -1,8 +1,8 @@
 ---
 name: deploy-mcp-to-remote-server
 description: >-
-  Deploy, update, start, stop and diagnose named MCP server installations on remote servers using Docker and
-  systemd. Use for requests such as "deploy to dev-1", "update prod-2", or inspect an installation's status and logs.
+  Deploy, update, start, stop and diagnose named MCP server installations using host systemd by default or Docker
+  when configured. Use for requests such as "deploy to dev-1", "update prod-2", or inspect status and logs.
 allowed-tools: Bash, Read
 ---
 
@@ -23,15 +23,16 @@ node .agents/skills/deploy-mcp-to-remote-server/scripts/remote.cjs --server dev-
 node .agents/skills/deploy-mcp-to-remote-server/scripts/remote.cjs --server dev-1 deploy
 ```
 
-Before making changes, run `show`: it prints the selected host, branch, container, paths, port and domain without
+Before making changes, run `show`: it prints the selected host, mode, branch, paths, service, port and domain without
 secrets. Compare them with the request and installation rules. Use `remote.cjs` for supported operations.
 
 ## Installation settings
 
 Copy `configs/_example/` to `configs/<alias>/`. Use lowercase Latin letters, digits, dots, hyphens and underscores;
-start with a letter or digit. Each installation folder contains these files:
+start with a letter or digit. Select `deployment.mode: systemd|docker`; omitted mode means `systemd`. Each
+installation folder contains these files:
 
-- `config.yaml`: connection, repository, domain, container, persistent data and the `update` section.
+- `config.yaml`: connection, repository, deployment mode, domain, persistent data and the `update` section.
 - `local.yaml`: application settings, copied verbatim to the application's `config/local.yaml`.
 - `rules.md`: installation, networking and recovery requirements. Keep additional reference files alongside it.
 
@@ -41,15 +42,26 @@ them separately to a new workstation. The optional registry format is shown in r
 To migrate old settings, rename `remote-server-config.local.yaml` to `config.yaml`. Move `branch` from the separate
 `config.yml` to `project.branch`, move its remaining fields under `update` in `config.yaml`, then delete `config.yml`.
 Move `local.yaml` to the named folder, add `rules.md`, and preserve the previous `service.name`, `service.instance`,
-`project.projectPath` and `project.statePath` so commands continue managing the existing container and data.
+`project.projectPath` and `project.statePath` so commands continue managing the existing service and data.
 
-By default, container and volume names include the project name and installation alias. Installations sharing a
-host also need different ports and domains. An explicit `service.name` must be unique. Node.js comes from `.envrc`
-or `container.nodeVersion`. Set `webServer.trustProxy: true` in `local.yaml`; omit `webServer.publicBaseUrl`, which
-is derived from `mcp.dns`.
+By default, runtime and service names include the project name and installation alias. Installations sharing a host
+also need different ports and domains. An explicit `service.name` must be unique. Node.js comes from `.envrc` or
+`container.nodeVersion`.
 
-The working copy normally lives in a named Docker volume. `uninstall --yes` removes that volume and any host
-directory at `project.projectPath`, but always preserves the separately configured `project.statePath`.
+Systemd mode clones the repository into `project.projectPath`, installs a host service and keeps state directly in
+the real `project.cacheDir` directory; it must not create a symbolic link. In this mode, `project.statePath` is
+invalid and uninstall removes the state together with the project checkout. Docker mode bind-mounts a separate
+`project.statePath`, defaulting to `/opt/<installation-name>`, and preserves it during uninstall. With
+`mcp.reverseProxy: false`, the service uses direct HTTP at `mcp.dns:webServer.port` and leaves nginx/Caddy unchanged.
+
+After installing a systemd service, if `restart` exists, register an alias with `restart add`. Build the base alias
+from the initials of words obtained by replacing non-alphanumeric characters with spaces. If occupied, append
+successive characters of the final word; after exhausting it, append a number. Reuse an existing alias that already
+points to the service and never trigger the command's interactive overwrite prompt.
+
+When moving an installation to systemd, copy its key directory into `project.projectPath/project.cacheDir` before
+starting the service. Keep the old state directory, refuse to overwrite different destination keys, and verify
+filenames and sizes without printing key contents. Copy means a real directory and files, never a symbolic link.
 
 ## Commands
 
@@ -57,44 +69,45 @@ directory at `project.projectPath`, but always preserves the separately configur
 |---|---|
 | Show the selected installation without connecting | `show` |
 | Generate a read-only repository key | `keygen` |
-| Create or recreate the container and configure Caddy or nginx | `deploy` |
-| Check container, service, version, local and public `/health` | `status` |
-| Stop or start the container | `stop`, `start` |
+| Deploy using the configured mode and configure networking | `deploy` |
+| Check runtime, service, version, local and public `/health` | `status` |
+| Stop or start the configured service | `stop`, `start` |
 | Restart the application without updating code | `restart` |
 | Apply an update and check readiness | `update` |
 | Deliver settings and restart the application | `push-config` |
-| Deliver settings only, or restart the entire container | `push-config --no-restart`, `push-config --container` |
+| Deliver settings only, or restart a Docker container | `push-config --no-restart`, `push-config --container` |
 | Read application, initial boot or update logs | `logs 200`, `bootlog 200`, `updatelog 80` |
-| Open a shell or run a command inside the container | `shell`, `exec -- <command>` |
+| Open a shell or run a command in the configured runtime | `shell`, `exec -- <command>` |
 | Print the SSH connection command | `ssh` |
-| Remove container, image, volume, `projectPath` and reverse proxy; preserve `statePath` | `uninstall --yes` |
+| Remove the runtime, `projectPath` and reverse proxy; preserve Docker `statePath` | `uninstall --yes` |
 
-Uninstall only when explicitly requested. It permanently removes `project.projectPath` but preserves
-`project.statePath`. It must refuse broad paths, symbolic links, a project path containing the state path, and a
-project path or image still used by another container. For the first deployment, add the public key generated by
-`keygen` to the repository with read-only access. After `deploy`, the initial build continues inside the container:
-check `status` and `bootlog` until ready. Container creation alone does not mean success. Report build failures and
-stop retrying when the build fails.
+Uninstall only when explicitly requested. It permanently removes `project.projectPath`, including systemd mode's
+in-project state; Docker mode preserves its separate `project.statePath`. It must refuse broad paths, symbolic links,
+nested Docker state paths and resources used by another container. After `deploy`, check `status` until the service
+and readiness endpoint both succeed.
 
 `push-config` does not update code. Changes to the application port, connection or container settings require
 `deploy`. Initial secrets are delivered as private files and removed from temporary storage after successful
-installation; secret values are not passed through Docker environment variables. Never print settings contents.
+installation. Never print settings contents.
 
 ## Updates and diagnostics
 
 Set the branch in `project.branch` and notifications in `update.email`, `update.smtp` and `update.telegram`.
-The container's `deploy/config.yml` is generated automatically from these settings and `update.healthUrl`.
+The runtime's `deploy/config.yml` is generated automatically from these settings and `update.healthUrl`.
 
-Root `update.cjs` runs manually or every minute inside the container. A lock prevents concurrent runs. Before code
-changes, a pending-update marker is saved inside `.git`; it is removed after the readiness check. On failure, the
-next run retries the required steps. Dependencies are reinstalled when their inputs change or `node_modules` is
-missing. A build runs for changes beyond documentation or when `dist` is missing. This retries the operation;
-it does not automatically roll back the version.
+Root `update.cjs` runs manually or every minute from cron on the host or inside the container. A lock prevents
+concurrent runs. Before code changes, a pending-update marker is saved inside `.git`; it is removed after the
+readiness check. On failure, the next run retries the required steps. This does not automatically roll back.
 
 After an update, the application must return 2xx from `update.healthUrl` or local `/health` on its listening port.
 Otherwise, the command fails, retains the marker and shows service logs. Check public access separately using
 `status`: application failures and Caddy or nginx failures may have different causes.
 
-Report the selected installation, actual version, application state, public URL and unfinished steps. Consult
-[README.md](README.md) for container internals and manual diagnostics. The container uses systemd, `--privileged`
-and host networking; deploying this design must comply with the installation rules.
+After deployment, verify the externally configured base URL: `/`, `/admin` and `/agent-tester` must return HTML
+successfully. A protected `/mcp` returning 401 without credentials only proves authentication is enabled; issue a
+short-lived token and run a real MCP discovery or tool-list request through the external URL. Do not call business
+tools, send messages or invoke a model merely to verify transport availability.
+
+Report the selected installation, deployment mode, actual version, application state, public URL and unfinished
+steps. Consult [README.md](README.md) for runtime internals and diagnostics. Docker mode uses systemd,
+`--privileged` and host networking; systemd mode runs directly on the host.
