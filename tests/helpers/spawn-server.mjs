@@ -81,6 +81,7 @@ ${stderrBuf}`,
     url: `http://127.0.0.1:${port}`,
     waitReady,
     kill,
+    getStdout: () => stdoutBuf,
     getStderr: () => stderrBuf,
   };
 }
