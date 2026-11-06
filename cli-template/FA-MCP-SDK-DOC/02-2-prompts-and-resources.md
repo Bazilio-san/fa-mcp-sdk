@@ -314,6 +314,11 @@ The declaration is exposed unchanged through `use://http-headers` and `/used-htt
 Agent Tester to use a password field, keep the value only for the current page connection, exclude it from
 `localStorage`, clear it when the page connection ends, and mask it in tester diagnostics and service responses.
 
+For projects that support a direct personal login to an upstream system, `x-username` and `x-password` are the
+recommended interoperable names. They are project conventions, not SDK authentication fields. The SDK does not
+export constants for them, parse them, validate either value, require both values, or provide aliases for older
+project-specific names. Each project decides whether to declare and interpret these headers.
+
 ## requireAuth
 
 Both prompts and resources support `requireAuth: true`:
