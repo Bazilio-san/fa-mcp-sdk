@@ -172,8 +172,8 @@ export { getCache, CacheManager } from './cache/cache.js';
 export { InMemoryEventStore } from './web/event-store.js';
 
 // Standard §12.2 — optional helper to mask sensitive fields/values in tool results before returning.
-export { maskSensitive } from './utils/mask-sensitive.js';
-export type { IMaskRules } from './utils/mask-sensitive.js';
+export { maskSecretHeaders, maskSensitive } from './utils/mask-sensitive.js';
+export type { IMaskRules, ISecretHeaderDescriptor } from './utils/mask-sensitive.js';
 
 export { McpHttpClient } from './utils/testing/McpHttpClient.js';
 export { McpModernHttpClient } from './utils/testing/McpModernHttpClient.js';

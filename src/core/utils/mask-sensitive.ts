@@ -32,6 +32,11 @@ export interface IMaskRules {
   replacement?: string | ((original: string) => string);
 }
 
+export interface ISecretHeaderDescriptor {
+  name: string;
+  isSecret?: boolean;
+}
+
 const DEFAULT_REPLACEMENT = '***';
 
 function applyReplacement(original: string, replacement: IMaskRules['replacement']): string {
@@ -83,6 +88,35 @@ export function maskSensitive<T>(value: T, rules: IMaskRules): T {
       return result;
     }
     return node;
+  };
+
+  return walk(value) as T;
+}
+
+/** Masks values of headers explicitly declared secret, including nested records and name/value entries. */
+export function maskSecretHeaders<T>(value: T, headers: ISecretHeaderDescriptor[], replacement = '***'): T {
+  const secretNames = new Set(
+    headers.filter((header) => header.isSecret === true).map((header) => header.name.toLowerCase()),
+  );
+
+  const walk = (node: unknown): unknown => {
+    if (Array.isArray(node)) {
+      return node.map((item) => walk(item));
+    }
+    if (!node || typeof node !== 'object') {
+      return node;
+    }
+    const entry = node as Record<string, unknown>;
+    const entryName = typeof entry.name === 'string' ? entry.name.toLowerCase() : '';
+    const result: Record<string, unknown> = {};
+    for (const [key, child] of Object.entries(entry)) {
+      if (secretNames.has(key.toLowerCase()) || (secretNames.has(entryName) && key.toLowerCase() === 'value')) {
+        result[key] = replacement;
+      } else {
+        result[key] = walk(child);
+      }
+    }
+    return result;
   };
 
   return walk(value) as T;

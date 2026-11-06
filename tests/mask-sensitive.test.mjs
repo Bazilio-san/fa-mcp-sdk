@@ -8,7 +8,7 @@
  */
 import assert from 'node:assert/strict';
 
-import { maskSensitive } from '../dist/core/utils/mask-sensitive.js';
+import { maskSecretHeaders, maskSensitive } from '../dist/core/utils/mask-sensitive.js';
 
 let failed = 0;
 const test = (name, fn) => {
@@ -77,6 +77,21 @@ test('arrays of objects are walked', () => {
 test('no rules → deep clone with no changes', () => {
   const out = maskSensitive({ a: { b: 'c' } }, {});
   assert.deepEqual(out, { a: { b: 'c' } });
+});
+
+test('secret header declarations mask records and name/value entries case-insensitively', () => {
+  const declarations = [{ name: 'X-Project-Secret', isSecret: true }];
+  const out = maskSecretHeaders(
+    {
+      headers: { 'x-project-secret': 'marker', ordinary: 'visible' },
+      entries: [{ name: 'X-PROJECT-SECRET', value: 'marker' }],
+    },
+    declarations,
+  );
+  assert.deepEqual(out, {
+    headers: { 'x-project-secret': '***', ordinary: 'visible' },
+    entries: [{ name: 'X-PROJECT-SECRET', value: '***' }],
+  });
 });
 
 console.log(failed === 0 ? '\nAll mask-sensitive tests passed.' : `\n${failed} test(s) failed.`);
