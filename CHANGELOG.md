@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.12.109] - 2026-11-06
+
+### Fixed
+
+- Normalize npm command paths and repository metadata so npm 11 preserves the `fa-mcp` and `fa-mcp-sdk`
+  executable commands in the published package.
+
 ## [0.12.108] - 2026-11-06
 
 ### Added

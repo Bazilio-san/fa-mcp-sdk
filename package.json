@@ -1,7 +1,7 @@
 {
   "name": "fa-mcp-sdk",
   "productName": "FA MCP SDK",
-  "version": "0.12.108",
+  "version": "0.12.109",
   "description": "Core infrastructure and templates for building Model Context Protocol (MCP) servers with TypeScript",
   "type": "module",
   "main": "dist/core/index.js",
@@ -27,8 +27,8 @@
     "README.md"
   ],
   "bin": {
-    "fa-mcp": "./bin/fa-mcp.js",
-    "fa-mcp-sdk": "./bin/fa-mcp.js"
+    "fa-mcp": "bin/fa-mcp.js",
+    "fa-mcp-sdk": "bin/fa-mcp.js"
   },
   "scripts": {
     "start": "npm run template:start",
@@ -91,7 +91,7 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/Bazilio-san/fa-mcp-sdk.git"
+    "url": "git+https://github.com/Bazilio-san/fa-mcp-sdk.git"
   },
   "homepage": "https://github.com/Bazilio-san/fa-mcp-sdk#readme",
   "dependencies": {
