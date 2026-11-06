@@ -101,6 +101,8 @@ export interface IUsedHttpHeader {
   name: string; // E.g. "Authorization",
   description: string; // E.g. "JWT Token issued on request"
   isOptional?: boolean;
+  /** Keep the value only in the current Agent Tester page and mask it in diagnostics. */
+  isSecret?: boolean;
 }
 
 /**

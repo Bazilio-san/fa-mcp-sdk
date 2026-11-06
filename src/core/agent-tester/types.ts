@@ -135,6 +135,8 @@ export interface ITesterCachedMcpClient {
 export interface TesterHeaderRequirement {
   name: string;
   description: string;
+  isOptional?: boolean;
+  isSecret?: boolean;
 }
 
 export interface TesterMcpServerConfig {
