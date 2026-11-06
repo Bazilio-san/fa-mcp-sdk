@@ -288,7 +288,7 @@ export function createAgentTesterRouter(
   // POST /api/mcp/disconnect/:serverName
   router.post('/api/mcp/disconnect/:serverName', async (req, res) => {
     try {
-      await mcpClientService.disconnectFromServer(req.params.serverName);
+      await mcpClientService.removeServer(req.params.serverName);
       res.json({ message: `Disconnected from ${req.params.serverName}` });
     } catch (error: any) {
       res.status(500).json({ error: error.message });

@@ -248,6 +248,7 @@ class AuthManager {
 
   async _logout() {
     this._clearSavedCreds();
+    window.mcpAgentTester?.clearSecretHeaderValues();
     try {
       await apiFetch(`${API_BASE}/api/auth/logout`, { method: 'POST' });
     } catch {
@@ -2843,6 +2844,26 @@ class McpAgentTester {
     localStorage.removeItem('mcpAgentFormValues');
   }
 
+  clearSecretHeaderValues() {
+    const secretNames = new Set(
+      this.usedHeaders.filter((header) => header.isSecret === true).map((header) => header.name.toLowerCase()),
+    );
+    for (const input of this.dynamicHeaders.querySelectorAll('input[data-secret="true"]')) {
+      input.value = '';
+      this.updateHeaderBorder(input);
+    }
+    for (const holder of [this.mcpConfig?.headers, this.currentServer?.headers]) {
+      if (!holder) {
+        continue;
+      }
+      for (const name of Object.keys(holder)) {
+        if (secretNames.has(name.toLowerCase())) {
+          delete holder[name];
+        }
+      }
+    }
+  }
+
   async loadCurrentServer() {
     try {
       const response = await apiFetch(`${API_BASE}/api/mcp/servers`);
@@ -2924,6 +2945,7 @@ class McpAgentTester {
     }
 
     this.stopAuthRefresh();
+    this.clearSecretHeaderValues();
 
     try {
       const response = await apiFetch(`${API_BASE}/api/mcp/disconnect/${this.currentServer.name}`, { method: 'POST' });
@@ -3525,6 +3547,7 @@ class McpAgentTester {
 
   handleServerUrlChange() {
     this.stopAuthRefresh();
+    this.clearSecretHeaderValues();
     let url = this.serverUrlInput.value.trim();
 
     if (url) {

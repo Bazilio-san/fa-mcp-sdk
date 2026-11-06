@@ -624,6 +624,17 @@ export class TesterMcpClientService {
     }
   }
 
+  public async removeServer(serverName: string): Promise<void> {
+    await this.disconnectFromServer(serverName);
+    this.servers.delete(serverName);
+    for (const [key, entry] of this.clientCache) {
+      if (entry.config.name === serverName) {
+        await entry.client.close?.();
+        this.clientCache.delete(key);
+      }
+    }
+  }
+
   public async updateHeaders(
     serverName: string,
     headers: Record<string, string>,
