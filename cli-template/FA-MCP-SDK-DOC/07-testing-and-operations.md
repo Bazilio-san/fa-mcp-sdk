@@ -391,6 +391,18 @@ mutation are separate decisions and cannot be inferred from a tool's name.
 Run on Node.js 20 or later. Full Authorization diagnostics require both a diagnostic namespace such as
 `DEBUG=token:auth` and `MCP_DEBUG_SHOW_AUTHORIZATION=1`; this intentionally writes real credentials to logs.
 
+### Release verification: 0.12.132
+
+The secret-header contract was released after the following checks on 2026-11-06:
+
+- `npm run clean`, `npm run build`, `npm run typecheck`, `npm run lint`, and `npm run format` completed successfully.
+- `npm run ci` completed successfully; the optional native `cpu-features` build warning did not fail installation.
+- All 13 `test:*` commands from the SDK `package.json` completed successfully with no failed command.
+- A project created by the published `0.12.110` generator built with `0.12.125` using `IUsedHttpHeader.isSecret`
+  from the public `fa-mcp-sdk` entry point and no internal imports.
+- Downstream consumers requiring migration are `mcp-jira` and `mcp-wiki`. No usernames, passwords, tokens, or
+  header values were recorded during verification.
+
 ## Именованные размещения на удалённых серверах
 
 Навык `.agents/skills/deploy-mcp-to-remote-server/SKILL.md` использует отдельную папку `configs/<имя>/` для каждого
