@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.12.127] - 2026-11-06
+
+### Added
+
+- Add optional `IUsedHttpHeader.isSecret` metadata and export `maskSecretHeaders` for project-declared headers.
+
+### Security
+
+- Keep Agent Tester secret header values out of `localStorage`, render them as password fields, clear them with the
+  page connection, and mask them in diagnostics and service responses while forwarding them to the current MCP.
+
 ## [0.12.110] - 2026-11-06
 
 ### Added
