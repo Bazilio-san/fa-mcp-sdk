@@ -16,7 +16,7 @@ import { subjectKeyFromAuth } from '../create-mcp-server.js';
 import { IClientCapabilities, ITransportContext, TLoggingLevel, TTransportType } from '../../_types_/types.js';
 import { appConfig, getProjectData } from '../../bootstrap/init-config.js';
 import { getMetrics } from '../../metrics/metrics.js';
-import { getTools, normalizeHeaders } from '../../utils/utils.js';
+import { getOnBehalfOfIdentity, getTools, normalizeHeaders } from '../../utils/utils.js';
 import { adoptTraceContextFromMeta } from '../../web/request-id.js';
 import {
   buildProgressEmitter,
@@ -139,10 +139,12 @@ export const createV2ServerFactory =
     // Connection-scoped part of ITransportContext; clientCapabilities join per handler call.
     const headers = ctx.requestInfo ? normalizeHeaders(Object.fromEntries(ctx.requestInfo.headers)) : undefined;
     const payload = (ctx.authInfo as { payload?: ITransportContext['payload'] } | undefined)?.payload;
+    const onBehalfOf = getOnBehalfOfIdentity(headers);
     const baseCtx: ITransportContext = {
       transport: transportType,
       ...(headers ? { headers } : {}),
       ...(payload ? { payload } : {}),
+      ...(onBehalfOf ? { onBehalfOf } : {}),
     };
     const ctxFor = (handlerCtx: unknown): ITransportContext => {
       // Standard §15.1 — a modern request may carry the W3C trace context in `_meta`; adopt it

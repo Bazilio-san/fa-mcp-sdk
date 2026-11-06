@@ -30,7 +30,7 @@ import {
 import { appConfig, getProjectData } from '../bootstrap/init-config.js';
 import { sanitizeOutwardMessage, toMcpError } from '../errors/errors.js';
 import { RateLimitedError, ResourceNotFoundError } from '../errors/specific-errors.js';
-import { getTools, normalizeHeaders } from '../utils/utils.js';
+import { getOnBehalfOfIdentity, getTools, normalizeHeaders } from '../utils/utils.js';
 import { getCurrentRequestContext, IRequestContext, runWithRequestContext } from '../web/request-id.js';
 import { getMetrics } from '../metrics/metrics.js';
 
@@ -169,11 +169,13 @@ export function createMcpServer(
     // `extra` is empty (legacy /sse preserves them from connection establishment).
     const headers = extra.requestInfo?.headers ? normalizeHeaders(extra.requestInfo.headers) : presetCtx?.headers;
     const payload = (extra.authInfo?.payload as ITransportContext['payload']) ?? presetCtx?.payload;
+    const onBehalfOf = getOnBehalfOfIdentity(headers);
     const caps = server.getClientCapabilities() as IClientCapabilities | undefined;
     return {
       transport: transportType,
       ...(headers ? { headers } : {}),
       ...(payload ? { payload } : {}),
+      ...(onBehalfOf ? { onBehalfOf } : {}),
       ...(caps ? { clientCapabilities: caps } : {}),
     };
   };

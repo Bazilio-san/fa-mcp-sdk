@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.12.110] - 2026-11-06
+
+### Added
+
+- Parse `x-on-behalf-of-user` consistently for every HTTP MCP path and expose `onBehalfOf.raw`, `username`,
+  optional `domain`, and canonical `normalized` values to tool, prompt, resource, and dynamic catalog handlers.
+
+### Changed
+
+- Accept signed JWTs without a non-empty `sub`; such tokens keep `payload.user` as an empty string while signature,
+  expiration, issuer, audience, identifier revocation, optional IP restrictions, and expected-user checks remain active.
+
 ## [0.12.109] - 2026-11-06
 
 ### Fixed

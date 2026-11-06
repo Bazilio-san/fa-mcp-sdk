@@ -132,13 +132,33 @@ function signFixtureJwt(payload, options = {}) {
 // ===== 7. Malformed token → "The token is not a JWT" =====
 
 {
+  for (const [name, payload] of [
+    ['missing', { role: 'impersonation' }],
+    ['empty', { role: 'impersonation', sub: '' }],
+  ]) {
+    const token = signFixtureJwt(payload, {
+      audience: expectedAud,
+      expiresIn: 60,
+      jwtid: `${name}-subject-fixture`,
+    });
+    const result = await checkJwtToken({ token });
+    assert.ok(!result.errorReason, `${name} subject must be accepted: ${result.errorReason}`);
+    assert.strictEqual(result.payload?.user, '', `${name} subject must normalize to an empty user`);
+    assert.strictEqual(result.payload?.role, 'impersonation');
+  }
+  console.log('  ✅  standard JWT without a non-empty subject accepted as userless token');
+}
+
+// ===== 8. Malformed token → "The token is not a JWT" =====
+
+{
   const result = await checkJwtToken({ token: 'definitely-not-a-jwt' });
   assert.ok(result.errorReason, 'malformed token must fail');
   assert.match(result.errorReason, /not a JWT/i, `expected "not a JWT" message: ${result.errorReason}`);
   console.log('  ✅  malformed token rejected');
 }
 
-// ===== 8. Legacy token fixture → ok =====
+// ===== 9. Legacy token fixture → ok =====
 
 {
   // Build a legacy token using the same algorithm `checkLegacyJwt` accepts

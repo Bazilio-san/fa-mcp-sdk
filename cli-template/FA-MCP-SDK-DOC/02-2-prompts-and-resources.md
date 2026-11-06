@@ -112,9 +112,15 @@ interface ITransportContext {
   transport: 'stdio' | 'sse' | 'http';
   headers?: Record<string, string>;            // HTTP headers (HTTP/SSE only)
   payload?: { user: string; [key: string]: any };  // Auth payload (if authenticated HTTP/SSE only)
+  onBehalfOf?: { raw: string; username: string; domain?: string; normalized: string };
   clientCapabilities?: IClientCapabilities;    // What the caller declared it can do (see 10-mcp-apps.md)
 }
 ```
+
+For HTTP and SSE, the SDK parses `x-on-behalf-of-user` once and supplies `onBehalfOf` to dynamic tools, prompts,
+resources, templates, and tool handlers. Accepted values are `username`, `domain\\username`, and `domain/username`.
+The `username`, `domain`, and `normalized` fields are lowercase; `normalized` uses `domain\\username`. A missing or
+malformed header leaves `onBehalfOf` undefined while the original value remains available in `headers`.
 
 `clientCapabilities` is assembled per protocol era: a modern (2026-07-28) request carries its capabilities in
 the per-request `_meta` envelope, while a legacy session inherits them from its `initialize` handshake. The

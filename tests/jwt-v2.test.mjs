@@ -61,8 +61,9 @@ try {
     },
     code: `
 import assert from 'node:assert';
-import { existsSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
+import { SignJWT, importPKCS8 } from 'jose';
 import { generateToken, checkJwtToken } from './dist/core/auth/jwt.js';
 
 const token = await generateToken('alice', 60, { scope: 'mcp:read' });
@@ -83,6 +84,23 @@ assert.ok(!r.errorReason, 'expected no error, got: ' + r.errorReason);
 assert.strictEqual(r.payload?.user, 'alice');
 assert.strictEqual(r.payload?.scope, 'mcp:read');
 assert.strictEqual(r.payload?.iss, 'urn:test-issuer');
+
+const privateKey = await importPKCS8(readFileSync(resolve(dir, 'private.pem'), 'utf8'), 'ES256');
+for (const [name, subject] of [['missing', undefined], ['empty', '']]) {
+  let builder = new SignJWT({ role: 'impersonation' })
+    .setProtectedHeader({ alg: 'ES256' })
+    .setIssuer('urn:test-issuer')
+    .setAudience('urn:test-mcp')
+    .setIssuedAt()
+    .setExpirationTime('1m')
+    .setJti(name + '-subject');
+  if (subject !== undefined) builder = builder.setSubject(subject);
+  const userless = await builder.sign(privateKey);
+  const checked = await checkJwtToken({ token: userless });
+  assert.ok(!checked.errorReason, name + ' subject must pass: ' + checked.errorReason);
+  assert.strictEqual(checked.payload?.user, '');
+  assert.strictEqual(checked.payload?.role, 'impersonation');
+}
 `,
   });
 } finally {

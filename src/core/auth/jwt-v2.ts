@@ -138,10 +138,7 @@ export async function verifyJwtV2(arg: {
     return { errorReason: `Error verifying JWT token :: ${err?.message ?? 'unknown error'}` };
   }
 
-  const sub = typeof payloadDecoded.sub === 'string' ? payloadDecoded.sub : '';
-  if (!sub) {
-    return { errorReason: 'JWT Token: missing subject' };
-  }
+  const sub = typeof payloadDecoded.sub === 'string' ? payloadDecoded.sub.trim() : '';
   const expSec = typeof payloadDecoded.exp === 'number' ? payloadDecoded.exp : 0;
   if (!expSec) {
     return { isTokenDecrypted: true, errorReason: 'JWT Token: missing expiration' };

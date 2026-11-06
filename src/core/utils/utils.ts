@@ -3,7 +3,7 @@ import path from 'path';
 
 import { Tool } from '@modelcontextprotocol/sdk/types.js';
 
-import { ITransportContext } from '../_types_/types.js';
+import { IOnBehalfOfIdentity, ITransportContext } from '../_types_/types.js';
 import { appConfig } from '../bootstrap/init-config.js';
 import { ROOT_PROJECT_DIR } from '../constants.js';
 import { assertToolNames } from '../mcp/validate-tool-names.js';
@@ -74,6 +74,48 @@ export const normalizeHeaders = (headers: Record<string, any>): Record<string, s
 
   return normalized;
 };
+
+const ON_BEHALF_OF_PART_RE = /^[a-z0-9][a-z0-9._-]{0,127}$/i;
+
+/**
+ * Parse `x-on-behalf-of-user` without assigning any application-specific meaning to the domain.
+ * Accepted forms are `username`, `domain\\username`, and `domain/username`.
+ */
+export const parseOnBehalfOfUser = (value: unknown): IOnBehalfOfIdentity | undefined => {
+  if (typeof value !== 'string') {
+    return undefined;
+  }
+  const raw = value.trim();
+  if (!raw) {
+    return undefined;
+  }
+  const separators = [...raw].filter((character) => character === '\\' || character === '/');
+  if (separators.length > 1) {
+    return undefined;
+  }
+  if (!separators.length) {
+    if (!ON_BEHALF_OF_PART_RE.test(raw)) {
+      return undefined;
+    }
+    const username = raw.toLowerCase();
+    return { raw, username, normalized: username };
+  }
+  const separator = separators[0]!;
+  const parts = raw.split(separator);
+  if (parts.length !== 2 || !parts[0] || !parts[1]) {
+    return undefined;
+  }
+  const domain = parts[0].toLowerCase();
+  const username = parts[1].toLowerCase();
+  if (!ON_BEHALF_OF_PART_RE.test(domain) || !ON_BEHALF_OF_PART_RE.test(username)) {
+    return undefined;
+  }
+  return { raw, domain, username, normalized: `${domain}\\${username}` };
+};
+
+/** Parse the normalized on-behalf-of header collection used by all HTTP MCP transports. */
+export const getOnBehalfOfIdentity = (headers?: Record<string, string>): IOnBehalfOfIdentity | undefined =>
+  parseOnBehalfOfUser(headers?.['x-on-behalf-of-user']);
 
 export async function getTools(args: ITransportContext): Promise<Tool[]> {
   const toolsOrFn = global.__MCP_PROJECT_DATA__.tools;

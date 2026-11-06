@@ -61,6 +61,9 @@ interface IToolHandlerParams {
   arguments?: any;
   headers?: Record<string, string>;
   payload?: { user: string; [key: string]: any };     // JWT payload if authenticated
+  onBehalfOf?: {                                      // Parsed x-on-behalf-of-user when valid
+    raw: string; username: string; domain?: string; normalized: string;
+  };
   transport?: 'stdio' | 'sse' | 'http';
   clientCapabilities?: IClientCapabilities;           // Era-dependent source, see below; also 10-mcp-apps.md
 }

@@ -201,10 +201,7 @@ function checkStandardJwt(
   }
 
   // Normalize to ITokenPayload shape
-  const sub = typeof decoded.sub === 'string' ? decoded.sub : '';
-  if (!sub) {
-    return { errorReason: 'JWT Token: missing subject' };
-  }
+  const sub = typeof decoded.sub === 'string' ? decoded.sub.trim() : '';
   const expSec = typeof decoded.exp === 'number' ? decoded.exp : 0;
   if (!expSec) {
     return { isTokenDecrypted: true, errorReason: 'JWT Token: missing expiration' };

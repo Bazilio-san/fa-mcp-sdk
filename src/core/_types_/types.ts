@@ -246,12 +246,26 @@ export interface IDeprecationInfo {
   note?: string;
 }
 
+/** Parsed identity from the optional `x-on-behalf-of-user` HTTP header. */
+export interface IOnBehalfOfIdentity {
+  /** Header value after outer whitespace is removed, preserving the caller's spelling. */
+  raw: string;
+  /** Lowercase username without a domain prefix. */
+  username: string;
+  /** Lowercase domain prefix, when the header used `domain\\username` or `domain/username`. */
+  domain?: string;
+  /** Canonical lowercase form: `username` or `domain\\username`. */
+  normalized: string;
+}
+
 export interface IToolHandlerParams {
   name: string;
   arguments?: any;
   transport: TTransportType;
   headers?: Record<string, string>;
   payload?: { user: string; [key: string]: any } | undefined;
+  /** Parsed `x-on-behalf-of-user`; absent when the header is missing or malformed. */
+  onBehalfOf?: IOnBehalfOfIdentity;
   /**
    * Client capabilities reported during the MCP initialize handshake.
    * Populated for STDIO/SSE on every call; for Streamable HTTP only when the
@@ -323,6 +337,8 @@ export interface ITransportContext {
   transport: TTransportType;
   headers?: Record<string, string>;
   payload?: { user: string; [key: string]: any } | undefined;
+  /** Parsed `x-on-behalf-of-user`; absent when the header is missing or malformed. */
+  onBehalfOf?: IOnBehalfOfIdentity;
   /** See {@link IToolHandlerParams.clientCapabilities}. */
   clientCapabilities?: IClientCapabilities;
 }

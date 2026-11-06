@@ -7,6 +7,7 @@ export type {
   IInputRequiredResponse,
   IToolHandlerParams,
   ITransportContext,
+  IOnBehalfOfIdentity,
   TLoggingLevel,
   TTransportType,
   IGetPromptParams,
@@ -155,6 +156,8 @@ export {
   encodeSvgForDataUri,
   getAsset,
   normalizeHeaders,
+  parseOnBehalfOfUser,
+  getOnBehalfOfIdentity,
   getTools,
 } from './utils/utils.js';
 export { isPortAvailable, checkPortAvailability } from './utils/port-checker.js';

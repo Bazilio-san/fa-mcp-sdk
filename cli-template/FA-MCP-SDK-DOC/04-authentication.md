@@ -64,8 +64,8 @@ expectedIssuer:
   - 'https://idp-migration.corp'
 ```
 
-To deliberately skip only the `iss` check, enable the weakened mode. Signature, expiration, subject, revocation and
-configured audience checks continue to run:
+To deliberately skip only the `iss` check, enable the weakened mode. Signature, expiration, revocation and configured
+audience checks continue to run:
 
 ```yaml
 expectedIssuer: ''
@@ -101,6 +101,11 @@ import { generateToken, checkJwtToken } from 'fa-mcp-sdk';
 const token = await generateToken('john_doe', 3600, { role: 'admin' }); // 1 hour
 const r = await checkJwtToken({ token });
 ```
+
+The standard JWT `sub` claim is optional. When it is absent, empty, or whitespace-only, verification returns
+`payload.user === ''`. This represents a valid token that is not bound to one username; applications may combine it
+with a separately trusted identity header. A non-empty `expectedUser` still rejects a token whose normalized user is
+empty or different. Signature, `exp`, issuer, audience, `jti` revocation, and optional IP checks are unchanged.
 
 Synchronous fallbacks (legacy mode only — never throw on `mode = legacyAesCtr`):
 
