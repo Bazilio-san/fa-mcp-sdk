@@ -521,6 +521,9 @@ Skill location: `.agents/skills/gen-jwt/SKILL.md`
 
 HTTP endpoint for programmatic JWT token generation. Disabled by default.
 
+For a reusable end-to-end PowerShell procedure that works with any generated MCP server, see
+[JWT token generation](04-1-jwt-token-generation.md).
+
 ### Configuration
 
 ```yaml
