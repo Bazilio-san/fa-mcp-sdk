@@ -2391,7 +2391,8 @@ class McpAgentTester {
       const headerGroup = document.createElement('div');
       headerGroup.className = 'header-row';
 
-      const savedValue = savedHeaders[header.name] || this.configHttpHeaders[header.name] || '';
+      const isSecret = header.isSecret === true;
+      const savedValue = isSecret ? '' : savedHeaders[header.name] || this.configHttpHeaders[header.name] || '';
       const isRequired = !header.isOptional;
       const hasDesc = header.description && header.description.trim();
       const nameClass = hasDesc ? 'header-name has-tooltip' : 'header-name';
@@ -2402,12 +2403,14 @@ class McpAgentTester {
       headerGroup.innerHTML = `
                 <span class="${nameClass}"${tooltipAttr}>${header.name}</span>
                 <input
-                    type="text"
+                    type="${isSecret ? 'password' : 'text'}"
+                    autocomplete="${isSecret ? 'new-password' : 'off'}"
                     class="${inputClass}"
                     id="header_${header.name}"
                     placeholder="${header.name}"
                     data-header-name="${header.name}"
                     data-required="${isRequired}"
+                    data-secret="${isSecret}"
                     data-testid="at-header-input-${header.name}"
                     value="${savedValue.replace(/"/g, '&quot;')}"
                 >
