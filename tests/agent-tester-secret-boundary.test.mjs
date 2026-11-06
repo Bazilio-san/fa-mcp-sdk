@@ -11,6 +11,11 @@ const requirement = {
   isOptional: true,
   isSecret: true,
 };
+const ordinaryRequirement = {
+  name: 'x-project-visible',
+  description: 'Synthetic ordinary header',
+  isOptional: true,
+};
 const worker = await isolatedWorker('http', {}, { EXPECTED_SECRET_HEADER: marker });
 const tester = spawnServer({
   port: 39860,
@@ -38,7 +43,7 @@ try {
     body: JSON.stringify({
       serverName,
       headers: { 'x-project-secret': marker, 'x-project-visible': 'visible' },
-      headerRequirements: [requirement],
+      headerRequirements: [ordinaryRequirement, requirement],
     }),
   });
   const updateText = await update.text();
@@ -58,6 +63,7 @@ try {
   const toolCallText = await toolCall.text();
   assert.equal(toolCall.status, 200);
   assert.match(toolCallText, /exactSecretReceived\\?":true/);
+  assert.match(toolCallText, /ordinaryReceived\\?":true/);
   assert.doesNotMatch(toolCallText, new RegExp(marker));
 
   const badConnect = await fetch(`${tester.url}/agent-tester/api/mcp/connect`, {

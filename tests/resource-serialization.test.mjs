@@ -14,11 +14,13 @@ for (const mode of ['http', 'stdio']) {
     const headers = await client.readResource('use://http-headers');
     assert.deepEqual(JSON.parse(headers.contents[0].text), [
       { name: 'Authorization', description: 'Synthetic test header' },
+      { name: 'x-project-visible', description: 'Synthetic ordinary header', isOptional: true },
       { name: 'x-project-secret', description: 'Synthetic private header', isOptional: true, isSecret: true },
     ]);
     if (mode === 'http') {
       assert.deepEqual(await (await fetch(`${worker.url}/used-http-headers`)).json(), [
         { name: 'Authorization', description: 'Synthetic test header' },
+        { name: 'x-project-visible', description: 'Synthetic ordinary header', isOptional: true },
         { name: 'x-project-secret', description: 'Synthetic private header', isOptional: true, isSecret: true },
       ]);
     }

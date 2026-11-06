@@ -23,6 +23,7 @@ globalThis.__MCP_PROJECT_DATA__ = {
   agentPrompt: '',
   usedHttpHeaders: [
     { name: 'Authorization', description: 'Synthetic test header' },
+    { name: 'x-project-visible', description: 'Synthetic ordinary header', isOptional: true },
     { name: 'x-project-secret', description: 'Synthetic private header', isOptional: true, isSecret: true },
   ],
   customAuthValidator: async (req) =>
@@ -65,7 +66,10 @@ globalThis.__MCP_PROJECT_DATA__ = {
         content: [
           {
             type: 'text',
-            text: JSON.stringify({ exactSecretReceived: received === process.env.EXPECTED_SECRET_HEADER }),
+            text: JSON.stringify({
+              exactSecretReceived: received === process.env.EXPECTED_SECRET_HEADER,
+              ordinaryReceived: p.headers?.['x-project-visible'] === 'visible',
+            }),
           },
         ],
       };
