@@ -149,6 +149,7 @@ export interface TesterMcpServerConfig {
   lastConnected?: Date;
   connectionError?: string;
   headers?: Record<string, string>;
+  headerRequirements?: TesterHeaderRequirement[];
   /** Whether the active session advertised MCP Apps UI capability. */
   appMode?: boolean;
 }
@@ -158,6 +159,7 @@ export interface TesterMcpConnectionRequest {
   url: string;
   transport: 'http' | 'sse';
   headers?: Record<string, string>;
+  headerRequirements?: TesterHeaderRequirement[];
   /** Advertise MCP Apps UI capability during `initialize`. */
   appMode?: boolean;
 }

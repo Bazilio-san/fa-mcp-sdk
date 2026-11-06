@@ -10,6 +10,7 @@ import { generateToken } from '../../auth/jwt.js';
 import { canLocallyIssueJwt } from '../../auth/key-resolver.js';
 import { logger as lgr } from '../../logger.js';
 import { MCP_APPS_EXTENSION_ID, MCP_APPS_RESOURCE_MIME_TYPE } from '../../mcp/mcp-apps.js';
+import { maskSecretHeaders } from '../../utils/mask-sensitive.js';
 import {
   TesterMcpConfig,
   ITesterCachedMcpClient,
@@ -29,6 +30,34 @@ export class TesterMcpClientService {
   private clientCache: Map<string, ITesterCachedMcpClient> = new Map();
   private cleanupInterval: ReturnType<typeof setInterval> | null = null;
   private readonly CACHE_MAX_AGE_MS = 10 * 60 * 1000; // 10 minutes
+
+  private sanitizeError(
+    error: unknown,
+    headers: Record<string, string> | undefined,
+    requirements: TesterHeaderRequirement[] | undefined,
+  ): string {
+    let message = error instanceof Error ? error.message : typeof error === 'string' ? error : 'Connection failed';
+    const secretNames = new Set(
+      (requirements || []).filter((header) => header.isSecret === true).map((header) => header.name.toLowerCase()),
+    );
+    for (const [name, value] of Object.entries(headers || {})) {
+      if (secretNames.has(name.toLowerCase()) && value) {
+        message = message.split(value).join('***');
+      }
+    }
+    return message;
+  }
+
+  private publicServerConfig(config: TesterMcpServerConfig): TesterMcpServerConfig {
+    const requirements = config.headerRequirements || [];
+    return {
+      ...config,
+      ...(config.headers ? { headers: maskSecretHeaders(config.headers, requirements) } : {}),
+      ...(config.connectionError
+        ? { connectionError: this.sanitizeError(config.connectionError, config.headers, requirements) }
+        : {}),
+    };
+  }
 
   constructor() {
     this.cleanupInterval = setInterval(() => {
@@ -506,6 +535,9 @@ export class TesterMcpClientService {
         if (request.headers) {
           serverConfig.headers = request.headers;
         }
+        if (request.headerRequirements) {
+          serverConfig.headerRequirements = request.headerRequirements;
+        }
         if (request.appMode) {
           serverConfig.appMode = true;
         }
@@ -522,10 +554,11 @@ export class TesterMcpClientService {
 
         return {
           success: true,
-          config: serverConfig,
+          config: this.publicServerConfig(serverConfig),
         };
       } catch (connectionError) {
-        logger.error(`Failed to connect to MCP server ${request.name}:`, connectionError);
+        const safeError = this.sanitizeError(connectionError, request.headers, request.headerRequirements);
+        logger.error(`Failed to connect to MCP server ${request.name}: ${safeError}`);
 
         const serverConfig: TesterMcpServerConfig = {
           name: request.name,
@@ -533,22 +566,25 @@ export class TesterMcpClientService {
           transport: request.transport,
           isConnected: false,
           tools: [],
-          connectionError: connectionError instanceof Error ? connectionError.message : 'Connection failed',
+          connectionError: safeError,
         };
         if (request.headers) {
           serverConfig.headers = request.headers;
+        }
+        if (request.headerRequirements) {
+          serverConfig.headerRequirements = request.headerRequirements;
         }
 
         this.servers.set(request.name, serverConfig);
 
         return {
           success: false,
-          error: connectionError instanceof Error ? connectionError.message : 'Connection failed',
+          error: safeError,
         };
       }
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-      logger.error(`Unexpected error connecting to MCP server ${request.name}:`, error);
+      const errorMessage = this.sanitizeError(error, request.headers, request.headerRequirements);
+      logger.error(`Unexpected error connecting to MCP server ${request.name}: ${errorMessage}`);
 
       const serverConfig: TesterMcpServerConfig = {
         name: request.name,
@@ -560,6 +596,9 @@ export class TesterMcpClientService {
       };
       if (request.headers) {
         serverConfig.headers = request.headers;
+      }
+      if (request.headerRequirements) {
+        serverConfig.headerRequirements = request.headerRequirements;
       }
 
       this.servers.set(request.name, serverConfig);
@@ -638,6 +677,7 @@ export class TesterMcpClientService {
   public async updateHeaders(
     serverName: string,
     headers: Record<string, string>,
+    headerRequirements: TesterHeaderRequirement[] = [],
   ): Promise<TesterMcpConnectionResponse> {
     const config = this.servers.get(serverName);
     if (!config) {
@@ -645,6 +685,7 @@ export class TesterMcpClientService {
     }
 
     config.headers = { ...headers };
+    config.headerRequirements = headerRequirements;
 
     try {
       try {
@@ -656,6 +697,7 @@ export class TesterMcpClientService {
         url: config.url,
         transport: config.transport as 'http' | 'sse',
         headers: config.headers,
+        headerRequirements: config.headerRequirements,
         ...(config.appMode ? { appMode: true } : {}),
       });
 
@@ -667,7 +709,11 @@ export class TesterMcpClientService {
   }
 
   public getAllServerConfigs(): TesterMcpServerConfig[] {
-    return Array.from(this.servers.values());
+    return Array.from(this.servers.values(), (config) => this.publicServerConfig(config));
+  }
+
+  public getServerConfig(serverName: string): TesterMcpServerConfig | undefined {
+    return this.servers.get(serverName);
   }
 
   public async cleanup(): Promise<void> {

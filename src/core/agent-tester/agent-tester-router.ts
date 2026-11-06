@@ -298,12 +298,16 @@ export function createAgentTesterRouter(
   // POST /api/mcp/headers
   router.post('/api/mcp/headers', async (req, res): Promise<void> => {
     try {
-      const { serverName, headers } = req.body || {};
+      const { serverName, headers, headerRequirements } = req.body || {};
       if (!serverName || typeof headers !== 'object') {
         res.status(400).json({ error: 'serverName and headers are required' });
         return;
       }
-      const result = await mcpClientService.updateHeaders(serverName, headers);
+      const result = await mcpClientService.updateHeaders(
+        serverName,
+        headers,
+        Array.isArray(headerRequirements) ? headerRequirements : [],
+      );
       res.json(result);
     } catch (error: any) {
       res.status(500).json({ error: error.message });
@@ -323,7 +327,7 @@ export function createAgentTesterRouter(
         res.status(400).json({ error: 'serverName and toolName are required' });
         return;
       }
-      const server = mcpClientService.getAllServerConfigs().find((s) => s.name === serverName);
+      const server = mcpClientService.getServerConfig(serverName);
       if (!server || !server.isConnected) {
         res.status(404).json({ error: `Server ${serverName} is not connected` });
         return;
@@ -384,7 +388,7 @@ export function createAgentTesterRouter(
       res.status(400).json({ error: 'serverName, toolName and callId are required' });
       return;
     }
-    const server = mcpClientService.getAllServerConfigs().find((s) => s.name === serverName);
+    const server = mcpClientService.getServerConfig(serverName);
     if (!server || !server.isConnected) {
       res.status(404).json({ error: `Server ${serverName} is not connected` });
       return;
@@ -499,7 +503,7 @@ export function createAgentTesterRouter(
         res.status(400).json({ error: 'serverName is required' });
         return;
       }
-      const server = mcpClientService.getAllServerConfigs().find((s) => s.name === serverName);
+      const server = mcpClientService.getServerConfig(serverName);
       if (!server || !server.isConnected) {
         res.status(404).json({ error: `Server ${serverName} is not connected` });
         return;

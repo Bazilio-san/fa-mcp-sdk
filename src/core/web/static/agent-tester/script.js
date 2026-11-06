@@ -2164,6 +2164,7 @@ class McpAgentTester {
       url: serverUrl,
       transport: transport,
       headers: this.getHeadersFromForm(),
+      headerRequirements: this.usedHeaders,
       appMode: this.appMode,
     };
 
@@ -2262,6 +2263,7 @@ class McpAgentTester {
       url: serverUrl,
       transport: transport,
       headers: this.getHeadersFromForm(),
+      headerRequirements: this.usedHeaders,
       appMode: this.appMode,
     };
 
@@ -2624,7 +2626,7 @@ class McpAgentTester {
       const resp = await apiFetch(`${API_BASE}/api/mcp/headers`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ serverName: this.currentServer.name, headers }),
+        body: JSON.stringify({ serverName: this.currentServer.name, headers, headerRequirements: this.usedHeaders }),
       });
       const data = await resp.json();
       if (!resp.ok || !data.success) {
