@@ -61,7 +61,7 @@
     "@modelcontextprotocol/sdk": "^1.32.2",
     "@modelcontextprotocol/server": "^2.4.0",
     "dotenv": "^18.0.9",
-    "fa-mcp-sdk": "^0.12.138",
+    "fa-mcp-sdk": "^0.12.141",
     "nodemailer": "^9.0.3",
     "yaml": "^2.9.1"
   },
