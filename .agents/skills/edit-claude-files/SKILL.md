@@ -1,6 +1,8 @@
 ---
 name: edit-claude-files
-description: "Protocol for creating, editing OR deleting any file under .claude/ (SKILL.md, scripts, hooks, agents, settings.json, etc.). Use it BEFORE any such change — direct Write/Edit is denied by settings.json and direct shell ops (rm/mv/cp/redirect) on .claude are blocked by the harness, so every change MUST go through the scripts/fcp.js channel."
+description: >-
+  Protocol for creating, editing or deleting any file under .claude/ through the required scripts/fcp.js atomic
+  channel. Use it before changing settings, hooks, links or other files in that tree.
 allowed-tools: Read, Write, Edit, Bash(node scripts/fcp.js *), Bash(rm:*)
 ---
 
@@ -16,15 +18,12 @@ creating, editing, **deleting**, renaming, moving. It covers `SKILL.md`, scripts
 `.claude/skills/<skill>/scripts/`, hooks in `.claude/hooks/`, supporting reference
 files, `settings.json` — anything inside the tree.
 
-**Never attempt a direct change, not even once.** Two layers block direct access on purpose:
+**Never attempt a direct change, not even once.** The project requires the atomic channel below independently of
+the active `settings.json` permissions. The harness also blocks direct shell modification of `.claude/` — `rm`,
+`mv`, `cp`, `>`/`>>` redirection, `sed -i`, and the like. Reading is always fine.
 
-- `settings.json` denies the `Write` and `Edit` tools on `.claude/**`.
-- The harness blocks direct shell modification of `.claude/` — `rm`, `mv`, `cp`, `>`/`>>` redirection, `sed -i`,
-  and the like. (Reading is always fine.)
-
-So do NOT reach for `Write`/`Edit`/`rm` on a `.claude/` path and fall back when it fails — that wastes a denied
-call. Go straight to the `fcp.js` channel below, which runs as `node` (an allowlisted command) and is the ONLY
-sanctioned way in, for writes AND deletes.
+Go straight to the `fcp.js` channel below, which runs as `node` and is the only sanctioned way to write or delete
+inside `.claude/`.
 
 ## Protocol
 

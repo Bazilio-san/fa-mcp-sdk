@@ -405,12 +405,12 @@ The secret-header contract was released after the following checks on 2026-11-06
 
 ## Именованные размещения на удалённых серверах
 
-Навык `.agents/skills/deploy-mcp-to-remote-server/SKILL.md` использует отдельную папку `configs/<имя>/` для каждого
+Навык `.agents/skills/deploy/SKILL.md` использует отдельную папку `configs/<имя>/` для каждого
 размещения. Образец находится в `configs/_example/`; необязательный корневой `servers.local.md` связывает
 разговорные названия с папками. Для предварительного просмотра без подключения выполнить:
 
 ```bash
-node .agents/skills/deploy-mcp-to-remote-server/scripts/remote.cjs --server dev-1 show
+node .agents/skills/deploy/scripts/remote.cjs --server dev-1 show
 ```
 
 Тот же обязательный параметр применяется к `deploy`, `update`, `status` и другим командам. По умолчанию

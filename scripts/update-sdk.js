@@ -120,7 +120,7 @@ for (const { name, src, dest, preserve = [], respectPin = false, exclude = [], p
     pinned.add(entry);
   }
   if (name === '.agents/skills') {
-    const deploy = 'deploy-mcp-to-remote-server';
+    const deploy = 'deploy';
     const cards = join(dest, deploy, 'configs');
     if (existsSync(cards)) {
       for (const entry of readdirSync(cards)) {

@@ -3,10 +3,9 @@
 /**
  * The sanctioned write/delete channel for files under .claude/ (and any other path).
  *
- * Direct Write/Edit on .claude/** is denied by settings.json, and direct shell modification of .claude/
- * (rm, mv, cp, output redirection) is blocked by the harness. This script is the ONE allowed way to create,
- * overwrite or delete such files, because it runs as `node` (an allowlisted command). See the /edit-claude-files
- * skill for the full protocol.
+ * Project instructions require this atomic channel for .claude/**, and direct shell modification of that tree
+ * (rm, mv, cp, output redirection) is blocked by the harness. This script is the one allowed way to create,
+ * overwrite or delete such files. See the /edit-claude-files skill for the full protocol.
  *
  * Usage:
  *   node scripts/fcp.js <filePath> <contentFilePath>   # create/overwrite <filePath> with the contents of the temp file

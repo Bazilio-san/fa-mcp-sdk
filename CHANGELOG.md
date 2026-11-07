@@ -5,6 +5,13 @@ All notable changes to `fa-mcp-sdk` are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.12.139] - 2026-11-07
+
+### Changed
+
+- Provide the deployment skill as `deploy` and update its paths throughout generated projects.
+- Allow Claude Code to read local and private files in generated projects while denying the `Edit` tool for them.
+
 ## [Unreleased]
 
 ## [0.12.138] - 2026-11-07
@@ -231,7 +238,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Arguments dialog for "Launch widget" in the Inspector tab.** The dialog (`at-widget-args-modal`) offers a JSON
   editor, a schema-driven skeleton generator, a `Validate` button and a collapsible schema view; arguments are shared
   with the Tool Tester through the same `localStorage` key.
-- **`deploy-mcp-to-remote-server` skill for generated projects.** Deploys, stops, restarts, updates and diagnoses the
+- **`deploy` skill for generated projects.** Deploys, stops, restarts, updates and diagnoses the
   MCP server on a remote host as a self-contained systemd Docker container behind Caddy or nginx, with a once-a-minute
   in-container git auto-update; everything runs through `scripts/remote.cjs <subcommand>`.
 - **Tool-owned UI resources in the template.** `ITemplateTool` accepts an optional `uiResources` array; `tools.ts`
@@ -262,7 +269,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Removed
 
 - `cli-template/deploy/docker/` (Dockerfile, Dockerfile.local, docker-compose.yml, `.env.example`,
-  `config/local.docker.yaml`, README) — superseded by the `deploy-mcp-to-remote-server` skill.
+  `config/local.docker.yaml`, README) — superseded by the `deploy` skill.
 - Bundled subagent definitions under `cli-template/.claude/agents/` (architect, auditor, planner, scanner, worker,
   refactor, prd-writer, javascript-pro, typescript-pro, fa-mcp-sdk) — generated projects no longer ship them.
 

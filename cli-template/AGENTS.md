@@ -400,9 +400,9 @@ Commit `.agents/skills/`; the generated links are ignored by Git.
 
 ## Editing files in `.claude/` (Skill /edit-claude-files)
 
-Any edit or new file under `.claude/**` (SKILL.md, scripts, hooks, agents, `settings.json`) is blocked
-by `settings.json` — direct `Write`/`Edit` will fail. Invoke the `/edit-claude-files` skill, which
-describes the required `scripts/fcp.js` temp-copy protocol.
+Any edit, deletion or new file under `.claude/**` (SKILL.md, scripts, hooks, agents, `settings.json`) must use the
+`/edit-claude-files` skill and its `scripts/fcp.js` temporary-copy protocol. This remains a project requirement even
+when `settings.json` does not deny the direct tool call.
 
 
 ## MCP Apps Reference Clone (`scripts/clone-mcp-ext-apps.js`)
@@ -462,6 +462,6 @@ template-literal contents untouched, which is exactly why they replace `+` wrapp
 ## Именованные размещения на серверах
 
 Для просьб «выкати на dev-1», обновления и диагностики удалённого MCP-сервера использовать навык
-`.agents/skills/deploy-mcp-to-remote-server/SKILL.md`. Если существует корневой `servers.local.md`, прочитать его
+`.agents/skills/deploy/SKILL.md`. Если существует корневой `servers.local.md`, прочитать его
 для сопоставления названий с папками настроек. Затем прочитать правила выбранного размещения. Реестр необязателен;
 при его отсутствии использовать точное имя папки. Не выбирать сервер по умолчанию или по сходству названий.

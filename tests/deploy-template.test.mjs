@@ -9,10 +9,7 @@ import { test } from 'node:test';
 
 const require = createRequire(import.meta.url);
 const state = require('../cli-template/deploy/update-state.cjs');
-const remoteSource = fs.readFileSync(
-  'cli-template/.agents/skills/deploy-mcp-to-remote-server/scripts/remote.cjs',
-  'utf8',
-);
+const remoteSource = fs.readFileSync('cli-template/.agents/skills/deploy/scripts/remote.cjs', 'utf8');
 
 test('dependency, build and documentation inputs', () => {
   assert.deepEqual(state.classifyChanges(['README.md']), { dependencies: false, build: false });

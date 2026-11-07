@@ -5,7 +5,7 @@
 
 | Имя папки | Дополнительные названия | Настройки и особенности |
 |---|---|---|
-| dev-1 | первый тестовый сервер | `.agents/skills/deploy-mcp-to-remote-server/configs/dev-1/` |
-| prod-2 | второй рабочий сервер | `.agents/skills/deploy-mcp-to-remote-server/configs/prod-2/` |
+| dev-1 | первый тестовый сервер | `.agents/skills/deploy/configs/dev-1/` |
+| prod-2 | второй рабочий сервер | `.agents/skills/deploy/configs/prod-2/` |
 
 Это только образец: указанные папки не создаются автоматически и не являются доступными размещениями.

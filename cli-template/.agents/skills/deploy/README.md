@@ -27,10 +27,10 @@ formed from the initials of the service-name words; collisions extend the final 
 ## Status checks
 
 ```bash
-node .agents/skills/deploy-mcp-to-remote-server/scripts/remote.cjs --server dev-1 status
-node .agents/skills/deploy-mcp-to-remote-server/scripts/remote.cjs --server dev-1 bootlog 200
-node .agents/skills/deploy-mcp-to-remote-server/scripts/remote.cjs --server dev-1 logs 200
-node .agents/skills/deploy-mcp-to-remote-server/scripts/remote.cjs --server dev-1 updatelog 80
+node .agents/skills/deploy/scripts/remote.cjs --server dev-1 status
+node .agents/skills/deploy/scripts/remote.cjs --server dev-1 bootlog 200
+node .agents/skills/deploy/scripts/remote.cjs --server dev-1 logs 200
+node .agents/skills/deploy/scripts/remote.cjs --server dev-1 updatelog 80
 ```
 
 Wait for the initial build to complete. If local `/health` works but public access fails, check the domain,

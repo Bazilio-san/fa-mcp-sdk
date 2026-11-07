@@ -9,21 +9,14 @@
       "WebSearch"
     ],
     "deny": [
-      "Read(./.env)",
-      "Read(./.idea/**)",
-      "Read(./.run/**)",
-      "Read(./_misc/**)",
-      "Read(./**/_tmp/**)",
-      "Read(./**/*.private.*)",
-      "Read(./**/*.local.*)",
-      "Read(./**/*local-*)",
-      "Read(.claude/skills/deploy-mcp-to-remote-server/config/config.yml)",
-      "Read(.claude/skills/deploy-mcp-to-remote-server/config/local.yaml)",
-      "Read(.claude/skills/deploy-mcp-to-remote-server/config/remote-server-config.yaml)",
-      "Edit(.claude/**)",
-      "Read(.agents/skills/deploy-mcp-to-remote-server/config/config.yml)",
-      "Read(.agents/skills/deploy-mcp-to-remote-server/config/local.yaml)",
-      "Read(.agents/skills/deploy-mcp-to-remote-server/config/remote-server-config.yaml)"
+      "Edit(./.env)",
+      "Edit(./.idea/**)",
+      "Edit(./.run/**)",
+      "Edit(./_misc/**)",
+      "Edit(./**/_tmp/**)",
+      "Edit(./**/*.private.*)",
+      "Edit(./**/*.local.*)",
+      "Edit(./**/*local-*)"
     ]
   },
   "env": {

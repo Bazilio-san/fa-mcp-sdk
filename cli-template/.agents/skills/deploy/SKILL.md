@@ -1,5 +1,5 @@
 ---
-name: deploy-mcp-to-remote-server
+name: deploy
 description: >-
   Deploy, update, start, stop and diagnose named MCP server installations using host systemd by default or Docker
   when configured. Use for requests such as "deploy to dev-1", "update prod-2", or inspect status and logs.
@@ -19,8 +19,8 @@ Pass `--server <alias>` explicitly to every command. The alias identifies a fold
 through the registry. Do not interpret `dev` as the local workstation. `_example` is not a deployment target.
 
 ```bash
-node .agents/skills/deploy-mcp-to-remote-server/scripts/remote.cjs --server dev-1 show
-node .agents/skills/deploy-mcp-to-remote-server/scripts/remote.cjs --server dev-1 deploy
+node .agents/skills/deploy/scripts/remote.cjs --server dev-1 show
+node .agents/skills/deploy/scripts/remote.cjs --server dev-1 deploy
 ```
 
 Before making changes, run `show`: it prints the selected host, mode, branch, paths, service, port and domain without

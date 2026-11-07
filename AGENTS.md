@@ -133,15 +133,11 @@ Commit `.agents/skills/`; the generated links are ignored by Git.
 
 **Never touch anything under `.claude/**` directly — and never even attempt it.** This is absolute and covers
 **every kind of change**: creating a new file, editing an existing one, **deleting**, renaming or moving — for
-`SKILL.md`, scripts, hooks, agents, supporting files, `settings.json`, anything in the tree. Two layers block
-direct access on purpose, so a direct attempt always fails (it is not a glitch, and trying it first is the mistake
-to avoid):
+`SKILL.md`, scripts, hooks, agents, supporting files, `settings.json`, anything in the tree. This repository requires
+all such changes to use the atomic `scripts/fcp.js` channel. The harness also blocks direct shell modification of
+`.claude/` — `rm`, `mv`, `cp`, `>`/`>>` redirection, `sed -i`, and the like. Reading is fine.
 
-- `settings.json` denies the `Write` and `Edit` tools on `.claude/**`.
-- The harness blocks direct shell modification of `.claude/` too — `rm`, `mv`, `cp`, `>`/`>>` redirection,
-  `sed -i`, and the like. (Reading is fine.)
-
-Do **not** reach for `Write`/`Edit`/`rm` on a `.claude/` path and fall back when it is denied. The FIRST action for
+Do **not** reach for `Write`/`Edit`/`rm` on a `.claude/` path and fall back to another method. The FIRST action for
 any `.claude/` change is to invoke the `/edit-claude-files` skill and use its `scripts/fcp.js` channel from the
 start — `fcp.js` runs as `node` (allowlisted) and is the ONLY sanctioned way in:
 

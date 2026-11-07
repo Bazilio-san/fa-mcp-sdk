@@ -1,6 +1,8 @@
 ---
 name: edit-claude-files
-description: "Protocol for editing or creating any file under .claude/ (SKILL.md, scripts, hooks, agents, settings.json, etc.). Use whenever a file path starts with .claude/ — direct Write/Edit is blocked by settings.json, so changes MUST go through the scripts/fcp.js temp-copy workflow."
+description: >-
+  Protocol for creating, editing or deleting any file under .claude/ through the required scripts/fcp.js atomic
+  channel. Use it before changing settings, hooks, links or other files in that tree.
 allowed-tools: Read, Write, Edit, MultiEdit, Bash(node scripts/fcp.js *), Bash(rm:*)
 ---
 
@@ -16,8 +18,8 @@ This includes scripts in `.claude/skills/<skill>/scripts/`, hooks in `.claude/ho
 `settings.json`, and anything else inside the directory. Claude Code watches the whole tree and reloads on change; 
 direct writes risk partial reads and inconsistent state during multi-edit sessions.
 
-To enforce this, `settings.json` denies the `Write` and `Edit` tools on `.claude/**` outright.
-Attempting a direct edit will fail the permission check — that is intentional, not a bug.
+The project requires the temporary-copy protocol below independently of the active `settings.json` permissions.
+Do not attempt a direct edit even when the current permission rules would allow it.
 
 **Protocol — every file, every time:**
 
