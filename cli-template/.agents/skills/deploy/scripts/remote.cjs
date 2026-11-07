@@ -695,7 +695,7 @@ CRON
 chmod 0644 /etc/cron.d/mcp-update-${cronName}
 ${restartAliasRegistrationScript(cfg)}
 ${healthScript(cfg)}
-${cfg.reverseProxy ? reverseProxySnippet(cfg) : "echo 'Прямое внутреннее подключение; настройки nginx не изменяются.'"}
+${cfg.reverseProxy ? reverseProxySnippet(cfg) : "echo 'Direct internal connection; nginx settings remain unchanged.'"}
 `;
   say(`Deploying ${cfg.name} as a host systemd service on ${cfg.user}@${cfg.host}`);
   const code = sshRun(cfg, script);
@@ -767,7 +767,7 @@ docker create --name ${CONTAINER} --restart unless-stopped \
 docker cp "$SECRET_DIR" ${CONTAINER}:/run-secrets
 docker start ${CONTAINER}
 echo 'Container started. First boot clones + builds inside the container (a few minutes).'
-${cfg.reverseProxy ? reverseProxySnippet(cfg) : "echo 'Прямое внутреннее подключение; настройки nginx не изменяются.'"}
+${cfg.reverseProxy ? reverseProxySnippet(cfg) : "echo 'Direct internal connection; nginx settings remain unchanged.'"}
 `;
   say('Starting container and wiring up the reverse proxy (Caddy or nginx)...');
   code = sshRun(cfg, runScript);

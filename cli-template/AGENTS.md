@@ -445,23 +445,27 @@ template-literal contents untouched, which is exactly why they replace `+` wrapp
 
 
 
-## Дополнительные правила работы
+## Additional Working Rules
 
-Перед работой с отдельными рабочими копиями Git и общими изменениями читать
+Before working with Git worktrees and shared changes, read
 [AGENTS-GIT-WORKTREE-RULES.md](/AGENTS-GIT-WORKTREE-RULES.md).
 
-Перед длительной загрузкой или массовой обработкой данных читать
+Before long-running downloads or bulk data processing, read
 [AGENTS-LONG-RUNNING-JOBS.md](/AGENTS-LONG-RUNNING-JOBS.md).
 
-Перед созданием, изменением или выполнением плана задания читать
+Before creating, modifying, or executing a task plan, read
 [AGENTS-PROMPT-PLAN-RULES.md](/AGENTS-PROMPT-PLAN-RULES.md).
 
-Перед созданием или изменением инструкций модели и схем ответа читать
+Before creating or modifying model instructions and response schemas, read
 [AGENTS-PROMPT-RULES.md](/AGENTS-PROMPT-RULES.md).
 
-## Именованные размещения на серверах
+## Named Server Deployments
 
-Для просьб «выкати на dev-1», обновления и диагностики удалённого MCP-сервера использовать навык
-`.agents/skills/deploy/SKILL.md`. Если существует корневой `servers.local.md`, прочитать его
-для сопоставления названий с папками настроек. Затем прочитать правила выбранного размещения. Реестр необязателен;
-при его отсутствии использовать точное имя папки. Не выбирать сервер по умолчанию или по сходству названий.
+For requests such as "deploy to dev-1", updates, and diagnostics of a remote MCP server, use the skill at
+`.agents/skills/deploy/SKILL.md`. If `servers.local.md` exists at the project root, read it to map names to
+configuration directories. Then read the rules for the selected deployment. The registry is optional;
+if it is absent, use the exact directory name. Do not select a server by default or by similarity of names.
+
+## Property Order in config/*.yaml Files
+
+When editing `config/*.yaml`, follow the property ordering rules in `config/CONFIG-RULE.md`.

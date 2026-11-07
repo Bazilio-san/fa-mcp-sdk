@@ -1,11 +1,11 @@
-# Имена размещений
+# Deployment Names
 
-Скопируйте этот файл в `servers.local.md`, если нужны дополнительные названия серверов. Настоящий реестр не
-сохраняется в Git. Каждая строка должна однозначно указывать папку настроек; секреты в реестр не добавляйте.
+Copy this file to `servers.local.md` if additional server names are needed. The actual registry is not stored in Git.
+Each row must unambiguously identify a configuration directory; do not add secrets to the registry.
 
-| Имя папки | Дополнительные названия | Настройки и особенности |
+| Directory name / server alias | Additional names | Configuration and notes |
 |---|---|---|
-| dev-1 | первый тестовый сервер | `.agents/skills/deploy/configs/dev-1/` |
-| prod-2 | второй рабочий сервер | `.agents/skills/deploy/configs/prod-2/` |
+| dev-1 | first test server | `.agents/skills/deploy/configs/dev-1/` |
+| prod-2 | second production server | `.agents/skills/deploy/configs/prod-2/` |
 
-Это только образец: указанные папки не создаются автоматически и не являются доступными размещениями.
+This is only an example: these directories are not created automatically and do not represent available deployments.

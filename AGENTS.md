@@ -201,16 +201,20 @@ fit within 120 columns stay as plain quotes. For user-facing text where the exac
 breaks), keep the wording on one logical line inside the backticks even if that line is long — the formatter leaves
 template-literal contents untouched, which is exactly why they replace `+` wrapping.
 
-## Дополнительные правила работы
+## Additional Working Rules
 
-Перед работой с отдельными рабочими копиями Git и общими изменениями читать
+Before working with Git worktrees and shared changes, read
 [AGENTS-GIT-WORKTREE-RULES.md](/AGENTS-GIT-WORKTREE-RULES.md).
 
-Перед длительной загрузкой или массовой обработкой данных читать
+Before long-running downloads or bulk data processing, read
 [AGENTS-LONG-RUNNING-JOBS.md](/AGENTS-LONG-RUNNING-JOBS.md).
 
-Перед созданием, изменением или выполнением плана задания читать
+Before creating, modifying, or executing a task plan, read
 [AGENTS-PROMPT-PLAN-RULES.md](/AGENTS-PROMPT-PLAN-RULES.md).
 
-Перед созданием или изменением инструкций модели и схем ответа читать
+Before creating or modifying model instructions and response schemas, read
 [AGENTS-PROMPT-RULES.md](/AGENTS-PROMPT-RULES.md).
+
+## Property Order in config/*.yaml Files
+
+When editing `config/*.yaml`, follow the property ordering rules in `config/CONFIG-RULE.md`.

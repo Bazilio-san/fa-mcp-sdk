@@ -39,10 +39,10 @@ ad:
         - 'ldap://c2.corp.com'
       #> Marks this domain as default one
       default: true
-      #> Service account password.
-      password: '***'
       #> Service account (bind DN or username) used to connect to LDAP.
       username: '***'
+      #> Service account password.
+      password: '***'
   #> Cache TTL for group membership checks (default: 600000 = 10 min)
   # groupCacheTtlMs: 600000
 
@@ -52,6 +52,8 @@ ad:
 #> Supports 4 authentication methods: permanentServerTokens, basic, jwtToken, ntlm.
 #> ========================================================================
 adminPanel:
+  #> Enable/disable admin panel. false — /admin is not mounted at all.
+  enabled: true
   #> Authentication type: 'permanentServerTokens' | 'basic' | 'jwtToken' | 'ntlm' | 'none'
   #> Accepts a single type (string) or multiple types (array):
   #>   authType: 'basic'
@@ -65,8 +67,6 @@ adminPanel:
   authType:
     - permanentServerTokens
     - jwtToken
-  #> Enable/disable admin panel. false — /admin is not mounted at all.
-  enabled: true
 
 #> Built-in chat UI for testing MCP tools with an LLM.
 agentTester:
@@ -215,17 +215,17 @@ db:
         database: <database>
         #> To exclude the use of the database, you need to set host = ''
         host: ''
-        #> Human-readable label shown in diagnostics and admin pages
-        label: 'Your Database Label'
-        #> Database password
-        password: <password>
         #> PostgreSQL server port
         port: 5432
+        #> Database user
+        user: <user>
+        #> Database password
+        password: <password>
+        #> Human-readable label shown in diagnostics and admin pages
+        label: 'Your Database Label'
         #> List of PostgreSQL extensions required by the service (e.g., 'pgvector', 'uuid-ossp')
         usedExtensions: []
         #  - pgvector
-        #> Database user
-        user: <user>
 
 #> Headless testing of MCP tools via POST /agent-tester/api/chat/test (no browser, structured trace).
 headlessTester:
@@ -312,11 +312,11 @@ mcp:
   #> advertises `logging: {}` on initialize and accepts `logging/setLevel` to throttle
   #> notifications/message emissions.
   logging:
+    #> Set false to suppress the capability (compat tests against older clients).
+    enabled: true
     #> Initial severity threshold (Syslog ladder). Levels: debug | info | notice | warning |
     #> error | critical | alert | emergency. Default: info.
     defaultLevel: info
-    #> Set false to suppress the capability (compat tests against older clients).
-    enabled: true
     #> Max serialized `data` payload in bytes. Anything longer is truncated. Default: 4096.
     maxBodyBytes: 4096
   #> Multi Round-Trip Requests (MRTR, 2026-07-28): a tool may pause mid-call and ask the user for
@@ -371,11 +371,11 @@ mcp:
   #> `execution.taskSupport` in their declaration. The default store keeps tasks in process memory
   #> only and does not survive a restart.
   tasks:
+    #> Set true to advertise `tasks` capability and accept the task lifecycle methods. Default false.
+    enabled: false
     #> Default retention of a finished task, milliseconds, from creation. A client-requested ttl is
     #> clamped to [minTtlMs, maxTtlMs]. Default 3600000 (1 hour).
     defaultTtlMs: 3600000
-    #> Set true to advertise `tasks` capability and accept the task lifecycle methods. Default false.
-    enabled: false
     #> Max number of simultaneously retained tasks across all subjects. Oldest finished tasks are
     #> evicted first when the cap is reached. Default 1000.
     maxTasks: 1000
@@ -430,6 +430,8 @@ webServer:
   #> You can also use a custom authorization function.
   #> ========================================================================
   auth:
+    #> Enables/disables authorization
+    enabled: false
 
     #> ========================================================================
     #> Basic Authentication — Base64 encoded username:password
@@ -438,12 +440,10 @@ webServer:
     #> and set username and password to valid values
     #> ========================================================================
     basic:
-      #> Password for HTTP Basic auth
-      password: '***'
       #> Username for HTTP Basic auth
       username: ''
-    #> Enables/disables authorization
-    enabled: false
+      #> Password for HTTP Basic auth
+      password: '***'
 
     #> ========================================================================
     #> JWT TOKEN

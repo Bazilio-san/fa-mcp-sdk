@@ -1,40 +1,41 @@
 ---
 name: deploy-new-project
-description: Развёртывание нового проекта fa-mcp-sdk по конфигурационному файлу с проверкой сборки и запуска.
+description: Deploy a new fa-mcp-sdk project from a configuration file, verifying its build and startup.
 ---
 
-# Развёртывание нового проекта
+# Deploy a New Project
 
-Прочитать инструкции репозитория, README.md и разделы 03 и 07 в `cli-template/FA-MCP-SDK-DOC/`.
-Получить путь к конфигурационному файлу генератора и проверить `projectAbsPath`, порт и адрес сервера.
-Не выводить секреты из конфигурации и не включать их в историю Git или текст навыка.
+Read the repository instructions, README.md, and sections 03 and 07 in `cli-template/FA-MCP-SDK-DOC/`.
+Obtain the generator configuration file path and check `projectAbsPath`, the port, and the server address.
+Do not print configuration secrets or include them in Git history or the skill text.
 
-Установить опубликованную версию командой `npm install -g fa-mcp-sdk@latest`, проверить её через
-`npm list -g fa-mcp-sdk --depth=0`. Создать проект командой `fa-mcp <путь-к-конфигурации>`.
-Существующий каталог с пользовательскими изменениями не удалять без разрешения. Перед разрешённым удалением
-проверить абсолютный путь и отсутствие ссылок на чужие зависимости; в PowerShell применять `Remove-Item -LiteralPath`.
+Install the published version with `npm install -g fa-mcp-sdk@latest` and verify it using
+`npm list -g fa-mcp-sdk --depth=0`. Create the project with `fa-mcp <config-path>`.
+Do not delete an existing directory containing user changes without permission. Before an authorized deletion,
+verify the absolute path and the absence of links to unrelated dependencies. In PowerShell, use
+`Remove-Item -LiteralPath`.
 
-В новом проекте выполнить `npm install`, `npm run cb`, `npm run lint` и `npm run format`.
-Запустить `npm start`, проверить `/health`, `/ready` и запрос MCP через клиент из установленного пакета.
-Зафиксировать реально проверенные адреса, версию, результаты и способ остановки процесса.
-Не выдавать локальный запуск за проверку доступности удалённого сервера.
+In the new project, run `npm install`, `npm run cb`, `npm run lint`, and `npm run format`.
+Run `npm start`, check `/health` and `/ready`, and send an MCP request using a client from the installed package.
+Record the addresses actually checked, the version, results, and how the process was stopped.
+Do not present a local startup check as verification that the remote server is reachable.
 
-## Прямое обращение по HTTP внутри сети
+## Direct HTTP Access Within the Network
 
-Отдельное доменное имя и Nginx для прямого обращения к порту не требуются. В `config/local.yaml` указать
-`webServer.host: '0.0.0.0'`, нужный `webServer.port` и адрес `http://<сервер>:<порт>` в `swagger.servers`.
-Добавить имя сервера в `webServer.originHosts`, сохранив нужные локальные имена. Проверить фактическое поведение
-проверки Origin. На сервере разрешить входящие подключения к порту средствами сетевой защиты.
-Не применять созданный образец Nginx с HTTPS к такому размещению без отдельной настройки.
-Предупреждение переименования файла Nginx из-за двоеточия в `mcp.domain` на Windows само по себе не доказывает
-ошибку запуска HTTP; проверить сборку и запросы к работающему процессу.
+A separate domain name and Nginx are not required for direct port access. In `config/local.yaml`, set
+`webServer.host: '0.0.0.0'`, the required `webServer.port`, and `http://<server>:<port>` in `swagger.servers`.
+Add the server name to `webServer.originHosts`, preserving the necessary local names. Verify the actual behavior of
+the Origin check. Allow inbound connections to the port through the server's network security controls.
+Do not apply the generated HTTPS Nginx example to this deployment without configuring it separately.
+An Nginx file rename warning caused by a colon in `mcp.domain` on Windows does not by itself prove that HTTP startup
+failed; verify the build and requests to the running process.
 
-## Исправления
+## Fixes
 
-Ошибки настроек исправлять в `config/local.yaml` нового проекта. Запрашивать недостающие учётные данные,
-если они нужны для запуска или проверки требуемой функции. Не подменять такую проверку отключением функции.
-При ошибке библиотеки исправить исходники SDK и выполнить lint, format, typecheck и build в его репозитории.
-Если пользователь разрешил отправку и публикацию, сохранить исправление, отправить в GitHub, опубликовать пакет
-и повторить создание с опубликованной версии. Иначе запросить разрешение на конкретную готовую публикацию.
-Повторное удаление проекта допустимо только в пределах разрешения пользователя и после проверки его содержимого.
-При повторении одной причины без продвижения прекратить повторы, исследовать журналы и сообщить препятствие.
+Fix configuration errors in the new project's `config/local.yaml`. Request missing credentials if they are needed
+to start or verify a required feature. Do not replace verification by disabling the feature.
+For a library error, fix the SDK sources and run lint, format, typecheck, and build in its repository.
+If the user has authorized pushing and publishing, commit the fix, push it to GitHub, publish the package, and repeat
+generation using the published version. Otherwise, request permission for the specific prepared publication.
+Deleting the project again is allowed only within the user's authorization and after inspecting its contents.
+If the same cause recurs without progress, stop retrying, investigate the logs, and report the blocker.

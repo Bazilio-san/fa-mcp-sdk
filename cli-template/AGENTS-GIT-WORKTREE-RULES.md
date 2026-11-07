@@ -1,27 +1,27 @@
-# Правила отдельных рабочих копий Git
+# Git Worktree Rules
 
-Читать перед работой в отдельных рабочих копиях, общим каталогом и объединением ветвей. Основную ветку определять
-по настройкам репозитория. Не предполагать её имя. Перед изменениями проверять `git status`.
+Read before working in separate worktrees, the shared directory, or integrating branches. Determine the main branch
+from the repository settings; do not assume its name. Check `git status` before making changes.
 
-## Объединение
+## Integration
 
-Использовать `git rebase` и `git merge --ff-only`, не создавать запись слияния. Разрешать конфликты по целевому
-поведению, сохраняя договорённости библиотеки и создаваемых проектов. При продвижении основной ветки повторять
-перенос и затронутые проверки. Не восстанавливать удалённый код механическим выбором одной стороны конфликта.
+Use `git rebase` and `git merge --ff-only`; do not create merge commits. Resolve conflicts according to the intended
+behavior while preserving the contracts of the library and generated projects. If the main branch advances, rebase
+again and repeat the affected checks. Do not restore deleted code by mechanically choosing one side of a conflict.
 
-## Совместная работа
+## Collaboration
 
-Не перезаписывать чужие изменения и не включать их в свою запись. При необходимости изоляции использовать отдельную
-рабочую копию. Перед записью проверять `git log -1 --stat`: если соседняя сессия уже сохранила изменения, сообщить
-об этом и не переписывать историю. Не создавать записи Git без прямого указания пользователя.
+Do not overwrite other people's changes or include them in your commit. Use a separate worktree when isolation is
+needed. Before committing, check `git log -1 --stat`: if another session has already committed changes, report this
+and do not rewrite history. Do not create Git commits without an explicit user instruction.
 
-При явно порученной работе нескольких исполнителей закреплять за каждым отдельные файлы и перечислять запреты.
-Не изменять переданные исполнителю файлы одновременно с ним. После его работы проверять `git diff`, окончания строк,
-непреднамеренные удаления и проверки. Исходную ветку сверять с актуальной основной веткой.
-Ценные неотслеживаемые данные сохранять по абсолютному пути в основном каталоге.
+When the user explicitly requests multiple agents, assign separate files to each and list prohibited actions.
+Do not modify assigned files while their agent is working on them. Afterwards, review `git diff`, line endings,
+unintended deletions, and checks. Compare the source branch against the current main branch.
+Keep valuable untracked data at an absolute path in the main working directory.
 
-## Удаление
+## Deletion
 
-Зависимости устанавливать отдельно. Перед удалением проверить абсолютный путь, неотслеживаемые данные и ссылки
-на `node_modules`. Не допускать удаления зависимостей основного каталога через ссылку. Локальные настройки копировать
-только для нуждающихся в них проверок. Не сохранять секреты в истории Git.
+Install dependencies separately. Before deleting anything, verify the absolute path, untracked data, and links to
+`node_modules`. Never delete the main directory's dependencies through a link. Copy local settings only for checks
+that require them. Do not store secrets in Git history.

@@ -1,24 +1,24 @@
 #!/usr/bin/env node
 
 /**
- * Связывает навыки Codex и Claude Code на любой операционной системе.
+ * Links Codex and Claude Code skills on any operating system.
  *
- * Устройство:
+ * Layout:
  *
- *   .agents/skills/          основное хранилище навыков: настоящие файлы (Codex читает его сам)
- *   .claude/skills -> ../.agents/skills   (ссылка, через которую навыки видит Claude Code)
+ *   .agents/skills/          canonical skill storage: real files (read directly by Codex)
+ *   .claude/skills -> ../.agents/skills   (link used by Claude Code to access skills)
  *
- * Корень проекта определяется по расположению сценария (scripts/..), поэтому результат не зависит
- * от рабочей папки. Параметр --repo <путь> задаёт корень явно.
+ * The project root is determined by the script location (scripts/..), so the result is independent
+ * of the working directory. Use --repo <path> to specify the root explicitly.
  *
- * Связываются только совместимые сущности. Не связываются:
- *   - .claude/agents    — агенты Codex хранятся в .codex/agents/*.toml;
- *   - .claude/commands  — команды переносятся в навыки;
- *   - .claude/settings  — у Codex свои .codex/config.toml и hooks.json;
- *   - .mcp.json         — серверы MCP Codex описываются в .codex/config.toml.
+ * Only compatible entities are linked. The following are not linked:
+ *   - .claude/agents    — Codex agents are stored in .codex/agents/*.toml;
+ *   - .claude/commands  — commands are migrated to skills;
+ *   - .claude/settings  — Codex has its own .codex/config.toml and hooks.json;
+ *   - .mcp.json         — Codex MCP servers are configured in .codex/config.toml.
  *
- * Использование: node scripts/claude-2-agents-symlink.js [setup|remove|status] [--dry-run] [--force]
- *                [--repo <путь>]
+ * Usage: node scripts/claude-2-agents-symlink.js [setup|remove|status] [--dry-run] [--force]
+ *                [--repo <path>]
  */
 
 import fs from 'node:fs';
@@ -32,13 +32,13 @@ const FCP = path.join(DEFAULT_REPO_ROOT, 'scripts/fcp.js');
 
 function mutate(args, dryRun) {
   if (dryRun) {
-    log(`[пробный прогон] fcp ${args.join(' ')}`);
+    log(`[dry run] fcp ${args.join(' ')}`);
   } else {
     execFileSync(process.execPath, [FCP, ...args], { stdio: 'pipe' });
   }
 }
 
-// Проверяем всё дерево до переноса: различающиеся файлы требуют ручного объединения.
+// Check the entire tree before migration: differing files require a manual merge.
 function planMerge(source, destination, operations) {
   const target = fs.lstatSync(destination, { throwIfNoEntry: false });
   if (!target) {
@@ -51,7 +51,7 @@ function planMerge(source, destination, operations) {
       planMerge(path.join(source, name), path.join(destination, name), operations);
     }
   } else if (!(original.isFile() && target.isFile() && fs.readFileSync(source).equals(fs.readFileSync(destination)))) {
-    throw new Error(`Конфликт при переносе навыков: ${source} и ${destination}. Объедините их вручную.`);
+    throw new Error(`Skill migration conflict: ${source} and ${destination}. Merge them manually.`);
   }
   operations.push(['--rm', source]);
 }
@@ -64,12 +64,12 @@ function migrateSkills(repoRoot, options) {
   const operations = [];
   if (source.isSymbolicLink) {
     if (!old.exists || old.isSymbolicLink || !sameResolvedPath(canonical, legacy)) {
-      throw new Error(`Основной каталог ${canonical} является посторонней ссылкой. Перенос остановлен.`);
+      throw new Error(`Canonical directory ${canonical} is an unrelated link. Migration stopped.`);
     }
     operations.push(['--rm', canonical], ['--move', canonical, legacy]);
   } else if (old.exists && !old.isSymbolicLink) {
     if (!fs.lstatSync(legacy).isDirectory()) {
-      throw new Error(`Ожидался каталог навыков: ${legacy}`);
+      throw new Error(`Expected a skills directory: ${legacy}`);
     }
     planMerge(legacy, canonical, operations);
   }
@@ -116,14 +116,14 @@ function parseArgs(argv) {
     } else if (arg === '--repo') {
       const value = argv[i + 1];
       if (!value) {
-        throw new Error('После --repo требуется путь.');
+        throw new Error('A path is required after --repo.');
       }
       result.repo = path.resolve(value);
       i += 1;
     } else if (arg.startsWith('--repo=')) {
       result.repo = path.resolve(arg.slice('--repo='.length));
     } else if (arg.startsWith('-')) {
-      throw new Error(`Неизвестный параметр: ${arg}`);
+      throw new Error(`Unknown option: ${arg}`);
     } else {
       positional.push(arg);
     }
@@ -132,7 +132,7 @@ function parseArgs(argv) {
   if (positional[0]) {
     const mode = positional[0];
     if (!['setup', 'remove', 'status'].includes(mode)) {
-      throw new Error(`Неизвестный режим: ${mode}. Допустимы setup, remove и status.`);
+      throw new Error(`Unknown mode: ${mode}. Expected setup, remove, or status.`);
     }
     result.mode = mode;
   }
@@ -145,7 +145,7 @@ function log(message) {
 }
 
 function warn(message) {
-  process.stderr.write(`ПРЕДУПРЕЖДЕНИЕ: ${message}${os.EOL}`);
+  process.stderr.write(`WARNING: ${message}${os.EOL}`);
 }
 
 function pathInfo(targetPath) {
@@ -195,27 +195,27 @@ function currentTarget(linkPath) {
   try {
     return readLinkTargetAbsolute(linkPath);
   } catch {
-    return 'неизвестно';
+    return 'unknown';
   }
 }
 
 function ensureDir(dirPath, dryRun) {
   if (pathInfo(dirPath).exists) {
     if (!fs.statSync(dirPath).isDirectory()) {
-      throw new Error(`Ожидался каталог: ${dirPath}`);
+      throw new Error(`Expected a directory: ${dirPath}`);
     }
     return;
   }
 
   if (dryRun) {
-    log(`[пробный прогон] создать каталог ${dirPath}`);
+    log(`[dry run] create directory ${dirPath}`);
     return;
   }
 
   fs.mkdirSync(dirPath, { recursive: true });
 }
 
-// В Windows создаётся точка соединения каталогов (junction): для неё не нужны права администратора.
+// On Windows, a directory junction is created; administrator privileges are not required.
 function createDirectoryLink(sourcePath, linkPath, dryRun) {
   const parentDir = path.dirname(linkPath);
   ensureDir(parentDir, dryRun);
@@ -224,7 +224,7 @@ function createDirectoryLink(sourcePath, linkPath, dryRun) {
     process.platform === 'win32' ? path.resolve(sourcePath) : path.relative(parentDir, sourcePath) || '.';
 
   if (dryRun) {
-    log(`[пробный прогон] ссылка ${linkPath} -> ${targetForLink}`);
+    log(`[dry run] link ${linkPath} -> ${targetForLink}`);
     return;
   }
 
@@ -241,7 +241,7 @@ function setupMapping(repoRoot, mapping, options) {
 
   if (!link.exists) {
     createDirectoryLink(sourcePath, linkPath, options.dryRun);
-    log(`Готово: создана ссылка ${mapping.link} -> ${mapping.source}`);
+    log(`Done: created link ${mapping.link} -> ${mapping.source}`);
     return;
   }
 
@@ -251,29 +251,29 @@ function setupMapping(repoRoot, mapping, options) {
         mutate(['--rm', linkPath], options.dryRun);
         createDirectoryLink(sourcePath, linkPath, options.dryRun);
       }
-      log(`Готово: ${mapping.link} уже указывает на ${mapping.source}`);
+      log(`Done: ${mapping.link} already points to ${mapping.source}`);
       return;
     }
 
     if (!options.force) {
       throw new Error(
-        `${mapping.link} уже является ссылкой, но указывает не на ${mapping.source}. Для замены добавьте --force. Текущая цель: ${currentTarget(linkPath)}`,
+        `${mapping.link} is already a link but does not point to ${mapping.source}. Add --force to replace it. Current target: ${currentTarget(linkPath)}`,
       );
     }
 
     if (options.dryRun) {
-      log(`[пробный прогон] удалить прежнюю ссылку ${linkPath}`);
+      log(`[dry run] remove old link ${linkPath}`);
     } else {
       mutate(['--rm', linkPath], false);
     }
 
     createDirectoryLink(sourcePath, linkPath, options.dryRun);
-    log(`Готово: ссылка ${mapping.link} заменена и указывает на ${mapping.source}`);
+    log(`Done: replaced link ${mapping.link}; it now points to ${mapping.source}`);
     return;
   }
 
   throw new Error(
-    `${mapping.link} уже существует и не является ссылкой. Настоящие файлы и каталоги не перезаписываются: сначала перенесите их вручную.`,
+    `${mapping.link} already exists and is not a link. Real files and directories are not overwritten: migrate them manually first.`,
   );
 }
 
@@ -284,29 +284,29 @@ function removeMapping(repoRoot, mapping, options) {
   const link = pathInfo(linkPath);
 
   if (!link.exists) {
-    log(`Готово: ${mapping.link} отсутствует`);
+    log(`Done: ${mapping.link} is absent`);
     return;
   }
 
   if (!link.isSymbolicLink) {
-    warn(`${mapping.link} существует, но не является ссылкой. Пропускаю.`);
+    warn(`${mapping.link} exists but is not a link. Skipping.`);
     return;
   }
 
   if (!sameResolvedPath(linkPath, sourcePath) && !options.force) {
     warn(
-      `${mapping.link} является ссылкой, но указывает не на ${mapping.source}. Для удаления добавьте --force. Текущая цель: ${currentTarget(linkPath)}`,
+      `${mapping.link} is a link but does not point to ${mapping.source}. Add --force to remove it. Current target: ${currentTarget(linkPath)}`,
     );
     return;
   }
 
   if (options.dryRun) {
-    log(`[пробный прогон] удалить ссылку ${linkPath}`);
+    log(`[dry run] remove link ${linkPath}`);
     return;
   }
 
   mutate(['--rm', linkPath], false);
-  log(`Готово: ссылка ${mapping.link} удалена`);
+  log(`Done: removed link ${mapping.link}`);
 }
 
 function statusMapping(repoRoot, mapping) {
@@ -317,22 +317,22 @@ function statusMapping(repoRoot, mapping) {
   const link = pathInfo(linkPath);
 
   log(`\n[${mapping.name}]`);
-  log(`источник: ${mapping.source} ${source.exists ? 'существует' : 'отсутствует'}`);
-  log(`ссылка:   ${mapping.link} ${link.exists ? 'существует' : 'отсутствует'}`);
+  log(`source: ${mapping.source} ${source.exists ? 'exists' : 'absent'}`);
+  log(`link:     ${mapping.link} ${link.exists ? 'exists' : 'absent'}`);
 
   if (link.exists && link.isSymbolicLink) {
     const ok = source.exists && sameResolvedPath(linkPath, sourcePath);
-    log(`цель:     ${currentTarget(linkPath)}`);
-    log(`состояние: ${ok ? 'ссылка верна' : 'ссылка указывает не туда'}`);
+    log(`target:     ${currentTarget(linkPath)}`);
+    log(`status: ${ok ? 'link is correct' : 'link points to the wrong target'}`);
     return;
   }
 
   if (link.exists && !link.isSymbolicLink) {
-    log('состояние: на месте ссылки лежит настоящий каталог или файл');
+    log('status: a real directory or file occupies the link location');
     return;
   }
 
-  log('состояние: ссылка не создана');
+  log('status: link has not been created');
 }
 
 function main() {
@@ -340,14 +340,14 @@ function main() {
   const repoRoot = path.resolve(options.repo);
 
   if (!pathInfo(repoRoot).exists) {
-    throw new Error(`Каталог проекта не существует: ${repoRoot}`);
+    throw new Error(`Project directory does not exist: ${repoRoot}`);
   }
 
-  log(`проект: ${repoRoot}`);
-  log(`режим: ${options.mode}${options.dryRun ? ', пробный прогон' : ''}${options.force ? ', с заменой' : ''}`);
+  log(`project: ${repoRoot}`);
+  log(`mode: ${options.mode}${options.dryRun ? ', dry run' : ''}${options.force ? ', with replacement' : ''}`);
 
   if (options.mode === 'setup' && migrateSkills(repoRoot, options) && options.dryRun) {
-    log('[пробный прогон] после переноса будут созданы ссылки .claude/skills и .qwen/skills -> .agents/skills');
+    log('[dry run] after migration, links .claude/skills and .qwen/skills -> .agents/skills will be created');
     return;
   }
 
@@ -362,15 +362,13 @@ function main() {
   }
 
   log('');
-  log('Связываются только навыки: это единственная сущность, одинаково понятная Codex и Claude Code.');
-  log(
-    'Не связывайте напрямую .claude/agents, .claude/commands, настройки, обработчики событий и описание серверов MCP.',
-  );
+  log('Only skills are linked: they are the only entity understood in the same way by Codex and Claude Code.');
+  log('Do not directly link .claude/agents, .claude/commands, settings, event hooks, or MCP server definitions.');
 }
 
 try {
   main();
 } catch (error) {
-  process.stderr.write(`ОШИБКА: ${error.message}${os.EOL}`);
+  process.stderr.write(`ERROR: ${error.message}${os.EOL}`);
   process.exit(1);
 }

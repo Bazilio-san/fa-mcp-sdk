@@ -1,25 +1,25 @@
-# Наблюдение за длительной обработкой данных
+# Monitoring Long-Running Data Processing
 
-Применять при загрузке и массовой обработке данных. Эти правила не относятся к разработке, сборке и развёртыванию.
+Apply these rules to downloads and bulk data processing. They do not apply to development, builds, or deployment.
 
-Для обработки дольше пяти минут измерять завершённый и оставшийся объём, скорость, успехи и ошибки, занятые
-и свободные места одновременного выполнения, длительность этапов и стоимость платных обращений.
-Каждые две минуты либо с указанным пользователем интервалом сообщать время измерения, изменения показателей,
-стоимость с начала работы и прогноз общей стоимости, продвижение этапов, затруднения и ожидаемое время завершения.
-Прогноз строить по нескольким измерениям. При нестабильной скорости объяснять недостаток данных, не выдумывать сроки.
+For processing that takes longer than five minutes, measure completed and remaining volume, speed, successes and
+errors, occupied and available concurrency slots, stage durations, and the cost of paid requests.
+Every two minutes, or at the interval specified by the user, report the measurement time, changes in metrics,
+cost so far and estimated total cost, stage progress, difficulties, and estimated completion time.
+Base forecasts on several measurements. If speed is unstable, explain the lack of data rather than inventing a deadline.
 
-## Остановка бесполезных повторов
+## Stopping Unproductive Retries
 
-Остановить текущий подход и провести диагностику, если:
+Stop the current approach and investigate if:
 
-- Две проверки подряд не показывают продвижения.
-- Скорость составляет половину необходимой для срока или меньше.
-- Одинаковая ошибка или недоступность повторилась трижды.
-- Повтор запуска не сопровождается устранением причины.
-- Стоимость или длительность этапа несоразмерна результату.
-- Часть обработки не меняется, хотя должна продвигаться.
+- Two consecutive checks show no progress.
+- Speed is half the rate needed to meet the deadline or lower.
+- The same error or unavailability occurs three times.
+- A restart is attempted without addressing the cause.
+- A stage's cost or duration is disproportionate to its result.
+- Part of the processing remains unchanged when it should be advancing.
 
-Прекратить одинаковые повторы и новые платные обращения. Найти причину по журналам, очередям и длительности этапов.
-Исправить причину либо выбрать более быстрый способ с тем же результатом, затем пересчитать прогноз.
-Если нужны доступ или решение пользователя, сразу назвать препятствие, необходимое действие и последствия ожидания.
-Не скрывать остановку за сообщениями о продолжении работы.
+Stop identical retries and new paid requests. Find the cause using logs, queues, and stage durations.
+Fix the cause or choose a faster approach with the same result, then recalculate the forecast.
+If access or a user decision is needed, immediately state the blocker, required action, and consequences of waiting.
+Do not conceal a stop behind messages claiming that work is continuing.

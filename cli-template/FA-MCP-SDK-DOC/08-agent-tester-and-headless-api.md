@@ -231,9 +231,9 @@ Before using the Agent Tester or Headless API, verify that the OpenAI API key is
 npm run check-llm
 ```
 
-Проверка использует Responses API, настроенный адрес поставщика и модель `agentTester.openAi.defaultModel`.
-Имя модели можно передать аргументом команды. Ключ доступа в вывод не попадает. Успех обозначается `OK`,
-ошибка — `FAIL: <причина>`. Код завершения равен соответственно `0` или `1`.
+The check uses the Responses API, the configured provider URL, and the `agentTester.openAi.defaultModel` model.
+The model name can be supplied as a command argument. The access key is never printed. Success is reported as `OK`,
+and failure as `FAIL: <reason>`. The corresponding exit codes are `0` and `1`.
 
 For custom OpenAI-compatible endpoints pass the model name:
 
@@ -1023,38 +1023,38 @@ These test-ids are part of the public contract of the Agent Tester UI. Once adde
 - Visible text (localized / editable copy — changes break tests)
 - XPath or positional selectors (brittle to layout changes)
 
-## Обращение к модели через Responses API
+## Model Requests Through the Responses API
 
-Проверочный чат использует Responses API по умолчанию, включая создание краткого содержания истории.
-Обычный разговор и проверка с подробным протоколом используют общий цикл выполнения инструментов.
-В `modelConfig` запроса можно передать следующие параметры:
+Agent Tester uses the Responses API by default, including for history summarization.
+Regular chat and testing with detailed traces share the same tool execution loop.
+The request's `modelConfig` accepts the following parameters:
 
-| Поле | Назначение |
+| Field | Purpose |
 |---|---|
-| `api` | `responses` по умолчанию; `chat-completions` — явно выбранная совместимость с другим поставщиком |
-| `reasoningEffort` | Уровень рассуждений, поддерживаемый выбранной моделью |
-| `temperature` | Передавать только для поддерживающих его моделей; при отсутствии поле не отправляется |
-| `maxTokens` | Максимальное число выходных токенов, включая рассуждения |
+| `api` | Defaults to `responses`; explicitly select `chat-completions` for compatibility with another provider |
+| `reasoningEffort` | Reasoning effort supported by the selected model |
+| `temperature` | Supply only for models that support it; the field is omitted when absent |
+| `maxTokens` | Maximum output tokens, including reasoning |
 
-Автоматического переключения способа обращения после ошибки нет. Адрес и ключ поставщика по-прежнему задаются
-через `agentTester.openAi` либо через существующие поля `modelConfig.baseURL` и `modelConfig.apiKey`.
-Параметры `api` и `reasoningEffort` доступны в запросе программного интерфейса; отдельных полей в окне настроек нет.
-`check-llm` проверяет основной способ обращения — Responses API.
+There is no automatic API fallback after an error. The provider URL and key are still configured through
+`agentTester.openAi` or the existing `modelConfig.baseURL` and `modelConfig.apiKey` fields.
+The `api` and `reasoningEffort` parameters are available in API requests; there are no separate settings dialog fields.
+`check-llm` tests the primary API, Responses.
 
-История хранится на нашем сервере; запросы содержат `store: false`. Исходные элементы ответа, включая зашифрованные
-рассуждения, сохраняются для последующего запроса. Вызовы функций связываются с результатами через `call_id`.
-Схемы произвольных MCP-инструментов передаются с `strict: false`. Сами инструменты выполняет наш MCP-клиент.
-Данные `appCalls` и полные результаты для отображения приложений сохраняются независимо от сокращённого текста,
-передаваемого модели. Идентификатор `callId` соответствует `call_id` Responses API.
+History is stored on our server; requests include `store: false`. Original response items, including encrypted
+reasoning, are retained for the next request. Function calls are linked to their results through `call_id`.
+Arbitrary MCP tool schemas are sent with `strict: false`. Our MCP client executes the tools.
+The `appCalls` data and complete results for rendering apps are retained independently of the shortened text sent
+to the model. The `callId` identifier corresponds to the Responses API's `call_id`.
 
-Сокращение истории выполняется по завершённым группам разговора после успешного создания краткого содержания.
-Последняя группа и текущий запрос сохраняются. При ошибке обращения история возвращается к предыдущему состоянию.
-Смена модели, поставщика, ключа либо способа обращения начинает новую историю модели в той же сессии отображения.
-Результаты уже выполненных инструментов вне истории автоматически не отменяются.
+History is compacted by completed conversation groups after successful summarization.
+The latest group and current request are retained. If a request fails, history is restored to its previous state.
+Changing the model, provider, key, or API starts a new model history within the same display session.
+The external effects of tools already executed are not automatically undone.
 
-Отказ модели и незавершённый ответ считаются ошибкой. Повторы сетевых запросов выполняет библиотека OpenAI;
-отдельного дополнительного цикла повторов нет. Потоковая выдача текста этим изменением не добавляется.
-Внутренний слой сохраняет привычное представление сообщений для существующего протокола проверки и дополнительно
-хранит исходный `output`; он не восстанавливает рассуждения из текстового протокола.
+A model refusal or incomplete response is treated as an error. The OpenAI library retries network requests;
+there is no additional retry loop. This change does not add text streaming.
+The internal layer preserves the existing message representation for test traces and additionally retains the
+original `output`; it does not reconstruct reasoning from the text trace.
 
-Проверка реализации в репозитории библиотеки: `npm run build` и `node --test tests/responses.test.mjs`.
+Verify the implementation in the library repository with `npm run build` and `node --test tests/responses.test.mjs`.

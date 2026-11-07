@@ -1,38 +1,40 @@
-# Правила планов заданий
+# Task Plan Rules
 
-Читать перед созданием, изменением и выполнением плана. Перед изменением инструкций модели дополнительно читать
+Read before creating, modifying, or executing a plan. Before modifying model instructions, also read
 [AGENTS-PROMPT-RULES.md](/AGENTS-PROMPT-RULES.md).
 
-## Размещение
+## Location
 
-Активные планы размещать в `_prompts/_progress`, завершённые — в `_prompts/done`. Для отложенных использовать
-`_prompts/_shelf`, для будущих — `_prompts/_future`. Имя начинать временем создания `YYYY-MM-DD--HH-MM--`.
-Перемещать в `done` только после выполнения всех пунктов, сохраняя имя.
+Keep active plans in `_prompts/_progress`, completed plans in `_prompts/done`, deferred plans in `_prompts/_shelf`,
+and future plans in `_prompts/_future`. Prefix filenames with the creation time, `YYYY-MM-DD--HH-MM--`.
+Move a plan to `done` only after completing every item, preserving its filename.
 
-## Содержание
+## Contents
 
-Сразу после заголовка разместить `## Суть`: понятное неспециалисту описание без путей, имён функций, полей,
-параметров и необъяснённых сокращений. Использовать нужные подразделы: «Проблема», «Текущее состояние», «Решение»,
-«Как будет». Следом разместить `## Исполнителю (LLM)` с постоянными указаниями по выполнению.
+Immediately after the title, add `## Overview`: an explanation understandable to a nonspecialist, without paths,
+function names, fields, parameters, or unexplained abbreviations. Use the subsections needed: "Problem", "Current
+State", "Solution", and "Expected Outcome". Follow this with `## Instructions for the Agent (LLM)` containing standing
+execution instructions.
 
-Разбить работу на этапы со списками `- [ ]`. Каждый пункт должен описывать проверяемый результат и допускать
-безопасное повторное выполнение. Начинать этап способом независимой проверки его завершённости.
-Последним этапом сделать обновление документации. Закончить разделом `## Заметки выполнения` с датированными записями.
-Включать проверенные пути, точки входа, исходные значения, решения, требования, команды и условия приёмки.
-План должен быть достаточен исполнителю без истории разговора и после прерывания сессии.
-Факты отделять от требований; не ссылаться на «обсуждённый подход» вместо описания решения.
+Divide the work into stages with `- [ ]` checklists. Each item must describe a verifiable result and allow safe
+repetition. Begin each stage with an independent way to check its completion. Make documentation updates the final
+stage. End with `## Execution Notes` containing dated entries. Include verified paths, entry points, initial values,
+decisions, requirements, commands, and acceptance criteria. The plan must be sufficient without conversation history
+and after a session interruption. Separate facts from requirements; describe the solution instead of referring to
+"the approach discussed earlier".
 
-## Выполнение
+## Execution
 
-Сразу после завершения каждого пункта менять отметку на `- [x]` в самом плане. Сохранять открытые вопросы,
-решения и результаты проверок в заметках. Не создавать записи Git без прямого поручения пользователя.
-При работе в отдельной рабочей копии и наличии разрешения на записи перед очередным переносом сохранять изменения
-и план, затем выполнять `git rebase` на актуальную основную ветку. Не затрагивать чужие изменения.
-Объединять ветви согласно [AGENTS-GIT-WORKTREE-RULES.md](/AGENTS-GIT-WORKTREE-RULES.md).
+Immediately after completing each item, mark it `- [x]` in the plan. Record open questions, decisions, and check
+results in the notes. Do not create Git commits without an explicit user instruction. When using a separate worktree
+with permission to commit, save changes and the plan before each rebase onto the current main branch. Do not touch
+other people's changes. Integrate branches according to
+[AGENTS-GIT-WORKTREE-RULES.md](/AGENTS-GIT-WORKTREE-RULES.md).
 
-После каждого пункта показывать полосу из 64 символов: доля `█` равна доле выполненных пунктов с округлением,
-остальные символы — `░`. Рядом показывать целый процент, следующей строкой — количество закрытых и всех пунктов.
-Выводить обе строки в блоке с сохранением пробелов. При длительной работе повторять не реже раза в 20 минут.
-Включать эти указания в каждый создаваемый план. Отметки списка являются единственным источником хода выполнения.
+After each item, display a 64-character bar: the rounded proportion of `█` characters equals the proportion of
+completed items; use `░` for the remainder. Show an integer percentage beside it and completed/total counts on the
+next line. Put both lines in a whitespace-preserving block. During long-running work, repeat at least every
+20 minutes. Include these instructions in every new plan. Checklist marks are the sole source of progress figures.
 
-В библиотеке обновлять соответствующие документы и `cli-template/FA-MCP-SDK-DOC/`, в созданном проекте — его документы.
+In the library, update the relevant documents and `cli-template/FA-MCP-SDK-DOC/`; in a generated project, update its
+documentation.
