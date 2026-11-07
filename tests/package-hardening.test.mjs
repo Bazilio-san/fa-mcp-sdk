@@ -4,7 +4,7 @@ import { execFileSync } from 'node:child_process';
 import { readFile, writeFile, mkdir, mkdtemp, copyFile, symlink, realpath } from 'node:fs/promises';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { dirname, resolve, join } from 'node:path';
-import yaml from 'js-yaml';
+import * as yaml from 'js-yaml';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
 const npm = (args, cwd) =>

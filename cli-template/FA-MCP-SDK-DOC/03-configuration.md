@@ -499,7 +499,7 @@ between them — the era is derived from the traffic itself.
 | Legacy | `2025-11-25` and earlier | An `initialize` request, or an `Mcp-Session-Id` header | Sessionful: handshake first, session-scoped capabilities, log level and subscriptions |
 
 Modern traffic is served by the official `@modelcontextprotocol/server@2` package; legacy traffic keeps the
-`@modelcontextprotocol/sdk@1.29` session path. On the STDIO transport the era is decided from the connection's
+`@modelcontextprotocol/sdk@1.32.2` session path. On the STDIO transport the era is decided from the connection's
 opening message and pinned for the lifetime of the process. Several `mcp.*` keys therefore behave differently
 depending on which client is talking — each section below states the era it applies to.
 
@@ -718,7 +718,7 @@ Stack traces and internal paths are NEVER included in `error.data` (standard §1
 
 ## Runtime and packaged configuration
 
-Node.js 20 or later is required by the SDK and generated projects, including the direct MCP v2 dependencies.
+Node.js 22.12 or later is required by the SDK and generated projects, including their development tools.
 The package includes only `default.yaml`, `development.yaml`, `production.yaml`, `test.yaml`,
 `custom-environment-variables.yaml` and the generator template `_local.yaml` from `config/`.
 Personal `local.yaml`, `local-*.yaml`, `local_*.yaml` and other unlisted variants stay on disk and are excluded

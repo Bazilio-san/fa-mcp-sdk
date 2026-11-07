@@ -121,7 +121,7 @@ copies only shared defaults, disables external service startup, allocates local 
 processes. Tests do not import personal configuration. Official schemas and original licenses are stored in
 `tests/fixtures/mcp-2026-07-28/README.md`; validation needs no network. These targeted checks do not establish
 complete protocol conformance. The legacy task suites verify that their nested `task`, `ttl` and `pollInterval`
-formats remain unchanged. The supported runtime is Node.js 20 or later.
+formats remain unchanged. The supported runtime is Node.js 22.12 or later.
 
 ### Authorization compatibility matrix
 

@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.12.138] - 2026-11-07
+
+### Breaking
+
+- Require Node.js 22.12 or later for the SDK, generated projects, and their development tools.
+
+### Added
+
+- Export `TesterHeaderRequirement` from the package root for generated projects and custom integrations.
+- Add a dedicated guide for issuing JWTs through the HTTP endpoint and verifying the resulting credential.
+
+### Changed
+
+- Make host systemd the default remote deployment mode; select Docker explicitly with `deployment.mode: docker`.
+- Update MCP, OpenAI, JWT, YAML, PostgreSQL vector, web, and development dependencies to stable releases.
+
+### Fixed
+
+- Make remote uninstall remove the project checkout safely while preserving its separate deployment state.
+
 ## [0.12.132] - 2026-11-06
 
 ### Added

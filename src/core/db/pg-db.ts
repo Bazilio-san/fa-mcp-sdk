@@ -75,7 +75,7 @@ export const queryMAIN = async <R extends QueryResultRow = any>(
   }
   arg.connectionId = connectionId;
   if (appConfig.db.postgres!.dbs[connectionId]?.usedExtensions?.includes('pgvector')) {
-    arg.registerTypesFunctions = [pgvector.registerType];
+    arg.registerTypesFunctions = [pgvector.registerTypes];
   }
   try {
     const res = await queryPg<R>(arg as IQueryPgArgs);

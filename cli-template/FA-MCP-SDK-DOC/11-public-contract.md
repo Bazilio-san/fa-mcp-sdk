@@ -21,7 +21,7 @@ second port, and no separate deployment.
 | **legacy** | `2025-11-25` and earlier | `initialize` handshake plus `Mcp-Session-Id` session state                 |
 
 The modern era is served by the official `@modelcontextprotocol/server@2` package (`src/core/mcp/v2/`),
-the legacy era by `@modelcontextprotocol/sdk@1.29` (`src/core/mcp/create-mcp-server.ts`).
+the legacy era by `@modelcontextprotocol/sdk@1.32.2` (`src/core/mcp/create-mcp-server.ts`).
 
 | Transport          | Standard | Status | Eras   | Notes                                                        |
 |--------------------|----------|--------|--------|---------------------------------------------------------------|
@@ -597,7 +597,7 @@ Each question key is unique over a task's lifetime. The implementation rejects i
 than accumulating them and never resumes on an unknown or already answered key. Current-request capabilities
 gate pending questions, including form versus URL elicitation. Unsupported questions are never emitted.
 Background execution emits no request-scoped progress or log notifications. The memory store requires one
-server instance and provides no restart recovery. Runtime requirement: Node.js 20 or later.
+server instance and provides no restart recovery. Runtime requirement: Node.js 22.12 or later.
 
 These rules follow the separately versioned
 [Tasks extension](https://github.com/modelcontextprotocol/ext-tasks/blob/b3d28aceaa6d49f5f92258e3d06b61ad6f111e84/specification/2026-07-28/tasks.md).

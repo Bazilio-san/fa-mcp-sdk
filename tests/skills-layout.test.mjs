@@ -5,7 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { test } from 'node:test';
-import yaml from 'js-yaml';
+import * as yaml from 'js-yaml';
 
 const sdk = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const linker = path.join(sdk, 'scripts/claude-2-agents-symlink.js');

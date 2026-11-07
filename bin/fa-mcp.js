@@ -8,7 +8,7 @@ import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'url';
 
 import chalk from 'chalk';
-import yaml from 'js-yaml';
+import * as yaml from 'js-yaml';
 import { v4 as uuidv4 } from 'uuid';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -113,6 +113,15 @@ const getAsk = () => {
  * @param {string} content - Content of the file
  * @returns {object} Parsed configuration object
  */
+const configYamlSchema = yaml.CORE_SCHEMA.withTags(
+  yaml.timestampTag,
+  yaml.mergeTag,
+  yaml.binaryTag,
+  yaml.omapTag,
+  yaml.pairsTag,
+  yaml.setTag,
+);
+
 const parseConfigFile = (filePath, content) => {
   const ext = path.extname(filePath).toLowerCase();
 
@@ -120,14 +129,14 @@ const parseConfigFile = (filePath, content) => {
     if (ext === '.json') {
       return JSON.parse(content);
     } else if (ext === '.yaml' || ext === '.yml') {
-      return yaml.load(content, { schema: yaml.DEFAULT_SCHEMA });
+      return yaml.load(content, { schema: configYamlSchema });
     } else {
       // Try to detect format by content
       const trimmed = content.trim();
       if (trimmed.startsWith('{') || trimmed.startsWith('[')) {
         return JSON.parse(content);
       } else {
-        return yaml.load(content, { schema: yaml.DEFAULT_SCHEMA });
+        return yaml.load(content, { schema: configYamlSchema });
       }
     }
   } catch (error) {

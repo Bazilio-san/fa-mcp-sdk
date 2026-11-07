@@ -1,5 +1,4 @@
-import type { IUsedHttpHeader } from '../core/index.js';
-import type { TesterHeaderRequirement } from '../core/agent-tester/types.js';
+import type { IUsedHttpHeader, TesterHeaderRequirement } from '../core/index.js';
 
 const arbitraryHeader: IUsedHttpHeader = {
   name: 'x-project-private-value',

@@ -388,7 +388,7 @@ broken response stream guarantees rollback of an external mutation. Verify its o
 before retrying it; use an API-defined idempotency key where available. A repeat of a read and a repeat of a
 mutation are separate decisions and cannot be inferred from a tool's name.
 
-Run on Node.js 20 or later. Full Authorization diagnostics require both a diagnostic namespace such as
+Run on Node.js 22.12 or later. Full Authorization diagnostics require both a diagnostic namespace such as
 `DEBUG=token:auth` and `MCP_DEBUG_SHOW_AUTHORIZATION=1`; this intentionally writes real credentials to logs.
 
 ### Release verification: 0.12.132

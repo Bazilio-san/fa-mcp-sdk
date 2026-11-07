@@ -14,7 +14,7 @@ import { resolve as resolvePath } from 'path';
 
 import chalk from 'chalk';
 import { createRemoteJWKSet, exportJWK, exportSPKI, generateKeyPair, importPKCS8, importSPKI } from 'jose';
-import type { JWK, JWSHeaderParameters, KeyLike } from 'jose';
+import type { CryptoKey, JWK, JWSHeaderParameters } from 'jose';
 
 import { appConfig } from '../bootstrap/init-config.js';
 import { logger as lgr } from '../logger.js';
@@ -36,9 +36,9 @@ export function normalizeExpectedIssuers(value: unknown): string[] {
 
 export interface KeyResolver {
   /** Resolve a verification key for the given JWT header. */
-  getVerifyKey(header: JWSHeaderParameters): Promise<KeyLike | Uint8Array>;
+  getVerifyKey(header: JWSHeaderParameters): Promise<CryptoKey | Uint8Array>;
   /** Return the signing key + algorithm + kid for token issuance. Throws if mode cannot sign. */
-  getSignContext(): { privateKey: KeyLike; algorithm: JwtAsymmetricAlgorithm; kid: string };
+  getSignContext(): { privateKey: CryptoKey; algorithm: JwtAsymmetricAlgorithm; kid: string };
   /** Return JWKS (public keys only) for the /.well-known/jwks.json endpoint. */
   getPublicJwks(): { keys: JWK[] };
   /** True if this resolver has access to a private key and can issue tokens. */
@@ -126,8 +126,8 @@ function deriveKid(jwk: JWK): string {
 // ────────────────────────────────────────────────────────────────────────────
 
 class EmbeddedKeyResolver implements KeyResolver {
-  private privateKey!: KeyLike;
-  private publicKey!: KeyLike;
+  private privateKey!: CryptoKey;
+  private publicKey!: CryptoKey;
   private algorithm: JwtAsymmetricAlgorithm;
   private kid!: string;
   private initialized = false;
@@ -170,7 +170,7 @@ class EmbeddedKeyResolver implements KeyResolver {
     logger.info(`Embedded IdP ready (alg=${this.algorithm}, kid=${this.kid})`);
   }
 
-  async getVerifyKey(_header: JWSHeaderParameters): Promise<KeyLike | Uint8Array> {
+  async getVerifyKey(_header: JWSHeaderParameters): Promise<CryptoKey | Uint8Array> {
     await this.init();
     return this.publicKey;
   }
@@ -213,7 +213,7 @@ class EmbeddedKeyResolver implements KeyResolver {
 /**
  * Helper around exportPKCS8 — wraps the awaited PEM string for embedded keypair write.
  */
-async function exportPrivateKeyPem(key: KeyLike): Promise<string> {
+async function exportPrivateKeyPem(key: CryptoKey): Promise<string> {
   const { exportPKCS8 } = await import('jose');
   return exportPKCS8(key);
 }
@@ -223,8 +223,8 @@ async function exportPrivateKeyPem(key: KeyLike): Promise<string> {
 // ────────────────────────────────────────────────────────────────────────────
 
 class LocalKeyResolver implements KeyResolver {
-  private publicKey!: KeyLike;
-  private privateKey: KeyLike | undefined;
+  private publicKey!: CryptoKey;
+  private privateKey: CryptoKey | undefined;
   private algorithm: JwtAsymmetricAlgorithm;
   private kid!: string;
   private initialized = false;
@@ -270,7 +270,7 @@ class LocalKeyResolver implements KeyResolver {
     );
   }
 
-  async getVerifyKey(_header: JWSHeaderParameters): Promise<KeyLike | Uint8Array> {
+  async getVerifyKey(_header: JWSHeaderParameters): Promise<CryptoKey | Uint8Array> {
     await this.init();
     return this.publicKey;
   }
@@ -323,12 +323,12 @@ class RemoteJwksKeyResolver implements KeyResolver {
     logger.info(`RemoteJwks resolver ready (uri=${jwksUri}, cacheTtl=${jwksCacheTtl}s, cooldown=${jwksCooldown}s)`);
   }
 
-  async getVerifyKey(header: JWSHeaderParameters): Promise<KeyLike | Uint8Array> {
+  async getVerifyKey(header: JWSHeaderParameters): Promise<CryptoKey | Uint8Array> {
     this.init();
-    return (await this.jwksFn(header, {} as any)) as unknown as KeyLike;
+    return (await this.jwksFn(header, {} as any)) as unknown as CryptoKey;
   }
 
-  getSignContext(): { privateKey: KeyLike; algorithm: JwtAsymmetricAlgorithm; kid: string } {
+  getSignContext(): { privateKey: CryptoKey; algorithm: JwtAsymmetricAlgorithm; kid: string } {
     throw new Error(
       `remoteJwks mode does not issue tokens. Obtain a token from the IdP at ${getJwtRuntimeConfig().jwksUri}`,
     );

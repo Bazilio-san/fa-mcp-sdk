@@ -47,7 +47,13 @@ export async function isolatedWorker(mode = 'http', overrides = {}, environment 
   );
   const proc = spawn(process.execPath, [fileURLToPath(new URL('./conformance-worker.mjs', import.meta.url)), mode], {
     cwd: dir,
-    env: { ...env, NODE_CONFIG_DIR: dir, NODE_ENV: 'test', ...environment },
+    env: {
+      ...env,
+      NODE_CONFIG_DIR: dir,
+      NODE_ENV: 'test',
+      NODE_PATH: fileURLToPath(new URL('../../node_modules/', import.meta.url)),
+      ...environment,
+    },
     stdio: ['pipe', 'pipe', 'pipe'],
   });
   let stderr = '';
