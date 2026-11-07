@@ -8,19 +8,43 @@
 #> ========================================================================
 # accessPoints:
 #   myService:
-#     #> Human-readable title shown in diagnostics and admin pages
-#     title: 'My remote service'
+#     #> Override the Consul service name to look up (defaults to the alias key)
+#     consulServiceName: <consulServiceName>
 #     #> Remote service host (used when noConsul=true or as a fallback)
 #     host: <host>
-#     #> Remote service TCP port
-#     port: 9999
-#     #> Auth token sent to the remote service
-#     token: '***'
 #     #> Use if the service developers do not provide registration in consul —
 #     #> disables Consul lookup and forces use of the host/port above
 #     noConsul: true
-#     #> Override the Consul service name to look up (defaults to the alias key)
-#     consulServiceName: <consulServiceName>
+#     #> Remote service TCP port
+#     port: 9999
+#     #> Human-readable title shown in diagnostics and admin pages
+#     title: 'My remote service'
+#     #> Auth token sent to the remote service
+#     token: '***'
+
+#> Active Directory / LDAP settings.
+#> Used for authentication/authorization (e.g., NTLM in admin panel) and checking user membership in AD groups.
+ad:
+  #> Cache TTL for user/group DN lookups (default: 86400000 = 24 hours)
+  # dnCacheTtlMs: 86400000
+  #> Map of domains. Key is a domain name
+  domains:
+    MYDOMAIN:
+      #> Base DN for LDAP searches. Auto-derived from controller URL if not set.
+      # baseDn: 'DC=corp,DC=com'
+      #> List of LDAP controllers (can be multiple for failover).
+      #> Use ldap:// for plain LDAP or ldaps:// for LDAP over TLS.
+      controllers:
+        - 'ldap://c1.corp.com'
+        - 'ldap://c2.corp.com'
+      #> Marks this domain as default one
+      default: true
+      #> Service account password.
+      password: '***'
+      #> Service account (bind DN or username) used to connect to LDAP.
+      username: '***'
+  #> Cache TTL for group membership checks (default: 600000 = 10 min)
+  # groupCacheTtlMs: 600000
 
 #> ========================================================================
 #> ADMIN PANEL
@@ -28,8 +52,6 @@
 #> Supports 4 authentication methods: permanentServerTokens, basic, jwtToken, ntlm.
 #> ========================================================================
 adminPanel:
-  #> Enable/disable admin panel. false — /admin is not mounted at all.
-  enabled: true
   #> Authentication type: 'permanentServerTokens' | 'basic' | 'jwtToken' | 'ntlm' | 'none'
   #> Accepts a single type (string) or multiple types (array):
   #>   authType: 'basic'
@@ -43,61 +65,30 @@ adminPanel:
   authType:
     - permanentServerTokens
     - jwtToken
-
-#> Active Directory / LDAP settings.
-#> Used for authentication/authorization (e.g., NTLM in admin panel) and checking user membership in AD groups.
-ad:
-  #> Map of domains. Key is a domain name
-  domains:
-    MYDOMAIN:
-      #> Marks this domain as default one
-      default: true
-      #> List of LDAP controllers (can be multiple for failover).
-      #> Use ldap:// for plain LDAP or ldaps:// for LDAP over TLS.
-      controllers:
-        - 'ldap://c1.corp.com'
-        - 'ldap://c2.corp.com'
-      #> Service account (bind DN or username) used to connect to LDAP.
-      username: '***'
-      #> Service account password.
-      password: '***'
-      #> Base DN for LDAP searches. Auto-derived from controller URL if not set.
-      # baseDn: 'DC=corp,DC=com'
-  #> Cache TTL for group membership checks (default: 600000 = 10 min)
-  # groupCacheTtlMs: 600000
-  #> Cache TTL for user/group DN lookups (default: 86400000 = 24 hours)
-  # dnCacheTtlMs: 86400000
+  #> Enable/disable admin panel. false — /admin is not mounted at all.
+  enabled: true
 
 #> Built-in chat UI for testing MCP tools with an LLM.
 agentTester:
   #> Enables the Agent Tester UI at /agent-tester
   enabled: true
-  #> true (default) — show Agent Tester link in home page footer; false — hide link without disabling tester
-  showFooterLink: true
-  #> true — protect Agent Tester with full multi-auth (permanentTokens/basic/JWT/custom);
-  #> browser users see a login dialog, headless clients pass Authorization header
-  useAuth: false
-  #> Browser login session lifetime in milliseconds. Default: 28800000 (8 hours).
-  #> Applies only when useAuth is true. Sessions are in-memory on the server — lost on restart.
-  sessionTtlMs: 28800000
-  #> JWT TTL (seconds) for tokens auto-issued via /agent-tester/api/auth-token (auto-fill of Authorization header
-  #> in the chat UI and for headless clients). Default: 1800 (30 min). The UI refreshes the token every
-  #> max(30, ttlSec/3 - 60) seconds (≈ 1/3 of TTL with a 60s safety lead, lower-bounded by 30s).
-  tokenTTLSec: 1800
-  #> Per-tool-call timeout (ms) the Agent Tester MCP client waits for a single tool result. Default: 60000 (60s).
-  #> Set this at or above the target server's mcp.limits.toolTimeoutMs, otherwise the client aborts long-running
-  #> tools before the server does and you get a client-side timeout instead of the server's -32004.
-  toolCallTimeoutMs: 60000
+
+  #> Key-value pairs for HTTP requests that should be auto-populated in agentTester. Example: X-User-Id: 12345
+  httpHeaders:
   #> true — emit structured JSON events (tool_call, tool_result, llm_response, response) to stdout during agent execution
   logJson: false
   #> OpenAI-compatible LLM credentials used by Agent Tester to drive tool calls
   openAi:
-    #> Key name (for logging and debugging)
-    apiKeyName: '***'
     #> API key for LLM provider (OpenAI and compatible)
     apiKey: '***'
+    #> Key name (for logging and debugging)
+    apiKeyName: '***'
     #> Override base URL for OpenAI-compatible providers (Azure, local LLMs, proxies)
     baseURL: ''
+    #> Default model pre-filled in the Agent Tester chat UI when the user has not chosen one yet.
+    #> This is the value that ends up in the browser's localStorage on first open. Editing the model in
+    #> the UI overrides it locally. Sent to the UI via GET /agent-tester/api/config (not a secret).
+    defaultModel: 'gpt-6.1-terra'
     #> -------------------------------------------------------------------------
     #> When true, baseURL and apiKey are sent to the Agent Tester UI as defaults
     #> and auto-saved into the browser's localStorage on first open. The UI shows
@@ -106,26 +97,28 @@ agentTester:
     #> /agent-tester can read the key. Default: false (safe).
     #> -------------------------------------------------------------------------
     exposeToClient: false
-    #> Default model pre-filled in the Agent Tester chat UI when the user has not chosen one yet.
-    #> This is the value that ends up in the browser's localStorage on first open. Editing the model in
-    #> the UI overrides it locally. Sent to the UI via GET /agent-tester/api/config (not a secret).
-    defaultModel: 'gpt-6.1-terra'
     #> List of model names shown in the Agent Tester UI model dropdown. Purely a convenience list —
     #> the user can still type any model name manually. Sent to the UI via GET /agent-tester/api/config.
     models:
       - gpt-6-luna
       - gpt-6.1-terra
       - gpt-6.1-sol
-
-  #> Key-value pairs for HTTP requests that should be auto-populated in agentTester. Example: X-User-Id: 12345
-  httpHeaders:
-
-#> Headless testing of MCP tools via POST /agent-tester/api/chat/test (no browser, structured trace).
-headlessTester:
-  #> Default LLM model used for headless test requests when the request body omits modelConfig.model.
-  #> Unlike agentTester.openAi.defaultModel (which seeds the browser UI), this value drives server-side
-  #> headless runs directly. Override per request by passing modelConfig.model (e.g. --model in headless-test.js).
-  defaultModel: 'gpt-6.1-terra'
+  #> Browser login session lifetime in milliseconds. Default: 28800000 (8 hours).
+  #> Applies only when useAuth is true. Sessions are in-memory on the server — lost on restart.
+  sessionTtlMs: 28800000
+  #> true (default) — show Agent Tester link in home page footer; false — hide link without disabling tester
+  showFooterLink: true
+  #> JWT TTL (seconds) for tokens auto-issued via /agent-tester/api/auth-token (auto-fill of Authorization header
+  #> in the chat UI and for headless clients). Default: 1800 (30 min). The UI refreshes the token every
+  #> max(30, ttlSec/3 - 60) seconds (≈ 1/3 of TTL with a 60s safety lead, lower-bounded by 30s).
+  tokenTTLSec: 1800
+  #> Per-tool-call timeout (ms) the Agent Tester MCP client waits for a single tool result. Default: 60000 (60s).
+  #> Set this at or above the target server's mcp.limits.toolTimeoutMs, otherwise the client aborts long-running
+  #> tools before the server does and you get a client-side timeout instead of the server's -32004.
+  toolCallTimeoutMs: 60000
+  #> true — protect Agent Tester with full multi-auth (permanentTokens/basic/JWT/custom);
+  #> browser users see a login dialog, headless clients pass Authorization header
+  useAuth: false
 
 #> --------------------------------------------------
 #> CACHING Reduces API calls by caching responses
@@ -141,14 +134,6 @@ cache:
 
 #> Consul service discovery and registration settings
 consul:
-  #> Health check parameters reported to Consul for this service
-  check:
-    #> How often Consul invokes the health check
-    interval: '10s'
-    #> Per-attempt timeout for the health check
-    timeout: '5s'
-    #> Auto-deregister the service after it has been critical for this duration
-    deregistercriticalserviceafter: '3m'
   agent:
     #> Credentials for getting information about services in the DEV DC
     dev:
@@ -185,31 +170,39 @@ consul:
       secure: false
       #> Token for registering the service in the consul agent
       token: '***'
+  #> Health check parameters reported to Consul for this service
+  check:
+    #> Auto-deregister the service after it has been critical for this duration
+    deregistercriticalserviceafter: '3m'
+    #> How often Consul invokes the health check
+    interval: '10s'
+    #> Per-attempt timeout for the health check
+    timeout: '5s'
+  #> Used to generate the service ID
+  envCode:
+    #> Development environment code
+    dev: '{{consul.envCode.dev}}'
+    #> Production environment code
+    prod: '{{consul.envCode.prod}}'
   service:
-    #> true — Allows registration of the service with the consul
-    enable: {{consul.service.enable}}
-    #> Here you can specify an alternative name for the service.
-    #> String "<name>" will be replaced by env SERVICE_NAME | <package.json>.name at initialization
-    name: <name>
-    #> This value will be specified as a suffix in the id of the service
-    instance: '{{SERVICE_INSTANCE}}'
-    #> String "<version>" will be replaced by <package.json>.version at initialization
-    version: <version>
     #> Here you can specify an alternative name description.
     #> String "<description>" will be replaced by <package.json>.description at initialization
     description: <description>
-    #> If null or empty array — Will be pulled up from package.keywords at initialization
-    tags: [ ]
+    #> true — Allows registration of the service with the consul
+    enable: {{consul.service.enable}}
+    #> This value will be specified as a suffix in the id of the service
+    instance: '{{SERVICE_INSTANCE}}'
     #> Arbitrary metadata published with the service registration
     meta:
       #> "Home" page link template
       who: 'http://{address}:{port}/'
-  #> Used to generate the service ID
-  envCode:
-    #> Production environment code
-    prod: '{{consul.envCode.prod}}'
-    #> Development environment code
-    dev: '{{consul.envCode.dev}}'
+    #> Here you can specify an alternative name for the service.
+    #> String "<name>" will be replaced by env SERVICE_NAME | <package.json>.name at initialization
+    name: <name>
+    #> If null or empty array — Will be pulled up from package.keywords at initialization
+    tags: [ ]
+    #> String "<version>" will be replaced by <package.json>.version at initialization
+    version: <version>
 
 #> Database connections used by the service
 db:
@@ -218,21 +211,28 @@ db:
     #> Map of named PostgreSQL databases (key is a logical alias used in code)
     dbs:
       main:
-        #> Human-readable label shown in diagnostics and admin pages
-        label: 'Your Database Label'
-        #> To exclude the use of the database, you need to set host = ''
-        host: ''
-        #> PostgreSQL server port
-        port: 5432
         #> Database name
         database: <database>
-        #> Database user
-        user: <user>
+        #> To exclude the use of the database, you need to set host = ''
+        host: ''
+        #> Human-readable label shown in diagnostics and admin pages
+        label: 'Your Database Label'
         #> Database password
         password: <password>
+        #> PostgreSQL server port
+        port: 5432
         #> List of PostgreSQL extensions required by the service (e.g., 'pgvector', 'uuid-ossp')
         usedExtensions: []
         #  - pgvector
+        #> Database user
+        user: <user>
+
+#> Headless testing of MCP tools via POST /agent-tester/api/chat/test (no browser, structured trace).
+headlessTester:
+  #> Default LLM model used for headless test requests when the request body omits modelConfig.model.
+  #> Unlike agentTester.openAi.defaultModel (which seeds the browser UI), this value drives server-side
+  #> headless runs directly. Override per request by passing modelConfig.model (e.g. --model in headless-test.js).
+  defaultModel: 'gpt-6.1-terra'
 
 #> Service home page (`/`) customization
 homePage:
@@ -251,30 +251,51 @@ homePage:
 
 #> Logging configuration (tslog-based)
 logger:
-  #> Minimum log level: silly | trace | debug | info | warn | error | fatal
-  level: info
-  #> To use or not to use logging to a file
-  useFileLogger: {{logger.useFileLogger}}
   #> Absolute path to the folder where logs will be written. Default <proj_root>/../logs
   dir: '{{logger.dir}}'
   #> Disable built-in secret/email/URL masking (maskValuesRegEx becomes []). Default: false.
   disableMasking: false
+  #> Minimum log level: silly | trace | debug | info | warn | error | fatal
+  level: info
+  #> To use or not to use logging to a file
+  useFileLogger: {{logger.useFileLogger}}
 
 #> MCP (Model Context Protocol) server settings
 mcp:
-  #> Transport for the MCP server: stdio | http
-  transportType: http
-  #> Per-client request rate limiting for the MCP endpoint
-  rateLimit:
-    #> Maximum number of requests allowed within windowMs
-    maxRequests: 100
-    #> Rate limit window length in milliseconds (1 minute)
-    windowMs: 60000
-    #> Standard §14 — 'subject' counts requests per JWT `sub` (fallback to IP when no JWT).
-    #> 'ip' = legacy behavior. Default: 'subject'.
-    scope: subject
-    #> Max simultaneous in-flight tools/call requests per subject. Excess → -32003 / 429 + Retry-After.
-    maxConcurrentPerSubject: 16
+  #> Standard v2.0 §12.3 — cache hints (`ttlMs` / `cacheScope`) stamped on cacheable 2026-07-28
+  #> results: server/discover, tools/list, prompts/list, resources/list, resources/templates/list
+  #> (listTtlMs) and resources/read (readTtlMs). Legacy (2025-11-25) responses are not affected.
+  #> `private` is the safe default: results may vary per token. Set `cacheScope: public` only when
+  #> the catalog is identical for all callers.
+  cacheHints:
+    #> Who may cache: public | private. Default private.
+    cacheScope: private
+    #> Freshness hint for catalog results, milliseconds. Default 60000 (1 minute).
+    listTtlMs: 60000
+    #> Freshness hint for resources/read results, milliseconds. Default 0 (immediately stale).
+    readTtlMs: 0
+  #> Standard §8.2 (MAY) — `completion/complete` capability (argument autocompletion).
+  #> Off by default. Even when enabled, the capability is advertised only if the project also
+  #> supplies a `completionProvider` in McpServerData — otherwise there is nothing to serve.
+  completions:
+    #> Set true (and provide completionProvider) to advertise `completions: {}` and accept
+    #> completion/complete requests. Default: false.
+    enabled: false
+  #> Debug & diagnostics. All keys optional. The stderr `DEBUG=mcp:*` stream
+  #> is independent of this section — these flags only add file logging and
+  #> built-in helper tools.
+  debug:
+    #> When true, registers SDK-provided MCP tools for widgets and integration
+    #> tests: mcp-debug-log, mcp-debug-refresh, debug-tool. All are marked
+    #> _meta.ui.visibility: ['app'] and stay hidden from the LLM — they are
+    #> only callable from MCP App widgets (app.callServerTool(...)) or test
+    #> clients. Default: false.
+    builtinTools: false
+    #> Absolute path to a JSON-lines file that mirrors mcp:tool / mcp:resource /
+    #> mcp:prompt events for post-mortem analysis (jq, p95 latency, error mining).
+    #> Empty = file logging disabled (only stderr DEBUG output is produced).
+    #> Example: /var/log/mcp/server-debug.jsonl
+    logFile: ''
   #> Hard ceilings enforced by the HTTP transport (standard §14).
   #> Concrete servers MAY raise or lower these values without patching SDK code.
   limits:
@@ -287,6 +308,84 @@ mcp:
     #> Per-tool execution timeout, milliseconds. Default 30 s.
     #> Exceeded calls return JSON-RPC code -32004 / HTTP 504.
     toolTimeoutMs: 30000
+  #> Standard §15.2 + §8.2 — MCP `logging` capability. When enabled (default), the server
+  #> advertises `logging: {}` on initialize and accepts `logging/setLevel` to throttle
+  #> notifications/message emissions.
+  logging:
+    #> Initial severity threshold (Syslog ladder). Levels: debug | info | notice | warning |
+    #> error | critical | alert | emergency. Default: info.
+    defaultLevel: info
+    #> Set false to suppress the capability (compat tests against older clients).
+    enabled: true
+    #> Max serialized `data` payload in bytes. Anything longer is truncated. Default: 4096.
+    maxBodyBytes: 4096
+  #> Multi Round-Trip Requests (MRTR, 2026-07-28): a tool may pause mid-call and ask the user for
+  #> confirmation or missing data (`resultType: input_required`); the client retries the call with
+  #> the answers and the opaque `requestState` blob minted by the server.
+  mrtr:
+    #> HMAC secret protecting `requestState` integrity (min 32 characters). Empty = a random
+    #> per-process key is generated at startup: fine for a single instance, but a restart
+    #> invalidates in-flight MRTR cycles, and multiple instances behind a load balancer MUST share
+    #> one secret set here (or via MCP_MRTR_STATE_SECRET).
+    stateSecret: ''
+    #> How long a minted requestState stays valid, seconds. Default 600 (10 minutes).
+    stateTtlSeconds: 600
+  #> Standard §8.4 — server-side pagination for tools/list, prompts/list, resources/list.
+  pagination:
+    #> Items per page. Default 100.
+    pageSize: 100
+  #> Standard §8.6 — `notifications/progress` throttling. Minimum gap between successive
+  #> emissions for a single progressToken. Default 100 ms (10 events/s).
+  progress:
+    throttleMs: 100
+  #> Per-client request rate limiting for the MCP endpoint
+  rateLimit:
+    #> Max simultaneous in-flight tools/call requests per subject. Excess → -32003 / 429 + Retry-After.
+    maxConcurrentPerSubject: 16
+    #> Maximum number of requests allowed within windowMs
+    maxRequests: 100
+    #> Standard §14 — 'subject' counts requests per JWT `sub` (fallback to IP when no JWT).
+    #> 'ip' = legacy behavior. Default: 'subject'.
+    scope: subject
+    #> Rate limit window length in milliseconds (1 minute)
+    windowMs: 60000
+  #> Standard §11.5 — optional MAY resource capabilities. Off by default.
+  resources:
+    #> Enable resources/subscribe + notifications/resources/updated. Only turn on
+    #> when the project has dynamic resources; static resource sets do not benefit.
+    subscribeEnabled: false
+    #> Enable resources/templates/list (returns empty array if no templates configured).
+    templatesEnabled: false
+  #> Standard §6 (MAY) — Streamable HTTP SSE stream resumability via the `Last-Event-ID` header.
+  #> Off by default. When enabled, the server keeps recent SSE events in process memory so a
+  #> reconnecting client can replay missed messages. The buffer is in-memory only: it is lost on
+  #> restart and does not span multiple server instances.
+  sse:
+    #> Max number of events retained per process for replay. Default 1000.
+    maxStoredEvents: 1000
+    #> Set true to attach the in-memory EventStore to the Streamable HTTP transport. Default false.
+    resumability: false
+  #> Standard §8.7 (MAY) — task-augmented execution (long-running / pollable tool calls). Off by
+  #> default. When enabled, the server advertises the `tasks` capability and accepts tasks/list,
+  #> tasks/get, tasks/result, tasks/cancel. Long-running tools opt in per-tool via
+  #> `execution.taskSupport` in their declaration. The default store keeps tasks in process memory
+  #> only and does not survive a restart.
+  tasks:
+    #> Default retention of a finished task, milliseconds, from creation. A client-requested ttl is
+    #> clamped to [minTtlMs, maxTtlMs]. Default 3600000 (1 hour).
+    defaultTtlMs: 3600000
+    #> Set true to advertise `tasks` capability and accept the task lifecycle methods. Default false.
+    enabled: false
+    #> Max number of simultaneously retained tasks across all subjects. Oldest finished tasks are
+    #> evicted first when the cap is reached. Default 1000.
+    maxTasks: 1000
+    #> Hard upper bound on retention, milliseconds. Default 86400000 (24 hours).
+    maxTtlMs: 86400000
+    #> Lower bound a client-requested ttl is clamped to, milliseconds. Default 0 (no floor).
+    minTtlMs: 0
+    #> Recommended poll interval suggested to the client in every task object, milliseconds.
+    #> Default 1000.
+    pollIntervalMs: 1000
   #> Tool listing and response behavior
   tools:
     #> Response format configuration.
@@ -301,120 +400,21 @@ mcp:
     #> `error.data` payload listing the offending fields. Set false to skip input validation (tools
     #> validate their own args, or trusted internal deployment). Does not affect outputSchema checks.
     validateInput: true
-  #> Debug & diagnostics. All keys optional. The stderr `DEBUG=mcp:*` stream
-  #> is independent of this section — these flags only add file logging and
-  #> built-in helper tools.
-  debug:
-    #> Absolute path to a JSON-lines file that mirrors mcp:tool / mcp:resource /
-    #> mcp:prompt events for post-mortem analysis (jq, p95 latency, error mining).
-    #> Empty = file logging disabled (only stderr DEBUG output is produced).
-    #> Example: /var/log/mcp/server-debug.jsonl
-    logFile: ''
-    #> When true, registers SDK-provided MCP tools for widgets and integration
-    #> tests: mcp-debug-log, mcp-debug-refresh, debug-tool. All are marked
-    #> _meta.ui.visibility: ['app'] and stay hidden from the LLM — they are
-    #> only callable from MCP App widgets (app.callServerTool(...)) or test
-    #> clients. Default: false.
-    builtinTools: false
-  #> Standard §8.4 — server-side pagination for tools/list, prompts/list, resources/list.
-  pagination:
-    #> Items per page. Default 100.
-    pageSize: 100
-  #> Standard §11.5 — optional MAY resource capabilities. Off by default.
-  resources:
-    #> Enable resources/subscribe + notifications/resources/updated. Only turn on
-    #> when the project has dynamic resources; static resource sets do not benefit.
-    subscribeEnabled: false
-    #> Enable resources/templates/list (returns empty array if no templates configured).
-    templatesEnabled: false
-  #> Standard §15.2 + §8.2 — MCP `logging` capability. When enabled (default), the server
-  #> advertises `logging: {}` on initialize and accepts `logging/setLevel` to throttle
-  #> notifications/message emissions.
-  logging:
-    #> Set false to suppress the capability (compat tests against older clients).
-    enabled: true
-    #> Initial severity threshold (Syslog ladder). Levels: debug | info | notice | warning |
-    #> error | critical | alert | emergency. Default: info.
-    defaultLevel: info
-    #> Max serialized `data` payload in bytes. Anything longer is truncated. Default: 4096.
-    maxBodyBytes: 4096
-  #> Standard §8.6 — `notifications/progress` throttling. Minimum gap between successive
-  #> emissions for a single progressToken. Default 100 ms (10 events/s).
-  progress:
-    throttleMs: 100
-  #> Standard §8.2 (MAY) — `completion/complete` capability (argument autocompletion).
-  #> Off by default. Even when enabled, the capability is advertised only if the project also
-  #> supplies a `completionProvider` in McpServerData — otherwise there is nothing to serve.
-  completions:
-    #> Set true (and provide completionProvider) to advertise `completions: {}` and accept
-    #> completion/complete requests. Default: false.
-    enabled: false
-  #> Standard §8.7 (MAY) — task-augmented execution (long-running / pollable tool calls). Off by
-  #> default. When enabled, the server advertises the `tasks` capability and accepts tasks/list,
-  #> tasks/get, tasks/result, tasks/cancel. Long-running tools opt in per-tool via
-  #> `execution.taskSupport` in their declaration. The default store keeps tasks in process memory
-  #> only and does not survive a restart.
-  tasks:
-    #> Set true to advertise `tasks` capability and accept the task lifecycle methods. Default false.
-    enabled: false
-    #> Default retention of a finished task, milliseconds, from creation. A client-requested ttl is
-    #> clamped to [minTtlMs, maxTtlMs]. Default 3600000 (1 hour).
-    defaultTtlMs: 3600000
-    #> Lower bound a client-requested ttl is clamped to, milliseconds. Default 0 (no floor).
-    minTtlMs: 0
-    #> Hard upper bound on retention, milliseconds. Default 86400000 (24 hours).
-    maxTtlMs: 86400000
-    #> Recommended poll interval suggested to the client in every task object, milliseconds.
-    #> Default 1000.
-    pollIntervalMs: 1000
-    #> Max number of simultaneously retained tasks across all subjects. Oldest finished tasks are
-    #> evicted first when the cap is reached. Default 1000.
-    maxTasks: 1000
-  #> Standard v2.0 §12.3 — cache hints (`ttlMs` / `cacheScope`) stamped on cacheable 2026-07-28
-  #> results: server/discover, tools/list, prompts/list, resources/list, resources/templates/list
-  #> (listTtlMs) and resources/read (readTtlMs). Legacy (2025-11-25) responses are not affected.
-  #> `private` is the safe default: results may vary per token. Set `cacheScope: public` only when
-  #> the catalog is identical for all callers.
-  cacheHints:
-    #> Freshness hint for catalog results, milliseconds. Default 60000 (1 minute).
-    listTtlMs: 60000
-    #> Freshness hint for resources/read results, milliseconds. Default 0 (immediately stale).
-    readTtlMs: 0
-    #> Who may cache: public | private. Default private.
-    cacheScope: private
-  #> Multi Round-Trip Requests (MRTR, 2026-07-28): a tool may pause mid-call and ask the user for
-  #> confirmation or missing data (`resultType: input_required`); the client retries the call with
-  #> the answers and the opaque `requestState` blob minted by the server.
-  mrtr:
-    #> HMAC secret protecting `requestState` integrity (min 32 characters). Empty = a random
-    #> per-process key is generated at startup: fine for a single instance, but a restart
-    #> invalidates in-flight MRTR cycles, and multiple instances behind a load balancer MUST share
-    #> one secret set here (or via MCP_MRTR_STATE_SECRET).
-    stateSecret: ''
-    #> How long a minted requestState stays valid, seconds. Default 600 (10 minutes).
-    stateTtlSeconds: 600
-  #> Standard §6 (MAY) — Streamable HTTP SSE stream resumability via the `Last-Event-ID` header.
-  #> Off by default. When enabled, the server keeps recent SSE events in process memory so a
-  #> reconnecting client can replay missed messages. The buffer is in-memory only: it is lost on
-  #> restart and does not span multiple server instances.
-  sse:
-    #> Set true to attach the in-memory EventStore to the Streamable HTTP transport. Default false.
-    resumability: false
-    #> Max number of events retained per process for replay. Default 1000.
-    maxStoredEvents: 1000
+  #> Transport for the MCP server: stdio | http
+  transportType: http
 
 #> Swagger / OpenAPI documentation settings
 swagger:
   #> An array of servers that will be added to swagger docs
   servers:
-    # - url: http://localhost:{{port}}
-    #   description: "Development server (localhost)"
-    # - url: http://0.0.0.0:{{port}}
-    #   description: "Development server (all interfaces)"
-    # - url: http://<prod_server_host_or_ip>:{{port}}
-    #   description: "PROD server"
-    - url: https://{{mcp.domain}}
-      description: "PROD server"
+    # - description: "Development server (localhost)"
+    #   url: http://localhost:{{port}}
+    # - description: "Development server (all interfaces)"
+    #   url: http://0.0.0.0:{{port}}
+    # - description: "PROD server"
+    #   url: http://<prod_server_host_or_ip>:{{port}}
+    - description: "PROD server"
+      url: https://{{mcp.domain}}
 
 #> UI theme overrides for built-in pages (home, admin, agent-tester)
 uiColor:
@@ -423,22 +423,6 @@ uiColor:
 
 #> HTTP server hosting MCP, admin panel, agent tester, swagger and health endpoints
 webServer:
-  #> Bind address for the HTTP server.
-  #> Default: '127.0.0.1' — loopback only (safer default, standard §6).
-  #> Set to '0.0.0.0' explicitly to listen on every interface (containers, public-facing deployments).
-  host: '127.0.0.1'
-  #> TCP port for the HTTP server
-  port: {{port}}
-  #> Array of hosts that CORS skips
-  originHosts: [ 'localhost', '0.0.0.0' ]
-  #> CORS origin guard. Default: enabled — the `originHosts` allow-list is enforced and
-  #> unlisted `Origin` headers are rejected with HTTP 403. Set `cors.enabled: false` to turn
-  #> the guard OFF: the server then adds `Access-Control-Allow-Origin: *` to every response and
-  #> answers preflight requests, so public endpoints work when fetched cross-origin from sandboxed
-  #> iframes (MCP Apps widgets) whose `Origin` is `null` or a dynamic host subdomain. This opens
-  #> the server to every origin — protect it by network policy / a reverse proxy.
-  cors:
-    enabled: true
   #> ========================================================================
   #> Authentication is configured here only when accessing the MCP server.
   #> Authentication in services that enable tools, resources, and prompts
@@ -446,18 +430,20 @@ webServer:
   #> You can also use a custom authorization function.
   #> ========================================================================
   auth:
+
+    #> ========================================================================
+    #> Basic Authentication — Base64 encoded username:password
+    #> CPU cost: Medium — Base64 decoding + string comparison
+    #> To enable this authentication, you need to set auth.enabled = true
+    #> and set username and password to valid values
+    #> ========================================================================
+    basic:
+      #> Password for HTTP Basic auth
+      password: '***'
+      #> Username for HTTP Basic auth
+      username: ''
     #> Enables/disables authorization
     enabled: false
-    #> ========================================================================
-    #> PERMANENT SERVER TOKENS
-    #> Static tokens for server-to-server communication
-    #> CPU cost: O(1) — fastest authentication method
-    #>
-    #> To enable this authentication, you need to set auth.enabled = true
-    #> and set one token of at least 20 characters in length
-    #> ========================================================================
-    #> Add your server tokens here: ['token1', 'token2']
-    permanentServerTokens: [ 'token' ]
 
     #> ========================================================================
     #> JWT TOKEN
@@ -476,61 +462,59 @@ webServer:
     #> CPU cost: Medium — signature verification + JSON parsing
     #> ========================================================================
     jwtToken:
-      #> Operating mode (see above). Default: legacyAesCtr (preserves existing behavior).
-      mode: legacyAesCtr
-      #> HS256 signing secret — used ONLY by legacyAesCtr mode (minimum 8 chars).
-      encryptKey: '***'
+
+      #> -------- Settings below apply ONLY to modes embedded / localKey / remoteJwks --------
+
+      #> Asymmetric signing algorithm. ES256 (ECDSA P-256) recommended — smaller tokens, faster.
+      algorithm: ES256
+      #> Weakened mode: do not validate `iss`. Signature and other claim checks remain active. Default false.
+      allowAnyIssuer: false
       #> If webServer.auth.enabled and the parameter true, the service name and the service specified in the token will be checked
       checkMCPName: true
+      #> Allowed clock skew for exp/nbf checks (seconds). Default: 30. Max enforced: 60 (standard Appendix A.1).
+      clockSkew: 30
+      #> Default TTL (seconds) for tokens issued by embedded /oauth/token endpoint. Default: 1800 (30 min).
+      defaultTtl: 1800
+      #> HS256 signing secret — used ONLY by legacyAesCtr mode (minimum 8 chars).
+      encryptKey: '***'
+      #> Expected `aud` claim. Defaults to appConfig.name when empty.
+      expectedAudience: ''
+      #> Accepted `iss` claim: one string or a list. The first item is used for locally issued tokens and OIDC metadata.
+      #> Required in localKey/remoteJwks unless allowAnyIssuer is explicitly enabled.
+      expectedIssuer: ''
       #> If true and JWT token contains non-empty 'ip' field,
       #> the client IP will be checked against the allowed list in the token
       isCheckIP: false
       #> Optional JWT `iss` claim. When non-empty, the generator stamps it and the verifier requires it.
       #> Leave empty to skip issuer enforcement. Used by legacyAesCtr mode.
       issuer: ''
-
-      #> -------- Settings below apply ONLY to modes embedded / localKey / remoteJwks --------
-
-      #> Asymmetric signing algorithm. ES256 (ECDSA P-256) recommended — smaller tokens, faster.
-      algorithm: ES256
-      #> Directory for embedded keypair (private.pem + public.pem). Auto-generated on first run.
-      #> Used only in mode=embedded. Default: ./keys
-      keyStoragePath: './keys'
-      #> Path to public key PEM. Used only in mode=localKey.
-      publicKeyPath: ''
-      #> Path to private key PEM. Optional — when set, allows local issuance via
-      #> generate-jwt.js and POST /gen-jwt. Used in mode=localKey.
-      privateKeyPath: ''
-      #> Remote JWKS endpoint URL. Used only in mode=remoteJwks.
-      #> Example: https://idp.example.com/.well-known/jwks.json
-      jwksUri: ''
-      #> Accepted `iss` claim: one string or a list. The first item is used for locally issued tokens and OIDC metadata.
-      #> Required in localKey/remoteJwks unless allowAnyIssuer is explicitly enabled.
-      expectedIssuer: ''
-      #> Weakened mode: do not validate `iss`. Signature and other claim checks remain active. Default false.
-      allowAnyIssuer: false
-      #> Expected `aud` claim. Defaults to appConfig.name when empty.
-      expectedAudience: ''
       #> JWKS in-memory cache TTL (seconds). Default: 600 (10 min).
       jwksCacheTtl: 600
       #> Minimum interval between repeat JWKS fetches when kid is missing (seconds). Default: 30.
       jwksCooldown: 30
-      #> Allowed clock skew for exp/nbf checks (seconds). Default: 30. Max enforced: 60 (standard Appendix A.1).
-      clockSkew: 30
-      #> Default TTL (seconds) for tokens issued by embedded /oauth/token endpoint. Default: 1800 (30 min).
-      defaultTtl: 1800
-
+      #> Remote JWKS endpoint URL. Used only in mode=remoteJwks.
+      #> Example: https://idp.example.com/.well-known/jwks.json
+      jwksUri: ''
+      #> Directory for embedded keypair (private.pem + public.pem). Auto-generated on first run.
+      #> Used only in mode=embedded. Default: ./keys
+      keyStoragePath: './keys'
+      #> Operating mode (see above). Default: legacyAesCtr (preserves existing behavior).
+      mode: legacyAesCtr
+      #> Path to private key PEM. Optional — when set, allows local issuance via
+      #> generate-jwt.js and POST /gen-jwt. Used in mode=localKey.
+      privateKeyPath: ''
+      #> Path to public key PEM. Used only in mode=localKey.
+      publicKeyPath: ''
     #> ========================================================================
-    #> Basic Authentication — Base64 encoded username:password
-    #> CPU cost: Medium — Base64 decoding + string comparison
+    #> PERMANENT SERVER TOKENS
+    #> Static tokens for server-to-server communication
+    #> CPU cost: O(1) — fastest authentication method
+    #>
     #> To enable this authentication, you need to set auth.enabled = true
-    #> and set username and password to valid values
+    #> and set one token of at least 20 characters in length
     #> ========================================================================
-    basic:
-      #> Username for HTTP Basic auth
-      username: ''
-      #> Password for HTTP Basic auth
-      password: '***'
+    #> Add your server tokens here: ['token1', 'token2']
+    permanentServerTokens: [ 'token' ]
 
     #> ========================================================================
     #> REVOCATION LISTS
@@ -545,6 +529,14 @@ webServer:
       jwtTokens: [ ]
       #> Revoked usernames matched against JWT payload.user (case-insensitive)
       users: [ ]
+  #> CORS origin guard. Default: enabled — the `originHosts` allow-list is enforced and
+  #> unlisted `Origin` headers are rejected with HTTP 403. Set `cors.enabled: false` to turn
+  #> the guard OFF: the server then adds `Access-Control-Allow-Origin: *` to every response and
+  #> answers preflight requests, so public endpoints work when fetched cross-origin from sandboxed
+  #> iframes (MCP Apps widgets) whose `Origin` is `null` or a dynamic host subdomain. This opens
+  #> the server to every origin — protect it by network policy / a reverse proxy.
+  cors:
+    enabled: true
 
   #> ========================================================================
   #> JWT TOKEN GENERATION API
@@ -552,6 +544,31 @@ webServer:
   #> Requires valid Authorization header (any method configured in webServer.auth).
   #> ========================================================================
   genJwtApiEnable: false
+  #> Bind address for the HTTP server.
+  #> Default: '127.0.0.1' — loopback only (safer default, standard §6).
+  #> Set to '0.0.0.0' explicitly to listen on every interface (containers, public-facing deployments).
+  host: '127.0.0.1'
+
+  #> ========================================================================
+  #> Standard §15.3 — Prometheus metrics endpoint.
+  #> Opt-in. Endpoint is PUBLIC (no auth) — protect via network policy / reverse proxy
+  #> when the server is reachable from the network.
+  #> Metrics exposed: mcp_tool_calls_total, mcp_tool_duration_seconds,
+  #> mcp_auth_failures_total, mcp_rate_limit_hits_total, mcp_http_requests_total,
+  #> mcp_concurrent_calls, mcp_payload_bytes, mcp_result_bytes + Node.js process metrics.
+  #> ========================================================================
+  metrics:
+    #> Set true to mount the metrics endpoint. Default: false.
+    enabled: false
+    #> Include Node.js process metrics (GC, heap, uptime). Default: true. Disable to shed
+    #> ~30 default series when scraping many SDK instances.
+    includeProcessMetrics: true
+    #> URL path. Default: /metrics.
+    path: '/metrics'
+  #> Array of hosts that CORS skips
+  originHosts: [ 'localhost', '0.0.0.0' ]
+  #> TCP port for the HTTP server
+  port: {{port}}
 
   #> ========================================================================
   #> TOKEN CHECK ENDPOINT (/ct)
@@ -569,20 +586,3 @@ webServer:
   #> from X-Forwarded-Proto / X-Forwarded-Host). Set true behind HTTPS reverse proxy.
   #> ========================================================================
   trustProxy: false
-
-  #> ========================================================================
-  #> Standard §15.3 — Prometheus metrics endpoint.
-  #> Opt-in. Endpoint is PUBLIC (no auth) — protect via network policy / reverse proxy
-  #> when the server is reachable from the network.
-  #> Metrics exposed: mcp_tool_calls_total, mcp_tool_duration_seconds,
-  #> mcp_auth_failures_total, mcp_rate_limit_hits_total, mcp_http_requests_total,
-  #> mcp_concurrent_calls, mcp_payload_bytes, mcp_result_bytes + Node.js process metrics.
-  #> ========================================================================
-  metrics:
-    #> Set true to mount the metrics endpoint. Default: false.
-    enabled: false
-    #> URL path. Default: /metrics.
-    path: '/metrics'
-    #> Include Node.js process metrics (GC, heap, uptime). Default: true. Disable to shed
-    #> ~30 default series when scraping many SDK instances.
-    includeProcessMetrics: true

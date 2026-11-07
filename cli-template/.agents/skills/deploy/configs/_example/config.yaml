@@ -1,54 +1,54 @@
-server:
-  host: <server IP>            # SSH host of the target server
-  port: 22                     # SSH port
-  user: <username>             # SSH user (usually root)
-  keyPath: <path to SSH key>   # Local private key for SSH, e.g. C:\Users\you\.ssh\id_rsa
+# container:
+#   nodeVersion: <x.y.z>   # node version baked into the image (default: from .envrc)
 
 deployment:
   # systemd is the default: clone into projectPath and run the app as a host service.
   # Use docker explicitly for the privileged systemd-in-container deployment.
   mode: systemd
 
+env:
+  DEBUG: config-info   # DEBUG value passed to the service (optional; default: config-info)
+
 git:
-  repoUrl: <git@github.com:org/repo.git>   # SSH URL cloned by the selected runtime
   # Private key the server uses to clone. Best practice is a dedicated read-only
   # GitHub Deploy Key — create one with:  node scripts/remote.cjs keygen
   # then add the printed public key to the repo (Settings → Deploy keys, read-only).
   # You may also point this at an existing key that already has GitHub access.
   deployKeyPath: <path to git private key>   # e.g. C:\Users\you\.ssh\<name>-deploy
-
-project:
-  branch: master     # Branch the service tracks and auto-updates from
-  # projectPath is optional and defaults to /opt/node/<name>.
-  # projectPath: /opt/node/<name>   # host checkout in systemd mode; mounted checkout in docker mode
-  # cacheDir:    data-cache         # real project directory in systemd mode
-  # statePath:   /opt/<name>        # docker mode only; host directory mounted at cacheDir
+  repoUrl: <git@github.com:org/repo.git>   # SSH URL cloned by the selected runtime
 
 mcp:
   dns: <public domain>   # Public domain the reverse proxy serves, e.g. app.example.com
 
+project:
+  branch: master     # Branch the service tracks and auto-updates from
+  # cacheDir:    data-cache         # real project directory in systemd mode
+  # projectPath is optional and defaults to /opt/node/<name>.
+  # projectPath: /opt/node/<name>   # host checkout in systemd mode; mounted checkout in docker mode
+  # statePath:   /opt/<name>        # docker mode only; host directory mounted at cacheDir
+server:
+  host: <server IP>            # SSH host of the target server
+  keyPath: <path to SSH key>   # Local private key for SSH, e.g. C:\Users\you\.ssh\id_rsa
+  port: 22                     # SSH port
+  user: <username>             # SSH user (usually root)
+
 # OPTIONAL overrides (auto-detected if omitted):
 # service:
-#   name: <name>     # runtime/service base name (default: package.json name + installation alias)
-#   instance: prod   # systemd instance suffix -> <name>--<instance>
 #   aliasSource: <name> # optional source words for the restart alias; default: package.json name
-# container:
-#   nodeVersion: <x.y.z>   # node version baked into the image (default: from .envrc)
-
-env:
-  DEBUG: config-info   # DEBUG value passed to the service (optional; default: config-info)
+#   instance: prod   # systemd instance suffix -> <name>--<instance>
+#   name: <name>     # runtime/service base name (default: package.json name + installation alias)
 
 # Update settings; configure the branch only in project.branch.
 update:
-  # healthUrl: http://127.0.0.1:9049/health
   # Defaults to /health on the application port.
   email: ''
+  # healthUrl: http://127.0.0.1:9049/health
+  # smtp:
+  #   from: <sender>
+  #   host: <mail server>
+  #   pass: <password>
+  #   port: 587
+  #   user: <username>
   # telegram:
   #   botToken: <token>
   #   chatId: <recipient>
-  # smtp:
-  #   host: <mail server>
-  #   port: 587
-  #   from: <sender>
-  #   user: <username>
-  #   pass: <password>
