@@ -198,7 +198,7 @@ my-mcp-server/
 ├── prompt-example-new-MCP.md    # Example of instructions for Claude Code for vibe coding of a custom MCP server 
 ├── README.md
 ├── tsconfig.json                # TypeScript configuration
-└── update.cjs                   # Project update script
+└── update.js                    # Project update script
 ```
 
 Note: The `dist/` directory (compiled JavaScript) is created after running `npm run build`.

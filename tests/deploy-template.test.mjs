@@ -56,7 +56,7 @@ test('readiness retries and rejects a service that remains unavailable', async (
 test('failed build after Git reset is retried with identical HEAD; success requires health', async () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'mcp-retry-'));
   const pendingFile = path.join(dir, 'pending.json');
-  const source = fs.readFileSync('cli-template/update.cjs', 'utf8');
+  const source = fs.readFileSync('cli-template/update.js', 'utf8');
   const main = source.slice(source.indexOf('async function main()'), source.indexOf('// Handle process termination'));
   let head = 'old';
   let builds = 0;
@@ -66,6 +66,7 @@ test('failed build after Git reset is retried with identical HEAD; success requi
   const context = vm.createContext({
     ...state,
     pendingFile,
+    checkStatusFile: path.join(dir, 'check_status.log'),
     process: processMock,
     nodeVersion: null,
     DEFAULT_NODE_VERSION: '22',
@@ -238,6 +239,14 @@ test('named targets, argument separation, private delivery and failure propagati
     assert.match(dockerScript, /docker create/);
     assert.match(dockerScript, /docker cp/);
     assert.match(dockerScript, /-v '\/opt\/node\/example-prod-2':\/opt\/node\/example-prod-2/);
+    for (const alias of ['dev-1', 'prod-2']) {
+      for (const command of ['status', 'updatelog']) {
+        run(['--server', alias, command]);
+        const report = calls.at(-1)[2].input;
+        assert.match(report, new RegExp(`deploy__example-${alias}__check_status[.]log`));
+        assert.match(report, new RegExp(`deploy__example-${alias}__status[.]log`));
+      }
+    }
     run(['--server', 'prod-2', 'uninstall', '--yes']);
     const dockerUninstallScript = calls.at(-1)[2].input;
     assert.match(dockerUninstallScript, /docker rm -f example-prod-2/);

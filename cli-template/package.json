@@ -34,6 +34,7 @@
     "postinstall": "node ../scripts/npm/patch_node_modules.js",
     "check-llm": "node node_modules/fa-mcp-sdk/dist/core/agent-tester/check-llm.js",
     "consul:unreg": "node node_modules/fa-mcp-sdk/dist/core/consul/deregister.js",
+    "test:update": "node --test tests/deploy/update.test.mjs",
     "test": "jest",
     "test:mcp": "node tests/mcp/test-stdio.js",
     "test:mcp-http": "node tests/mcp/test-http.js",

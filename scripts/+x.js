@@ -9,7 +9,7 @@ const scriptDir = path.dirname(fileURLToPath(import.meta.url));
 const gitDir = path.resolve(scriptDir, '..');
 
 const files = [
-  '../update.cjs',
+  existsSync(path.join(gitDir, 'update.js')) ? '../update.js' : '../update.cjs',
   'update-sdk.js',
   'remove-nul.js',
   'kill-port.js',

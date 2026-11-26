@@ -43,13 +43,31 @@ protocol test. Also run the registered `restart` alias once and wait for `/healt
 
 ## Retrying updates
 
-Root `update.cjs` uses `flock` to prevent concurrent runs. Pending state lives in `.git/deploy-update-pending.json`,
+Root `update.js` uses `flock` to prevent concurrent runs. Pending state lives in `.git/deploy-update-pending.json`,
 so working-tree cleanup does not remove it. A retry runs the required dependency installation and build steps,
 restarts the service and waits for readiness. Failures return a nonzero exit code. There is no automatic rollback;
 inspect the last deployment log to identify and fix the cause.
 
-In systemd mode, a skipped update may not create the verdict file. The cron output in
-`/tmp/mcp-update-<installation-name>.log` still confirms that the scheduled check ran.
+Every completed repository check writes `deploy__<project-folder>__check_status.log` beside the project directory,
+including successful checks with no changes. `deploy__<project-folder>__status.log` records the last attempted
+deployment independently; an old deployment failure is historical when a newer repository check has succeeded.
+`status` and `updatelog` display both results. A build failure leaves the successful repository check intact.
+
+Temporary Git connection failures receive up to three retries after the initial attempt, with delays of 2, 4 and
+8 seconds. Authentication, host-key and missing-repository or branch errors fail immediately. The original failure
+is retained after retries are exhausted; dependency installation and service restart are never retried this way.
+
+Manual updates in systemd mode load NVM when installed and use the Node.js version configured for the installation.
+The updater uses `npm ci` and `npm run cb` when the updated checkout contains `package-lock.json`. Projects without
+that file use Yarn for dependency installation and the TypeScript build.
+
+When upgrading an existing installation, use the updated `remote.cjs --server <alias> update` command: it accepts
+the old entry-point filename and migrates the selected cron entry once `update.js` exists, even if its build fails.
+The update command preserves the failure exit code so the pending update can be retried by cron. `deploy`
+also recreates the cron entry. Renaming the repository file alone does not change an existing system cron file.
+
+Run the isolated regression suite with `npm run test:update`. It exercises the actual entry point with intercepted
+system commands, including unchanged code, recovered and exhausted connections, access failures and build outcomes.
 
 `restart` only restarts the application; `update` synchronizes code. Port or runtime changes require `deploy`.
 After any change, also check public access with `status`.

@@ -96,7 +96,7 @@
       }
     },
     {
-      "files": ["**/jest.config.js", "**/jest.config.cjs", "**/jest.config.mjs", "**/jest-simple-reporter.js", "**/test-cases.js", "**/update.cjs"],
+      "files": ["**/jest.config.js", "**/jest.config.cjs", "**/jest.config.mjs", "**/jest-simple-reporter.js", "**/test-cases.js", "**/update.js"],
       "rules": {
         "import/no-default-export": "off"
       }

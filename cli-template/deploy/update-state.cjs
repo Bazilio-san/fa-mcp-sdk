@@ -39,4 +39,41 @@ async function waitForHealth(url, { attempts = 30, delay = 1000, fetcher = fetch
   }
   throw new Error('Application health check failed');
 }
-module.exports = { classifyChanges, readPending, writePending, waitForHealth };
+function writeCheckStatus(file, status, detail) {
+  const timestamp = new Date().toISOString().replace('T', ' ').substring(0, 19);
+  fs.writeFileSync(`${file}.tmp`, `${status} | ${timestamp}Z | ${String(detail).replace(/[\r\n]+/g, ' ')}\n`, {
+    mode: 0o600,
+  });
+  fs.renameSync(`${file}.tmp`, file);
+}
+
+async function fetchWithRetry(
+  run,
+  { sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms)), onRetry = () => {} } = {},
+) {
+  const delays = [2000, 4000, 8000];
+  for (let attempt = 0; ; attempt++) {
+    try {
+      return await run();
+    } catch (error) {
+      const message = `${error.stderr ?? ''}\n${error.message ?? ''}`;
+      const permanent = [
+        /Permission denied|Authentication failed|Host key verification failed/i,
+        /Repository not found|repository .* not found|couldn't find remote ref|access denied/i,
+      ].some((pattern) => pattern.test(message));
+      const temporary = [
+        /kex_exchange_identification|Connection (?:reset|closed|timed out|refused)|Operation timed out/i,
+        /Could not resolve (?:host|hostname|proxy)|Temporary failure in name resolution/i,
+        /Network is unreachable|No route to host|remote end hung up|unexpected disconnect/i,
+        /TLS connection was non-properly terminated|SSL_ERROR_SYSCALL|requested URL returned error: (?:429|5\d\d)/i,
+      ].some((pattern) => pattern.test(message));
+      if (attempt >= delays.length || permanent || !temporary) {
+        throw error;
+      }
+      onRetry(attempt + 1, delays[attempt]);
+      await sleep(delays[attempt]);
+    }
+  }
+}
+
+module.exports = { classifyChanges, readPending, writePending, waitForHealth, writeCheckStatus, fetchWithRetry };

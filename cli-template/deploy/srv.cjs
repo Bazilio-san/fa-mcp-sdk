@@ -197,7 +197,7 @@ function parseDotEnvVars () {
   return result;
 }
 
-// Return full service name aligned with update.cjs logic: base name plus optional "--<instance>"
+// Return full service name aligned with update.js logic: base name plus optional "--<instance>"
 function getServiceName () {
   // Highest priority: CLI parameter (-n)
   let baseName = trim(SERVICE_NAME);

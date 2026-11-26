@@ -2,20 +2,30 @@
 
 // noinspection UnnecessaryLocalVariableJS
 
-const fs = require('fs');
-const path = require('path');
-const https = require('https');
-const YAML = require('yaml');
-const { execSync, spawn } = require('child_process');
-const os = require('os');
-const { classifyChanges, readPending, writePending, waitForHealth } = require('./deploy/update-state.cjs');
-const { spawnSync } = require('child_process');
+import fs from 'node:fs';
+import path from 'node:path';
+import https from 'node:https';
+import YAML from 'yaml';
+import { execSync, spawn, spawnSync } from 'node:child_process';
+import os from 'node:os';
+import { fileURLToPath } from 'node:url';
+import {
+  classifyChanges,
+  readPending,
+  writePending,
+  waitForHealth,
+  writeCheckStatus,
+  fetchWithRetry,
+} from './deploy/update-state.cjs';
 
-const version = '2025.11.25-0506';
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+const version = '2026.11.14-01';
 console.log(`Update script version: ${version}`);
 
 // Name of this folder
-const scriptDirName = require('path').basename(__dirname);
+const scriptDirName = path.basename(__dirname);
 // Changing the working directory to a script directory
 process.chdir(__dirname);
 const CWD = process.cwd();
@@ -84,6 +94,7 @@ const cumulativeLogFile = path.join(VON, `deploy__${scriptDirName}__cumulative.l
 // (e.g. the deploy skill's `status` / `updatelog`): "SUCCESS|FAIL | <ts> | <detail>".
 const pendingFile = path.join(CWD, '.git', 'deploy-update-pending.json');
 const statusFile = path.join(VON, `deploy__${scriptDirName}__status.log`);
+const checkStatusFile = path.join(VON, `deploy__${scriptDirName}__check_status.log`);
 
 const clearColors = (text) => text.replace(/\x1B\[[0-9;]*[mGKH]/g, '');
 const clearHtmlColors = (text) => text.replace(/<\/?(red|y|g|r|status)>/g, '');
@@ -119,7 +130,12 @@ const nowPretty = () => `${new Date().toISOString().replace('T', ' ').substring(
 /** Write the one-line machine-readable verdict of the current update run. */
 const writeStatus = (status, detail = '') => {
   try {
-    fs.writeFileSync(statusFile, `${status} | ${nowPretty()} | ${String(detail).split('\n')[0]}\n`);
+    fs.writeFileSync(
+      statusFile,
+      `${status} | ${nowPretty()} | ${String(detail)
+        .replace(/[\r\n]+/g, ' ')
+        .trim()}\n`,
+    );
   } catch {
     /* best effort */
   }
@@ -452,7 +468,7 @@ async function sendSmtpNotification(config, status, body, serviceName) {
   }
   let nodemailer;
   try {
-    nodemailer = require('nodemailer');
+    nodemailer = (await import('nodemailer')).default;
   } catch {
     logIt('SMTP configured but nodemailer is not installed — notification skipped');
     return;
@@ -566,11 +582,11 @@ async function sendNotifications(config, status, body, serviceName) {
 
 let scriptsDirName = fs.existsSync(path.join(CWD, '_sh/npm/yarn-ci.sh')) ? '_sh' : 'scripts';
 
-const reinstallDependencies = () => {
+const reinstallDependencies = (usesNpm) => {
   logIt('CLEAN INSTALL DEPENDENCIES', true);
 
   execCommand('rm -rf node_modules/');
-  execWithNODE('yarn install --frozen-lockfile');
+  execWithNODE(usesNpm ? 'npm ci --no-audit --no-fund' : 'yarn install --frozen-lockfile');
   logIt('Dependencies installed');
 
   // Patch node modules if patch file exists
@@ -582,9 +598,9 @@ const reinstallDependencies = () => {
   }
 };
 
-const compile = () => {
+const compile = (usesNpm) => {
   logIt('TYPESCRIPT BUILD', true);
-  execWithNODE('yarn cb', { silent: true });
+  execWithNODE(usesNpm ? 'npm run cb' : 'yarn cb', { silent: true });
   logIt('TypeScript build completed');
 };
 
@@ -648,11 +664,14 @@ async function main() {
   // Override branch if specified in arguments
   const expectedBranch = args.expectedBranch || config.branch;
   let updateDeployedLogFile = false;
+  let checkCompleted = false;
   try {
     if (!/^[a-zA-Z0-9][a-zA-Z0-9_./-]*$/.test(expectedBranch) || expectedBranch.includes('..')) {
       throw new Error('Invalid deployment branch');
     }
-    execCommand(`git fetch origin ${expectedBranch} --prune`);
+    await fetchWithRetry(() => execCommand(`git fetch origin ${expectedBranch} --prune`), {
+      onRetry: (retry, delay) => logIt(`Temporary Git connection failure; retry ${retry}/3 in ${delay / 1000}s.`),
+    });
     const target = `origin/${expectedBranch}`;
     const before = execCommand('git rev-parse HEAD').trim();
     const after = execCommand(`git rev-parse ${target}`).trim();
@@ -677,6 +696,12 @@ async function main() {
       changes.dependencies ||
       changes.build;
     const updateReason = `${before} -> ${after}${pending ? ' (retry pending update)' : ''}`;
+    writeCheckStatus(
+      checkStatusFile,
+      'SUCCESS',
+      needUpdate || args.force ? `Update required: ${updateReason}` : 'No changes detected.',
+    );
+    checkCompleted = true;
     if (needUpdate || args.force) {
       updateDeployedLogFile = true;
       writePending(pendingFile, { ...changes, before, after });
@@ -684,11 +709,12 @@ async function main() {
       execCommand(`git checkout -f -B ${expectedBranch} ${target}`);
       execCommand(`git reset --hard ${target}`);
       execCommand('git clean -fd');
+      const usesNpm = fs.existsSync(path.join(CWD, 'package-lock.json'));
       if (changes.dependencies) {
-        reinstallDependencies();
+        reinstallDependencies(usesNpm);
       }
       if (changes.build) {
-        compile();
+        compile(usesNpm);
         buildQuasar();
       }
       restartService(serviceNamePM);
@@ -722,7 +748,9 @@ async function main() {
       logIt('No changes detected. Update skipped.');
     }
   } catch (err) {
-    const message = String(err.message).includes(err.stderr) ? err.message : [err.stderr, err.message].join('\n');
+    const message = String(err.message).includes(err.stderr)
+      ? err.message
+      : [err.stderr, err.message].filter(Boolean).join('\n');
     process.exitCode = 1;
     logError(message);
     try {
@@ -730,7 +758,12 @@ async function main() {
     } catch {
       /* Preserve original failure. */
     }
-    writeStatus('FAIL', message);
+    if (!checkCompleted) {
+      writeCheckStatus(checkStatusFile, 'FAIL', message);
+    }
+    if (updateDeployedLogFile) {
+      writeStatus('FAIL', message);
+    }
     await sendNotifications(config, 'FAIL', logBuffer, serviceName);
   } finally {
     logIt('#FINISH#');

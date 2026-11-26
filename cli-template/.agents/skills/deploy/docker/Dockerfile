@@ -6,7 +6,7 @@
 # On first boot the baked-in mcp-bootstrap.service clones the repository (read-only
 # Deploy Key delivered as a private file), installs config/local.yaml + deploy/config.yml,
 # writes .env, builds the project and installs it as a systemd service through the
-# repo's own deploy/srv.cjs. A cron job then runs the repo's update.cjs every
+# repo's own deploy/srv.cjs. A cron job then runs the repo's update.js every
 # minute, which git-pulls the branch and, on change, rebuilds and restarts the
 # service (and notifies, if the project configures it).
 #
@@ -130,10 +130,10 @@ node scripts/runtime/run-progress.cjs build npm run cb
 # Install (or reinstall) the app as a systemd service via the repo's own script.
 node deploy/srv.cjs install
 
-# Auto-update every minute: stable node symlink (cron PATH is minimal); update.cjs
+# Auto-update every minute: stable node symlink (cron PATH is minimal); update.js
 # itself sources .envrc for its yarn/build steps.
 cat > /etc/cron.d/mcp-update <<CRON
-* * * * * root /usr/local/bin/node $PROJECT_DIR/update.cjs >/tmp/mcp-update.log 2>&1
+* * * * * root /usr/local/bin/node $PROJECT_DIR/update.js >/tmp/mcp-update.log 2>&1
 CRON
 chmod 0644 /etc/cron.d/mcp-update
 

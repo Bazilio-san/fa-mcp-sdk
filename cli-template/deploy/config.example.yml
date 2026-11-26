@@ -1,6 +1,6 @@
 # Copy this file to config.yml (kept out of version control).
 #
-# config.yml becomes the container's deploy/config.yml, read by update.cjs (proper YAML).
+# config.yml becomes the container's deploy/config.yml, read by update.js (proper YAML).
 # It holds ALL settings the deploy skill's notifications need.
 
 branch: master
@@ -19,7 +19,7 @@ smtp:
   user: <user>                       # omit user + pass for an IP-authenticated relay
   pass: <password>
 
-# ── Telegram — the deploy skill's build/restart notifications (read by update.cjs) ──
+# ── Telegram — the deploy skill's build/restart notifications (read by update.js) ──
 # This is separate from the app's own telegram in local.yaml. Remove to disable Telegram.
 telegram:
   botToken: '<bot token>'

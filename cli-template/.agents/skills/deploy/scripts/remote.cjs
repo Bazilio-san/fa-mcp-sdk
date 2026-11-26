@@ -11,7 +11,7 @@
 // Model: a self-contained systemd Docker image (docker/Dockerfile) carrying no app
 // code; at boot it clones the repo (read-only Deploy Key delivered as a private file), writes
 // config/local.yaml (from config/local.yaml) + deploy/config.yml + .env, builds,
-// installs the app as a systemd service, and runs update.cjs from cron every minute.
+// installs the app as a systemd service, and runs update.js from cron every minute.
 //
 // This orchestrator only: builds the image on the server context-lessly
 // (`docker build -`), runs the container, wires up the reverse proxy, drives lifecycle.
@@ -23,7 +23,7 @@
 //   node remote.cjs start       # start the container
 //   node remote.cjs restart     # restart just the app service (fast, no rebuild)
 //   node remote.cjs push-config # generate and deliver application/update settings, then restart
-//   node remote.cjs update      # force update.cjs --force inside the container
+//   node remote.cjs update      # force update.js --force inside the container
 //   node remote.cjs logs [N]    # last N app-service journal lines (default 200)
 //   node remote.cjs updatelog   # auto-update verdict + error scan + last-run log
 //   node remote.cjs uninstall --yes   # remove container, image, project checkout and reverse proxy
@@ -94,14 +94,19 @@ function parseYaml(text) {
   return root;
 }
 
-// Container paths of the update.cjs bookkeeping logs (VON = parent of the project dir,
-// name = its basename): deploy__<name>__status.log / __last_deploy.log / __cumulative.log.
+// Container paths of the update.js bookkeeping logs (VON = parent of the project dir,
+// name = its basename): check_status.log / status.log / last_deploy.log / cumulative.log.
 function logPaths(cfg) {
   const p = cfg.projectPath.replace(/\/+$/, '');
   const von = p.replace(/\/[^/]+$/, '') || '/';
   const name = p.replace(/^.*\//, '');
   const base = `${von}/deploy__${name}__`;
-  return { status: `${base}status.log`, lastDeploy: `${base}last_deploy.log`, cumulative: `${base}cumulative.log` };
+  return {
+    status: `${base}status.log`,
+    check: `${base}check_status.log`,
+    lastDeploy: `${base}last_deploy.log`,
+    cumulative: `${base}cumulative.log`,
+  };
 }
 
 function fail(msg) {
@@ -690,7 +695,7 @@ systemctl restart ${SERVICE}
 
 NODE_BIN=$(command -v node)
 cat > /etc/cron.d/mcp-update-${cronName} <<CRON
-* * * * * root $NODE_BIN $PROJECT_PATH/update.cjs >/tmp/mcp-update-${cronName}.log 2>&1
+* * * * * root $NODE_BIN $PROJECT_PATH/update.js >/tmp/mcp-update-${cronName}.log 2>&1
 CRON
 chmod 0644 /etc/cron.d/mcp-update-${cronName}
 ${restartAliasRegistrationScript(cfg)}
@@ -801,7 +806,9 @@ curl -fsS -m 8 "${cfg.publicUrl}/health" && echo || echo 'external /health FAILE
 echo
 echo '===== AUTO-UPDATE ====='
 docker exec ${CONTAINER} cat /etc/cron.d/mcp-update 2>/dev/null || echo 'cron file not present yet'
-echo -n 'last update verdict: '
+echo -n 'last check result: '
+docker exec ${CONTAINER} cat ${lp.check} 2>/dev/null || echo '(no check result recorded yet)'
+echo -n 'last update verdict (historical): '
 docker exec ${CONTAINER} cat ${lp.status} 2>/dev/null || echo '(no update has run yet — cron checks every minute)'
 ERRS=$(docker exec ${CONTAINER} grep -aF '[ERROR]' ${lp.lastDeploy} 2>/dev/null | wc -l | tr -d ' ')
 if [ "\${ERRS:-0}" -gt 0 ] 2>/dev/null; then
@@ -847,7 +854,9 @@ curl -fsS -m 8 "${cfg.publicUrl}/health" && echo || echo 'external /health FAILE
 echo
 echo '===== AUTO-UPDATE ====='
 cat /etc/cron.d/mcp-update-${sanitizeName(cfg.name)} 2>/dev/null || echo 'cron file not present'
-echo -n 'last update verdict: '
+echo -n 'last check result: '
+cat ${lp.check} 2>/dev/null || echo '(no check result recorded yet)'
+echo -n 'last update verdict (historical): '
 if [ -f ${lp.status} ]; then
   cat ${lp.status}
 elif [ -f /tmp/mcp-update-${sanitizeName(cfg.name)}.log ]; then
@@ -929,12 +938,31 @@ function cmdRestart(cfg) {
 }
 
 function cmdUpdate(cfg) {
+  const cronFile =
+    cfg.deploymentMode === 'systemd' ? `/etc/cron.d/mcp-update-${sanitizeName(cfg.name)}` : '/etc/cron.d/mcp-update';
+  const script = `
+set -euo pipefail
+cd ${sq(cfg.projectPath)}
+UPDATE_SCRIPT=update.js
+if [ ! -f "$UPDATE_SCRIPT" ]; then UPDATE_SCRIPT=update.cjs; fi
+UPDATE_EXIT=0
+${cfg.deploymentMode === 'systemd' ? 'node' : NODE_BIN} "$UPDATE_SCRIPT" --force || UPDATE_EXIT=$?
+if [ -f update.js ] && [ -f ${sq(cronFile)} ]; then
+  sed -i 's|/update[.]cjs|/update.js|g' ${sq(cronFile)}
+fi
+exit "$UPDATE_EXIT"
+`;
   if (cfg.deploymentMode === 'systemd') {
-    say('Forcing update.cjs --force in the host project checkout');
-    return sshRun(cfg, `cd ${sq(cfg.projectPath)} && ${NODE_BIN} update.cjs --force`);
+    say('Forcing update.js --force in the host project checkout');
+    return sshRun(cfg, `export NVM_DIR="$HOME/.nvm"
+if [ -s "$NVM_DIR/nvm.sh" ]; then
+  . "$NVM_DIR/nvm.sh"
+  nvm use ${sq(cfg.nodeVersion)} >/dev/null || exit 1
+fi
+${script}`);
   }
-  say('Forcing update.cjs --force inside the container');
-  sshRun(cfg, `docker exec ${CONTAINER} ${NODE_BIN} ${cfg.projectPath}/update.cjs --force`);
+  say('Forcing update.js --force inside the container');
+  sshRun(cfg, `docker exec ${CONTAINER} bash -lc ${sq(script)}`);
 }
 
 // Push selected installation files without changing Git or rebuilding the image.
@@ -1010,7 +1038,10 @@ function cmdUpdatelog(cfg, n) {
   const lp = logPaths(cfg);
   const readPrefix = cfg.deploymentMode === 'docker' ? `docker exec ${CONTAINER} ` : '';
   const script = `
-echo '===== LAST UPDATE VERDICT ====='
+echo '===== LAST CHECK RESULT ====='
+${readPrefix}cat ${lp.check} 2>/dev/null || echo '(no check result recorded yet)'
+echo
+echo '===== LAST UPDATE VERDICT (HISTORICAL) ====='
 ${readPrefix}cat ${lp.status} 2>/dev/null || echo '(no update has run yet — cron checks every minute)'
 echo
 echo '===== ERROR LINES (last run + history) ====='
@@ -1251,7 +1282,7 @@ function main() {
   push-config       Generate and deliver application/update settings, then restart
                       [--container] restart the whole container instead of the app service
                       [--no-restart] push only, restart later
-  update            Force update.cjs --force in the configured runtime
+  update            Force update.js --force in the configured runtime
   logs [N]          Last N app-service journal lines (default 200)
   bootlog [N]       Last N bootstrap (clone/build) journal lines (default 200)
   updatelog [N]     Last auto-update verdict + error scan + last-run log (default 80)

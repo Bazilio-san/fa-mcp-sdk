@@ -421,6 +421,16 @@ If the host provides the `restart` utility, deployment registers an available al
 delivered as private files. Updates save pending state before changing code, retry unfinished stages, and report
 success only after the readiness check passes. See the skill for migration and recovery procedures.
 
+`status` and `updatelog` show the latest repository check and the last deployment attempt. A check records
+success even when the branch has no changes or a subsequent build fails. Temporary Git connection failures
+are retried after 2, 4 and 8 seconds. Run `npm run test:update` to exercise the updater locally.
+
+New installations schedule `update.js`. On an existing installation, run the updated `remote.cjs --server
+<alias> update` command to migrate the scheduled job when `update.js` appears in the checkout.
+In systemd mode, this command loads NVM when installed and selects the configured Node.js version.
+The updater selects npm for dependency installation and the TypeScript build when the updated checkout contains
+`package-lock.json`; otherwise it uses Yarn.
+
 ### Installation files
 
 Each `configs/<alias>/` folder contains:

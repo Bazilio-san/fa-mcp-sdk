@@ -95,7 +95,7 @@ installation. Never print settings contents.
 Set the branch in `project.branch` and notifications in `update.email`, `update.smtp` and `update.telegram`.
 The runtime's `deploy/config.yml` is generated automatically from these settings and `update.healthUrl`.
 
-Root `update.cjs` runs manually or every minute from cron on the host or inside the container. A lock prevents
+Root `update.js` runs manually or every minute from cron on the host or inside the container. A lock prevents
 concurrent runs. Before code changes, a pending-update marker is saved inside `.git`; it is removed after the
 readiness check. On failure, the next run retries the required steps. This does not automatically roll back.
 
